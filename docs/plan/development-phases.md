@@ -43,11 +43,11 @@ Do not build these in v0.1:
 
 ## Phase 0: Foundation
 
-Status: In progress.
+Status: Completed.
 
 Goal: make the repository a sustainable engineering base.
 
-Current status: repository scaffold is complete; CI is still pending.
+Current status: completed on 2026-04-30.
 
 Completed:
 
@@ -60,13 +60,15 @@ Completed:
 - examples added.
 - architecture and decision docs added.
 - `cargo check --workspace` passed.
+- `cargo fmt --check` passed.
+- `cargo clippy --workspace --locked -- -D warnings` passed.
+- TypeScript dependency lockfile added.
+- `pnpm typecheck` passed for workspace packages.
+- GitHub Actions CI added for Rust checks and TypeScript typecheck.
 
 Remaining:
 
-- Add CI for Rust checks.
-- Run and enforce `cargo fmt --check`.
-- Run and enforce `cargo clippy --workspace`.
-- Decide whether TypeScript dependency installation and typecheck belong in Phase 0 CI.
+- None for Phase 0.
 
 Deliverables:
 
@@ -96,9 +98,28 @@ Done when:
 
 ## Phase 1: Node Runtime and Manual Network
 
-Status: Not started.
+Status: In progress.
 
 Goal: run real daemons on already-reachable nodes.
+
+Current status: local daemon runtime and manual endpoint CLI are implemented; two-machine validation is still pending.
+
+Completed:
+
+- `operond start --listen <addr> --node-id <id>` implemented.
+- daemon exposes `GET /health`.
+- daemon exposes `GET /node`.
+- manual YAML endpoint config is loadable.
+- `operon node list` implemented.
+- `operon node ping <node-id>` implemented for Phase 1 `http://` endpoints.
+- `examples/nodes.yaml` includes a local endpoint.
+- local validation passed with `operond` on `127.0.0.1:7788` and `operon node ping local`.
+
+Remaining:
+
+- Validate the same flow across two reachable machines.
+- Decide whether Phase 1 should add HTTPS support or keep HTTP behind private network boundaries.
+- Replace the temporary hand-written HTTP client if/when the daemon API moves to generated gRPC or a formal HTTP client.
 
 Commands:
 
@@ -122,7 +143,7 @@ Modules:
 
 - `operond`: daemon lifecycle
 - `operon-network`: manual endpoint resolver
-- `operon-protocol`: gRPC health and node info
+- `operon-core`: shared health and node info types
 - `operon-cli`: node commands
 
 Implementation notes:

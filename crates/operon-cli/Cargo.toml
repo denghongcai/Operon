@@ -12,4 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+clap.workspace = true
 operon-core = { path = "../operon-core" }
+operon-network = { path = "../operon-network" }
+serde.workspace = true
+serde_json.workspace = true

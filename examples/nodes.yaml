@@ -1,5 +1,7 @@
 nodes:
+  local:
+    endpoint: http://127.0.0.1:7788
   cloud-a:
-    endpoint: https://100.96.12.34:7788
+    endpoint: http://100.96.12.34:7788
   gpu-node:
-    endpoint: https://100.96.18.20:7788
+    endpoint: http://100.96.18.20:7788
