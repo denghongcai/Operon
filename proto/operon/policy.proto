@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package operon.policy.v1;
+
+message PolicyDecision {
+  bool allowed = 1;
+  string reason = 2;
+}

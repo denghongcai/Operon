@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package operon.capability.v1;
+
+message Capability {
+  string id = 1;
+  string kind = 2;
+  string description = 3;
+}
+
+message CapabilityList {
+  repeated Capability capabilities = 1;
+}

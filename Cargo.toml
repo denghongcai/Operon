@@ -1,0 +1,26 @@
+[workspace]
+members = [
+  "crates/operond",
+  "crates/operon-cli",
+  "crates/operon-core",
+  "crates/operon-protocol",
+  "crates/operon-fs",
+  "crates/operon-process",
+  "crates/operon-store",
+  "crates/operon-network",
+  "crates/operon-mount",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/operon/operon"
+rust-version = "1.80"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"

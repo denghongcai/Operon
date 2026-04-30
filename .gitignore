@@ -1,0 +1,45 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / TypeScript
+node_modules/
+dist/
+build/
+.turbo/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Package managers
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operon runtime data
+.operon/
+operon.db
+*.sqlite
+*.sqlite3
+
+# Generated protocol output
+generated/
+**/generated/

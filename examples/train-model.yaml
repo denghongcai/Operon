@@ -1,0 +1,14 @@
+name: train-model
+
+steps:
+  - node: nas
+    action: fs.read
+    path: /data/images
+
+  - node: gpu-node
+    action: job.run
+    command: python train.py
+
+  - node: cloud-a
+    action: fs.write
+    path: /models/output

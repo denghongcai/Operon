@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package operon.execution.v1;
+
+message OperonGraph {
+  string id = 1;
+  repeated OperonStep steps = 2;
+}
+
+message OperonStep {
+  string id = 1;
+  string node_id = 2;
+  string action = 3;
+}

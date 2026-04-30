@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package operon.node.v1;
+
+service OperonNode {
+  rpc Stat(StatRequest) returns (StatResponse);
+  rpc ReadFile(ReadFileRequest) returns (stream FileChunk);
+  rpc WriteFile(stream WriteFileChunk) returns (WriteFileResponse);
+  rpc RunProcess(RunProcessRequest) returns (stream ProcessEvent);
+  rpc ExecuteOperon(ExecuteRequest) returns (stream ExecutionEvent);
+  rpc WatchFs(WatchFsRequest) returns (stream FsEvent);
+}
+
+message StatRequest {
+  string path = 1;
+}
+
+message StatResponse {
+  bool is_file = 1;
+  bool is_dir = 2;
+  uint64 size = 3;
+}
+
+message ReadFileRequest {
+  string path = 1;
+}
+
+message FileChunk {
+  bytes data = 1;
+}
+
+message WriteFileChunk {
+  string path = 1;
+  bytes data = 2;
+}
+
+message WriteFileResponse {
+  uint64 bytes_written = 1;
+}
+
+message RunProcessRequest {
+  string command = 1;
+  repeated string args = 2;
+}
+
+message ProcessEvent {
+  string stream = 1;
+  bytes data = 2;
+  optional int32 exit_code = 3;
+}
+
+message ExecuteRequest {
+  string operon_yaml = 1;
+}
+
+message ExecutionEvent {
+  string step_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message FsEvent {
+  string path = 1;
+  string kind = 2;
+}
+
+message WatchFsRequest {
+  string path = 1;
+}
