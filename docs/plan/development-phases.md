@@ -167,9 +167,24 @@ Notes:
 
 ## Phase 2: Capability Discovery
 
-Status: Not started.
+Status: Completed.
 
 Goal: nodes can declare machine-readable capabilities.
+
+Current status: completed on 2026-04-30 with Docker two-node validation.
+
+Completed:
+
+- shared `Capability`, `CapabilityKind`, and `CapabilityList` types added.
+- daemon exposes `GET /capabilities`.
+- default Phase 2 capabilities are advertised: `fs`, `process`, `job`, `device-info`, and `service`.
+- `operon capability list <node-id>` implemented.
+- Docker two-node validation passed for `node-a` and `node-b` capability discovery.
+- `scripts/verify-phase1-docker.sh` now validates both node health and capability discovery.
+
+Remaining:
+
+- None for Phase 2.
 
 Initial capability kinds:
 
@@ -214,9 +229,32 @@ Done when:
 
 ## Phase 3: Filesystem Capability
 
-Status: Not started.
+Status: Completed.
 
 Goal: make remote filesystem operations work through protocol calls, without mount support.
+
+Current status: completed on 2026-04-30 with Docker two-node validation.
+
+Completed:
+
+- daemon exposes `GET /fs/stat`.
+- daemon exposes `GET /fs/list`.
+- daemon exposes `GET /fs/read`.
+- daemon exposes `POST /fs/write`.
+- daemon constrains all fs operations to the configured workspace mount.
+- CLI implements `operon fs stat <node:/path>`.
+- CLI implements `operon fs list <node:/path>`.
+- CLI implements `operon fs read <node:/path>`.
+- CLI implements `operon fs write <node:/path> --content <text>`.
+- Docker image creates a writable `/workspace` mount.
+- minimal audit log added through `GET /audit`.
+- CLI implements `operon audit list <node-id>`.
+- Docker validation passes fs stat/list/read/write on `node-a` and `node-b`.
+- Docker validation confirms path escape attempts are denied and recorded in audit output.
+
+Remaining:
+
+- None for Phase 3.
 
 Commands:
 

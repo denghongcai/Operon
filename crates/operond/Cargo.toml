@@ -12,6 +12,7 @@ axum.workspace = true
 clap.workspace = true
 operon-core = { path = "../operon-core" }
 operon-network = { path = "../operon-network" }
+serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

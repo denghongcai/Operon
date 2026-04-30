@@ -502,6 +502,7 @@ dependencies = [
  "clap",
  "operon-core",
  "operon-network",
+ "serde",
  "tokio",
  "tracing",
  "tracing-subscriber",
