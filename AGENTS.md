@@ -28,6 +28,10 @@ Operon should not own:
 
 ## Key Design Documents
 
+- `docs/plan/development-phases.md`
+  - Authoritative phase plan and phase status tracker.
+  - Every completed task must update this document with what changed and which phase advanced.
+
 - `README.md`
   - Public-facing project positioning and high-level architecture.
   - Current framing: "AI-native capability runtime over existing private networks."
@@ -90,3 +94,7 @@ Defer:
 - Do not reintroduce Operon-owned transport/mesh/VPN responsibilities without updating the decision docs first.
 - Prefer adding or updating decision records when changing product scope or architecture boundaries.
 - Keep README language aligned with the decision docs.
+- After every task, update `docs/plan/development-phases.md` before finishing.
+- Phase updates must state which phase changed, what was completed, and what remains.
+- If implementation changes the phase scope, update the phase text itself instead of only adding a note.
+- If no phase status changed, explicitly record that in the relevant phase or explain it in the final response.
