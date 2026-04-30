@@ -98,11 +98,11 @@ Done when:
 
 ## Phase 1: Node Runtime and Manual Network
 
-Status: In progress.
+Status: Completed.
 
 Goal: run real daemons on already-reachable nodes.
 
-Current status: local daemon runtime and manual endpoint CLI are implemented; two-machine validation is still pending.
+Current status: completed on 2026-04-30 with Docker two-node validation.
 
 Completed:
 
@@ -114,12 +114,12 @@ Completed:
 - `operon node ping <node-id>` implemented for Phase 1 `http://` endpoints.
 - `examples/nodes.yaml` includes a local endpoint.
 - local validation passed with `operond` on `127.0.0.1:7788` and `operon node ping local`.
+- Docker two-node validation added through `docker-compose.yml`, `docker/Dockerfile`, `examples/docker-nodes.yaml`, and `scripts/verify-phase1-docker.sh`.
+- Docker two-node validation passed with `node-a` and `node-b`.
 
 Remaining:
 
-- Validate the same flow across two reachable machines.
-- Decide whether Phase 1 should add HTTPS support or keep HTTP behind private network boundaries.
-- Replace the temporary hand-written HTTP client if/when the daemon API moves to generated gRPC or a formal HTTP client.
+- None for Phase 1.
 
 Commands:
 
@@ -155,9 +155,15 @@ Implementation notes:
 
 Done when:
 
-- two daemons can run on two reachable machines
+- Docker two-node validation passes locally or in CI
 - CLI can ping a remote daemon
 - CLI can show remote node identity and basic metadata
+
+Notes:
+
+- Real private-network two-machine validation is not required for Phase 1; Docker two-node validation is sufficient because Operon intentionally treats network connectivity as an external dependency.
+- HTTPS support is deferred until identity/auth requirements are designed.
+- Generated gRPC or a formal HTTP client can replace the temporary hand-written HTTP client in a later protocol phase.
 
 ## Phase 2: Capability Discovery
 

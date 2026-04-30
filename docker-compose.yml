@@ -1,0 +1,16 @@
+services:
+  node-a:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["start", "--listen", "0.0.0.0:7788", "--node-id", "node-a"]
+    ports:
+      - "17788:7788"
+
+  node-b:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["start", "--listen", "0.0.0.0:7788", "--node-id", "node-b"]
+    ports:
+      - "17789:7788"
