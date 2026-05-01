@@ -9,9 +9,22 @@ permissions:
   contents: write
 
 jobs:
-  draft-release:
-    name: Draft GitHub Release
+  build-rust:
+    name: Build Rust (${{ matrix.arch }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            arch: linux-x86_64
+            packages: ""
+          - target: aarch64-unknown-linux-gnu
+            arch: linux-arm64
+            packages: gcc-aarch64-linux-gnu
+          - target: armv7-unknown-linux-gnueabihf
+            arch: linux-armv7
+            packages: gcc-arm-linux-gnueabihf
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -19,20 +32,68 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            gcc-arm-linux-gnueabihf \
-            protobuf-compiler
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.target }}
 
-      - name: Install Rust targets
+      - name: Install build dependencies
+        shell: bash
         run: |
-          rustup target add \
-            x86_64-unknown-linux-gnu \
-            aarch64-unknown-linux-gnu \
-            armv7-unknown-linux-gnueabihf
+          set -euo pipefail
+          packages="${{ matrix.packages }}"
+
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler ${packages}
+
+      - name: Install Rust target
+        run: rustup target add "${{ matrix.target }}"
+
+      - name: Build Rust binaries
+        shell: bash
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+          PKG_CONFIG_ALLOW_CROSS: "1"
+        run: cargo build --release --locked --target "${{ matrix.target }}" -p operon-cli -p operond
+
+      - name: Package Rust binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          target="${{ matrix.target }}"
+          arch="${{ matrix.arch }}"
+          dist_dir="$PWD/dist"
+          binary_dir="$dist_dir/operon-${tag}-${arch}"
+
+          rm -rf "$dist_dir"
+          mkdir -p "$binary_dir"
+          cp "target/$target/release/operon" "$binary_dir/operon"
+          cp "target/$target/release/operond" "$binary_dir/operond"
+          cp README.md PROTOCOL.md "$binary_dir/"
+          if [[ -f LICENSE ]]; then
+            cp LICENSE "$binary_dir/"
+          fi
+
+          tar -C "$dist_dir" -czf "$dist_dir/operon-${tag}-${arch}.tar.gz" "operon-${tag}-${arch}"
+
+      - name: Upload Rust archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: operon-${{ github.ref_name }}-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  build-sdk:
+    name: Build TypeScript SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -51,48 +112,6 @@ jobs:
       - name: Build TypeScript SDK
         run: pnpm --filter @operon/sdk build
 
-      - name: Build and package Rust binaries
-        shell: bash
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
-          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-          CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
-          PKG_CONFIG_ALLOW_CROSS: "1"
-        run: |
-          set -euo pipefail
-
-          tag="${GITHUB_REF_NAME}"
-          dist_dir="$PWD/dist"
-
-          rm -rf "$dist_dir"
-          mkdir -p "$dist_dir"
-
-          targets=(
-            "x86_64-unknown-linux-gnu:linux-x86_64"
-            "aarch64-unknown-linux-gnu:linux-arm64"
-            "armv7-unknown-linux-gnueabihf:linux-armv7"
-          )
-
-          for target_spec in "${targets[@]}"; do
-            target="${target_spec%%:*}"
-            arch="${target_spec##*:}"
-            binary_dir="$dist_dir/operon-${tag}-${arch}"
-
-            cargo build --release --locked --target "$target" -p operon-cli -p operond
-
-            mkdir -p "$binary_dir"
-            cp "target/$target/release/operon" "$binary_dir/operon"
-            cp "target/$target/release/operond" "$binary_dir/operond"
-            cp README.md PROTOCOL.md "$binary_dir/"
-            if [[ -f LICENSE ]]; then
-              cp LICENSE "$binary_dir/"
-            fi
-
-            tar -C "$dist_dir" -czf "$dist_dir/operon-${tag}-${arch}.tar.gz" "operon-${tag}-${arch}"
-            rm -rf "$binary_dir"
-          done
-
       - name: Package TypeScript SDK
         shell: bash
         run: |
@@ -102,28 +121,50 @@ jobs:
           dist_dir="$PWD/dist"
           sdk_dir="$dist_dir/operon-sdk-js-${tag}"
 
+          rm -rf "$dist_dir"
           mkdir -p "$sdk_dir"
           cp packages/sdk-js/package.json "$sdk_dir/package.json"
           cp -R packages/sdk-js/dist "$sdk_dir/dist"
           cp -R packages/sdk-js/src/generated "$sdk_dir/generated"
           tar -C "$dist_dir" -czf "$dist_dir/operon-sdk-js-${tag}.tar.gz" "operon-sdk-js-${tag}"
 
-          rm -rf "$sdk_dir"
+      - name: Upload SDK archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: operon-sdk-js-${{ github.ref_name }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  draft-release:
+    name: Draft GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-rust
+      - build-sdk
+    steps:
+      - name: Download archives
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Generate checksums
         shell: bash
         run: |
           set -euo pipefail
 
-          dist_dir="$PWD/dist"
-          cd "$dist_dir"
+          cd "$PWD/dist"
           sha256sum *.tar.gz > SHA256SUMS
 
-      - name: Create draft release
+      - name: Create or update draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --draft \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --draft \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi

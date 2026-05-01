@@ -1954,6 +1954,9 @@ Completed:
 - Updated README, AGENTS, and CI references for v0.6.5.
 - Split README user Quickstart from developer validation, with release-download
   install commands and onboard-based setup.
+- Optimized GitHub Actions with Rust build caching, a matrix-backed validation
+  job, and parallel release matrix builds for Linux `x86_64`, `arm64`, and
+  `armv7` archives.
 
 Remaining:
 

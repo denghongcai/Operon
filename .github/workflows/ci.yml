@@ -17,6 +17,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-rust
+
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
@@ -59,12 +64,28 @@ jobs:
       - name: Test
         run: pnpm -r test
 
-  v05-docker:
-    name: v0.5 Docker Validation
+  validation:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     needs:
       - rust
       - typescript
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: v0.5 Docker Validation
+            script: scripts/verify-v0.5-docker.sh
+          - name: v0.6 Linux Mount Validation
+            script: scripts/verify-v0.6-linux-mount.sh
+          - name: v0.6.1 Linux Write Mount Validation
+            script: scripts/verify-v0.6.1-linux-write-mount.sh
+          - name: v0.6.2 CLI FS Cleanup Validation
+            script: scripts/verify-v0.6.2-cli-fs-cleanup.sh
+          - name: v0.6.3 FS Copy Validation
+            script: scripts/verify-v0.6.3-fs-copy.sh
+          - name: v0.6.4/v0.6.5 Onboard and Unified Config Validation
+            script: scripts/verify-v0.6.4-onboard.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -72,122 +93,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.5 Docker demo
-        run: scripts/verify-v0.5-docker.sh
-
-  v06-linux-mount:
-    name: v0.6 Linux Mount Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-rust
 
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
-      - name: Validate v0.6 Linux mount
-        run: scripts/verify-v0.6-linux-mount.sh
-
-  v061-linux-write-mount:
-    name: v0.6.1 Linux Write Mount Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.6.1 Linux write mount
-        run: scripts/verify-v0.6.1-linux-write-mount.sh
-
-  v062-cli-fs-cleanup:
-    name: v0.6.2 CLI FS Cleanup Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.6.2 CLI fs cleanup
-        run: scripts/verify-v0.6.2-cli-fs-cleanup.sh
-
-  v063-fs-copy:
-    name: v0.6.3 FS Copy Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.6.3 fs copy
-        run: scripts/verify-v0.6.3-fs-copy.sh
-
-  v064-onboard:
-    name: v0.6.4 Onboard Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.6.4 onboard
-        run: scripts/verify-v0.6.4-onboard.sh
-
-  v065-unified-config:
-    name: v0.6.5 Unified Config Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.6.5 unified config
-        run: scripts/verify-v0.6.4-onboard.sh
+      - name: Run validation
+        run: ${{ matrix.script }}
