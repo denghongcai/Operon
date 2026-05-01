@@ -59,7 +59,7 @@ Operon is not a VPN. It runs on top of Cloudflare Mesh, Tailscale, WireGuard, SS
 Install the latest Linux release binary:
 
 ```bash
-VERSION=v0.6.5
+VERSION=v0.6.8
 case "$(uname -m)" in
   x86_64) ARCH=linux-x86_64 ;;
   aarch64|arm64) ARCH=linux-arm64 ;;
@@ -124,6 +124,7 @@ scripts/verify-v0.6.1-linux-write-mount.sh
 scripts/verify-v0.6.2-cli-fs-cleanup.sh
 scripts/verify-v0.6.3-fs-copy.sh
 scripts/verify-v0.6.4-onboard.sh
+scripts/verify-v0.6.7-runtime.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -135,6 +136,9 @@ The v0.6.3 fs copy validation checks same-node daemon-side copy, denied copy,
 and audit.
 The v0.6.4 onboard validation checks generated unified config, token auth,
 daemon startup, CLI ping, capability inspection, fs operation, and audit.
+The v0.6.7/v0.6.8 runtime validation checks process-group cancellation,
+binary-safe job logs, streaming file writes, job stdin streaming, and current
+paginated list API callers.
 
 ## Release Automation
 
@@ -142,8 +146,8 @@ Pushing a tag that matches `v*` starts the `Draft Release` GitHub Actions
 workflow:
 
 ```bash
-git tag v0.6.5
-git push origin v0.6.5
+git tag v0.6.8
+git push origin v0.6.8
 ```
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
@@ -469,6 +473,7 @@ scripts/verify-v0.6.1-linux-write-mount.sh
 scripts/verify-v0.6.2-cli-fs-cleanup.sh
 scripts/verify-v0.6.3-fs-copy.sh
 scripts/verify-v0.6.4-onboard.sh
+scripts/verify-v0.6.7-runtime.sh
 ```
 
 Example workflow:

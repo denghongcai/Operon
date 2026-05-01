@@ -86,6 +86,8 @@ jobs:
             script: scripts/verify-v0.6.3-fs-copy.sh
           - name: v0.6.4/v0.6.5 Onboard and Unified Config Validation
             script: scripts/verify-v0.6.4-onboard.sh
+          - name: v0.6.7/v0.6.8 Runtime and Protocol Validation
+            script: scripts/verify-v0.6.7-runtime.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -76,6 +76,37 @@ for _ in $(seq 1 50); do
 done
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" node ping local | grep -q "ok=true"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" capability list local >"$TMP_DIR/capabilities.txt"
+grep -q "local/fs:workspace" "$TMP_DIR/capabilities.txt"
+
+printf 'streamed fs content\n' >"$TMP_DIR/fs-stream-input.txt"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" fs write local:/streamed.txt \
+  --file "$TMP_DIR/fs-stream-input.txt" >/dev/null
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" fs read local:/streamed.txt \
+  --output "$TMP_DIR/fs-stream-output.txt"
+cmp "$TMP_DIR/fs-stream-input.txt" "$TMP_DIR/fs-stream-output.txt"
+
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
+  --detach \
+  --timeout-secs 10 \
+  -- "cat > stdin-streamed.txt" \
+  >"$TMP_DIR/stdin-job.txt"
+stdin_job_id="$(awk '{print $2}' "$TMP_DIR/stdin-job.txt" | head -n1)"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job stdin local "$stdin_job_id" \
+  --content "stdin stream content"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job stdin local "$stdin_job_id" --close
+for _ in $(seq 1 50); do
+  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job status local "$stdin_job_id" \
+    >"$TMP_DIR/stdin-status.txt"
+  if grep -q "Succeeded" "$TMP_DIR/stdin-status.txt"; then
+    break
+  fi
+  sleep 0.1
+done
+grep -q "Succeeded" "$TMP_DIR/stdin-status.txt"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" fs read local:/stdin-streamed.txt \
+  --output "$TMP_DIR/stdin-output.txt"
+grep -q "stdin stream content" "$TMP_DIR/stdin-output.txt"
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
   --detach \
@@ -145,4 +176,10 @@ cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job logs local "$binary_jo
 printf '\377\000A' >"$TMP_DIR/binary-log-expected.bin"
 cmp "$TMP_DIR/binary-log-expected.bin" "$TMP_DIR/binary-log-output.bin"
 
-echo "v0.6.7 runtime validation passed"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job list local >"$TMP_DIR/jobs.txt"
+grep -q "$binary_job_id" "$TMP_DIR/jobs.txt"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" audit list local >"$TMP_DIR/audit.txt"
+grep -q "write-stream" "$TMP_DIR/audit.txt"
+grep -q "job:default" "$TMP_DIR/audit.txt"
+
+echo "v0.6.7/v0.6.8 runtime validation passed"

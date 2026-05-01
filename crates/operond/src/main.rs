@@ -51,6 +51,7 @@ const RUN_ID_METADATA: &str = "x-operon-run-id";
 const STEP_ID_METADATA: &str = "x-operon-step-id";
 const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
 const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
+const MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS: usize = 512;
 
 tokio::task_local! {
     static AUDIT_CONTEXT: RequestContext;
@@ -124,7 +125,9 @@ struct JobTask {
 
 struct JobCompletion {
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
     events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
+    log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
     cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     stdin: JobStdinRegistry,
     store: Option<PathBuf>,
@@ -1316,25 +1319,31 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
     let timeout_secs = request
         .timeout_secs
         .unwrap_or(state.policy.job.default_timeout_secs);
+    let audit_context = current_request_context();
 
     tokio::spawn(async move {
-        run_job_task(JobTask {
-            jobs,
-            logs,
-            events,
-            log_events,
-            cancels,
-            stdin,
-            store,
-            job_id,
-            command,
-            cwd,
-            timeout_secs,
-            env,
-            cancel_rx,
-            stdin_rx,
-        })
-        .await;
+        let context = audit_context.clone();
+        AUDIT_CONTEXT
+            .scope(context, async move {
+                run_job_task(JobTask {
+                    jobs,
+                    logs,
+                    events,
+                    log_events,
+                    cancels,
+                    stdin,
+                    store,
+                    job_id,
+                    command,
+                    cwd,
+                    timeout_secs,
+                    env,
+                    cancel_rx,
+                    stdin_rx,
+                })
+                .await;
+            })
+            .await;
     });
 
     Ok(record)
@@ -1413,11 +1422,14 @@ fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>>
 
 fn next_job_sequence(jobs: &BTreeMap<String, JobRecord>) -> u64 {
     jobs.keys()
-        .filter_map(|id| id.strip_prefix("job-"))
-        .filter_map(|suffix| suffix.parse::<u64>().ok())
+        .filter_map(|id| job_sequence_number(id))
         .max()
         .unwrap_or(0)
         + 1
+}
+
+fn job_sequence_number(job_id: &str) -> Option<u64> {
+    job_id.strip_prefix("job-")?.parse::<u64>().ok()
 }
 
 fn advertise_lan(
@@ -1613,7 +1625,9 @@ fn now_ms() -> u128 {
 async fn run_job_task(task: JobTask) {
     let completion = JobCompletion {
         jobs: task.jobs.clone(),
+        logs: task.logs.clone(),
         events: task.events.clone(),
+        log_events: task.log_events.clone(),
         cancels: task.cancels.clone(),
         stdin: task.stdin.clone(),
         store: task.store.clone(),
@@ -1978,6 +1992,52 @@ fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i
         {
             let _ = sender.send(event);
         }
+    }
+    cleanup_finished_job_runtime(completion);
+}
+
+fn cleanup_finished_job_runtime(completion: &JobCompletion) {
+    completion
+        .events
+        .lock()
+        .expect("job event mutex poisoned")
+        .remove(&completion.job_id);
+    completion
+        .log_events
+        .lock()
+        .expect("job log event mutex poisoned")
+        .remove(&completion.job_id);
+    prune_completed_job_log_buffers(&completion.jobs, &completion.logs);
+}
+
+fn prune_completed_job_log_buffers(
+    jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
+) {
+    let jobs = jobs.lock().expect("job map mutex poisoned");
+    let mut completed_log_job_ids = logs
+        .lock()
+        .expect("job log mutex poisoned")
+        .keys()
+        .filter(|job_id| {
+            jobs.get(*job_id)
+                .map(|record| !matches!(record.status, JobStatus::Running))
+                .unwrap_or(true)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if completed_log_job_ids.len() <= MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS {
+        return;
+    }
+
+    completed_log_job_ids.sort_by_key(|job_id| job_sequence_number(job_id).unwrap_or(u64::MAX));
+    let remove_count = completed_log_job_ids.len() - MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS;
+    drop(jobs);
+
+    let mut logs = logs.lock().expect("job log mutex poisoned");
+    for job_id in completed_log_job_ids.into_iter().take(remove_count) {
+        logs.remove(&job_id);
     }
 }
 
@@ -2383,5 +2443,69 @@ mod tests {
         let buffer = buffers.get("job-1").expect("job log buffer");
         assert_eq!(buffer.logs.len(), MAX_IN_MEMORY_JOB_LOGS);
         assert_eq!(buffer.logs.front().expect("first retained").sequence, 5);
+    }
+
+    #[test]
+    fn finished_job_runtime_state_is_cleaned_and_log_buffers_are_bounded() {
+        let mut job_records = BTreeMap::new();
+        let mut log_buffers = BTreeMap::new();
+        for index in 1..=(MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS + 2) {
+            let job_id = format!("job-{index}");
+            job_records.insert(
+                job_id.clone(),
+                JobRecord {
+                    id: job_id.clone(),
+                    node_id: "node-a".to_string(),
+                    command: "true".to_string(),
+                    cwd: "/workspace".to_string(),
+                    status: JobStatus::Succeeded,
+                    exit_code: Some(0),
+                    log_count: 0,
+                    logs_truncated: false,
+                },
+            );
+            log_buffers.insert(job_id, JobLogBuffer::default());
+        }
+        let target_job_id = format!("job-{}", MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS + 2);
+        if let Some(record) = job_records.get_mut(&target_job_id) {
+            record.status = JobStatus::Running;
+            record.exit_code = None;
+        }
+
+        let jobs = Arc::new(Mutex::new(job_records));
+        let logs = Arc::new(Mutex::new(log_buffers));
+        let (event_sender, _) = broadcast::channel(1);
+        let (log_sender, _) = broadcast::channel(1);
+        let events = Arc::new(Mutex::new(BTreeMap::from([(
+            target_job_id.clone(),
+            event_sender,
+        )])));
+        let log_events = Arc::new(Mutex::new(BTreeMap::from([(
+            target_job_id.clone(),
+            log_sender,
+        )])));
+        let completion = JobCompletion {
+            jobs,
+            logs: logs.clone(),
+            events: events.clone(),
+            log_events: log_events.clone(),
+            cancels: Arc::new(Mutex::new(BTreeMap::new())),
+            stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            store: None,
+            job_id: target_job_id.clone(),
+        };
+
+        finish_job(&completion, JobStatus::Succeeded, Some(0));
+
+        assert!(!events.lock().expect("events").contains_key(&target_job_id));
+        assert!(!log_events
+            .lock()
+            .expect("log events")
+            .contains_key(&target_job_id));
+        let logs = logs.lock().expect("logs");
+        assert_eq!(logs.len(), MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS);
+        assert!(!logs.contains_key("job-1"));
+        assert!(!logs.contains_key("job-2"));
+        assert!(logs.contains_key(&target_job_id));
     }
 }

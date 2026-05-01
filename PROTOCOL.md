@@ -42,8 +42,8 @@ mTLS policy are separate roadmap items.
 
 ## Authentication
 
-If the daemon is started with `--auth-token` or `--auth-token-file`, send bearer
-metadata on every call:
+If the daemon config sets `daemon.auth.token`, `daemon.auth.token_file`, or
+`daemon.auth.token_env`, send bearer metadata on every call:
 
 ```text
 authorization: Bearer <token>

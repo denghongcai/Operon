@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.6.6";
+pub const PROTOCOL_VERSION: &str = "v0.6.8";
 
 pub mod runtime {
     pub mod v1 {
@@ -556,6 +556,6 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.6.6");
+        assert_eq!(PROTOCOL_VERSION, "v0.6.8");
     }
 }

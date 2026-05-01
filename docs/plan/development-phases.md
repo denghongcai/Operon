@@ -2475,6 +2475,40 @@ Completed:
 - Verified format, clippy, Rust tests, SDK typecheck/tests, Docker runtime
   smoke, and v0.6.7 runtime validation.
 
+## Phase 32.29: v0.6.8 Release Cleanup
+
+Status: Completed.
+
+Goal: close final review findings before tagging v0.6.8.
+
+Planned:
+
+- bound runtime-only job maps so completed jobs do not grow daemon memory
+  without limit.
+- preserve audit context across spawned job task boundaries.
+- add current runtime/schema smoke validation to CI and README.
+- replace stale daemon flag references with unified `config.yaml` guidance.
+- align public protocol version and release examples with v0.6.8.
+
+Done when:
+
+- completed job event broadcasters are removed after terminal events.
+- completed job log buffers have a global in-memory retention limit.
+- job async tasks run under the captured request audit context.
+- CI runs the current runtime validation script.
+- README, PROTOCOL.md, and runtime architecture docs match the unified config
+  model.
+- `PROTOCOL_VERSION` and release instructions point to v0.6.8.
+
+Completed:
+
+- Added bounded completed-job log buffer retention and event broadcaster cleanup.
+- Captured request audit context before spawning job execution tasks.
+- Expanded `scripts/verify-v0.6.7-runtime.sh` and added it to CI.
+- Updated README, PROTOCOL.md, runtime architecture docs, and
+  `docs/plan/v0.6.8-release-cleanup.md`.
+- Updated `PROTOCOL_VERSION` to `v0.6.8`.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

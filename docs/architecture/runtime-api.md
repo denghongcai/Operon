@@ -7,14 +7,16 @@ later hardening work.
 
 ## Current Boundary
 
-- The daemon starts one runtime listener with `operond start --grpc-listen`.
+- The daemon starts one runtime listener from `$HOME/.operon/config.yaml` by
+  default, or from an explicit `operond start --config <path>` file.
+- The daemon listen address is configured with `daemon.grpc_listen`.
 - Runtime configs use `grpc://` or `grpcs://` node endpoints.
 - Scripts should use `operon --json`, not direct daemon calls.
 - Programs should use an SDK or generate a gRPC client from
   `proto/operon/runtime.proto`.
 - Clients that do not use an SDK should follow `PROTOCOL.md`.
-- Authentication is bearer-token based when `operond` starts with
-  `--auth-token` or `--auth-token-file`.
+- Authentication is bearer-token based when `daemon.auth.token`,
+  `daemon.auth.token_file`, or `daemon.auth.token_env` is configured.
 - Policy is enforced by the daemon for every capability operation.
 - gRPC errors use status codes for auth, policy, validation, missing resources,
   precondition failures, and internal failures.

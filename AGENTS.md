@@ -76,6 +76,10 @@ Operon should not own:
 - `docs/plan/v0.6.8-acceptance.md`
   - v0.6.8 acceptance scope for gRPC schema-level protocol stabilization.
 
+- `docs/plan/v0.6.8-release-cleanup.md`
+  - v0.6.8 final release cleanup scope for runtime retention, CI validation,
+    config docs, and protocol version alignment.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -132,6 +136,9 @@ Operon should not own:
 - Completed protocol stabilization milestone: v0.6.8 typed runtime enums,
   proto3 optional presence, streaming request envelopes, paginated list APIs,
   and active proto surface pruning.
+- Completed release cleanup milestone: v0.6.8 runtime retention bounding,
+  current CI validation coverage, unified config docs, and protocol version
+  alignment.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.
