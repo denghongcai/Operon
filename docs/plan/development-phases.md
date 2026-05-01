@@ -619,6 +619,7 @@ Completed:
 - Old `verify-phase1-docker.sh` references were updated to the MVP script name.
 - Unit test baseline added across core Rust modules and the TypeScript SDK.
 - CI Node setup updated to `actions/setup-node@v6`.
+- CI checkout and pnpm setup actions updated to `actions/checkout@v6` and `pnpm/action-setup@v6`.
 
 Remaining:
 
