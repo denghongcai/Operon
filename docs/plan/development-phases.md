@@ -297,18 +297,42 @@ Done when:
 
 ## Phase 4: Process and Job Capability
 
-Status: Not started.
+Status: Completed.
 
 Goal: run controlled commands remotely and stream their lifecycle.
+
+Current status: completed on 2026-05-01 with Docker two-node validation.
+
+Completed:
+
+- daemon exposes `POST /job/run`.
+- daemon exposes `GET /job/status`.
+- daemon exposes `GET /job/logs`.
+- daemon exposes `POST /job/cancel`.
+- daemon keeps an in-memory job table with lifecycle status and exit code.
+- daemon captures stdout/stderr as structured `JobLog` entries.
+- daemon supports timeout and best-effort cancellation.
+- daemon constrains job cwd to the configured workspace mount.
+- job run and cancel operations emit audit records.
+- CLI implements `operon job run <node-id> -- <command>`.
+- CLI implements `operon job run <node-id> --detach -- <command>`.
+- CLI implements `operon job status <node-id> <job-id>`.
+- CLI implements `operon job logs <node-id> <job-id>`.
+- CLI implements `operon job cancel <node-id> <job-id>`.
+- Docker validation passes job run/log/status/cancel/timeout on `node-a` and `node-b`.
+
+Remaining:
+
+- None for Phase 4.
 
 Commands:
 
 ```bash
-operon job run cloud-a -- "echo hello"
-operon job run gpu-node --cwd /workspace -- "python train.py"
-operon job logs <job-id>
-operon job status <job-id>
-operon job cancel <job-id>
+operon job run cloud-a -- echo hello
+operon job run gpu-node --cwd /workspace -- python train.py
+operon job logs cloud-a <job-id>
+operon job status cloud-a <job-id>
+operon job cancel cloud-a <job-id>
 ```
 
 MVP features:
@@ -346,9 +370,28 @@ Done when:
 
 ## Phase 5: Operon Execution Graph
 
-Status: Not started.
+Status: Completed.
 
 Goal: compose capability calls into a traceable execution unit.
+
+Current status: completed on 2026-05-01 with Docker two-node validation.
+
+Completed:
+
+- shared `ExecutionGraph`, `ExecutionStep`, `ExecutionTrace`, and trace status types added.
+- CLI implements `operon run <workflow.yaml>`.
+- workflow YAML executes steps sequentially.
+- supported graph actions: `fs.stat`, `fs.list`, `fs.read`, `fs.write`, and `job.run`.
+- each step records id, node, action, status, start/end timestamps, error, and output.
+- graph execution stops on the first failed step and prints the partial trace.
+- graph execution prints structured JSON trace for human and agent consumption.
+- example Docker workflow added at `examples/docker-copy-and-run.yaml`.
+- `examples/train-model.yaml` updated with explicit step ids and write content.
+- Docker validation passes the copy/run/read graph demo on `node-a`.
+
+Remaining:
+
+- None for Phase 5.
 
 Example:
 
@@ -376,7 +419,6 @@ Commands:
 
 ```bash
 operon run examples/train-model.yaml
-operon trace show <run-id>
 ```
 
 MVP graph fields:
@@ -397,6 +439,14 @@ Scheduling:
 - v0.1 should execute steps sequentially
 - no complex DAG scheduler in MVP
 
+Deferred:
+
+- daemon-persisted traces
+- `operon trace show <run-id>`
+- parallel DAG scheduling
+- artifact store
+- retry policy
+
 Done when:
 
 - YAML steps execute in order
@@ -406,28 +456,48 @@ Done when:
 
 ## Phase 6: Minimal Policy and Audit
 
-Status: Not started.
+Status: Completed.
 
 Goal: make capability use explicit, scoped, and traceable.
+
+Current status: completed on 2026-05-01 with Docker two-node validation.
+
+Completed:
+
+- shared policy types added for fs mounts, fs permissions, job cwd allowlist, job timeout limits, and env allowlist.
+- daemon supports `operond start --policy <policy.yaml>`.
+- daemon keeps a default policy when no policy file is provided.
+- fs stat/list/read/write are checked against configured fs mount permissions before execution.
+- job run checks cwd allowlist and timeout maximum before execution.
+- Docker nodes load `examples/docker-policy.yaml`.
+- audit records now include subject, timestamp, run id placeholder, and step id placeholder.
+- CLI audit output renders the expanded audit fields.
+- Docker validation confirms path escape denial, job timeout policy denial, allowed operations, and denied operations are all recorded in audit output.
+
+Remaining:
+
+- None for Phase 6.
 
 Example node policy:
 
 ```yaml
-nodes:
-  cloud-a:
-    endpoint: http://100.96.12.34:7788
-    capabilities:
-      fs:
-        mounts:
-          - name: workspace
-            path: /home/ubuntu/workspace
-            permissions:
-              read: true
-              write: true
-              delete: false
-      job:
-        allow:
-          - cwd: /home/ubuntu/workspace
+subject: local-cli
+
+fs:
+  mounts:
+    - name: workspace
+      path: /
+      permissions:
+        read: true
+        write: true
+        delete: false
+
+job:
+  allowed_cwds:
+    - /
+  default_timeout_secs: 30
+  max_timeout_secs: 300
+  env_allowlist: []
 ```
 
 MVP policy:
@@ -461,19 +531,44 @@ Done when:
 
 ## Phase 7: Minimal SDK and Demo Packaging
 
-Status: Not started.
+Status: Completed.
 
 Goal: expose the MVP through an agent-friendly SDK and a runnable demo.
+
+Current status: completed on 2026-05-01 with Docker two-node validation.
+
+Completed:
+
+- TypeScript SDK now exposes `OperonClient`.
+- SDK can run sequential workflows over configured node endpoints.
+- SDK supports `fs.stat`, `fs.list`, `fs.read`, `fs.write`, and `job.run`.
+- SDK returns a structured trace with run id, step status, timing, error, and output fields.
+- README now documents the Docker MVP demo command.
+- README now shows the runnable `examples/docker-copy-and-run.yaml` workflow.
+- README status checklist reflects the completed MVP runtime pieces.
+- Docker validation remains the reproducible fresh-checkout demo path.
+
+Remaining:
+
+- None for Phase 7.
 
 TypeScript SDK shape:
 
 ```ts
-await operon.run({
+import { OperonClient } from "@operon/sdk";
+
+const operon = new OperonClient([
+  { nodeId: "cloud-a", endpoint: "http://100.96.12.34:7788" },
+  { nodeId: "gpu-node", endpoint: "http://100.96.18.20:7788" }
+]);
+
+const trace = await operon.run({
+  name: "train-model",
   steps: [
     { node: "cloud-a", action: "fs.read", path: "/workspace/a.txt" },
     { node: "gpu-node", action: "job.run", command: "python train.py" }
   ]
-})
+});
 ```
 
 SDK should call the local daemon HTTP facade, not require consumers to speak gRPC directly.
@@ -495,7 +590,7 @@ workflow:
 Demo command:
 
 ```bash
-operon run examples/copy-and-run.yaml
+scripts/verify-phase1-docker.sh
 ```
 
 Done when:

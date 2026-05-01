@@ -1,8 +1,13 @@
 use std::{
+    collections::BTreeMap,
     env, fs,
     net::SocketAddr,
     path::{Component, Path, PathBuf},
-    sync::{Arc, Mutex},
+    process::Stdio,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use axum::{
@@ -13,9 +18,12 @@ use axum::{
 };
 use clap::{Parser, Subcommand};
 use operon_core::{
-    AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList, FsRead,
-    FsStat, FsWrite, FsWriteRequest, HealthStatus, NodeInfo,
+    AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList,
+    FsMountPolicy, FsPermissions, FsPolicy, FsRead, FsStat, FsWrite, FsWriteRequest, HealthStatus,
+    JobCancelRequest, JobLog, JobPolicy, JobRecord, JobRunRequest, JobStatus, NodeInfo,
+    PolicyConfig,
 };
+use tokio::{io::AsyncReadExt, process::Command as TokioCommand, sync::oneshot, time};
 
 #[derive(Debug, Parser)]
 #[command(name = "operond", about = "Operon capability daemon")]
@@ -39,6 +47,9 @@ struct StartArgs {
 
     #[arg(long, default_value = "/workspace")]
     workspace: PathBuf,
+
+    #[arg(long)]
+    policy: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +57,11 @@ struct AppState {
     node: NodeInfo,
     capabilities: CapabilityList,
     workspace: PathBuf,
+    policy: PolicyConfig,
     audit: Arc<Mutex<Vec<AuditEvent>>>,
+    jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    job_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    next_job_id: Arc<AtomicU64>,
 }
 
 #[tokio::main]
@@ -59,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn start(args: StartArgs) -> anyhow::Result<()> {
+    let policy = load_policy(args.policy.as_deref())?;
     let node = NodeInfo {
         id: args.node_id,
         hostname: hostname(),
@@ -69,7 +85,11 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         capabilities: default_capabilities(&node.id),
         node,
         workspace: args.workspace,
+        policy,
         audit: Arc::new(Mutex::new(Vec::new())),
+        jobs: Arc::new(Mutex::new(BTreeMap::new())),
+        job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+        next_job_id: Arc::new(AtomicU64::new(1)),
     };
 
     let app = Router::new()
@@ -80,6 +100,10 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .route("/fs/list", get(fs_list))
         .route("/fs/read", get(fs_read))
         .route("/fs/write", post(fs_write))
+        .route("/job/run", post(job_run))
+        .route("/job/status", get(job_status))
+        .route("/job/logs", get(job_logs))
+        .route("/job/cancel", post(job_cancel))
         .route("/audit", get(audit_log))
         .with_state(state);
 
@@ -125,10 +149,19 @@ struct FsPathQuery {
     path: String,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct JobIdQuery {
+    id: String,
+}
+
 async fn fs_stat(
     State(state): State<AppState>,
     Query(query): Query<FsPathQuery>,
 ) -> Result<Json<FsStat>, (StatusCode, String)> {
+    if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
+        record_audit(&state, "stat", &query.path, false, &error.1);
+        return Err(error);
+    }
     let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
         Ok(path) => path,
         Err(error) => {
@@ -151,6 +184,10 @@ async fn fs_list(
     State(state): State<AppState>,
     Query(query): Query<FsPathQuery>,
 ) -> Result<Json<FsList>, (StatusCode, String)> {
+    if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
+        record_audit(&state, "list", &query.path, false, &error.1);
+        return Err(error);
+    }
     let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
         Ok(path) => path,
         Err(error) => {
@@ -187,6 +224,10 @@ async fn fs_read(
     State(state): State<AppState>,
     Query(query): Query<FsPathQuery>,
 ) -> Result<Json<FsRead>, (StatusCode, String)> {
+    if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
+        record_audit(&state, "read", &query.path, false, &error.1);
+        return Err(error);
+    }
     let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
         Ok(path) => path,
         Err(error) => {
@@ -207,6 +248,10 @@ async fn fs_write(
     State(state): State<AppState>,
     Json(request): Json<FsWriteRequest>,
 ) -> Result<Json<FsWrite>, (StatusCode, String)> {
+    if let Err(error) = authorize_fs(&state.policy, "write", &request.path) {
+        record_audit(&state, "write", &request.path, false, &error.1);
+        return Err(error);
+    }
     let full_path = match resolve_workspace_path(&state.workspace, &request.path) {
         Ok(path) => path,
         Err(error) => {
@@ -226,10 +271,161 @@ async fn fs_write(
     }))
 }
 
+async fn job_run(
+    State(state): State<AppState>,
+    Json(request): Json<JobRunRequest>,
+) -> Result<Json<JobRecord>, (StatusCode, String)> {
+    let cwd_virtual = request.cwd.clone().unwrap_or_else(|| "/".to_string());
+    if let Err(error) = authorize_job(&state.policy, &cwd_virtual, request.timeout_secs) {
+        record_audit_capability(&state, "job:default", "run", &cwd_virtual, false, &error.1);
+        return Err(error);
+    }
+    let cwd = match resolve_workspace_path(&state.workspace, &cwd_virtual) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit_capability(&state, "job:default", "run", &cwd_virtual, false, &error.1);
+            return Err(error);
+        }
+    };
+    if !cwd.exists() {
+        fs::create_dir_all(&cwd).map_err(internal_error)?;
+    }
+
+    let job_id = format!("job-{}", state.next_job_id.fetch_add(1, Ordering::SeqCst));
+    let record = JobRecord {
+        id: job_id.clone(),
+        node_id: state.node.id.clone(),
+        command: request.command.clone(),
+        cwd: cwd_virtual.clone(),
+        status: JobStatus::Running,
+        exit_code: None,
+        logs: Vec::new(),
+    };
+    state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .insert(job_id.clone(), record.clone());
+    record_audit_capability(&state, "job:default", "run", &job_id, true, "allowed");
+
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    state
+        .job_cancel
+        .lock()
+        .expect("job cancel mutex poisoned")
+        .insert(job_id.clone(), cancel_tx);
+
+    let jobs = state.jobs.clone();
+    let cancels = state.job_cancel.clone();
+    let command = request.command;
+    let timeout_secs = request
+        .timeout_secs
+        .unwrap_or(state.policy.job.default_timeout_secs);
+
+    tokio::spawn(async move {
+        run_job_task(jobs, cancels, job_id, command, cwd, timeout_secs, cancel_rx).await;
+    });
+
+    Ok(Json(record))
+}
+
+async fn job_status(
+    State(state): State<AppState>,
+    Query(query): Query<JobIdQuery>,
+) -> Result<Json<JobRecord>, (StatusCode, String)> {
+    let record = state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .get(&query.id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("job `{}` not found", query.id),
+            )
+        })?;
+    Ok(Json(record))
+}
+
+async fn job_logs(
+    State(state): State<AppState>,
+    Query(query): Query<JobIdQuery>,
+) -> Result<Json<JobRecord>, (StatusCode, String)> {
+    job_status(State(state), Query(query)).await
+}
+
+async fn job_cancel(
+    State(state): State<AppState>,
+    Json(request): Json<JobCancelRequest>,
+) -> Result<Json<JobRecord>, (StatusCode, String)> {
+    if let Some(sender) = state
+        .job_cancel
+        .lock()
+        .expect("job cancel mutex poisoned")
+        .remove(&request.job_id)
+    {
+        let _ = sender.send(());
+        record_audit_capability(
+            &state,
+            "job:default",
+            "cancel",
+            &request.job_id,
+            true,
+            "cancel requested",
+        );
+    }
+
+    let record = state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .get(&request.job_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("job `{}` not found", request.job_id),
+            )
+        })?;
+    Ok(Json(record))
+}
+
 fn hostname() -> String {
     env::var("HOSTNAME")
         .or_else(|_| env::var("COMPUTERNAME"))
         .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn load_policy(path: Option<&Path>) -> anyhow::Result<PolicyConfig> {
+    let Some(path) = path else {
+        return Ok(default_policy());
+    };
+    let content = fs::read_to_string(path)?;
+    Ok(serde_yaml::from_str(&content)?)
+}
+
+fn default_policy() -> PolicyConfig {
+    PolicyConfig {
+        subject: "local-cli".to_string(),
+        fs: FsPolicy {
+            mounts: vec![FsMountPolicy {
+                name: "workspace".to_string(),
+                path: "/".to_string(),
+                permissions: FsPermissions {
+                    read: true,
+                    write: true,
+                    delete: false,
+                },
+            }],
+        },
+        job: JobPolicy {
+            allowed_cwds: vec!["/".to_string()],
+            default_timeout_secs: 30,
+            max_timeout_secs: 300,
+            env_allowlist: Vec::new(),
+        },
+    }
 }
 
 fn default_capabilities(node_id: &str) -> CapabilityList {
@@ -302,6 +498,86 @@ fn resolve_workspace_path(
     Ok(resolved)
 }
 
+fn authorize_fs(
+    policy: &PolicyConfig,
+    operation: &str,
+    virtual_path: &str,
+) -> Result<(), (StatusCode, String)> {
+    let Some(mount) = policy
+        .fs
+        .mounts
+        .iter()
+        .find(|mount| path_in_policy_scope(virtual_path, &mount.path))
+    else {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "path is outside allowed fs mounts".to_string(),
+        ));
+    };
+
+    let allowed = match operation {
+        "read" => mount.permissions.read,
+        "write" => mount.permissions.write,
+        "delete" => mount.permissions.delete,
+        _ => false,
+    };
+
+    if allowed {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::FORBIDDEN,
+            format!("fs {operation} denied by policy"),
+        ))
+    }
+}
+
+fn authorize_job(
+    policy: &PolicyConfig,
+    cwd: &str,
+    requested_timeout_secs: Option<u64>,
+) -> Result<(), (StatusCode, String)> {
+    if !policy
+        .job
+        .allowed_cwds
+        .iter()
+        .any(|allowed_cwd| path_in_policy_scope(cwd, allowed_cwd))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "job cwd denied by policy".to_string(),
+        ));
+    }
+
+    let timeout_secs = requested_timeout_secs.unwrap_or(policy.job.default_timeout_secs);
+    if timeout_secs > policy.job.max_timeout_secs {
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!(
+                "job timeout {timeout_secs}s exceeds policy maximum {}s",
+                policy.job.max_timeout_secs
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
+fn path_in_policy_scope(path: &str, scope: &str) -> bool {
+    let path = normalize_virtual_path(path);
+    let scope = normalize_virtual_path(scope);
+
+    scope == "/" || path == scope || path.starts_with(&format!("{scope}/"))
+}
+
+fn normalize_virtual_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "/" {
+        return "/".to_string();
+    }
+    format!("/{}", trimmed.trim_matches('/'))
+}
+
 fn join_virtual_path(base: &str, name: &str) -> String {
     let base = base.trim_end_matches('/');
     if base.is_empty() || base == "/" {
@@ -316,17 +592,188 @@ fn internal_error(error: impl std::fmt::Display) -> (StatusCode, String) {
 }
 
 fn record_audit(state: &AppState, action: &str, resource: &str, allowed: bool, reason: &str) {
+    record_audit_capability(state, "fs:workspace", action, resource, allowed, reason);
+}
+
+fn record_audit_capability(
+    state: &AppState,
+    capability: &str,
+    action: &str,
+    resource: &str,
+    allowed: bool,
+    reason: &str,
+) {
     let event = AuditEvent {
+        subject: state.policy.subject.clone(),
+        timestamp_ms: now_ms(),
         node_id: state.node.id.clone(),
-        capability: "fs:workspace".to_string(),
+        capability: capability.to_string(),
         action: action.to_string(),
         resource: resource.to_string(),
         allowed,
         reason: reason.to_string(),
+        run_id: None,
+        step_id: None,
     };
     state
         .audit
         .lock()
         .expect("audit log mutex poisoned")
         .push(event);
+}
+
+fn now_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+async fn run_job_task(
+    jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    job_id: String,
+    command: String,
+    cwd: PathBuf,
+    timeout_secs: u64,
+    cancel_rx: oneshot::Receiver<()>,
+) {
+    let child = TokioCommand::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn();
+
+    let Ok(mut child) = child else {
+        append_job_log(
+            &jobs,
+            &job_id,
+            JobLog {
+                stream: "stderr".to_string(),
+                data: "failed to spawn command".to_string(),
+            },
+        );
+        finish_job(&jobs, &cancels, &job_id, JobStatus::Failed, None);
+        return;
+    };
+
+    if let Some(stdout) = child.stdout.take() {
+        tokio::spawn(capture_job_stream(
+            jobs.clone(),
+            job_id.clone(),
+            "stdout",
+            stdout,
+        ));
+    }
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(capture_job_stream(
+            jobs.clone(),
+            job_id.clone(),
+            "stderr",
+            stderr,
+        ));
+    }
+
+    let wait = child.wait();
+    tokio::pin!(wait);
+
+    tokio::select! {
+        status = &mut wait => {
+            match status {
+                Ok(status) => {
+                    let job_status = if status.success() {
+                        JobStatus::Succeeded
+                    } else {
+                        JobStatus::Failed
+                    };
+                    finish_job(&jobs, &cancels, &job_id, job_status, status.code());
+                }
+                Err(error) => {
+                    append_job_log(
+                        &jobs,
+                        &job_id,
+                        JobLog {
+                            stream: "stderr".to_string(),
+                            data: error.to_string(),
+                        },
+                    );
+                    finish_job(
+                        &jobs,
+                        &cancels,
+                        &job_id,
+                        JobStatus::Failed,
+                        None,
+                    );
+                }
+            }
+        }
+        _ = cancel_rx => {
+            finish_job(&jobs, &cancels, &job_id, JobStatus::Cancelled, None);
+        }
+        _ = time::sleep(std::time::Duration::from_secs(timeout_secs)) => {
+            finish_job(&jobs, &cancels, &job_id, JobStatus::TimedOut, None);
+        }
+    }
+}
+
+async fn capture_job_stream<R>(
+    jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    job_id: String,
+    stream: &'static str,
+    mut reader: R,
+) where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut buffer = [0_u8; 8192];
+    loop {
+        match reader.read(&mut buffer).await {
+            Ok(0) => break,
+            Ok(count) => append_job_log(
+                &jobs,
+                &job_id,
+                JobLog {
+                    stream: stream.to_string(),
+                    data: String::from_utf8_lossy(&buffer[..count]).to_string(),
+                },
+            ),
+            Err(error) => {
+                append_job_log(
+                    &jobs,
+                    &job_id,
+                    JobLog {
+                        stream: "stderr".to_string(),
+                        data: format!("failed to read {stream}: {error}"),
+                    },
+                );
+                break;
+            }
+        }
+    }
+}
+
+fn append_job_log(jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>, job_id: &str, log: JobLog) {
+    if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
+        record.logs.push(log);
+    }
+}
+
+fn finish_job(
+    jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    cancels: &Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    job_id: &str,
+    status: JobStatus,
+    exit_code: Option<i32>,
+) {
+    cancels
+        .lock()
+        .expect("job cancel mutex poisoned")
+        .remove(job_id);
+
+    if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
+        record.status = status;
+        record.exit_code = exit_code;
+    }
 }

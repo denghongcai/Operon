@@ -7,9 +7,11 @@ use std::{
 use clap::{Parser, Subcommand};
 use operon_core::{
     AuditLog, CapabilityList, FsList, FsRead, FsStat, FsWrite, FsWriteRequest, HealthStatus,
-    NodeInfo,
+    JobCancelRequest, JobRecord, JobRunRequest, JobStatus, NodeInfo,
 };
 use operon_network::NodesConfig;
+
+mod graph;
 
 #[derive(Debug, Parser)]
 #[command(name = "operon", about = "Operon CLI")]
@@ -38,6 +40,13 @@ enum Command {
     Audit {
         #[command(subcommand)]
         command: AuditCommand,
+    },
+    Job {
+        #[command(subcommand)]
+        command: JobCommand,
+    },
+    Run {
+        workflow: PathBuf,
     },
 }
 
@@ -75,6 +84,33 @@ enum AuditCommand {
     List { node_id: String },
 }
 
+#[derive(Debug, Subcommand)]
+enum JobCommand {
+    Run {
+        node_id: String,
+        #[arg(long)]
+        cwd: Option<String>,
+        #[arg(long, default_value_t = 30)]
+        timeout_secs: u64,
+        #[arg(long)]
+        detach: bool,
+        #[arg(required = true, trailing_var_arg = true)]
+        command: Vec<String>,
+    },
+    Status {
+        node_id: String,
+        job_id: String,
+    },
+    Logs {
+        node_id: String,
+        job_id: String,
+    },
+    Cancel {
+        node_id: String,
+        job_id: String,
+    },
+}
+
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
@@ -95,6 +131,19 @@ fn main() -> anyhow::Result<()> {
         Command::Audit { command } => match command {
             AuditCommand::List { node_id } => list_audit(args.config, &node_id),
         },
+        Command::Job { command } => match command {
+            JobCommand::Run {
+                node_id,
+                cwd,
+                timeout_secs,
+                detach,
+                command,
+            } => job_run(args.config, &node_id, cwd, timeout_secs, detach, command),
+            JobCommand::Status { node_id, job_id } => job_status(args.config, &node_id, &job_id),
+            JobCommand::Logs { node_id, job_id } => job_logs(args.config, &node_id, &job_id),
+            JobCommand::Cancel { node_id, job_id } => job_cancel(args.config, &node_id, &job_id),
+        },
+        Command::Run { workflow } => graph::run_graph(args.config, workflow),
     }
 }
 
@@ -221,24 +270,122 @@ fn list_audit(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
 
     for event in audit.events {
         println!(
-            "{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            event.subject,
+            event.timestamp_ms,
             event.node_id,
             event.capability,
             event.action,
             event.resource,
             event.allowed,
-            event.reason
+            event.reason,
+            event.run_id.as_deref().unwrap_or("-"),
+            event.step_id.as_deref().unwrap_or("-")
         );
     }
 
     Ok(())
 }
 
-fn http_get_json<T: serde::de::DeserializeOwned>(endpoint: &str, path: &str) -> anyhow::Result<T> {
+fn job_run(
+    config_path: PathBuf,
+    node_id: &str,
+    cwd: Option<String>,
+    timeout_secs: u64,
+    detach: bool,
+    command: Vec<String>,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path.clone(), node_id)?;
+    let request = JobRunRequest {
+        command: command.join(" "),
+        cwd,
+        timeout_secs: Some(timeout_secs),
+    };
+    let record: JobRecord = http_post_json(&endpoint.endpoint, "/job/run", &request)?;
+    println!(
+        "{} {} {:?} {}",
+        record.node_id, record.id, record.status, record.command
+    );
+
+    if !detach {
+        wait_for_job(config_path, node_id, &record.id)?;
+    }
+
+    Ok(())
+}
+
+fn job_status(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+    let record = load_job(config_path, node_id, job_id)?;
+    print_job_status(&record);
+    Ok(())
+}
+
+fn job_logs(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+    let record = load_job_from_path(config_path, node_id, &format!("/job/logs?id={job_id}"))?;
+    for log in record.logs {
+        print!("{}", log.data);
+    }
+    Ok(())
+}
+
+fn job_cancel(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    let request = JobCancelRequest {
+        job_id: job_id.to_string(),
+    };
+    let record: JobRecord = http_post_json(&endpoint.endpoint, "/job/cancel", &request)?;
+    print_job_status(&record);
+    Ok(())
+}
+
+fn wait_for_job(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+    loop {
+        let record = load_job(config_path.clone(), node_id, job_id)?;
+        match record.status {
+            JobStatus::Running => std::thread::sleep(std::time::Duration::from_millis(100)),
+            _ => {
+                print_job_status(&record);
+                for log in record.logs {
+                    print!("{}", log.data);
+                }
+                return Ok(());
+            }
+        }
+    }
+}
+
+pub(crate) fn load_job(
+    config_path: PathBuf,
+    node_id: &str,
+    job_id: &str,
+) -> anyhow::Result<JobRecord> {
+    load_job_from_path(config_path, node_id, &format!("/job/status?id={job_id}"))
+}
+
+fn load_job_from_path(
+    config_path: PathBuf,
+    node_id: &str,
+    path: &str,
+) -> anyhow::Result<JobRecord> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    http_get_json(&endpoint.endpoint, path)
+}
+
+fn print_job_status(record: &JobRecord) {
+    println!(
+        "{} {} {:?} exit_code={:?}",
+        record.node_id, record.id, record.status, record.exit_code
+    );
+}
+
+pub(crate) fn http_get_json<T: serde::de::DeserializeOwned>(
+    endpoint: &str,
+    path: &str,
+) -> anyhow::Result<T> {
     http_json_request(endpoint, "GET", path, None)
 }
 
-fn http_post_json<T: serde::de::DeserializeOwned, B: serde::Serialize>(
+pub(crate) fn http_post_json<T: serde::de::DeserializeOwned, B: serde::Serialize>(
     endpoint: &str,
     path: &str,
     body: &B,
@@ -299,7 +446,7 @@ fn parse_node_path(target: &str) -> anyhow::Result<NodePath> {
     })
 }
 
-fn load_endpoint(
+pub(crate) fn load_endpoint(
     config_path: PathBuf,
     node_id: &str,
 ) -> anyhow::Result<operon_network::NodeEndpoint> {
@@ -309,7 +456,7 @@ fn load_endpoint(
         .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))
 }
 
-fn encode_path(path: &str) -> String {
+pub(crate) fn encode_path(path: &str) -> String {
     path.replace('%', "%25")
         .replace(' ', "%20")
         .replace('#', "%23")

@@ -83,29 +83,47 @@ Cloudflare Mesh or Tailscale can decide whether one device can reach another dev
 
 ## ⚡ Example
 
-Run a distributed workflow across machines:
-
-```yaml
-name: train-model
-
-steps:
-  - node: nas
-    action: fs.read
-    path: /data/images
-
-  - node: gpu-node
-    action: job.run
-    command: python train.py
-
-  - node: cloud-a
-    action: fs.write
-    path: /models/output
-```
-
-Run it:
+Run the local Docker MVP demo:
 
 ```bash
-operon run train-model.yaml
+scripts/verify-phase1-docker.sh
+```
+
+This starts two `operond` containers, validates capability discovery, fs operations, job execution, policy denial, audit output, and runs:
+
+```bash
+operon --config examples/docker-nodes.yaml run examples/docker-copy-and-run.yaml
+```
+
+Example workflow:
+
+```yaml
+name: docker-copy-and-run
+
+steps:
+  - id: write-input
+    node: node-a
+    action: fs.write
+    path: /graph-input.txt
+    content: hello from graph
+
+  - id: run-command
+    node: node-a
+    action: job.run
+    cwd: /
+    timeout_secs: 5
+    command: cat graph-input.txt > graph-output.txt
+
+  - id: read-output
+    node: node-a
+    action: fs.read
+    path: /graph-output.txt
+```
+
+For real machines, point the CLI at already reachable daemon endpoints:
+
+```bash
+operon --config examples/nodes.yaml run examples/train-model.yaml
 ```
 
 ---
@@ -180,12 +198,20 @@ Agents can:
 - reason over execution results
 
 ```ts
-await operon.run({
+import { OperonClient } from "@operon/sdk";
+
+const operon = new OperonClient([
+  { nodeId: "cloud-a", endpoint: "http://100.96.12.34:7788" },
+  { nodeId: "gpu-node", endpoint: "http://100.96.18.20:7788" }
+]);
+
+const trace = await operon.run({
+  name: "train-model",
   steps: [
     { node: "cloud-a", action: "fs.read", path: "/data" },
     { node: "gpu-node", action: "job.run", command: "train.py" }
   ]
-})
+});
 ```
 
 ---
@@ -222,11 +248,13 @@ Operon is in early development.
 
 Roadmap:
 
-- [ ] Node runtime
-- [ ] Filesystem capability
-- [ ] Job execution
-- [ ] CLI
-- [ ] Policy system
+- [x] Node runtime
+- [x] Filesystem capability
+- [x] Job execution
+- [x] CLI
+- [x] Execution graph
+- [x] Minimal policy and audit
+- [x] Minimal TypeScript SDK
 - [ ] FUSE mount
 - [ ] Agent integration
 - [ ] Network provider adapters

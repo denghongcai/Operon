@@ -1,0 +1,20 @@
+name: docker-copy-and-run
+
+steps:
+  - id: write-input
+    node: node-a
+    action: fs.write
+    path: /graph-input.txt
+    content: hello from graph
+
+  - id: run-command
+    node: node-a
+    action: job.run
+    cwd: /
+    timeout_secs: 5
+    command: cat graph-input.txt > graph-output.txt
+
+  - id: read-output
+    node: node-a
+    action: fs.read
+    path: /graph-output.txt

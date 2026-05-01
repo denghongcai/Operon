@@ -1,14 +1,18 @@
 name: train-model
 
 steps:
-  - node: nas
+  - id: read-data
+    node: nas
     action: fs.read
     path: /data/images
 
-  - node: gpu-node
+  - id: train
+    node: gpu-node
     action: job.run
     command: python train.py
 
-  - node: cloud-a
+  - id: save-model
+    node: cloud-a
     action: fs.write
     path: /models/output
+    content: model artifact placeholder

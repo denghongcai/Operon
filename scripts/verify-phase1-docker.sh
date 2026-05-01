@@ -32,7 +32,45 @@ for node in node-a node-b; do
     echo "expected path escape to fail for ${node}" >&2
     exit 1
   fi
+
+  cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job run "$node" -- echo "job from ${node}"
+
+  cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job run "$node" --detach --timeout-secs 10 -- sleep 5 >/tmp/operon-"${node}"-job.log
+  cat /tmp/operon-"${node}"-job.log
+  job_id="$(awk '{print $2}' /tmp/operon-"${node}"-job.log | head -n1)"
+  cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job cancel "$node" "$job_id"
+
+  for _ in $(seq 1 30); do
+    cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job status "$node" "$job_id" >/tmp/operon-"${node}"-job-status.log
+    cat /tmp/operon-"${node}"-job-status.log
+    if grep -Eq "Cancelled|TimedOut|Succeeded|Failed" /tmp/operon-"${node}"-job-status.log; then
+      break
+    fi
+    sleep 1
+  done
+
+  if ! grep -q "Cancelled" /tmp/operon-"${node}"-job-status.log; then
+    echo "expected cancelled job status for ${node}" >&2
+    exit 1
+  fi
+
+  cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job logs "$node" "$job_id"
+
+  cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job run "$node" --timeout-secs 1 -- sleep 5 >/tmp/operon-"${node}"-job-timeout.log
+  cat /tmp/operon-"${node}"-job-timeout.log
+  if ! grep -q "TimedOut" /tmp/operon-"${node}"-job-timeout.log; then
+    echo "expected timed out job status for ${node}" >&2
+    exit 1
+  fi
+
+  if cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml job run "$node" --timeout-secs 31 -- echo denied >/tmp/operon-"${node}"-policy-deny.log 2>&1; then
+    echo "expected job timeout policy denial for ${node}" >&2
+    exit 1
+  fi
+  cat /tmp/operon-"${node}"-policy-deny.log
+
   cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml audit list "$node"
 done
 
+cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml run examples/docker-copy-and-run.yaml
 cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml node list

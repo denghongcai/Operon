@@ -17,3 +17,4 @@ operon-core = { path = "../operon-core" }
 operon-network = { path = "../operon-network" }
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
