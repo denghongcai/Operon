@@ -56,6 +56,9 @@ Operon should not own:
 - `docs/plan/v0.6.2-cli-fs-cleanup-acceptance.md`
   - v0.6.2 cleanup scope for CLI fs mutation command alignment.
 
+- `docs/plan/v0.6.3-fs-copy-acceptance.md`
+  - v0.6.3 acceptance scope for same-node fs copy in protocol, CLI, and SDK.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -101,6 +104,7 @@ Operon should not own:
 - Completed mount milestone: v0.6 Linux-only read-only real FUSE mount.
 - Completed mount milestone: v0.6.1 Linux-only write-through FUSE mount.
 - Completed cleanup milestone: v0.6.2 CLI fs mutation command alignment.
+- Completed fs milestone: v0.6.3 same-node fs copy for protocol, CLI, and SDK.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.

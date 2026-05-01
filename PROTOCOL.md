@@ -67,6 +67,7 @@ Unary calls:
 - `MkdirFs`
 - `DeleteFs`
 - `RenameFs`
+- `CopyFs`
 - `RunJob`
 - `GetJob`
 - `ListJobs`
@@ -99,8 +100,9 @@ It replaces the file content.
 adapters and other clients that need write-through random write behavior.
 
 `TruncateFs`, `MkdirFs`, `DeleteFs`, and `RenameFs` are unary filesystem
-mutation calls used by the Linux mount adapter. The daemon still owns policy and
-audit for these operations.
+mutation calls used by the Linux mount adapter. `CopyFs` is a daemon-side,
+same-node file copy convenience operation for CLI, SDK, and direct protocol
+clients. The daemon still owns policy and audit for these operations.
 
 The human CLI maps these mutation calls to:
 
@@ -109,10 +111,32 @@ operon fs mkdir <node:/path>
 operon fs truncate <node:/path> --size <bytes>
 operon fs rm <node:/path>
 operon fs rename <node:/from> <node:/to>
+operon fs copy <node:/from> <node:/to>
 ```
 
 `WriteFileRange` is intentionally not exposed as a normal human CLI command. It
 is a low-level protocol operation for mount adapters and direct clients.
+
+`CopyFs` requires read permission on `from_path` and write permission on
+`to_path`. It is same-node only. Cross-node copy is a separate future protocol
+decision because it needs source streaming, target writing, failure recovery, and
+audit ownership across two nodes.
+
+## Filesystem Concurrency
+
+The current filesystem protocol does not provide conflict detection.
+
+Filesystem mutation requests do not carry file versions, etags, lock tokens,
+leases, or compare-and-swap preconditions. `ReadFile` is a live stream from the
+remote daemon, not a snapshot read. `WriteFile` replaces file content, and
+`WriteFileRange` writes the requested byte range, but neither operation checks
+that the file is unchanged since a prior read.
+
+If multiple clients mutate the same path concurrently, Operon does not define a
+merge order beyond the order in which the remote daemon and underlying
+filesystem apply operations. Clients that need deterministic behavior should
+serialize mutations outside the protocol until a later versioning or lease
+contract exists.
 
 `StreamJobLogs` returns ordered `JobLog` messages. Each message has `stream`
 (`stdout` or `stderr`) and text `data`.

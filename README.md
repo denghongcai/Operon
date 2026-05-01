@@ -77,6 +77,7 @@ scripts/verify-v0.5-docker.sh
 scripts/verify-v0.6-linux-mount.sh
 scripts/verify-v0.6.1-linux-write-mount.sh
 scripts/verify-v0.6.2-cli-fs-cleanup.sh
+scripts/verify-v0.6.3-fs-copy.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -84,6 +85,8 @@ The v0.6.1 Linux write mount validation checks create, write, read-after-write,
 truncate, delete, rename, denied write/delete/rename audit, and cleanup.
 The v0.6.2 CLI fs cleanup validation checks direct CLI mutation commands for
 mkdir, truncate, rename, rm, denied mutations, and audit.
+The v0.6.3 fs copy validation checks same-node daemon-side copy, denied copy,
+and audit.
 
 ---
 
@@ -240,6 +243,7 @@ operon --config ./operon.nodes.yaml fs write cloud-a:/large.bin --file ./large.b
 operon --config ./operon.nodes.yaml fs mkdir cloud-a:/work
 operon --config ./operon.nodes.yaml fs truncate cloud-a:/work/file.txt --size 0
 operon --config ./operon.nodes.yaml fs rename cloud-a:/work/file.txt cloud-a:/work/renamed.txt
+operon --config ./operon.nodes.yaml fs copy cloud-a:/work/renamed.txt cloud-a:/work/copied.txt
 operon --config ./operon.nodes.yaml fs rm cloud-a:/work/renamed.txt
 
 operon --config ./operon.nodes.yaml job run cloud-a -- echo hello
@@ -272,6 +276,13 @@ delete, and rename are sent to the remote daemon through the Core FS Protocol.
 The daemon still owns workspace path containment, policy, and audit. The host
 needs `/dev/fuse` and a working `fusermount3` or equivalent FUSE setup. Press
 Ctrl-C in the mounting process to unmount.
+
+The write mount does not currently provide conflict detection. Operon does not
+attach file versions, etags, locks, leases, or compare-and-swap preconditions to
+filesystem writes yet. If two clients write the same path concurrently, the
+visible result depends on the remote filesystem and RPC arrival order. Serialize
+mutating operations at the workflow, CLI, or agent layer when deterministic
+ordering matters.
 
 ---
 
@@ -324,6 +335,7 @@ Run the Linux FUSE mount validations:
 scripts/verify-v0.6-linux-mount.sh
 scripts/verify-v0.6.1-linux-write-mount.sh
 scripts/verify-v0.6.2-cli-fs-cleanup.sh
+scripts/verify-v0.6.3-fs-copy.sh
 ```
 
 Example workflow:
@@ -502,6 +514,7 @@ Roadmap:
 - [x] Linux read-only FUSE mount
 - [x] Linux write FUSE mount
 - [x] CLI fs mutation commands
+- [x] Same-node fs copy
 - [ ] CLI TUI console
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters

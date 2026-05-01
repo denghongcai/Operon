@@ -117,6 +117,17 @@ export interface FsRename {
   toPath: string;
 }
 
+export interface FsCopyRequest {
+  fromPath: string;
+  toPath: string;
+}
+
+export interface FsCopy {
+  fromPath: string;
+  toPath: string;
+  bytesCopied: string;
+}
+
 export interface JobRunRequest {
   command: string;
   cwd: string;
@@ -1872,6 +1883,194 @@ export const FsRename: MessageFns<FsRename> = {
   },
 };
 
+function createBaseFsCopyRequest(): FsCopyRequest {
+  return { fromPath: "", toPath: "" };
+}
+
+export const FsCopyRequest: MessageFns<FsCopyRequest> = {
+  encode(message: FsCopyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fromPath !== "") {
+      writer.uint32(10).string(message.fromPath);
+    }
+    if (message.toPath !== "") {
+      writer.uint32(18).string(message.toPath);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsCopyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsCopyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.fromPath = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.toPath = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsCopyRequest {
+    return {
+      fromPath: isSet(object.fromPath)
+        ? globalThis.String(object.fromPath)
+        : isSet(object.from_path)
+        ? globalThis.String(object.from_path)
+        : "",
+      toPath: isSet(object.toPath)
+        ? globalThis.String(object.toPath)
+        : isSet(object.to_path)
+        ? globalThis.String(object.to_path)
+        : "",
+    };
+  },
+
+  toJSON(message: FsCopyRequest): unknown {
+    const obj: any = {};
+    if (message.fromPath !== "") {
+      obj.fromPath = message.fromPath;
+    }
+    if (message.toPath !== "") {
+      obj.toPath = message.toPath;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsCopyRequest>): FsCopyRequest {
+    return FsCopyRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsCopyRequest>): FsCopyRequest {
+    const message = createBaseFsCopyRequest();
+    message.fromPath = object.fromPath ?? "";
+    message.toPath = object.toPath ?? "";
+    return message;
+  },
+};
+
+function createBaseFsCopy(): FsCopy {
+  return { fromPath: "", toPath: "", bytesCopied: "0" };
+}
+
+export const FsCopy: MessageFns<FsCopy> = {
+  encode(message: FsCopy, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fromPath !== "") {
+      writer.uint32(10).string(message.fromPath);
+    }
+    if (message.toPath !== "") {
+      writer.uint32(18).string(message.toPath);
+    }
+    if (message.bytesCopied !== "0") {
+      writer.uint32(24).uint64(message.bytesCopied);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsCopy {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsCopy();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.fromPath = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.toPath = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.bytesCopied = reader.uint64().toString();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsCopy {
+    return {
+      fromPath: isSet(object.fromPath)
+        ? globalThis.String(object.fromPath)
+        : isSet(object.from_path)
+        ? globalThis.String(object.from_path)
+        : "",
+      toPath: isSet(object.toPath)
+        ? globalThis.String(object.toPath)
+        : isSet(object.to_path)
+        ? globalThis.String(object.to_path)
+        : "",
+      bytesCopied: isSet(object.bytesCopied)
+        ? globalThis.String(object.bytesCopied)
+        : isSet(object.bytes_copied)
+        ? globalThis.String(object.bytes_copied)
+        : "0",
+    };
+  },
+
+  toJSON(message: FsCopy): unknown {
+    const obj: any = {};
+    if (message.fromPath !== "") {
+      obj.fromPath = message.fromPath;
+    }
+    if (message.toPath !== "") {
+      obj.toPath = message.toPath;
+    }
+    if (message.bytesCopied !== "0") {
+      obj.bytesCopied = message.bytesCopied;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsCopy>): FsCopy {
+    return FsCopy.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsCopy>): FsCopy {
+    const message = createBaseFsCopy();
+    message.fromPath = object.fromPath ?? "";
+    message.toPath = object.toPath ?? "";
+    message.bytesCopied = object.bytesCopied ?? "0";
+    return message;
+  },
+};
+
 function createBaseJobRunRequest(): JobRunRequest {
   return { command: "", cwd: "", timeoutSecs: "0", secrets: [], hasTimeoutSecs: false };
 }
@@ -3528,6 +3727,14 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
+    copyFs: {
+      name: "CopyFs",
+      requestType: FsCopyRequest as typeof FsCopyRequest,
+      requestStream: false,
+      responseType: FsCopy as typeof FsCopy,
+      responseStream: false,
+      options: {},
+    },
     runJob: {
       name: "RunJob",
       requestType: JobRunRequest as typeof JobRunRequest,
@@ -3633,6 +3840,7 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
   mkdirFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsStat>>;
   deleteFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsDelete>>;
   renameFs(request: FsRenameRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsRename>>;
+  copyFs(request: FsCopyRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsCopy>>;
   runJob(request: JobRunRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   getJob(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   listJobs(request: ListJobsRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobList>>;
@@ -3670,6 +3878,7 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
   mkdirFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsStat>;
   deleteFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsDelete>;
   renameFs(request: DeepPartial<FsRenameRequest>, options?: CallOptions & CallOptionsExt): Promise<FsRename>;
+  copyFs(request: DeepPartial<FsCopyRequest>, options?: CallOptions & CallOptionsExt): Promise<FsCopy>;
   runJob(request: DeepPartial<JobRunRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   getJob(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   listJobs(request: DeepPartial<ListJobsRequest>, options?: CallOptions & CallOptionsExt): Promise<JobList>;

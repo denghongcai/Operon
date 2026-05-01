@@ -1581,6 +1581,8 @@ Completed:
 
 - Documented Linux-only, single-writer, write-through semantics in
   `docs/plan/v0.6.1-acceptance.md`.
+- Documented that v0.6.1 has no file versions, etags, locks, leases, CAS
+  preconditions, snapshot reads, or multi-writer conflict detection.
 - Defined FUSE operation mapping to Core FS Protocol RPCs:
   `WriteFileRange`, `TruncateFs`, `MkdirFs`, `DeleteFs`, and `RenameFs`.
 - Kept policy, audit, and path containment in `operond`.
@@ -1662,6 +1664,9 @@ modes, provider discovery, or a new runtime API surface. `WriteFileRange` remain
 available through the protocol for mount adapters and direct clients, but normal
 CLI users should use higher-level commands.
 
+v0.6.2 inherits the v0.6.1 filesystem concurrency contract: CLI mutation
+commands do not perform conflict detection, version checks, locks, or leases.
+
 ## Phase 32.4: CLI FS Mutation Surface
 
 Status: Completed.
@@ -1721,6 +1726,79 @@ Completed:
 Remaining:
 
 - None for v0.6.2.
+
+## v0.6.3 Goal
+
+Operon v0.6.3 should add same-node filesystem copy as a protocol, CLI, and SDK
+convenience operation.
+
+```text
+v0.6.3 = daemon-side same-node fs copy.
+```
+
+v0.6.3 does not add cross-node copy, recursive directory copy, sparse-file
+preservation, metadata preservation, copy-on-write clone semantics, or conflict
+detection. Mount/FUSE still observes POSIX read/write/create operations for
+tools such as `cp`.
+
+## Phase 32.6: FS Copy Protocol And Interfaces
+
+Status: Completed.
+
+Goal: expose a same-node copy operation without routing file bytes through the
+CLI or SDK process.
+
+Planned:
+
+- add `CopyFs(from_path, to_path)` to the runtime protocol.
+- implement daemon-side copy within one node workspace.
+- require read permission on the source and write permission on the target.
+- add `operon fs copy <node:/from> <node:/to>`.
+- add TypeScript SDK `copyFile` and `fs.copy` support.
+- keep cross-node copy out of scope.
+
+Done when:
+
+- protocol, CLI, and SDK expose same-node copy.
+- daemon audit records allowed and denied copy operations.
+- copy remains scoped to regular files.
+
+Completed:
+
+- Added `CopyFs`, `FsCopyRequest`, and `FsCopy` to
+  `proto/operon/runtime.proto`.
+- Implemented daemon-side same-node regular-file copy with workspace
+  containment, read/write policy checks, and audit action `copy`.
+- Added `operon fs copy <node:/from> <node:/to>`.
+- Added `OperonClient.copyFile` and SDK `fs.copy` graph action support.
+
+## Phase 32.7: v0.6.3 Acceptance
+
+Status: Completed.
+
+Goal: make same-node copy behavior reproducible before starting v0.7.
+
+Planned:
+
+- `docs/plan/v0.6.3-fs-copy-acceptance.md`.
+- validation script for allowed and denied fs copy.
+- README, PROTOCOL, AGENTS, and CI updates.
+
+Done when:
+
+- validation covers allowed copy, denied source read, denied target write, and
+  audit records.
+- docs clearly state that cross-node copy remains later work.
+
+Completed:
+
+- Added `docs/plan/v0.6.3-fs-copy-acceptance.md`.
+- Added `scripts/verify-v0.6.3-fs-copy.sh`.
+- Updated README, PROTOCOL, AGENTS, and CI for v0.6.3.
+
+Remaining:
+
+- None for v0.6.3.
 
 ## v0.7 Goal
 

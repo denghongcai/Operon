@@ -134,3 +134,22 @@ jobs:
 
       - name: Validate v0.6.2 CLI fs cleanup
         run: scripts/verify-v0.6.2-cli-fs-cleanup.sh
+
+  v063-fs-copy:
+    name: v0.6.3 FS Copy Validation
+    runs-on: ubuntu-latest
+    needs:
+      - rust
+      - typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Validate v0.6.3 fs copy
+        run: scripts/verify-v0.6.3-fs-copy.sh

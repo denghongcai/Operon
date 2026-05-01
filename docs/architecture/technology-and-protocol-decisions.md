@@ -225,7 +225,7 @@ Runtime transport implementation
       ▼
 operond fs capability
   StatFs / ListFs / ReadFile / WriteFile
-  WriteFileRange / TruncateFs / MkdirFs / DeleteFs / RenameFs
+  WriteFileRange / TruncateFs / MkdirFs / DeleteFs / RenameFs / CopyFs
   policy / audit owned by daemon
 ```
 
@@ -245,6 +245,38 @@ Non-goals for the mount adapter layer:
 The FUSE adapter may keep transient inode mappings and rely on the kernel page
 cache, but persistent metadata, sync, and richer write semantics belong in later
 explicit phases.
+
+### Current Filesystem Concurrency Contract
+
+The current Core FS Protocol is single-writer oriented. It intentionally does
+not define multi-writer conflict detection yet.
+
+Current behavior:
+
+- reads are live remote reads, not snapshot reads.
+- writes are applied as daemon RPCs against the underlying filesystem.
+- audit records the operations that were allowed or denied, but it does not
+  detect semantic conflicts.
+- concurrent writes to the same path are not coordinated by Operon.
+
+Not currently present:
+
+- file versions or etags on `FsStat`.
+- expected-version preconditions on writes.
+- compare-and-swap semantics.
+- advisory or mandatory file locks.
+- file leases.
+- distributed transactions or merge/conflict resolution.
+
+A later concurrency phase should decide whether the project needs optimistic
+version checks, explicit file leases, or both. Until then, callers that require
+deterministic results should serialize writes at the workflow or agent layer.
+
+`CopyFs` is a daemon-side same-node convenience operation in the Core FS
+Protocol. It exists for CLI, SDK, and direct protocol clients, not because POSIX
+mount adapters receive a copy callback. Cross-node copy remains a separate
+future design item because it needs source streaming, target writing, partial
+failure semantics, and audit ownership across two nodes.
 
 ## Decision 7: Network Layer Boundary
 

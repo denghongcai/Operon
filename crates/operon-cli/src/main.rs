@@ -151,6 +151,10 @@ enum FsCommand {
         from: String,
         to: String,
     },
+    Copy {
+        from: String,
+        to: String,
+    },
     Truncate {
         target: String,
         #[arg(long)]
@@ -315,6 +319,7 @@ fn main() -> anyhow::Result<()> {
             FsCommand::Mkdir { target } => fs_mkdir(args.config, &target, output),
             FsCommand::Rm { target } => fs_rm(args.config, &target, output),
             FsCommand::Rename { from, to } => fs_rename(args.config, &from, &to, output),
+            FsCommand::Copy { from, to } => fs_copy(args.config, &from, &to, output),
             FsCommand::Truncate { target, size } => fs_truncate(args.config, &target, size, output),
         },
         Command::Audit { command } => match command {
@@ -680,6 +685,36 @@ fn fs_rename(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> 
         from.node_id,
         result["from_path"].as_str().unwrap_or_default(),
         result["to_path"].as_str().unwrap_or_default()
+    );
+    Ok(())
+}
+
+fn fs_copy(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> anyhow::Result<()> {
+    let from = parse_node_path(from)?;
+    let to = parse_node_path(to)?;
+    if from.node_id != to.node_id {
+        anyhow::bail!("fs copy requires source and target to use the same node");
+    }
+    let endpoint = load_endpoint(config_path, &from.node_id)?;
+    let (from_path, to_path, bytes_copied) = grpc::fs_copy(&endpoint, &from.path, &to.path)?;
+    let result = serde_json::json!({
+        "from_path": from_path,
+        "to_path": to_path,
+        "bytes_copied": bytes_copied,
+    });
+    if output.json {
+        print_json(&result)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    println!(
+        "{}:{} -> {} bytes_copied={}",
+        from.node_id,
+        result["from_path"].as_str().unwrap_or_default(),
+        result["to_path"].as_str().unwrap_or_default(),
+        result["bytes_copied"].as_u64().unwrap_or_default()
     );
     Ok(())
 }

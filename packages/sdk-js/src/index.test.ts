@@ -14,6 +14,7 @@ const niceGrpcMock = vi.hoisted(() => {
       listFs: vi.fn(),
       readFile: vi.fn(),
       writeFile: vi.fn(),
+      copyFs: vi.fn(),
       runJob: vi.fn(),
       getJob: vi.fn(),
       listJobs: vi.fn(),
@@ -163,6 +164,40 @@ describe("OperonClient", () => {
     expect(check.ok).toBe(true);
     expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({}, expect.any(Object));
     expect(niceGrpcMock.client.checkService).toHaveBeenCalledWith({ serviceId: "daemon" }, expect.any(Object));
+  });
+
+  it("copies files through daemon-side fs copy", async () => {
+    niceGrpcMock.client.copyFs.mockResolvedValue({
+      fromPath: "/a.txt",
+      toPath: "/b.txt",
+      bytesCopied: "7",
+    });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    const result = await client.copyFile("node-a", "/a.txt", "/b.txt");
+
+    expect(result).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7 });
+    expect(niceGrpcMock.client.copyFs).toHaveBeenCalledWith(
+      { fromPath: "/a.txt", toPath: "/b.txt" },
+      expect.any(Object),
+    );
+  });
+
+  it("runs fs.copy steps over gRPC", async () => {
+    niceGrpcMock.client.copyFs.mockResolvedValue({
+      fromPath: "/a.txt",
+      toPath: "/b.txt",
+      bytesCopied: "7",
+    });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    const trace = await client.run({
+      name: "copy",
+      steps: [{ id: "copy", node: "node-a", action: "fs.copy", fromPath: "/a.txt", toPath: "/b.txt" }],
+    });
+
+    expect(trace.status).toBe("succeeded");
+    expect(trace.steps[0].output).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7 });
   });
 });
 

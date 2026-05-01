@@ -33,8 +33,10 @@ export type NodeEndpoint = {
 export type OperonStep = {
   id?: string;
   node: string;
-  action: "fs.stat" | "fs.list" | "fs.read" | "fs.write" | "job.run";
+  action: "fs.stat" | "fs.list" | "fs.read" | "fs.write" | "fs.copy" | "job.run";
   path?: string;
+  fromPath?: string;
+  toPath?: string;
   content?: string;
   command?: string;
   cwd?: string;
@@ -163,6 +165,16 @@ export class OperonClient {
     return fromGrpcFsWrite(
       await this.grpcClient(endpoint).writeFile(grpcFileChunks(path, bytes), this.grpcOptions(endpoint)),
     );
+  }
+
+  async copyFile(nodeId: string, fromPath: string, toPath: string): Promise<{ from_path: string; to_path: string; bytes_copied: number }> {
+    const endpoint = this.endpointFor(nodeId);
+    const copy = await this.grpcClient(endpoint).copyFs({ fromPath, toPath }, this.grpcOptions(endpoint));
+    return {
+      from_path: copy.fromPath,
+      to_path: copy.toPath,
+      bytes_copied: Number(copy.bytesCopied),
+    };
   }
 
   async listJobs(nodeId: string): Promise<JobList> {
@@ -300,6 +312,20 @@ export class OperonClient {
             options,
           ),
         );
+      case "fs.copy": {
+        const copy = await client.copyFs(
+          {
+            fromPath: required(step.fromPath ?? step.path, "fromPath"),
+            toPath: required(step.toPath, "toPath"),
+          },
+          options,
+        );
+        return {
+          from_path: copy.fromPath,
+          to_path: copy.toPath,
+          bytes_copied: Number(copy.bytesCopied),
+        };
+      }
       case "job.run":
         return this.runGrpcJob(endpoint, step);
     }

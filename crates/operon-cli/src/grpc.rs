@@ -12,10 +12,10 @@ use operon_core::{
 };
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    operon_runtime_client::OperonRuntimeClient, FsPathRequest, FsRenameRequest, FsTruncateRequest,
-    GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest, JobStdinRequest,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
-    ServiceIdRequest, WriteFileRequest,
+    operon_runtime_client::OperonRuntimeClient, FsCopyRequest, FsPathRequest, FsRenameRequest,
+    FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest,
+    JobStdinRequest, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
+    ListServicesRequest, ServiceIdRequest, WriteFileRequest,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -152,6 +152,24 @@ pub fn fs_rename(
             .await?
             .into_inner();
         Ok((response.from_path, response.to_path))
+    })
+}
+
+pub fn fs_copy(
+    endpoint: &NodeEndpoint,
+    from_path: &str,
+    to_path: &str,
+) -> anyhow::Result<(String, String, u64)> {
+    let request = FsCopyRequest {
+        from_path: from_path.to_string(),
+        to_path: to_path.to_string(),
+    };
+    block_on(endpoint, |mut client, endpoint| async move {
+        let response = client
+            .copy_fs(with_auth(&endpoint, request)?)
+            .await?
+            .into_inner();
+        Ok((response.from_path, response.to_path, response.bytes_copied))
     })
 }
 

@@ -22,9 +22,10 @@ use operon_core::{
 };
 use operon_protocol::runtime::v1::{
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    FileChunk, FsPathRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest,
-    GetNodeRequest, HealthRequest, JobIdRequest, ListAuditRequest, ListCapabilitiesRequest,
-    ListJobsRequest, ListServicesRequest, ServiceIdRequest, WriteFileRequest,
+    FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest,
+    FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceIdRequest,
+    WriteFileRequest,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -402,6 +403,20 @@ impl OperonRuntime for GrpcRuntime {
         Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsRename {
             from_path: request.from_path,
             to_path: request.to_path,
+        }))
+    }
+
+    async fn copy_fs(
+        &self,
+        request: Request<FsCopyRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsCopy>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let request = request.into_inner();
+        let bytes_copied = grpc_fs_copy(&self.state, &request.from_path, &request.to_path).await?;
+        Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsCopy {
+            from_path: request.from_path,
+            to_path: request.to_path,
+            bytes_copied,
         }))
     }
 
@@ -866,6 +881,44 @@ async fn grpc_fs_rename(state: &AppState, from_path: &str, to_path: &str) -> Res
         .map_err(status_from_io_error)?;
     record_audit(state, "rename", &resource, true, "allowed");
     Ok(())
+}
+
+async fn grpc_fs_copy(state: &AppState, from_path: &str, to_path: &str) -> Result<u64, Status> {
+    let resource = format!("{from_path} -> {to_path}");
+    if let Err(error) = authorize_fs(&state.policy, "read", from_path) {
+        record_audit(state, "copy", &resource, false, &error.1);
+        return Err(status_from_error(error));
+    }
+    if let Err(error) = authorize_fs(&state.policy, "write", to_path) {
+        record_audit(state, "copy", &resource, false, &error.1);
+        return Err(status_from_error(error));
+    }
+    let from_full_path = match resolve_workspace_path(&state.workspace, from_path) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit(state, "copy", &resource, false, &error.1);
+            return Err(status_from_error(error));
+        }
+    };
+    let to_full_path = match resolve_workspace_path(&state.workspace, to_path) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit(state, "copy", &resource, false, &error.1);
+            return Err(status_from_error(error));
+        }
+    };
+    let metadata = tokio::fs::metadata(&from_full_path)
+        .await
+        .map_err(status_from_io_error)?;
+    if !metadata.is_file() {
+        record_audit(state, "copy", &resource, false, "copy source is not a file");
+        return Err(Status::failed_precondition("copy source is not a file"));
+    }
+    let bytes_copied = tokio::fs::copy(&from_full_path, &to_full_path)
+        .await
+        .map_err(status_from_io_error)?;
+    record_audit(state, "copy", &resource, true, "allowed");
+    Ok(bytes_copied)
 }
 
 fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Status> {
