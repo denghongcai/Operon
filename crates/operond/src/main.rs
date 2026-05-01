@@ -14,6 +14,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
+use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
     AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList,
     FsMountPolicy, FsPermissions, FsPolicy, FsStat, FsWrite, HealthStatus, JobList, JobLog,
@@ -55,32 +56,8 @@ enum Command {
 
 #[derive(Debug, Parser)]
 struct StartArgs {
-    #[arg(long, default_value = "127.0.0.1:7789")]
-    grpc_listen: SocketAddr,
-
-    #[arg(long, default_value = "local")]
-    node_id: String,
-
-    #[arg(long, default_value = "/workspace")]
-    workspace: PathBuf,
-
     #[arg(long)]
-    policy: Option<PathBuf>,
-
-    #[arg(long)]
-    auth_token: Option<String>,
-
-    #[arg(long)]
-    auth_token_file: Option<PathBuf>,
-
-    #[arg(long)]
-    store: Option<PathBuf>,
-
-    #[arg(long)]
-    secrets: Option<PathBuf>,
-
-    #[arg(long)]
-    advertise_lan: bool,
+    config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -129,13 +106,29 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn start(args: StartArgs) -> anyhow::Result<()> {
-    let policy = load_policy(args.policy.as_deref())?;
-    let auth_token = load_auth_token(args.auth_token, args.auth_token_file.as_deref())?;
-    let secrets = load_secrets(args.secrets.as_deref())?;
-    let stored_jobs = load_store_jobs(args.store.as_deref())?;
+    let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
+    let config = OperonConfig::load(&config_path)?;
+    let config_dir = OperonConfig::config_dir(&config_path);
+    let daemon = config
+        .daemon
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("config is missing daemon section"))?;
+    let policy = config.policy.unwrap_or_else(default_policy);
+    let auth_token = daemon.auth.resolve(&config_dir)?;
+    let store = daemon
+        .store
+        .as_ref()
+        .map(|path| resolve_path(&config_dir, path));
+    let secrets_path = config
+        .secrets
+        .as_ref()
+        .and_then(|secrets| secrets.file.as_ref())
+        .map(|path| resolve_path(&config_dir, path));
+    let secrets = load_secrets(secrets_path.as_deref())?;
+    let stored_jobs = load_store_jobs(store.as_deref())?;
     let next_job_id = next_job_sequence(&stored_jobs);
     let node = NodeInfo {
-        id: args.node_id.clone(),
+        id: daemon.node_id.clone(),
         hostname: hostname(),
         os: env::consts::OS.to_string(),
         arch: env::consts::ARCH.to_string(),
@@ -145,10 +138,10 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
     let state = AppState {
         capabilities: capability_list.clone(),
         node,
-        workspace: args.workspace,
+        workspace: daemon.workspace,
         policy,
         auth_token,
-        store: args.store.clone(),
+        store: store.clone(),
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(Vec::new())),
         jobs,
@@ -156,20 +149,20 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
         next_job_id: Arc::new(AtomicU64::new(next_job_id)),
     };
-    let mdns = if args.advertise_lan {
+    let mdns = if daemon.advertise_lan {
         Some(advertise_lan(
-            &args.node_id,
-            args.grpc_listen,
+            &daemon.node_id,
+            daemon.grpc_listen,
             &capability_list,
         )?)
     } else {
         None
     };
 
-    tracing::info!("operond gRPC listening on {}", args.grpc_listen);
+    tracing::info!("operond gRPC listening on {}", daemon.grpc_listen);
     Server::builder()
         .add_service(OperonRuntimeServer::new(GrpcRuntime { state }))
-        .serve_with_shutdown(args.grpc_listen, shutdown_signal())
+        .serve_with_shutdown(daemon.grpc_listen, shutdown_signal())
         .await?;
 
     drop(mdns);
@@ -1083,26 +1076,6 @@ fn hostname() -> String {
     env::var("HOSTNAME")
         .or_else(|_| env::var("COMPUTERNAME"))
         .unwrap_or_else(|_| "unknown".to_string())
-}
-
-fn load_policy(path: Option<&Path>) -> anyhow::Result<PolicyConfig> {
-    let Some(path) = path else {
-        return Ok(default_policy());
-    };
-    let content = fs::read_to_string(path)?;
-    Ok(serde_yaml::from_str(&content)?)
-}
-
-fn load_auth_token(
-    token: Option<String>,
-    token_file: Option<&Path>,
-) -> anyhow::Result<Option<String>> {
-    match (token, token_file) {
-        (Some(token), None) => Ok(Some(token)),
-        (None, Some(path)) => Ok(Some(fs::read_to_string(path)?.trim().to_string())),
-        (None, None) => Ok(None),
-        (Some(_), Some(_)) => anyhow::bail!("use either --auth-token or --auth-token-file"),
-    }
 }
 
 fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>> {

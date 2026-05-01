@@ -9,8 +9,11 @@ use std::{
 
 use clap::ValueEnum;
 use mdns_sd::{ServiceDaemon, ServiceEvent};
+use operon_config::{
+    AuthConfig, ClientConfig, DaemonConfig, NetworkProviderKind, NodeConfig, OperonConfig,
+    SecretsConfig,
+};
 use operon_core::{DiscoveryList, DiscoveryRecord};
-use operon_network::{NetworkProviderKind, NodeConfig, NodesConfig};
 
 use crate::OutputMode;
 
@@ -266,9 +269,11 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
     let mut equivalent_cli = Vec::new();
     let mut daemon_command = None;
     let token_path = output_dir.join("token");
-    let policy_path = output_dir.join("policy.yaml");
-    let nodes_path = output_dir.join("nodes.yaml");
+    let config_path = output_dir.join("config.yaml");
     let daemon_readme_path = output_dir.join("daemon-command.txt");
+    let mut daemon = None;
+    let mut policy = None;
+    let mut nodes = BTreeMap::new();
 
     if matches!(role, OnboardRole::Daemon | OnboardRole::Both) {
         let token = daemon_token
@@ -278,16 +283,24 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
             path: token_path.clone(),
             content: format!("{token}\n"),
         });
-        files.push(GeneratedFile {
-            path: policy_path.clone(),
-            content: render_policy(&node_id, &grant, service_port_from_listen_address(&listen)),
+        policy = Some(build_policy(
+            &node_id,
+            &grant,
+            service_port_from_listen_address(&listen),
+        )?);
+        daemon = Some(DaemonConfig {
+            node_id: node_id.clone(),
+            grpc_listen: listen.parse()?,
+            workspace: PathBuf::from(&workspace),
+            advertise_lan: true,
+            store: Some(PathBuf::from("store.jsonl")),
+            auth: AuthConfig {
+                token: None,
+                token_file: Some(PathBuf::from("token")),
+                token_env: None,
+            },
         });
-        equivalent_cli.push(format!("operon init policy {}", policy_path.display()));
-        let command = format!(
-            "operond start --grpc-listen {listen} --node-id {node_id} --workspace {workspace} --policy {} --auth-token-file {} --advertise-lan",
-            policy_path.display(),
-            token_path.display()
-        );
+        let command = format!("operond start --config {}", config_path.display());
         files.push(GeneratedFile {
             path: daemon_readme_path,
             content: format!("{command}\n"),
@@ -296,13 +309,12 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
     }
 
     if matches!(role, OnboardRole::Client | OnboardRole::Both) {
-        let mut nodes = BTreeMap::new();
         nodes.insert(
             node_id.clone(),
             NodeConfig {
                 endpoint: endpoint.clone(),
                 provider: NetworkProviderKind::Manual,
-                token: client_token.clone(),
+                auth: client_token_auth(client_token.clone(), matches!(role, OnboardRole::Both)),
             },
         );
 
@@ -312,21 +324,30 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
                 nodes.entry(node.node_id).or_insert(NodeConfig {
                     endpoint: node.endpoint,
                     provider: NetworkProviderKind::Lan,
-                    token: client_token.clone(),
+                    auth: client_token_auth(
+                        client_token.clone(),
+                        matches!(role, OnboardRole::Both),
+                    ),
                 });
             }
             equivalent_cli.push(format!(
                 "operon node discover --provider lan --output-config {}",
-                nodes_path.display()
+                config_path.display()
             ));
         }
-
-        files.push(GeneratedFile {
-            path: nodes_path.clone(),
-            content: serde_yaml::to_string(&NodesConfig { nodes })?,
-        });
-        equivalent_cli.push(format!("operon init config {}", nodes_path.display()));
+        equivalent_cli.push(format!("operon init config {}", config_path.display()));
     }
+
+    files.push(GeneratedFile {
+        path: config_path.clone(),
+        content: serde_yaml::to_string(&OperonConfig {
+            version: 1,
+            daemon,
+            client: ClientConfig { nodes },
+            policy,
+            secrets: Some(SecretsConfig::default()),
+        })?,
+    });
 
     Ok(OnboardPlan {
         output_dir,
@@ -352,7 +373,20 @@ fn prompt_capability_grants(prompt: &mut impl Prompt) -> anyhow::Result<Capabili
     })
 }
 
+#[cfg(test)]
 fn render_policy(subject: &str, grant: &CapabilityGrant, service_port: u16) -> String {
+    serde_yaml::to_string(&build_policy(subject, grant, service_port).expect("policy")).unwrap()
+}
+
+fn build_policy(
+    subject: &str,
+    grant: &CapabilityGrant,
+    service_port: u16,
+) -> anyhow::Result<operon_core::PolicyConfig> {
+    serde_yaml::from_str(&render_policy_yaml(subject, grant, service_port)).map_err(Into::into)
+}
+
+fn render_policy_yaml(subject: &str, grant: &CapabilityGrant, service_port: u16) -> String {
     let default_timeout_secs = if grant.job_run { 30 } else { 1 };
     let max_timeout_secs = if grant.job_run { 300 } else { 1 };
     let services = render_services(grant, service_port);
@@ -382,6 +416,22 @@ service:
         fs_write = grant.fs_write,
         fs_delete = grant.fs_delete,
     )
+}
+
+fn client_token_auth(token: Option<String>, local_token_file: bool) -> AuthConfig {
+    if local_token_file {
+        AuthConfig {
+            token: None,
+            token_file: Some(PathBuf::from("token")),
+            token_env: None,
+        }
+    } else {
+        AuthConfig {
+            token,
+            token_file: None,
+            token_env: None,
+        }
+    }
 }
 
 fn render_services(grant: &CapabilityGrant, service_port: u16) -> String {
@@ -584,8 +634,8 @@ mod tests {
         let nodes = plan
             .files
             .iter()
-            .find(|file| file.path.ends_with("nodes.yaml"))
-            .expect("nodes file");
+            .find(|file| file.path.ends_with("config.yaml"))
+            .expect("config file");
 
         assert!(!nodes.content.contains("token:"));
     }

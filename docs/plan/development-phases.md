@@ -1813,8 +1813,8 @@ v0.6.4 = onboard as a guided wrapper over existing setup primitives.
 ```
 
 `operon onboard` must generate normal Operon files and show the equivalent CLI
-commands. `init config`, `init policy`, `node discover --provider lan`, and
-other command-style configuration paths remain the stable automation surface.
+commands. `init config`, `node discover --provider lan`, and other
+command-style configuration paths remain the stable automation surface.
 
 ## Phase 32.8: Onboard Command
 
@@ -1826,7 +1826,7 @@ Planned:
 
 - add `operon onboard`.
 - support daemon, client, and combined setup roles.
-- generate `nodes.yaml`, `policy.yaml`, `token`, and daemon start command
+- generate `config.yaml`, `token`, and daemon start command
   files under a chosen output directory.
 - support optional LAN discovery as an onboarding input.
 - support coarse capability preauthorization for generated policy files.
@@ -1843,8 +1843,7 @@ Completed:
 
 - Added `operon onboard` with daemon, client, and combined roles.
 - Added non-interactive `--yes` mode for reproducible setup generation.
-- Generated ordinary `nodes.yaml`, `policy.yaml`, `token`, and
-  `daemon-command.txt` files.
+- Generated ordinary `config.yaml`, `token`, and `daemon-command.txt` files.
 - Added optional LAN discovery input for client node config generation.
 - Added coarse capability grant selection for generated policy files.
 - Printed equivalent CLI setup commands after onboarding.
@@ -1876,6 +1875,87 @@ Completed:
 Remaining:
 
 - None for v0.6.4.
+
+## v0.6.5 Cleanup Goal
+
+Operon v0.6.5 should replace split configuration files with one unified
+configuration entrypoint.
+
+```text
+v0.6.5 = one config.yaml schema for daemon, client, policy, auth, store, and secret references.
+```
+
+Daemon and CLI-specific settings remain separate sections inside the same file.
+Sensitive values should be referenced through `token_file`, `token_env`, or
+`secrets.file` instead of being forced inline.
+
+## Phase 32.10: operon-config Crate
+
+Status: Completed.
+
+Goal: put configuration ownership in a dedicated crate instead of `operon-network`.
+
+Planned:
+
+- add `operon-config`.
+- define `OperonConfig`, daemon config, client config, node config, auth config,
+  and secret references.
+- keep provider values available for client node resolution.
+- resolve relative file references from the config file directory.
+
+Completed:
+
+- Added `operon-config` as the shared schema/loading crate.
+- Moved unified config, node endpoint, provider, auth, daemon, client, and
+  secret reference types into `operon-config`.
+- Kept `operon-network` as a thin re-export boundary for provider/node endpoint
+  types.
+
+## Phase 32.11: Unified CLI And Daemon Config
+
+Status: Completed.
+
+Goal: make `config.yaml` the supported runtime configuration entrypoint.
+
+Planned:
+
+- make `operon --config` read unified `client.nodes`.
+- make `operond start --config` read daemon, policy, auth, store, and secrets.
+- default missing `--config` to `$HOME/.operon/config.yaml`.
+- remove legacy split config assumptions from onboard and validation scripts.
+
+Completed:
+
+- CLI now loads node endpoints from unified config.
+- Daemon now starts from unified config.
+- CLI and daemon default to `$HOME/.operon/config.yaml` when `--config` is not
+  provided.
+- Onboard now writes `.operon/config.yaml`, `.operon/token`, and
+  `.operon/daemon-command.txt`.
+- Docker and validation configs were moved to unified config files.
+
+## Phase 32.12: v0.6.5 Acceptance
+
+Status: Completed.
+
+Goal: validate unified config before starting v0.7.
+
+Planned:
+
+- `docs/plan/v0.6.5-unified-config-acceptance.md`.
+- validation for onboard-generated unified config.
+- validation for daemon/client fs mutation and copy flows through unified config.
+- README, AGENTS, and CI updates.
+
+Completed:
+
+- Added `docs/plan/v0.6.5-unified-config-acceptance.md`.
+- Updated onboard, Docker config, and validation scripts for unified config.
+- Updated README, AGENTS, and CI references for v0.6.5.
+
+Remaining:
+
+- None for v0.6.5.
 
 ## v0.7 Goal
 

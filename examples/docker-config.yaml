@@ -1,0 +1,12 @@
+version: 1
+
+client:
+  nodes:
+    node-a:
+      endpoint: grpc://127.0.0.1:17790
+      auth:
+        token: docker-token
+    node-b:
+      endpoint: grpc://127.0.0.1:17791
+      auth:
+        token: docker-token

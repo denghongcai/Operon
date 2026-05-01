@@ -12,6 +12,7 @@ async-stream.workspace = true
 clap.workspace = true
 futures-util.workspace = true
 mdns-sd.workspace = true
+operon-config = { path = "../operon-config" }
 operon-core = { path = "../operon-core" }
 operon-network = { path = "../operon-network" }
 operon-protocol = { path = "../operon-protocol" }

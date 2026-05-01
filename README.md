@@ -117,23 +117,21 @@ The v0.5 runtime has two binaries:
 From the repo, run them through Cargo:
 
 ```bash
-cargo run -p operond -- start --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
-cargo run -p operon-cli -- --config examples/nodes.yaml node list
+cargo run -p operond -- start --config examples/config.yaml
+cargo run -p operon-cli -- --config examples/config.yaml node list
 ```
 
 After installing built binaries, the same commands are:
 
 ```bash
-operond start --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
-operon --config examples/nodes.yaml node list
+operond start --config examples/config.yaml
+operon --config examples/config.yaml node list
 ```
 
 ### Onboarding
 
-`operon onboard` is a guided first-run setup helper. It does not replace the
-command-style configuration commands; it writes ordinary files that can be
-edited, committed, or regenerated through `operon init config`, `operon init
-policy`, and `operon node discover --provider lan`.
+`operon onboard` is a guided first-run setup helper. It writes a unified
+`config.yaml` plus referenced secret files where needed.
 
 ```bash
 operon onboard
@@ -154,48 +152,77 @@ operon onboard \
 This writes:
 
 ```text
-.operon/nodes.yaml
-.operon/policy.yaml
+.operon/config.yaml
 .operon/token
 .operon/daemon-command.txt
 ```
 
-The generated files are normal Operon config files. `onboard` also prints the
-equivalent CLI setup commands so automation can keep using the explicit command
-surface.
+`config.yaml` is the runtime config entrypoint for both `operon` and `operond`.
+If `--config` is omitted, both binaries read `$HOME/.operon/config.yaml`.
 
-### Node Config
+### Unified Config
 
-The CLI reads node endpoints from a YAML file. In v0.5, the default path is:
-
-```text
-examples/nodes.yaml
-```
-
-That default is useful for local development from the repo root. For real use, keep your own config file anywhere you want and pass it explicitly with `--config`:
-
-```bash
-operon --config ./operon.nodes.yaml node list
-operon --config ./operon.nodes.yaml node ping cloud-a
-operon --config ./operon.nodes.yaml capability list cloud-a
-```
-
-Config shape:
+Operon uses one YAML config schema with separate daemon, client, policy, auth,
+store, and secret-reference sections:
 
 ```yaml
-nodes:
-  local:
-    endpoint: grpc://127.0.0.1:7789
-    token: local-dev-token
-  cloud-a:
-    endpoint: grpc://100.96.12.34:7789
-    provider: tailscale
-  gpu-node:
-    endpoint: grpc://100.96.18.20:7789
-    provider: cloudflare-mesh
+version: 1
+
+daemon:
+  node_id: cloud-a
+  grpc_listen: 0.0.0.0:7789
+  workspace: /home/ubuntu/workspace
+  advertise_lan: true
+  store: store.jsonl
+  auth:
+    token_file: token
+
+client:
+  nodes:
+    cloud-a:
+      endpoint: grpc://100.96.12.34:7789
+      provider: tailscale
+      auth:
+        token_file: token
+    gpu-node:
+      endpoint: grpc://100.96.18.20:7789
+      provider: cloudflare-mesh
+
+policy:
+  subject: local-cli
+  fs:
+    mounts:
+      - name: workspace
+        path: /
+        permissions:
+          read: true
+          write: true
+          delete: false
+  job:
+    allowed_cwds:
+      - /
+    default_timeout_secs: 30
+    max_timeout_secs: 300
+    env_allowlist: []
+    allowed_secrets: []
+  service:
+    services:
+      - id: daemon
+        name: daemon
+        host: 127.0.0.1
+        port: 7789
+        protocol: tcp
+        description: Operon gRPC daemon listener
+
+secrets:
+  file: secrets.yaml
 ```
 
-`endpoint` may be `grpc://` or `grpcs://`. The CLI uses gRPC for runtime operations. Use `operon --json` for scripts, and use `PROTOCOL.md` if you need to integrate without an SDK. `provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
+`endpoint` may be `grpc://` or `grpcs://`. The CLI uses gRPC for runtime
+operations. Use `operon --json` for scripts, and use `PROTOCOL.md` if you need
+to integrate without an SDK. `provider` is optional and defaults to `manual`.
+Auth can use `token`, `token_file`, or `token_env`; file paths are resolved
+relative to the config file directory.
 
 Provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
 
@@ -211,23 +238,7 @@ lan
 kubernetes
 ```
 
-### Daemon Policy Config
-
-`operond` accepts a local policy file:
-
-```bash
-operond start \
-  --grpc-listen 0.0.0.0:7789 \
-  --node-id cloud-a \
-  --workspace /home/ubuntu/workspace \
-  --policy ./operon.policy.yaml \
-  --auth-token-file ./operon.token \
-  --store ./operon-store.jsonl \
-  --secrets ./operon.secrets.yaml \
-  --advertise-lan
-```
-
-If `--policy` is omitted, the daemon uses a permissive MVP default for the configured workspace. For any real machine, pass an explicit policy file.
+### Policy Section
 
 Policy shape:
 
@@ -262,7 +273,9 @@ service:
       description: Operon gRPC daemon listener
 ```
 
-Policy paths are virtual paths inside the daemon workspace. If the daemon starts with `--workspace /home/ubuntu/workspace`, policy path `/` means that workspace root, not the host root.
+Policy paths are virtual paths inside the daemon workspace. If the daemon
+config sets `workspace: /home/ubuntu/workspace`, policy path `/` means that
+workspace root, not the host root.
 
 Secret file shape:
 
@@ -275,50 +288,49 @@ Secrets are only injected into jobs that request them and are allowed by policy.
 ### Common Commands
 
 ```bash
-operon --config ./operon.nodes.yaml node list
-operon --config ./operon.nodes.yaml node resolve cloud-a
+operon --config ./operon.config.yaml node list
+operon --config ./operon.config.yaml node resolve cloud-a
 operon node discover --provider lan --timeout-secs 3
-operon --config ./operon.nodes.yaml node ping cloud-a
+operon --config ./operon.config.yaml node ping cloud-a
 operon provider list
-operon --config ./operon.nodes.yaml capability list cloud-a
-operon --config ./operon.nodes.yaml service list cloud-a
-operon --config ./operon.nodes.yaml service check cloud-a daemon
+operon --config ./operon.config.yaml capability list cloud-a
+operon --config ./operon.config.yaml service list cloud-a
+operon --config ./operon.config.yaml service check cloud-a daemon
 
-operon init config ./operon.nodes.yaml
-operon init policy ./operon.policy.yaml
+operon init config ./operon.config.yaml
 
-operon --config ./operon.nodes.yaml fs stat cloud-a:/README.md
-operon --config ./operon.nodes.yaml fs list cloud-a:/
-operon --config ./operon.nodes.yaml fs read cloud-a:/input.txt
-operon --config ./operon.nodes.yaml fs read cloud-a:/large.bin --output ./large.bin
-operon --config ./operon.nodes.yaml fs write cloud-a:/input.txt --content "hello"
-operon --config ./operon.nodes.yaml fs write cloud-a:/large.bin --file ./large.bin
-operon --config ./operon.nodes.yaml fs mkdir cloud-a:/work
-operon --config ./operon.nodes.yaml fs truncate cloud-a:/work/file.txt --size 0
-operon --config ./operon.nodes.yaml fs rename cloud-a:/work/file.txt cloud-a:/work/renamed.txt
-operon --config ./operon.nodes.yaml fs copy cloud-a:/work/renamed.txt cloud-a:/work/copied.txt
-operon --config ./operon.nodes.yaml fs rm cloud-a:/work/renamed.txt
+operon --config ./operon.config.yaml fs stat cloud-a:/README.md
+operon --config ./operon.config.yaml fs list cloud-a:/
+operon --config ./operon.config.yaml fs read cloud-a:/input.txt
+operon --config ./operon.config.yaml fs read cloud-a:/large.bin --output ./large.bin
+operon --config ./operon.config.yaml fs write cloud-a:/input.txt --content "hello"
+operon --config ./operon.config.yaml fs write cloud-a:/large.bin --file ./large.bin
+operon --config ./operon.config.yaml fs mkdir cloud-a:/work
+operon --config ./operon.config.yaml fs truncate cloud-a:/work/file.txt --size 0
+operon --config ./operon.config.yaml fs rename cloud-a:/work/file.txt cloud-a:/work/renamed.txt
+operon --config ./operon.config.yaml fs copy cloud-a:/work/renamed.txt cloud-a:/work/copied.txt
+operon --config ./operon.config.yaml fs rm cloud-a:/work/renamed.txt
 
-operon --config ./operon.nodes.yaml job run cloud-a -- echo hello
-operon --config ./operon.nodes.yaml job run cloud-a --secret GITHUB_TOKEN -- test x'$GITHUB_TOKEN' = xexpected
-operon --config ./operon.nodes.yaml job run cloud-a --detach -- sleep 10
-operon --config ./operon.nodes.yaml job status cloud-a job-1
-operon --config ./operon.nodes.yaml job list cloud-a
-operon --config ./operon.nodes.yaml job logs cloud-a job-1
-operon --config ./operon.nodes.yaml job logs cloud-a job-1 --follow
-operon --config ./operon.nodes.yaml job logs cloud-a job-1 --stream
-operon --config ./operon.nodes.yaml job stdin cloud-a job-1 --content "input"
-operon --config ./operon.nodes.yaml job stdin cloud-a job-1 --close
-operon --config ./operon.nodes.yaml job cancel cloud-a job-1
+operon --config ./operon.config.yaml job run cloud-a -- echo hello
+operon --config ./operon.config.yaml job run cloud-a --secret GITHUB_TOKEN -- test x'$GITHUB_TOKEN' = xexpected
+operon --config ./operon.config.yaml job run cloud-a --detach -- sleep 10
+operon --config ./operon.config.yaml job status cloud-a job-1
+operon --config ./operon.config.yaml job list cloud-a
+operon --config ./operon.config.yaml job logs cloud-a job-1
+operon --config ./operon.config.yaml job logs cloud-a job-1 --follow
+operon --config ./operon.config.yaml job logs cloud-a job-1 --stream
+operon --config ./operon.config.yaml job stdin cloud-a job-1 --content "input"
+operon --config ./operon.config.yaml job stdin cloud-a job-1 --close
+operon --config ./operon.config.yaml job cancel cloud-a job-1
 
-operon --config ./operon.nodes.yaml audit list cloud-a
-operon --config ./operon.nodes.yaml audit show cloud-a --limit 20
-operon --config ./operon.nodes.yaml audit show cloud-a --capability service:daemon --action check --allowed true --resource daemon --limit 5
-operon --config ./operon.nodes.yaml run --trace-output ./trace.json examples/train-model.yaml
+operon --config ./operon.config.yaml audit list cloud-a
+operon --config ./operon.config.yaml audit show cloud-a --limit 20
+operon --config ./operon.config.yaml audit show cloud-a --capability service:daemon --action check --allowed true --resource daemon --limit 5
+operon --config ./operon.config.yaml run --trace-output ./trace.json examples/train-model.yaml
 operon trace list .
 operon trace show ./trace.json
 operon --json trace show ./trace.json
-operon --config ./operon.nodes.yaml mount cloud-a:/ --to ./cloud-a
+operon --config ./operon.config.yaml mount cloud-a:/ --to ./cloud-a
 ```
 
 Add `--json` for structured command output or `--quiet` to suppress non-essential output.
@@ -379,7 +391,7 @@ scripts/verify-v0.5-docker.sh
 This starts two `operond` containers with gRPC listeners, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, policy denial, scoped secrets, audit output, trace summaries, and runs:
 
 ```bash
-operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-grpc-trace.json examples/docker-copy-and-run.yaml
+operon --config examples/docker-config.yaml run --trace-output /tmp/operon-docker-grpc-trace.json examples/docker-copy-and-run.yaml
 ```
 
 Run the Linux FUSE mount validations:
@@ -420,7 +432,7 @@ steps:
 For real machines, point the CLI at already reachable daemon endpoints:
 
 ```bash
-operon --config examples/nodes.yaml run examples/train-model.yaml
+operon --config examples/config.yaml run examples/train-model.yaml
 ```
 
 ---

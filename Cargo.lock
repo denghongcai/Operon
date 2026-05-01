@@ -783,6 +783,7 @@ dependencies = [
  "clap",
  "futures-util",
  "mdns-sd",
+ "operon-config",
  "operon-core",
  "operon-mount",
  "operon-network",
@@ -792,6 +793,16 @@ dependencies = [
  "serde_yaml",
  "tokio",
  "tonic",
+]
+
+[[package]]
+name = "operon-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "operon-core",
+ "serde",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -830,10 +841,7 @@ dependencies = [
 name = "operon-network"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "operon-core",
- "serde",
- "serde_yaml",
+ "operon-config",
 ]
 
 [[package]]
@@ -870,6 +878,7 @@ dependencies = [
  "clap",
  "futures-util",
  "mdns-sd",
+ "operon-config",
  "operon-core",
  "operon-network",
  "operon-protocol",

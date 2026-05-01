@@ -1,7 +1,0 @@
-nodes:
-  local:
-    endpoint: grpc://127.0.0.1:7789
-  cloud-a:
-    endpoint: grpc://100.96.12.34:7789
-  gpu-node:
-    endpoint: grpc://100.96.18.20:7789

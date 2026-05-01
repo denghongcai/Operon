@@ -23,8 +23,7 @@ TMP_DIR="$(mktemp -d)"
 MOUNT_DIR="$TMP_DIR/mount"
 DENY_WORKSPACE="$TMP_DIR/deny-workspace"
 DENY_STORE="$TMP_DIR/deny-store.jsonl"
-DENY_POLICY="$TMP_DIR/deny-policy.yaml"
-DENY_NODES="$TMP_DIR/deny-nodes.yaml"
+DENY_CONFIG="$TMP_DIR/deny-config.yaml"
 MOUNT_LOG="$TMP_DIR/mount.log"
 DENY_LOG="$TMP_DIR/deny-mount.log"
 MOUNT_PID=""
@@ -55,17 +54,17 @@ trap cleanup EXIT
 docker compose up -d --build node-a node-b
 
 for _ in $(seq 1 30); do
-  if cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml node ping node-a >/dev/null 2>&1; then
+  if cargo run -q -p operon-cli -- --config examples/docker-config.yaml node ping node-a >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml node ping node-a
+cargo run -q -p operon-cli -- --config examples/docker-config.yaml node ping node-a
 
-cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml fs write node-a:/mount-v06.txt --content "hello from v0.6 mount"
+cargo run -q -p operon-cli -- --config examples/docker-config.yaml fs write node-a:/mount-v06.txt --content "hello from v0.6 mount"
 
 mkdir -p "$MOUNT_DIR"
-cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml mount node-a:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
+cargo run -q -p operon-cli -- --config examples/docker-config.yaml mount node-a:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
 MOUNT_PID="$!"
 
 for _ in $(seq 1 30); do
@@ -79,10 +78,10 @@ mountpoint -q "$MOUNT_DIR"
 ls "$MOUNT_DIR" | grep -q "mount-v06.txt"
 grep -q "hello from v0.6 mount" "$MOUNT_DIR/mount-v06.txt"
 
-cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml fs write node-a:/mount-v06-live.txt --content "live update from remote"
+cargo run -q -p operon-cli -- --config examples/docker-config.yaml fs write node-a:/mount-v06-live.txt --content "live update from remote"
 grep -q "live update from remote" "$MOUNT_DIR/mount-v06-live.txt"
 
-if cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml mount node-a:/../secret --to "$TMP_DIR/bad-mount" >"$TMP_DIR/bad-mount.log" 2>&1; then
+if cargo run -q -p operon-cli -- --config examples/docker-config.yaml mount node-a:/../secret --to "$TMP_DIR/bad-mount" >"$TMP_DIR/bad-mount.log" 2>&1; then
   echo "expected path escape mount to fail" >&2
   exit 1
 fi
@@ -97,61 +96,66 @@ if mountpoint -q "$MOUNT_DIR"; then
 fi
 
 mkdir -p "$DENY_WORKSPACE"
-cat >"$DENY_POLICY" <<'YAML'
-subject: v06-deny
+cat >"$DENY_CONFIG" <<YAML
+version: 1
 
-fs:
-  mounts:
-    - name: workspace
-      path: /
-      permissions:
-        read: false
-        write: false
-        delete: false
-
-job:
-  allowed_cwds:
-    - /
-  default_timeout_secs: 30
-  max_timeout_secs: 30
-  env_allowlist: []
-  allowed_secrets: []
-
-service:
-  services: []
-YAML
-
-cat >"$DENY_NODES" <<'YAML'
-nodes:
-  deny:
-    endpoint: grpc://127.0.0.1:18789
+daemon:
+  node_id: deny
+  grpc_listen: 127.0.0.1:18789
+  workspace: $DENY_WORKSPACE
+  store: $DENY_STORE
+  auth:
     token: deny-token
+
+client:
+  nodes:
+    deny:
+      endpoint: grpc://127.0.0.1:18789
+      auth:
+        token: deny-token
+
+policy:
+  subject: v06-deny
+  fs:
+    mounts:
+      - name: workspace
+        path: /
+        permissions:
+          read: false
+          write: false
+          delete: false
+
+  job:
+    allowed_cwds:
+      - /
+    default_timeout_secs: 30
+    max_timeout_secs: 30
+    env_allowlist: []
+    allowed_secrets: []
+
+  service:
+    services: []
 YAML
 
 cargo run -q -p operond -- start \
-  --grpc-listen 127.0.0.1:18789 \
-  --node-id deny \
-  --workspace "$DENY_WORKSPACE" \
-  --policy "$DENY_POLICY" \
-  --auth-token deny-token \
-  --store "$DENY_STORE" >"$TMP_DIR/deny-daemon.log" 2>&1 &
+  --config "$DENY_CONFIG" >"$TMP_DIR/deny-daemon.log" 2>&1 &
 DENY_PID="$!"
 
 for _ in $(seq 1 30); do
-  if cargo run -q -p operon-cli -- --config "$DENY_NODES" node ping deny >/dev/null 2>&1; then
+  if cargo run -q -p operon-cli -- --config "$DENY_CONFIG" node ping deny >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-cargo run -q -p operon-cli -- --config "$DENY_NODES" node ping deny
+cargo run -q -p operon-cli -- --config "$DENY_CONFIG" node ping deny
 
-if cargo run -q -p operon-cli -- --config "$DENY_NODES" mount deny:/ --to "$TMP_DIR/deny-mount" >"$DENY_LOG" 2>&1; then
+if cargo run -q -p operon-cli -- --config "$DENY_CONFIG" mount deny:/ --to "$TMP_DIR/deny-mount" >"$DENY_LOG" 2>&1; then
   echo "expected policy-denied mount to fail" >&2
   exit 1
 fi
 cat "$DENY_LOG"
 
-cargo run -q -p operon-cli -- --config "$DENY_NODES" audit show deny --capability fs:workspace --action stat --allowed false --resource / --limit 5 >"$TMP_DIR/deny-audit.log"
+cargo run -q -p operon-cli -- --config "$DENY_CONFIG" audit show deny --capability fs:workspace --action stat --allowed false --resource / --limit 5 >"$TMP_DIR/deny-audit.log"
 cat "$TMP_DIR/deny-audit.log"
 grep -Eq "fs:workspace[[:space:]]+stat[[:space:]]+/[[:space:]]+false" "$TMP_DIR/deny-audit.log"
 

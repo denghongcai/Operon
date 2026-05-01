@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/operon-config",
   "crates/operond",
   "crates/operon-cli",
   "crates/operon-core",

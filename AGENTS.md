@@ -62,6 +62,9 @@ Operon should not own:
 - `docs/plan/v0.6.4-onboard-acceptance.md`
   - v0.6.4 acceptance scope for guided first-run configuration.
 
+- `docs/plan/v0.6.5-unified-config-acceptance.md`
+  - v0.6.5 acceptance scope for unified `config.yaml`.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -109,6 +112,7 @@ Operon should not own:
 - Completed cleanup milestone: v0.6.2 CLI fs mutation command alignment.
 - Completed fs milestone: v0.6.3 same-node fs copy for protocol, CLI, and SDK.
 - Completed onboarding milestone: v0.6.4 guided first-run setup through `operon onboard`.
+- Completed config milestone: v0.6.5 unified `config.yaml` through `operon-config`.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.
@@ -118,6 +122,7 @@ Operon should not own:
 - Capability authorization must remain inside Operon even when network access is already allowed.
 - Service / port capability is metadata and TCP health checking only; it must not become port forwarding, proxying, VPN, or relay behavior.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
+- `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 
 ## First MVP Boundary
 

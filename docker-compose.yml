@@ -3,7 +3,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: ["start", "--grpc-listen", "0.0.0.0:7789", "--node-id", "node-a", "--policy", "/etc/operon/policy.yaml", "--auth-token", "docker-token", "--store", "/workspace/operon-store.jsonl", "--secrets", "/etc/operon/secrets.yaml", "--advertise-lan"]
+    hostname: node-a
+    command: ["start"]
     ports:
       - "17790:7789"
 
@@ -11,6 +12,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: ["start", "--grpc-listen", "0.0.0.0:7789", "--node-id", "node-b", "--policy", "/etc/operon/policy.yaml", "--auth-token", "docker-token", "--store", "/workspace/operon-store.jsonl", "--secrets", "/etc/operon/secrets.yaml", "--advertise-lan"]
+    hostname: node-b
+    command: ["start"]
     ports:
       - "17791:7789"

@@ -21,11 +21,13 @@ RUN useradd --create-home --shell /usr/sbin/nologin operon \
 
 COPY --from=builder /workspace/target/release/operond /usr/local/bin/operond
 COPY --from=builder /workspace/target/release/operon /usr/local/bin/operon
-COPY examples/docker-policy.yaml /etc/operon/policy.yaml
 COPY examples/docker-secrets.yaml /etc/operon/secrets.yaml
+COPY examples/docker-node-a-config.yaml /etc/operon/node-a-config.yaml
+COPY examples/docker-node-b-config.yaml /etc/operon/node-b-config.yaml
+COPY docker/entrypoint.sh /usr/local/bin/operon-docker-entrypoint
 
 USER operon
 
 EXPOSE 7789
 
-ENTRYPOINT ["operond"]
+ENTRYPOINT ["operon-docker-entrypoint"]

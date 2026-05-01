@@ -8,12 +8,12 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
+use operon_config::{NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
     AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ExecutionTrace, FsList, FsRead,
     FsWrite, HealthStatus, JobList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
     NodeInfo, ServiceCheck, ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
-use operon_network::{NetworkProviderKind, NodesConfig};
 
 mod graph;
 mod grpc;
@@ -24,8 +24,8 @@ const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 #[derive(Debug, Parser)]
 #[command(name = "operon", about = "Operon CLI")]
 struct Args {
-    #[arg(short, long, default_value = "examples/nodes.yaml")]
-    config: PathBuf,
+    #[arg(short, long)]
+    config: Option<PathBuf>,
 
     #[arg(long)]
     json: bool,
@@ -110,7 +110,6 @@ enum NodeCommand {
 #[derive(Debug, Subcommand)]
 enum InitCommand {
     Config { path: PathBuf },
-    Policy { path: PathBuf },
 }
 
 #[derive(Debug, Subcommand)]
@@ -275,6 +274,7 @@ struct AuditFilter {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
     let output = OutputMode {
         json: args.json,
         quiet: args.quiet,
@@ -282,7 +282,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Node { command } => match command {
-            NodeCommand::List => list_nodes(args.config, output),
+            NodeCommand::List => list_nodes(config_path, output),
             NodeCommand::Discover {
                 provider,
                 timeout_secs,
@@ -293,40 +293,39 @@ fn main() -> anyhow::Result<()> {
                 output_config,
                 output,
             ),
-            NodeCommand::Resolve { node_id } => resolve_node(args.config, &node_id, output),
-            NodeCommand::Ping { node_id } => ping_node(args.config, &node_id, output),
+            NodeCommand::Resolve { node_id } => resolve_node(config_path, &node_id, output),
+            NodeCommand::Ping { node_id } => ping_node(config_path, &node_id, output),
         },
         Command::Init { command } => match command {
             InitCommand::Config { path } => init_config(path, output),
-            InitCommand::Policy { path } => init_policy(path, output),
         },
         Command::Onboard(args) => onboard::run(args, output),
         Command::Provider { command } => match command {
             ProviderCommand::List => list_providers(output),
         },
         Command::Capability { command } => match command {
-            CapabilityCommand::List { node_id } => list_capabilities(args.config, &node_id, output),
+            CapabilityCommand::List { node_id } => list_capabilities(config_path, &node_id, output),
         },
         Command::Fs { command } => match command {
-            FsCommand::Stat { target } => fs_stat(args.config, &target, output),
-            FsCommand::List { target } => fs_list(args.config, &target, output),
+            FsCommand::Stat { target } => fs_stat(config_path, &target, output),
+            FsCommand::List { target } => fs_list(config_path, &target, output),
             FsCommand::Read {
                 target,
                 output: file_output,
-            } => fs_read(args.config, &target, file_output, output),
+            } => fs_read(config_path, &target, file_output, output),
             FsCommand::Write {
                 target,
                 content,
                 file,
-            } => fs_write(args.config, &target, content, file, output),
-            FsCommand::Mkdir { target } => fs_mkdir(args.config, &target, output),
-            FsCommand::Rm { target } => fs_rm(args.config, &target, output),
-            FsCommand::Rename { from, to } => fs_rename(args.config, &from, &to, output),
-            FsCommand::Copy { from, to } => fs_copy(args.config, &from, &to, output),
-            FsCommand::Truncate { target, size } => fs_truncate(args.config, &target, size, output),
+            } => fs_write(config_path, &target, content, file, output),
+            FsCommand::Mkdir { target } => fs_mkdir(config_path, &target, output),
+            FsCommand::Rm { target } => fs_rm(config_path, &target, output),
+            FsCommand::Rename { from, to } => fs_rename(config_path, &from, &to, output),
+            FsCommand::Copy { from, to } => fs_copy(config_path, &from, &to, output),
+            FsCommand::Truncate { target, size } => fs_truncate(config_path, &target, size, output),
         },
         Command::Audit { command } => match command {
-            AuditCommand::List { node_id } => list_audit(args.config, &node_id, output),
+            AuditCommand::List { node_id } => list_audit(config_path, &node_id, output),
             AuditCommand::Show {
                 node_id,
                 limit,
@@ -342,15 +341,15 @@ fn main() -> anyhow::Result<()> {
                     allowed,
                     resource,
                 };
-                audit_show(args.config, &node_id, filter, output)
+                audit_show(config_path, &node_id, filter, output)
             }
         },
         Command::Service { command } => match command {
-            ServiceCommand::List { node_id } => service_list(args.config, &node_id, output),
+            ServiceCommand::List { node_id } => service_list(config_path, &node_id, output),
             ServiceCommand::Check {
                 node_id,
                 service_id,
-            } => service_check(args.config, &node_id, &service_id, output),
+            } => service_check(config_path, &node_id, &service_id, output),
         },
         Command::Job { command } => match command {
             JobCommand::Run {
@@ -361,7 +360,7 @@ fn main() -> anyhow::Result<()> {
                 detach,
                 command,
             } => job_run(JobRunInput {
-                config_path: args.config,
+                config_path,
                 node_id,
                 cwd,
                 timeout_secs,
@@ -370,42 +369,43 @@ fn main() -> anyhow::Result<()> {
                 command,
                 output,
             }),
-            JobCommand::List { node_id } => job_list(args.config, &node_id, output),
+            JobCommand::List { node_id } => job_list(config_path, &node_id, output),
             JobCommand::Status { node_id, job_id } => {
-                job_status(args.config, &node_id, &job_id, output)
+                job_status(config_path, &node_id, &job_id, output)
             }
             JobCommand::Logs {
                 node_id,
                 job_id,
                 follow,
                 stream,
-            } => job_logs(args.config, &node_id, &job_id, follow, stream),
+            } => job_logs(config_path, &node_id, &job_id, follow, stream),
             JobCommand::Stdin {
                 node_id,
                 job_id,
                 content,
                 file,
                 close,
-            } => job_stdin(args.config, &node_id, &job_id, content, file, close, output),
+            } => job_stdin(config_path, &node_id, &job_id, content, file, close, output),
             JobCommand::Cancel { node_id, job_id } => {
-                job_cancel(args.config, &node_id, &job_id, output)
+                job_cancel(config_path, &node_id, &job_id, output)
             }
         },
         Command::Run {
             workflow,
             trace_output,
-        } => graph::run_graph(args.config, workflow, trace_output),
+        } => graph::run_graph(config_path, workflow, trace_output),
         Command::Trace { command } => match command {
             TraceCommand::Show { path } => trace_show(path, output),
             TraceCommand::List { dir } => trace_list(dir, output),
         },
-        Command::Mount { target, to } => mount_fs(args.config, &target, to, output),
+        Command::Mount { target, to } => mount_fs(config_path, &target, to, output),
     }
 }
 
 fn list_nodes(config_path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
-    let config = NodesConfig::load(config_path)?;
-    let endpoints = config.endpoints();
+    let config = OperonConfig::load(&config_path)?;
+    let config_dir = OperonConfig::config_dir(&config_path);
+    let endpoints = config.endpoints(&config_dir)?;
     if output.json {
         print_json(&endpoints)?;
         return Ok(());
@@ -443,8 +443,9 @@ fn list_providers(output: OutputMode) -> anyhow::Result<()> {
 }
 
 fn resolve_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
-    let config = NodesConfig::load(config_path)?;
-    let endpoint = config.resolve(node_id)?;
+    let config = OperonConfig::load(&config_path)?;
+    let config_dir = OperonConfig::config_dir(&config_path);
+    let endpoint = config.endpoint(node_id, &config_dir)?;
     if output.json {
         print_json(&endpoint)?;
         return Ok(());
@@ -462,10 +463,7 @@ fn resolve_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyh
 }
 
 fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
-    let config = NodesConfig::load(config_path)?;
-    let endpoint = config
-        .endpoint(node_id)
-        .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))?;
+    let endpoint = load_endpoint(config_path, node_id)?;
 
     let (health, node): (HealthStatus, NodeInfo) = grpc::health_and_node(&endpoint)?;
     if output.json {
@@ -489,10 +487,7 @@ fn list_capabilities(
     node_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
-    let config = NodesConfig::load(config_path)?;
-    let endpoint = config
-        .endpoint(node_id)
-        .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))?;
+    let endpoint = load_endpoint(config_path, node_id)?;
 
     let list: CapabilityList = grpc::list_capabilities(&endpoint)?;
     if output.json {
@@ -1126,47 +1121,53 @@ fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
 }
 
 fn init_config(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
-    let content = r#"nodes:
-  local:
-    endpoint: grpc://127.0.0.1:7789
-    provider: manual
-    token: change-me
-"#;
-    fs::write(&path, content)?;
-    if !output.quiet {
-        println!("{}", path.display());
-    }
-    Ok(())
-}
+    let content = r#"version: 1
 
-fn init_policy(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
-    let content = r#"subject: local-cli
+daemon:
+  node_id: local
+  grpc_listen: 127.0.0.1:7789
+  workspace: /workspace
+  advertise_lan: false
+  store: store.jsonl
+  auth:
+    token_file: token
 
-fs:
-  mounts:
-    - name: workspace
-      path: /
-      permissions:
-        read: true
-        write: true
-        delete: false
+client:
+  nodes:
+    local:
+      endpoint: grpc://127.0.0.1:7789
+      provider: manual
+      auth:
+        token_file: token
 
-job:
-  allowed_cwds:
-    - /
-  default_timeout_secs: 30
-  max_timeout_secs: 300
-  env_allowlist: []
-  allowed_secrets: []
+policy:
+  subject: local-cli
+  fs:
+    mounts:
+      - name: workspace
+        path: /
+        permissions:
+          read: true
+          write: true
+          delete: false
+  job:
+    allowed_cwds:
+      - /
+    default_timeout_secs: 30
+    max_timeout_secs: 300
+    env_allowlist: []
+    allowed_secrets: []
+  service:
+    services:
+      - id: local-daemon
+        name: local-daemon
+        host: 127.0.0.1
+        port: 7789
+        protocol: tcp
+        description: Operon gRPC daemon listener
 
-service:
-  services:
-    - id: local-daemon
-      name: local-daemon
-      host: 127.0.0.1
-      port: 7789
-      protocol: tcp
-      description: Operon gRPC daemon listener
+secrets:
+  file: secrets.yaml
 "#;
     fs::write(&path, content)?;
     if !output.quiet {
@@ -1256,14 +1257,23 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
     for node in &list.nodes {
         nodes.insert(
             node.node_id.clone(),
-            operon_network::NodeConfig {
+            NodeConfig {
                 endpoint: node.endpoint.clone(),
                 provider: NetworkProviderKind::Lan,
-                token: None,
+                auth: operon_config::AuthConfig::default(),
             },
         );
     }
-    fs::write(path, serde_yaml::to_string(&NodesConfig { nodes })?)?;
+    fs::write(
+        path,
+        serde_yaml::to_string(&OperonConfig {
+            version: 1,
+            daemon: None,
+            client: operon_config::ClientConfig { nodes },
+            policy: None,
+            secrets: None,
+        })?,
+    )?;
     Ok(())
 }
 
@@ -1365,8 +1375,9 @@ pub(crate) fn load_endpoint(
     config_path: PathBuf,
     node_id: &str,
 ) -> anyhow::Result<operon_network::NodeEndpoint> {
-    let config = NodesConfig::load(config_path)?;
-    config.resolve(node_id)
+    let config = OperonConfig::load(&config_path)?;
+    let config_dir = OperonConfig::config_dir(&config_path);
+    config.endpoint(node_id, &config_dir)
 }
 
 #[cfg(test)]
