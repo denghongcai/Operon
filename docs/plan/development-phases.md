@@ -1470,6 +1470,9 @@ Planned:
 Completed:
 
 - Added `fuser` and implemented a read-only FUSE adapter in `operon-mount`.
+- Added a `RemoteFs` trait as the Core FS Protocol boundary and kept the Linux
+  FUSE code as an OS mount adapter over that trait.
+- Kept direct gRPC access through `GrpcRemoteFs`; local IPC is not part of v0.6.
 - Implemented inode mapping, lookup, getattr, readdir, read-only open, ranged
   reads over the gRPC `ReadFile` stream, and release.
 - Routed stat/list/read through the existing gRPC runtime API so policy and audit

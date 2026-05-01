@@ -189,7 +189,7 @@ crates/
   operon-process   # process/job capability
   operon-store     # SQLite registry, audit, sessions
   operon-network   # endpoint resolution and provider adapters
-  operon-mount     # Linux FUSE adapter
+  operon-mount     # OS mount adapters over RemoteFs
 
 packages/
   sdk-js           # TypeScript SDK
@@ -202,7 +202,50 @@ proto/
     policy.proto
 ```
 
-## Decision 6: Network Layer Boundary
+## Decision 6: Mount Layer Boundary
+
+Mount support is an adapter over the Core FS Protocol. FUSE, macFUSE, and WinFsp
+should adapt OS filesystem calls into Operon filesystem operations; they should
+not become the core VFS model.
+
+Current v0.6 shape:
+
+```text
+OS Mount Adapter
+  FUSE on Linux
+      │
+      ▼
+Core FS Protocol
+  RemoteFs trait
+      │
+      ▼
+Runtime transport implementation
+  GrpcRemoteFs
+      │
+      ▼
+operond fs capability
+  StatFs / ListFs / ReadFile / WriteFile
+  policy / audit owned by daemon
+```
+
+The current implementation intentionally does not include local IPC between a
+mount adapter and a local daemon. The adapter can call the runtime gRPC endpoint
+directly through `GrpcRemoteFs`. A later local IPC implementation can be added as
+another `RemoteFs` implementation without changing FUSE semantics.
+
+Non-goals for the mount adapter layer:
+
+- independent VFS authorization model.
+- independent policy or audit decisions.
+- VPN, mesh, or routing behavior.
+- durable metadata store in the adapter.
+- offline sync or conflict resolution in v0.6.
+
+The FUSE adapter may keep transient inode mappings and rely on the kernel page
+cache, but persistent metadata, sync, and richer write semantics belong in later
+explicit phases.
+
+## Decision 7: Network Layer Boundary
 
 Operon should outsource connectivity to mature network layers.
 
@@ -275,7 +318,7 @@ v0.3:
   Kubernetes service discovery
 ```
 
-## Decision 7: Distribution Strategy
+## Decision 8: Distribution Strategy
 
 The daemon should ship as prebuilt binaries.
 
@@ -319,7 +362,7 @@ cargo-zigbuild
 GitHub Actions build matrix
 ```
 
-## Decision 8: RPC Direction
+## Decision 9: RPC Direction
 
 For v0.1, Operon should prioritize correctness and debuggability:
 

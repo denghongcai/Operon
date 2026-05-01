@@ -61,13 +61,13 @@ pub fn spawn_read_only_mount(
     let mount_point = options.mount_point;
     ensure_mount_point(&mount_point)?;
 
-    let client = Arc::new(RemoteFsClient::connect(options.endpoint)?);
-    let root = client.stat(&remote_root)?;
+    let remote_fs = Arc::new(GrpcRemoteFs::connect(options.endpoint)?);
+    let root = remote_fs.stat(&remote_root)?;
     if !root.is_dir {
         anyhow::bail!("mount root `{remote_root}` is not a directory");
     }
 
-    let fs = OperonReadOnlyFs::new(client, root);
+    let fs = OperonReadOnlyFs::new(remote_fs, root);
     let mut config = fuser::Config::default();
     config.mount_options = vec![
         fuser::MountOption::RO,
@@ -95,13 +95,19 @@ fn ensure_mount_point(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-struct RemoteFsClient {
+pub trait RemoteFs: Send + Sync {
+    fn stat(&self, path: &str) -> anyhow::Result<FsStat>;
+    fn list(&self, path: &str) -> anyhow::Result<FsList>;
+    fn read_range(&self, path: &str, offset: u64, size: u32) -> anyhow::Result<Vec<u8>>;
+}
+
+struct GrpcRemoteFs {
     endpoint: NodeEndpoint,
     channel: Channel,
     runtime: tokio::runtime::Runtime,
 }
 
-impl RemoteFsClient {
+impl GrpcRemoteFs {
     fn connect(endpoint: NodeEndpoint) -> anyhow::Result<Self> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -115,7 +121,9 @@ impl RemoteFsClient {
             runtime,
         })
     }
+}
 
+impl RemoteFs for GrpcRemoteFs {
     fn stat(&self, path: &str) -> anyhow::Result<FsStat> {
         let path = path.to_string();
         self.runtime.block_on(async {
@@ -265,14 +273,14 @@ impl InodeTable {
 }
 
 struct OperonReadOnlyFs {
-    client: Arc<RemoteFsClient>,
+    remote_fs: Arc<dyn RemoteFs>,
     inodes: RwLock<InodeTable>,
 }
 
 impl OperonReadOnlyFs {
-    fn new(client: Arc<RemoteFsClient>, root: FsStat) -> Self {
+    fn new(remote_fs: Arc<dyn RemoteFs>, root: FsStat) -> Self {
         Self {
-            client,
+            remote_fs,
             inodes: RwLock::new(InodeTable::new(root)),
         }
     }
@@ -290,7 +298,7 @@ impl OperonReadOnlyFs {
         }
         let name = validate_child_name(name)?;
         let path = join_remote_child(&parent_entry.path, name)?;
-        let stat = self.client.stat(&path)?;
+        let stat = self.remote_fs.stat(&path)?;
         self.inodes
             .write()
             .expect("inode table poisoned")
@@ -348,7 +356,7 @@ impl fuser::Filesystem for OperonReadOnlyFs {
             return;
         };
 
-        match self.client.stat(&entry.path) {
+        match self.remote_fs.stat(&entry.path) {
             Ok(stat) => {
                 let refreshed = self.inodes.write().expect("inode table poisoned").upsert(
                     entry.parent,
@@ -509,7 +517,7 @@ impl fuser::Filesystem for OperonReadOnlyFs {
             reply.error(fuser::Errno::EISDIR);
             return;
         }
-        match self.client.read_range(&entry.path, offset, size) {
+        match self.remote_fs.read_range(&entry.path, offset, size) {
             Ok(data) => reply.data(&data),
             Err(error) => reply.error(errno_for_error(&error)),
         }
@@ -547,7 +555,7 @@ impl fuser::Filesystem for OperonReadOnlyFs {
             return;
         }
 
-        let list = match self.client.list(&parent.path) {
+        let list = match self.remote_fs.list(&parent.path) {
             Ok(list) => list,
             Err(error) => {
                 reply.error(errno_for_error(&error));
