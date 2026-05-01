@@ -59,8 +59,8 @@ jobs:
       - name: Test
         run: pnpm -r test
 
-  v02-docker:
-    name: v0.2 Docker Validation
+  v03-docker:
+    name: v0.3 Docker Validation
     runs-on: ubuntu-latest
     needs:
       - rust
@@ -72,5 +72,5 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Validate v0.2 Docker demo
-        run: scripts/verify-v0.2-docker.sh
+      - name: Validate v0.3 Docker demo
+        run: scripts/verify-v0.3-docker.sh

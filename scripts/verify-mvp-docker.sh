@@ -2,4 +2,4 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec "$ROOT_DIR/scripts/verify-v0.2-docker.sh" "$@"
+exec "$ROOT_DIR/scripts/verify-v0.3-docker.sh" "$@"

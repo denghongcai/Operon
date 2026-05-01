@@ -1,7 +1,8 @@
 use std::{
     collections::BTreeMap,
+    convert::Infallible,
     env, fs,
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Component, Path, PathBuf},
     process::Stdio,
     sync::{
@@ -11,21 +12,31 @@ use std::{
 };
 
 use axum::{
-    body::Bytes,
+    body::{Body, Bytes},
     extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use clap::{Parser, Subcommand};
+use futures_util::StreamExt;
+use mdns_sd::{ServiceDaemon, ServiceInfo};
 use operon_core::{
     AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, ErrorResponse, FsEntry,
     FsList, FsMountPolicy, FsPermissions, FsPolicy, FsRead, FsStat, FsWrite, FsWriteRequest,
-    HealthStatus, JobCancelRequest, JobLog, JobPolicy, JobRecord, JobRunRequest, JobStatus,
-    NodeInfo, PolicyConfig,
+    HealthStatus, JobCancelRequest, JobList, JobLog, JobPolicy, JobRecord, JobRunRequest,
+    JobStatus, JobStdin, JobStdinClose, NodeInfo, PolicyConfig,
 };
-use tokio::{io::AsyncReadExt, process::Command as TokioCommand, sync::oneshot, time};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::Command as TokioCommand,
+    sync::{mpsc, oneshot},
+    time,
+};
+use tokio_util::io::ReaderStream;
+
+const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
 #[derive(Debug, Parser)]
 #[command(name = "operond", about = "Operon capability daemon")]
@@ -64,6 +75,9 @@ struct StartArgs {
 
     #[arg(long)]
     secrets: Option<PathBuf>,
+
+    #[arg(long)]
+    advertise_lan: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -78,12 +92,14 @@ struct AppState {
     audit: Arc<Mutex<Vec<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     job_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    job_stdin: Arc<Mutex<BTreeMap<String, mpsc::UnboundedSender<Bytes>>>>,
     next_job_id: Arc<AtomicU64>,
 }
 
 struct JobTask {
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    stdin: Arc<Mutex<BTreeMap<String, mpsc::UnboundedSender<Bytes>>>>,
     store: Option<PathBuf>,
     job_id: String,
     command: String,
@@ -91,6 +107,7 @@ struct JobTask {
     timeout_secs: u64,
     env: BTreeMap<String, String>,
     cancel_rx: oneshot::Receiver<()>,
+    stdin_rx: mpsc::UnboundedReceiver<Bytes>,
 }
 
 #[derive(Debug)]
@@ -141,24 +158,34 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
     let policy = load_policy(args.policy.as_deref())?;
     let auth_token = load_auth_token(args.auth_token, args.auth_token_file.as_deref())?;
     let secrets = load_secrets(args.secrets.as_deref())?;
+    let stored_jobs = load_store_jobs(args.store.as_deref())?;
+    let next_job_id = next_job_sequence(&stored_jobs);
     let node = NodeInfo {
-        id: args.node_id,
+        id: args.node_id.clone(),
         hostname: hostname(),
         os: env::consts::OS.to_string(),
         arch: env::consts::ARCH.to_string(),
     };
+    let capability_list = default_capabilities(&node.id);
+    let jobs = Arc::new(Mutex::new(stored_jobs));
     let state = AppState {
-        capabilities: default_capabilities(&node.id),
+        capabilities: capability_list.clone(),
         node,
         workspace: args.workspace,
         policy,
         auth_token,
-        store: args.store,
+        store: args.store.clone(),
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(Vec::new())),
-        jobs: Arc::new(Mutex::new(BTreeMap::new())),
+        jobs,
         job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-        next_job_id: Arc::new(AtomicU64::new(1)),
+        job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+        next_job_id: Arc::new(AtomicU64::new(next_job_id)),
+    };
+    let mdns = if args.advertise_lan {
+        Some(advertise_lan(&args.node_id, args.listen, &capability_list)?)
+    } else {
+        None
     };
 
     let app = Router::new()
@@ -173,7 +200,11 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .route("/fs/write-stream", post(fs_write_stream))
         .route("/job/run", post(job_run))
         .route("/job/status", get(job_status))
+        .route("/job/list", get(job_list))
         .route("/job/logs", get(job_logs))
+        .route("/job/logs-stream", get(job_logs_stream))
+        .route("/job/stdin", post(job_stdin))
+        .route("/job/stdin/close", post(job_stdin_close))
         .route("/job/cancel", post(job_cancel))
         .route("/audit", get(audit_log))
         .with_state(state);
@@ -186,6 +217,8 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
             let _ = tokio::signal::ctrl_c().await;
         })
         .await?;
+
+    drop(mdns);
 
     Ok(())
 }
@@ -341,7 +374,7 @@ async fn fs_read_stream(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<FsPathQuery>,
-) -> Result<Vec<u8>, AppError> {
+) -> Result<Response, AppError> {
     authorize_request(&state, &headers)?;
     if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
         record_audit(&state, "read-stream", &query.path, false, &error.1);
@@ -354,10 +387,20 @@ async fn fs_read_stream(
             return Err(error.into());
         }
     };
-    let content = fs::read(&full_path).map_err(internal_error)?;
+    let metadata = tokio::fs::metadata(&full_path)
+        .await
+        .map_err(internal_error)?;
+    let file = tokio::fs::File::open(&full_path)
+        .await
+        .map_err(internal_error)?;
+    let stream = ReaderStream::new(file);
     record_audit(&state, "read-stream", &query.path, true, "allowed");
 
-    Ok(content)
+    Ok((
+        [(header::CONTENT_LENGTH, metadata.len().to_string())],
+        Body::from_stream(stream),
+    )
+        .into_response())
 }
 
 async fn fs_write(
@@ -393,7 +436,7 @@ async fn fs_write_stream(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<FsPathQuery>,
-    body: Bytes,
+    body: Body,
 ) -> Result<Json<FsWrite>, AppError> {
     authorize_request(&state, &headers)?;
     if let Err(error) = authorize_fs(&state.policy, "write", &query.path) {
@@ -410,12 +453,21 @@ async fn fs_write_stream(
     if let Some(parent) = full_path.parent() {
         fs::create_dir_all(parent).map_err(internal_error)?;
     }
-    fs::write(&full_path, &body).map_err(internal_error)?;
+    let mut file = tokio::fs::File::create(&full_path)
+        .await
+        .map_err(internal_error)?;
+    let mut stream = body.into_data_stream();
+    let mut bytes_written = 0_u64;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(internal_error)?;
+        file.write_all(&chunk).await.map_err(internal_error)?;
+        bytes_written += chunk.len() as u64;
+    }
     record_audit(&state, "write-stream", &query.path, true, "allowed");
 
     Ok(Json(FsWrite {
         path: query.path,
-        bytes_written: body.len() as u64,
+        bytes_written,
     }))
 }
 
@@ -469,14 +521,21 @@ async fn job_run(
     }
 
     let (cancel_tx, cancel_rx) = oneshot::channel();
+    let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     state
         .job_cancel
         .lock()
         .expect("job cancel mutex poisoned")
         .insert(job_id.clone(), cancel_tx);
+    state
+        .job_stdin
+        .lock()
+        .expect("job stdin mutex poisoned")
+        .insert(job_id.clone(), stdin_tx);
 
     let jobs = state.jobs.clone();
     let cancels = state.job_cancel.clone();
+    let stdin = state.job_stdin.clone();
     let store = state.store.clone();
     let command = request.command;
     let timeout_secs = request
@@ -487,6 +546,7 @@ async fn job_run(
         run_job_task(JobTask {
             jobs,
             cancels,
+            stdin,
             store,
             job_id,
             command,
@@ -494,6 +554,7 @@ async fn job_run(
             timeout_secs,
             env: secret_env,
             cancel_rx,
+            stdin_rx,
         })
         .await;
     });
@@ -522,6 +583,21 @@ async fn job_status(
     Ok(Json(record))
 }
 
+async fn job_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<JobList>, AppError> {
+    authorize_request(&state, &headers)?;
+    let jobs = state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .values()
+        .cloned()
+        .collect();
+    Ok(Json(JobList { jobs }))
+}
+
 async fn job_logs(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -529,6 +605,103 @@ async fn job_logs(
 ) -> Result<Json<JobRecord>, AppError> {
     authorize_request(&state, &headers)?;
     job_status(State(state), headers, Query(query)).await
+}
+
+async fn job_logs_stream(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<JobIdQuery>,
+) -> Result<Response, AppError> {
+    authorize_request(&state, &headers)?;
+    if !state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .contains_key(&query.id)
+    {
+        return Err(AppError(
+            StatusCode::NOT_FOUND,
+            format!("job `{}` not found", query.id),
+        ));
+    }
+
+    let jobs = state.jobs.clone();
+    let job_id = query.id;
+    let stream = async_stream::stream! {
+        let mut printed = 0;
+        loop {
+            let snapshot = jobs
+                .lock()
+                .expect("job map mutex poisoned")
+                .get(&job_id)
+                .cloned();
+            let Some(record) = snapshot else {
+                break;
+            };
+            for log in record.logs.iter().skip(printed) {
+                yield Ok::<_, Infallible>(Bytes::from(log.data.clone()));
+            }
+            printed = record.logs.len();
+            if !matches!(record.status, JobStatus::Running) {
+                break;
+            }
+            time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    };
+
+    Ok(Body::from_stream(stream).into_response())
+}
+
+async fn job_stdin(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<JobIdQuery>,
+    body: Body,
+) -> Result<Json<JobStdin>, AppError> {
+    authorize_request(&state, &headers)?;
+    let sender = state
+        .job_stdin
+        .lock()
+        .expect("job stdin mutex poisoned")
+        .get(&query.id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(
+                StatusCode::NOT_FOUND,
+                format!("job `{}` has no open stdin", query.id),
+            )
+        })?;
+    let mut stream = body.into_data_stream();
+    let mut bytes_written = 0_u64;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(internal_error)?;
+        bytes_written += chunk.len() as u64;
+        sender
+            .send(chunk)
+            .map_err(|_| (StatusCode::BAD_REQUEST, "job stdin is closed".to_string()))?;
+    }
+    Ok(Json(JobStdin {
+        job_id: query.id,
+        bytes_written,
+    }))
+}
+
+async fn job_stdin_close(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<JobIdQuery>,
+) -> Result<Json<JobStdinClose>, AppError> {
+    authorize_request(&state, &headers)?;
+    let closed = state
+        .job_stdin
+        .lock()
+        .expect("job stdin mutex poisoned")
+        .remove(&query.id)
+        .is_some();
+    Ok(Json(JobStdinClose {
+        job_id: query.id,
+        closed,
+    }))
 }
 
 async fn job_cancel(
@@ -601,6 +774,81 @@ fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>>
     };
     let content = fs::read_to_string(path)?;
     Ok(serde_yaml::from_str(&content)?)
+}
+
+fn load_store_jobs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, JobRecord>> {
+    let Some(path) = path else {
+        return Ok(BTreeMap::new());
+    };
+    if !path.exists() {
+        return Ok(BTreeMap::new());
+    }
+    let content = fs::read_to_string(path)?;
+    let mut jobs = BTreeMap::new();
+    for line in content.lines().filter(|line| !line.trim().is_empty()) {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        if value.get("kind").and_then(serde_json::Value::as_str) != Some("job") {
+            continue;
+        }
+        if let Some(record) = value.get("record") {
+            let record: JobRecord = serde_json::from_value(record.clone())?;
+            jobs.insert(record.id.clone(), record);
+        }
+    }
+    Ok(jobs)
+}
+
+fn next_job_sequence(jobs: &BTreeMap<String, JobRecord>) -> u64 {
+    jobs.keys()
+        .filter_map(|id| id.strip_prefix("job-"))
+        .filter_map(|suffix| suffix.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0)
+        + 1
+}
+
+fn advertise_lan(
+    node_id: &str,
+    listen: SocketAddr,
+    capabilities: &CapabilityList,
+) -> anyhow::Result<ServiceDaemon> {
+    let mdns = ServiceDaemon::new()?;
+    let capability_summary = capabilities
+        .capabilities
+        .iter()
+        .map(|capability| capability.id.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let endpoint = if listen.ip().is_unspecified() {
+        String::new()
+    } else {
+        format!("http://{}:{}", advertised_host(listen.ip()), listen.port())
+    };
+    let properties = [
+        ("node_id", node_id),
+        ("provider", "lan"),
+        ("endpoint", endpoint.as_str()),
+        ("capabilities", capability_summary.as_str()),
+    ];
+    let service = ServiceInfo::new(
+        OPERON_MDNS_SERVICE,
+        node_id,
+        &format!("{}.local.", node_id),
+        "",
+        listen.port(),
+        &properties[..],
+    )?
+    .enable_addr_auto();
+    mdns.register(service)?;
+    Ok(mdns)
+}
+
+fn advertised_host(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(ip) if ip == Ipv4Addr::UNSPECIFIED => "127.0.0.1".to_string(),
+        IpAddr::V6(ip) if ip.is_unspecified() => "127.0.0.1".to_string(),
+        ip => ip.to_string(),
+    }
 }
 
 fn authorize_request(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
@@ -921,6 +1169,7 @@ async fn run_job_task(task: JobTask) {
         .arg(&task.command)
         .current_dir(task.cwd)
         .envs(task.env)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -938,6 +1187,7 @@ async fn run_job_task(task: JobTask) {
         finish_job(
             &task.jobs,
             &task.cancels,
+            &task.stdin,
             task.store.as_deref(),
             &task.job_id,
             JobStatus::Failed,
@@ -946,6 +1196,9 @@ async fn run_job_task(task: JobTask) {
         return;
     };
 
+    if let Some(stdin) = child.stdin.take() {
+        tokio::spawn(pump_job_stdin(task.stdin_rx, stdin));
+    }
     if let Some(stdout) = child.stdout.take() {
         tokio::spawn(capture_job_stream(
             task.jobs.clone(),
@@ -978,6 +1231,7 @@ async fn run_job_task(task: JobTask) {
                     finish_job(
                         &task.jobs,
                         &task.cancels,
+                        &task.stdin,
                         task.store.as_deref(),
                         &task.job_id,
                         job_status,
@@ -996,6 +1250,7 @@ async fn run_job_task(task: JobTask) {
                     finish_job(
                         &task.jobs,
                         &task.cancels,
+                        &task.stdin,
                         task.store.as_deref(),
                         &task.job_id,
                         JobStatus::Failed,
@@ -1008,6 +1263,7 @@ async fn run_job_task(task: JobTask) {
             finish_job(
                 &task.jobs,
                 &task.cancels,
+                &task.stdin,
                 task.store.as_deref(),
                 &task.job_id,
                 JobStatus::Cancelled,
@@ -1018,6 +1274,7 @@ async fn run_job_task(task: JobTask) {
             finish_job(
                 &task.jobs,
                 &task.cancels,
+                &task.stdin,
                 task.store.as_deref(),
                 &task.job_id,
                 JobStatus::TimedOut,
@@ -1062,6 +1319,17 @@ async fn capture_job_stream<R>(
     }
 }
 
+async fn pump_job_stdin(
+    mut receiver: mpsc::UnboundedReceiver<Bytes>,
+    mut stdin: tokio::process::ChildStdin,
+) {
+    while let Some(chunk) = receiver.recv().await {
+        if stdin.write_all(&chunk).await.is_err() {
+            break;
+        }
+    }
+}
+
 fn append_job_log(jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>, job_id: &str, log: JobLog) {
     if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
         record.logs.push(log);
@@ -1071,6 +1339,7 @@ fn append_job_log(jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>, job_id: &str, 
 fn finish_job(
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
     cancels: &Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    stdin: &Arc<Mutex<BTreeMap<String, mpsc::UnboundedSender<Bytes>>>>,
     store: Option<&Path>,
     job_id: &str,
     status: JobStatus,
@@ -1079,6 +1348,10 @@ fn finish_job(
     cancels
         .lock()
         .expect("job cancel mutex poisoned")
+        .remove(job_id);
+    stdin
+        .lock()
+        .expect("job stdin mutex poisoned")
         .remove(job_id);
 
     if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
@@ -1195,6 +1468,7 @@ mod tests {
             audit: Arc::new(Mutex::new(Vec::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
         };
 
@@ -1227,6 +1501,7 @@ mod tests {
             audit: Arc::new(Mutex::new(Vec::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
         };
 

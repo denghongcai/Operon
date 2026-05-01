@@ -35,6 +35,9 @@ Operon should not own:
 - `docs/plan/v0.2-acceptance.md`
   - v0.2 acceptance scope, validation commands, and known limits.
 
+- `docs/plan/v0.3-acceptance.md`
+  - v0.3 acceptance scope, validation commands, and known limits.
+
 - `README.md`
   - Public-facing project positioning and high-level architecture.
   - Current framing: "AI-native capability runtime over existing private networks."

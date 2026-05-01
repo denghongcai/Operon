@@ -196,6 +196,49 @@ pub struct JobRecord {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobList {
+    pub jobs: Vec<JobRecord>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobStdin {
+    pub job_id: String,
+    pub bytes_written: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobStdinClose {
+    pub job_id: String,
+    pub closed: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DiscoveryRecord {
+    pub node_id: NodeId,
+    pub endpoint: String,
+    pub provider: String,
+    pub capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DiscoveryList {
+    pub nodes: Vec<DiscoveryRecord>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TraceFile {
+    pub path: String,
+    pub run_id: Option<String>,
+    pub name: Option<String>,
+    pub status: Option<ExecutionStatus>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TraceFileList {
+    pub traces: Vec<TraceFile>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExecutionGraph {
     pub name: String,
     pub steps: Vec<ExecutionStep>,

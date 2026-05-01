@@ -56,7 +56,7 @@ export type OperonStepTrace = {
   output?: unknown;
 };
 
-type JobRecord = {
+export type JobRecord = {
   id: string;
   node_id: string;
   command: string;
@@ -64,6 +64,20 @@ type JobRecord = {
   status: "running" | "succeeded" | "failed" | "cancelled" | "timed-out";
   exit_code?: number | null;
   logs: Array<{ stream: string; data: string }>;
+};
+
+export type JobList = {
+  jobs: JobRecord[];
+};
+
+export type JobStdinResult = {
+  job_id: string;
+  bytes_written: number;
+};
+
+export type JobStdinCloseResult = {
+  job_id: string;
+  closed: boolean;
 };
 
 export class OperonClient {
@@ -108,6 +122,33 @@ export class OperonClient {
       headers: { "content-type": "application/octet-stream" },
       body,
     });
+  }
+
+  async listJobs(nodeId: string): Promise<JobList> {
+    return this.get<JobList>(nodeId, "/job/list");
+  }
+
+  async streamJobLogs(nodeId: string, jobId: string): Promise<ReadableStream<Uint8Array>> {
+    const response = await this.fetchRaw(nodeId, `/job/logs-stream?id=${encodeURIComponent(jobId)}`, {
+      method: "GET",
+      headers: { accept: "application/octet-stream" },
+    });
+    if (!response.body) {
+      throw new Error("job logs stream response has no body");
+    }
+    return response.body;
+  }
+
+  async writeJobStdin(nodeId: string, jobId: string, body: BodyInit): Promise<JobStdinResult> {
+    return this.request<JobStdinResult>(nodeId, `/job/stdin?id=${encodeURIComponent(jobId)}`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body,
+    });
+  }
+
+  async closeJobStdin(nodeId: string, jobId: string): Promise<JobStdinCloseResult> {
+    return this.post<JobStdinCloseResult>(nodeId, `/job/stdin/close?id=${encodeURIComponent(jobId)}`, {});
   }
 
   private async runStep(step: OperonStep, index: number): Promise<OperonStepTrace> {
@@ -190,6 +231,29 @@ export class OperonClient {
   }
 
   private async request<T>(nodeId: string, path: string, init: RequestInit): Promise<T> {
+    const { endpoint, response } = await this.fetchEndpoint(nodeId, path, init);
+    if (!response.ok) {
+      throw new Error(`request to ${endpoint.endpoint}${path} failed: ${response.status} ${response.statusText}: ${await errorMessage(response)}`);
+    }
+    if (response.headers.get("content-type")?.startsWith("application/json") ?? false) {
+      return response.json() as Promise<T>;
+    }
+    return response.arrayBuffer() as Promise<T>;
+  }
+
+  private async fetchRaw(nodeId: string, path: string, init: RequestInit): Promise<Response> {
+    const { endpoint, response } = await this.fetchEndpoint(nodeId, path, init);
+    if (!response.ok) {
+      throw new Error(`request to ${endpoint.endpoint}${path} failed: ${response.status} ${response.statusText}: ${await errorMessage(response)}`);
+    }
+    return response;
+  }
+
+  private async fetchEndpoint(
+    nodeId: string,
+    path: string,
+    init: RequestInit,
+  ): Promise<{ endpoint: NodeEndpoint; response: Response }> {
     const endpoint = this.endpoints.get(nodeId);
     if (!endpoint) {
       throw new Error(`node ${nodeId} not found`);
@@ -201,13 +265,7 @@ export class OperonClient {
     }
 
     const response = await fetch(new URL(path, endpoint.endpoint), { ...init, headers });
-    if (!response.ok) {
-      throw new Error(`request to ${endpoint.endpoint}${path} failed: ${response.status} ${response.statusText}: ${await errorMessage(response)}`);
-    }
-    if (response.headers.get("content-type")?.startsWith("application/json") ?? false) {
-      return response.json() as Promise<T>;
-    }
-    return response.arrayBuffer() as Promise<T>;
+    return { endpoint, response };
   }
 }
 

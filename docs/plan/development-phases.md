@@ -875,16 +875,207 @@ Done when:
 - v0.2 has a canonical validation path.
 - docs accurately describe the runtime limits and commands.
 
-## Post-v0.2 Phases
+## v0.3 Goal
 
-### v0.3: Mounts and Developer Experience
+Operon v0.3 should turn the v0.2 runtime into a more usable local-network tool:
 
-- FUSE / WinFsp mount adapter
-- richer CLI output
-- local caching strategy
-- LAN mDNS discovery
-- Kubernetes service discovery
-- improved examples
+```text
+Core IO is streaming-friendly, CLI output is predictable for humans and agents,
+runtime records are queryable, LAN nodes can be discovered through mDNS, and
+mount semantics are validated through a narrow proof of concept.
+```
+
+v0.3 discovery is LAN mDNS only. Cloudflare, Tailscale, WireGuard, SSH, and Kubernetes remain manually configured endpoint providers unless a later phase explicitly adds API discovery.
+
+## Phase 15: Streaming Protocol Hardening
+
+Status: Completed.
+
+Goal: remove v0.2's most important IO limits.
+
+Planned:
+
+- daemon fs read endpoint streams file bytes without loading the whole file into memory.
+- daemon fs write endpoint consumes request bodies incrementally.
+- job stdout/stderr streaming endpoint for live consumers.
+- job stdin write endpoint for interactive or pipe-like jobs.
+- CLI and SDK helpers for streaming fs and job IO.
+
+Completed:
+
+- Daemon `/fs/read-stream` now streams file bytes through `ReaderStream`.
+- Daemon `/fs/write-stream` consumes request body chunks incrementally.
+- Added `/job/logs-stream`, `/job/stdin`, and `/job/stdin/close`.
+- CLI writes file uploads from disk without preloading the whole file and can stream downloads to a writer.
+- CLI supports `job logs --stream` and `job stdin`.
+- SDK exposes raw fs helpers, job log stream, job stdin write/close, and job listing.
+
+Remaining:
+
+- gRPC streaming and full TTY-style job sessions remain post-v0.3.
+
+Done when:
+
+- large fs transfers are streamed server-side.
+- job output can be consumed from a streaming endpoint.
+- stdin can be written to a running job.
+- Docker validation covers fs streaming and job stdin/stdout streaming.
+
+## Phase 16: CLI UX and Output Modes
+
+Status: Completed.
+
+Goal: make CLI output predictable for both humans and automation.
+
+Planned:
+
+- global `--json`.
+- global `--quiet`.
+- clearer structured error display.
+- `operon init config`.
+- `operon init policy`.
+
+Completed:
+
+- Added global `--json`.
+- Added global `--quiet`.
+- Added structured JSON output for core node, provider, capability, fs, audit, and job commands.
+- Added `operon init config <path>`.
+- Added `operon init policy <path>`.
+
+Remaining:
+
+- Rich table formatting and shell completions remain future work.
+
+Done when:
+
+- core commands can produce JSON output.
+- quiet mode suppresses non-essential output.
+- init commands generate usable starter files.
+- README documents output modes and init commands.
+
+## Phase 17: Queryable Runtime Store
+
+Status: Completed.
+
+Goal: make audit, job, and trace records inspectable after execution.
+
+Planned:
+
+- daemon reloads job records from the JSONL store on startup.
+- daemon exposes job list query.
+- CLI `job list`.
+- CLI `audit show`.
+- CLI `trace list`.
+- keep JSONL for v0.3 unless implementation proves it insufficient.
+
+Completed:
+
+- Daemon reloads completed jobs from the JSONL store on startup.
+- Added `/job/list`.
+- Added CLI `job list`.
+- Added CLI `audit show --limit`.
+- Added CLI `trace list`.
+- Kept JSONL as the v0.3 store format.
+
+Remaining:
+
+- Indexed store queries and SQLite remain future decisions.
+
+Done when:
+
+- completed jobs can be listed through the daemon.
+- audit records have a clearer show path.
+- local trace files can be listed and shown.
+- Docker validation covers store-backed job listing.
+
+## Phase 18: LAN mDNS Discovery
+
+Status: Completed.
+
+Goal: discover Operon daemons on the local network without owning connectivity.
+
+Planned:
+
+- daemon can advertise node id, provider, endpoint, and capability summary through LAN mDNS.
+- CLI `node discover --provider lan`.
+- discovered records are displayed and can optionally be written into a node config file.
+
+Completed:
+
+- Added daemon `--advertise-lan` mDNS advertisement.
+- Added CLI `node discover --provider lan`.
+- Added optional `--output-config` for discovered node config generation.
+- Docker validation runs LAN discovery inside the compose network.
+
+Remaining:
+
+- Discovery for Cloudflare, Tailscale, WireGuard, SSH, and Kubernetes is intentionally not implemented in v0.3.
+
+Done when:
+
+- LAN mDNS discovery works between local Docker nodes or host processes.
+- discovery results are endpoints only.
+- docs explicitly state that discovery does not grant capability access.
+
+## Phase 19: Mount PoC
+
+Status: Completed.
+
+Goal: validate mount semantics before committing to a full FUSE / WinFsp layer.
+
+Planned:
+
+- read-only mount proof of concept.
+- document path mapping, cache, permission, and error semantics.
+- keep WinFsp implementation deferred.
+
+Completed:
+
+- Added CLI `mount read-only <node:/path> --to <dir>` as a one-shot read-only materialization PoC.
+- The PoC writes `.operon-mount.json` documenting source, mode, cache, and consistency semantics.
+- Files are marked read-only after materialization.
+
+Remaining:
+
+- FUSE / WinFsp live mounts and sync are deferred.
+
+Done when:
+
+- a narrow read-only mount or mount-like PoC exists.
+- known semantic risks are documented.
+- v0.4 can decide whether to implement a full mount layer.
+
+## Phase 20: v0.3 Acceptance
+
+Status: Completed.
+
+Goal: make v0.3 reproducible and documented.
+
+Planned:
+
+- `docs/plan/v0.3-acceptance.md`.
+- README updates for streaming, CLI output modes, store queries, LAN mDNS discovery, and mount PoC.
+- Docker or local validation covers v0.3 additions.
+- CI remains green.
+
+Completed:
+
+- Added `docs/plan/v0.3-acceptance.md`.
+- Updated README for v0.3 commands and limits.
+- Added `scripts/verify-v0.3-docker.sh`.
+- Updated CI to run v0.3 Docker validation.
+- Verified `scripts/verify-v0.3-docker.sh` locally against the two-node Docker environment.
+- Updated this phase tracker after completing v0.3 implementation.
+
+Remaining:
+
+- Final CI status depends on the pushed branch run.
+
+Done when:
+
+- v0.3 has a canonical validation path.
+- docs accurately describe runtime limits and commands.
 
 ### v0.4: Web Console and Advanced Capabilities
 

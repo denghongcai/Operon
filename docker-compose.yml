@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: ["start", "--listen", "0.0.0.0:7788", "--node-id", "node-a", "--policy", "/etc/operon/policy.yaml", "--auth-token", "docker-token", "--store", "/workspace/operon-store.jsonl", "--secrets", "/etc/operon/secrets.yaml"]
+    command: ["start", "--listen", "0.0.0.0:7788", "--node-id", "node-a", "--policy", "/etc/operon/policy.yaml", "--auth-token", "docker-token", "--store", "/workspace/operon-store.jsonl", "--secrets", "/etc/operon/secrets.yaml", "--advertise-lan"]
     ports:
       - "17788:7788"
 
@@ -11,6 +11,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: ["start", "--listen", "0.0.0.0:7788", "--node-id", "node-b", "--policy", "/etc/operon/policy.yaml", "--auth-token", "docker-token", "--store", "/workspace/operon-store.jsonl", "--secrets", "/etc/operon/secrets.yaml"]
+    command: ["start", "--listen", "0.0.0.0:7788", "--node-id", "node-b", "--policy", "/etc/operon/policy.yaml", "--auth-token", "docker-token", "--store", "/workspace/operon-store.jsonl", "--secrets", "/etc/operon/secrets.yaml", "--advertise-lan"]
     ports:
       - "17789:7788"

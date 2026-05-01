@@ -62,7 +62,7 @@ Prerequisites:
 - Node.js and pnpm
 - Docker with Docker Compose
 
-Run the full v0.2 validation:
+Run the full v0.3 validation:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -70,16 +70,16 @@ cargo fmt --check
 cargo check --workspace --locked
 cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
-scripts/verify-v0.2-docker.sh
+scripts/verify-v0.3-docker.sh
 ```
 
-The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit, store, secret, streaming fs, followed logs, and runs the example execution graph.
+The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit, store queries, secret use, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph.
 
 ---
 
 ## CLI and Configuration
 
-The v0.2 runtime has two binaries:
+The v0.3 runtime has two binaries:
 
 - `operond`: the daemon that runs on each reachable machine.
 - `operon`: the CLI that talks to daemon endpoints.
@@ -100,7 +100,7 @@ operon --config examples/nodes.yaml node list
 
 ### Node Config
 
-The CLI reads node endpoints from a YAML file. In v0.2, the default path is:
+The CLI reads node endpoints from a YAML file. In v0.3, the default path is:
 
 ```text
 examples/nodes.yaml
@@ -131,7 +131,7 @@ nodes:
 
 `provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
 
-In v0.2, provider support is explicit endpoint resolution only. Operon does not create VPNs, assign mesh IPs, or discover nodes automatically.
+In v0.3, provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
 
 Supported provider values:
 
@@ -157,7 +157,8 @@ operond start \
   --policy ./operon.policy.yaml \
   --auth-token-file ./operon.token \
   --store ./operon-store.jsonl \
-  --secrets ./operon.secrets.yaml
+  --secrets ./operon.secrets.yaml \
+  --advertise-lan
 ```
 
 If `--policy` is omitted, the daemon uses a permissive MVP default for the configured workspace. For any real machine, pass an explicit policy file.
@@ -201,9 +202,13 @@ Secrets are only injected into jobs that request them and are allowed by policy.
 ```bash
 operon --config ./operon.nodes.yaml node list
 operon --config ./operon.nodes.yaml node resolve cloud-a
+operon node discover --provider lan --timeout-secs 3
 operon --config ./operon.nodes.yaml node ping cloud-a
 operon provider list
 operon --config ./operon.nodes.yaml capability list cloud-a
+
+operon init config ./operon.nodes.yaml
+operon init policy ./operon.policy.yaml
 
 operon --config ./operon.nodes.yaml fs stat cloud-a:/README.md
 operon --config ./operon.nodes.yaml fs list cloud-a:/
@@ -216,14 +221,23 @@ operon --config ./operon.nodes.yaml job run cloud-a -- echo hello
 operon --config ./operon.nodes.yaml job run cloud-a --secret GITHUB_TOKEN -- test x'$GITHUB_TOKEN' = xexpected
 operon --config ./operon.nodes.yaml job run cloud-a --detach -- sleep 10
 operon --config ./operon.nodes.yaml job status cloud-a job-1
+operon --config ./operon.nodes.yaml job list cloud-a
 operon --config ./operon.nodes.yaml job logs cloud-a job-1
 operon --config ./operon.nodes.yaml job logs cloud-a job-1 --follow
+operon --config ./operon.nodes.yaml job logs cloud-a job-1 --stream
+operon --config ./operon.nodes.yaml job stdin cloud-a job-1 --content "input"
+operon --config ./operon.nodes.yaml job stdin cloud-a job-1 --close
 operon --config ./operon.nodes.yaml job cancel cloud-a job-1
 
 operon --config ./operon.nodes.yaml audit list cloud-a
+operon --config ./operon.nodes.yaml audit show cloud-a --limit 20
 operon --config ./operon.nodes.yaml run --trace-output ./trace.json examples/train-model.yaml
+operon trace list .
 operon trace show ./trace.json
+operon --config ./operon.nodes.yaml mount read-only cloud-a:/ --to ./cloud-a-readonly
 ```
+
+Add `--json` for structured command output or `--quiet` to suppress non-essential output.
 
 ---
 
@@ -250,7 +264,7 @@ nodes:
     endpoint: http://100.96.18.20:7788
 ```
 
-The current CLI speaks HTTP to daemon endpoints. In production-style deployments, run that HTTP service only on an existing encrypted private network or behind a trusted local tunnel. HTTPS and gRPC clients remain post-v0.2 protocol decisions.
+The current CLI speaks HTTP to daemon endpoints. In production-style deployments, run that HTTP service only on an existing encrypted private network or behind a trusted local tunnel. HTTPS and gRPC clients remain post-v0.3 protocol decisions.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another device. Operon decides whether that device can read a directory, run a job, use a secret, or inspect an execution trace.
 
@@ -258,13 +272,13 @@ Cloudflare Mesh or Tailscale can decide whether one device can reach another dev
 
 ## ⚡ Example
 
-Run the local Docker v0.2 demo:
+Run the local Docker v0.3 demo:
 
 ```bash
-scripts/verify-v0.2-docker.sh
+scripts/verify-v0.3-docker.sh
 ```
 
-This starts two `operond` containers, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, followed logs, policy denial, scoped secrets, persisted store output, audit output, and runs:
+This starts two `operond` containers, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, LAN mDNS discovery, policy denial, scoped secrets, persisted store output, audit output, mount PoC output, and runs:
 
 ```bash
 operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-trace.json examples/docker-copy-and-run.yaml
@@ -436,9 +450,12 @@ Roadmap:
 - [x] Provider endpoint resolution
 - [x] JSONL audit/job store
 - [x] Scoped job secrets
-- [ ] FUSE mount
+- [x] LAN mDNS discovery
+- [x] Queryable job/audit/trace commands
+- [x] Read-only mount PoC
+- [ ] FUSE / WinFsp mount
 - [ ] Agent integration
-- [ ] Provider discovery adapters
+- [ ] Non-LAN provider discovery adapters
 
 ---
 

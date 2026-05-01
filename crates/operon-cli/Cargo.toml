@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+mdns-sd.workspace = true
 operon-core = { path = "../operon-core" }
 operon-network = { path = "../operon-network" }
 serde.workspace = true

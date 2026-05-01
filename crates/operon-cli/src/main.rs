@@ -1,23 +1,36 @@
 use std::{
+    collections::BTreeMap,
+    fs,
     io::{Read, Write},
     net::TcpStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 use clap::{Parser, Subcommand};
+use mdns_sd::{ServiceDaemon, ServiceEvent};
 use operon_core::{
-    AuditLog, CapabilityList, ErrorResponse, FsList, FsRead, FsStat, FsWrite, FsWriteRequest,
-    HealthStatus, JobCancelRequest, JobRecord, JobRunRequest, JobStatus, NodeInfo,
+    AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ErrorResponse, FsList, FsRead,
+    FsStat, FsWrite, FsWriteRequest, HealthStatus, JobCancelRequest, JobList, JobRecord,
+    JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, TraceFile, TraceFileList,
 };
 use operon_network::{NetworkProviderKind, NodeEndpoint, NodesConfig};
 
 mod graph;
+
+const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
 #[derive(Debug, Parser)]
 #[command(name = "operon", about = "Operon CLI")]
 struct Args {
     #[arg(short, long, default_value = "examples/nodes.yaml")]
     config: PathBuf,
+
+    #[arg(long)]
+    json: bool,
+
+    #[arg(long)]
+    quiet: bool,
 
     #[command(subcommand)]
     command: Command,
@@ -28,6 +41,10 @@ enum Command {
     Node {
         #[command(subcommand)]
         command: NodeCommand,
+    },
+    Init {
+        #[command(subcommand)]
+        command: InitCommand,
     },
     Provider {
         #[command(subcommand)]
@@ -58,13 +75,35 @@ enum Command {
         #[command(subcommand)]
         command: TraceCommand,
     },
+    Mount {
+        #[command(subcommand)]
+        command: MountCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum NodeCommand {
     List,
-    Resolve { node_id: String },
-    Ping { node_id: String },
+    Discover {
+        #[arg(long, default_value = "lan")]
+        provider: String,
+        #[arg(long, default_value_t = 3)]
+        timeout_secs: u64,
+        #[arg(long)]
+        output_config: Option<PathBuf>,
+    },
+    Resolve {
+        node_id: String,
+    },
+    Ping {
+        node_id: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum InitCommand {
+    Config { path: PathBuf },
+    Policy { path: PathBuf },
 }
 
 #[derive(Debug, Subcommand)]
@@ -101,7 +140,14 @@ enum FsCommand {
 
 #[derive(Debug, Subcommand)]
 enum AuditCommand {
-    List { node_id: String },
+    List {
+        node_id: String,
+    },
+    Show {
+        node_id: String,
+        #[arg(long)]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -119,6 +165,9 @@ enum JobCommand {
         #[arg(required = true, trailing_var_arg = true)]
         command: Vec<String>,
     },
+    List {
+        node_id: String,
+    },
     Status {
         node_id: String,
         job_id: String,
@@ -128,6 +177,18 @@ enum JobCommand {
         job_id: String,
         #[arg(long)]
         follow: bool,
+        #[arg(long)]
+        stream: bool,
+    },
+    Stdin {
+        node_id: String,
+        job_id: String,
+        #[arg(long)]
+        content: Option<String>,
+        #[arg(long)]
+        file: Option<PathBuf>,
+        #[arg(long)]
+        close: bool,
     },
     Cancel {
         node_id: String,
@@ -137,36 +198,92 @@ enum JobCommand {
 
 #[derive(Debug, Subcommand)]
 enum TraceCommand {
-    Show { path: PathBuf },
+    Show {
+        path: PathBuf,
+    },
+    List {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum MountCommand {
+    ReadOnly {
+        target: String,
+        #[arg(long)]
+        to: PathBuf,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+struct OutputMode {
+    json: bool,
+    quiet: bool,
+}
+
+struct JobRunInput {
+    config_path: PathBuf,
+    node_id: String,
+    cwd: Option<String>,
+    timeout_secs: u64,
+    secrets: Vec<String>,
+    detach: bool,
+    command: Vec<String>,
+    output: OutputMode,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    let output = OutputMode {
+        json: args.json,
+        quiet: args.quiet,
+    };
 
     match args.command {
         Command::Node { command } => match command {
-            NodeCommand::List => list_nodes(args.config),
-            NodeCommand::Resolve { node_id } => resolve_node(args.config, &node_id),
-            NodeCommand::Ping { node_id } => ping_node(args.config, &node_id),
+            NodeCommand::List => list_nodes(args.config, output),
+            NodeCommand::Discover {
+                provider,
+                timeout_secs,
+                output_config,
+            } => discover_nodes(
+                &provider,
+                Duration::from_secs(timeout_secs),
+                output_config,
+                output,
+            ),
+            NodeCommand::Resolve { node_id } => resolve_node(args.config, &node_id, output),
+            NodeCommand::Ping { node_id } => ping_node(args.config, &node_id, output),
+        },
+        Command::Init { command } => match command {
+            InitCommand::Config { path } => init_config(path, output),
+            InitCommand::Policy { path } => init_policy(path, output),
         },
         Command::Provider { command } => match command {
-            ProviderCommand::List => list_providers(),
+            ProviderCommand::List => list_providers(output),
         },
         Command::Capability { command } => match command {
-            CapabilityCommand::List { node_id } => list_capabilities(args.config, &node_id),
+            CapabilityCommand::List { node_id } => list_capabilities(args.config, &node_id, output),
         },
         Command::Fs { command } => match command {
-            FsCommand::Stat { target } => fs_stat(args.config, &target),
-            FsCommand::List { target } => fs_list(args.config, &target),
-            FsCommand::Read { target, output } => fs_read(args.config, &target, output),
+            FsCommand::Stat { target } => fs_stat(args.config, &target, output),
+            FsCommand::List { target } => fs_list(args.config, &target, output),
+            FsCommand::Read {
+                target,
+                output: file_output,
+            } => fs_read(args.config, &target, file_output, output),
             FsCommand::Write {
                 target,
                 content,
                 file,
-            } => fs_write(args.config, &target, content, file),
+            } => fs_write(args.config, &target, content, file, output),
         },
         Command::Audit { command } => match command {
-            AuditCommand::List { node_id } => list_audit(args.config, &node_id),
+            AuditCommand::List { node_id } => list_audit(args.config, &node_id, output),
+            AuditCommand::Show { node_id, limit } => {
+                audit_show(args.config, &node_id, limit, output)
+            }
         },
         Command::Job { command } => match command {
             JobCommand::Run {
@@ -176,37 +293,65 @@ fn main() -> anyhow::Result<()> {
                 secret,
                 detach,
                 command,
-            } => job_run(
-                args.config,
-                &node_id,
+            } => job_run(JobRunInput {
+                config_path: args.config,
+                node_id,
                 cwd,
                 timeout_secs,
-                secret,
+                secrets: secret,
                 detach,
                 command,
-            ),
-            JobCommand::Status { node_id, job_id } => job_status(args.config, &node_id, &job_id),
+                output,
+            }),
+            JobCommand::List { node_id } => job_list(args.config, &node_id, output),
+            JobCommand::Status { node_id, job_id } => {
+                job_status(args.config, &node_id, &job_id, output)
+            }
             JobCommand::Logs {
                 node_id,
                 job_id,
                 follow,
-            } => job_logs(args.config, &node_id, &job_id, follow),
-            JobCommand::Cancel { node_id, job_id } => job_cancel(args.config, &node_id, &job_id),
+                stream,
+            } => job_logs(args.config, &node_id, &job_id, follow, stream),
+            JobCommand::Stdin {
+                node_id,
+                job_id,
+                content,
+                file,
+                close,
+            } => job_stdin(args.config, &node_id, &job_id, content, file, close, output),
+            JobCommand::Cancel { node_id, job_id } => {
+                job_cancel(args.config, &node_id, &job_id, output)
+            }
         },
         Command::Run {
             workflow,
             trace_output,
         } => graph::run_graph(args.config, workflow, trace_output),
         Command::Trace { command } => match command {
-            TraceCommand::Show { path } => trace_show(path),
+            TraceCommand::Show { path } => trace_show(path, output),
+            TraceCommand::List { dir } => trace_list(dir, output),
+        },
+        Command::Mount { command } => match command {
+            MountCommand::ReadOnly { target, to } => {
+                mount_read_only(args.config, &target, to, output)
+            }
         },
     }
 }
 
-fn list_nodes(config_path: PathBuf) -> anyhow::Result<()> {
+fn list_nodes(config_path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
     let config = NodesConfig::load(config_path)?;
+    let endpoints = config.endpoints();
+    if output.json {
+        print_json(&endpoints)?;
+        return Ok(());
+    }
 
-    for endpoint in config.endpoints() {
+    if output.quiet {
+        return Ok(());
+    }
+    for endpoint in endpoints {
         println!(
             "{}\t{}\t{:?}",
             endpoint.node_id, endpoint.endpoint, endpoint.provider
@@ -216,16 +361,34 @@ fn list_nodes(config_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn list_providers() -> anyhow::Result<()> {
-    for provider in NetworkProviderKind::all() {
-        println!("{}", provider.as_str());
+fn list_providers(output: OutputMode) -> anyhow::Result<()> {
+    let providers: Vec<_> = NetworkProviderKind::all()
+        .iter()
+        .map(NetworkProviderKind::as_str)
+        .collect();
+    if output.json {
+        print_json(&providers)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    for provider in providers {
+        println!("{provider}");
     }
     Ok(())
 }
 
-fn resolve_node(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
+fn resolve_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let config = NodesConfig::load(config_path)?;
     let endpoint = config.resolve(node_id)?;
+    if output.json {
+        print_json(&endpoint)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
     println!(
         "{}\t{}\t{}",
         endpoint.node_id,
@@ -235,7 +398,7 @@ fn resolve_node(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn ping_node(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
+fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let config = NodesConfig::load(config_path)?;
     let endpoint = config
         .endpoint(node_id)
@@ -243,6 +406,13 @@ fn ping_node(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
 
     let health: HealthStatus = http_get_json_endpoint(&endpoint, "/health")?;
     let node: NodeInfo = http_get_json_endpoint(&endpoint, "/node")?;
+    if output.json {
+        print_json(&serde_json::json!({ "health": health, "node": node }))?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
 
     println!(
         "{} ok={} version={} host={} os={} arch={}",
@@ -252,13 +422,24 @@ fn ping_node(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn list_capabilities(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
+fn list_capabilities(
+    config_path: PathBuf,
+    node_id: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let config = NodesConfig::load(config_path)?;
     let endpoint = config
         .endpoint(node_id)
         .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))?;
 
     let list: CapabilityList = http_get_json_endpoint(&endpoint, "/capabilities")?;
+    if output.json {
+        print_json(&list)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
 
     for capability in list.capabilities {
         println!(
@@ -273,13 +454,20 @@ fn list_capabilities(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> 
     Ok(())
 }
 
-fn fs_stat(config_path: PathBuf, target: &str) -> anyhow::Result<()> {
+fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
     let stat: FsStat = http_get_json_endpoint(
         &endpoint,
         &format!("/fs/stat?path={}", encode_path(&target.path)),
     )?;
+    if output.json {
+        print_json(&stat)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
 
     println!(
         "{}:{} file={} dir={} size={}",
@@ -289,13 +477,20 @@ fn fs_stat(config_path: PathBuf, target: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn fs_list(config_path: PathBuf, target: &str) -> anyhow::Result<()> {
+fn fs_list(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
     let list: FsList = http_get_json_endpoint(
         &endpoint,
         &format!("/fs/list?path={}", encode_path(&target.path)),
     )?;
+    if output.json {
+        print_json(&list)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
 
     for entry in list.entries {
         println!(
@@ -309,21 +504,33 @@ fn fs_list(config_path: PathBuf, target: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn fs_read(config_path: PathBuf, target: &str, output: Option<PathBuf>) -> anyhow::Result<()> {
+fn fs_read(
+    config_path: PathBuf,
+    target: &str,
+    file_output: Option<PathBuf>,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
 
-    if let Some(output) = output {
-        let content = http_get_bytes_endpoint(
+    if let Some(file_output) = file_output {
+        http_get_bytes_to_file_endpoint(
             &endpoint,
             &format!("/fs/read-stream?path={}", encode_path(&target.path)),
+            &file_output,
         )?;
-        std::fs::write(output, content)?;
     } else {
         let read: FsRead = http_get_json_endpoint(
             &endpoint,
             &format!("/fs/read?path={}", encode_path(&target.path)),
         )?;
+        if output.json {
+            print_json(&read)?;
+            return Ok(());
+        }
+        if output.quiet {
+            return Ok(());
+        }
         print!("{}", read.content);
     }
 
@@ -335,6 +542,7 @@ fn fs_write(
     target: &str,
     content: Option<String>,
     file: Option<PathBuf>,
+    output: OutputMode,
 ) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
@@ -347,17 +555,21 @@ fn fs_write(
             };
             http_post_json_endpoint(&endpoint, "/fs/write", &request)?
         }
-        (None, Some(file)) => {
-            let body = std::fs::read(file)?;
-            http_post_bytes_endpoint(
-                &endpoint,
-                &format!("/fs/write-stream?path={}", encode_path(&target.path)),
-                &body,
-            )?
-        }
+        (None, Some(file)) => http_post_file_endpoint(
+            &endpoint,
+            &format!("/fs/write-stream?path={}", encode_path(&target.path)),
+            &file,
+        )?,
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
         (None, None) => anyhow::bail!("fs write requires --content or --file"),
     };
+    if output.json {
+        print_json(&write)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
 
     println!(
         "{}:{} bytes_written={}",
@@ -367,11 +579,46 @@ fn fs_write(
     Ok(())
 }
 
-fn list_audit(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
+fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     let audit: AuditLog = http_get_json_endpoint(&endpoint, "/audit")?;
+    if output.json {
+        print_json(&audit)?;
+        return Ok(());
+    }
+    print_audit(audit, None, output)
+}
 
-    for event in audit.events {
+fn audit_show(
+    config_path: PathBuf,
+    node_id: &str,
+    limit: Option<usize>,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    let audit: AuditLog = http_get_json_endpoint(&endpoint, "/audit")?;
+    if output.json {
+        print_json(&audit)?;
+        return Ok(());
+    }
+    print_audit(audit, limit, output)
+}
+
+fn print_audit(audit: AuditLog, limit: Option<usize>, output: OutputMode) -> anyhow::Result<()> {
+    if output.quiet {
+        return Ok(());
+    }
+    let events = if let Some(limit) = limit {
+        audit
+            .events
+            .into_iter()
+            .rev()
+            .take(limit)
+            .collect::<Vec<_>>()
+    } else {
+        audit.events
+    };
+    for event in events {
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             event.subject,
@@ -390,49 +637,90 @@ fn list_audit(config_path: PathBuf, node_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn job_run(
-    config_path: PathBuf,
-    node_id: &str,
-    cwd: Option<String>,
-    timeout_secs: u64,
-    secrets: Vec<String>,
-    detach: bool,
-    command: Vec<String>,
-) -> anyhow::Result<()> {
-    let endpoint = load_endpoint(config_path.clone(), node_id)?;
+fn job_run(input: JobRunInput) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
     let request = JobRunRequest {
-        command: command.join(" "),
-        cwd,
-        timeout_secs: Some(timeout_secs),
-        secrets,
+        command: input.command.join(" "),
+        cwd: input.cwd,
+        timeout_secs: Some(input.timeout_secs),
+        secrets: input.secrets,
     };
     let record: JobRecord = http_post_json_endpoint(&endpoint, "/job/run", &request)?;
-    println!(
-        "{} {} {:?} {}",
-        record.node_id, record.id, record.status, record.command
-    );
+    if input.output.json {
+        print_json(&record)?;
+    } else if !input.output.quiet {
+        println!(
+            "{} {} {:?} {}",
+            record.node_id, record.id, record.status, record.command
+        );
+    }
 
-    if !detach {
-        wait_for_job(config_path, node_id, &record.id)?;
+    if !input.detach {
+        wait_for_job(input.config_path, &input.node_id, &record.id, input.output)?;
     }
 
     Ok(())
 }
 
-fn trace_show(path: PathBuf) -> anyhow::Result<()> {
+fn trace_show(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
     let content = std::fs::read_to_string(path)?;
     let value: serde_json::Value = serde_json::from_str(&content)?;
+    if output.quiet {
+        return Ok(());
+    }
     println!("{}", serde_json::to_string_pretty(&value)?);
     Ok(())
 }
 
-fn job_status(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+fn job_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    let list: JobList = http_get_json_endpoint(&endpoint, "/job/list")?;
+    if output.json {
+        print_json(&list)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    for record in list.jobs {
+        print_job_status(&record);
+    }
+    Ok(())
+}
+
+fn job_status(
+    config_path: PathBuf,
+    node_id: &str,
+    job_id: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let record = load_job(config_path, node_id, job_id)?;
+    if output.json {
+        print_json(&record)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
     print_job_status(&record);
     Ok(())
 }
 
-fn job_logs(config_path: PathBuf, node_id: &str, job_id: &str, follow: bool) -> anyhow::Result<()> {
+fn job_logs(
+    config_path: PathBuf,
+    node_id: &str,
+    job_id: &str,
+    follow: bool,
+    stream: bool,
+) -> anyhow::Result<()> {
+    if stream {
+        let endpoint = load_endpoint(config_path, node_id)?;
+        return http_get_bytes_to_writer_endpoint(
+            &endpoint,
+            &format!("/job/logs-stream?id={job_id}"),
+            &mut std::io::stdout(),
+        );
+    }
     if !follow {
         let record = load_job_from_path(config_path, node_id, &format!("/job/logs?id={job_id}"))?;
         for log in record.logs {
@@ -461,30 +749,342 @@ fn job_logs(config_path: PathBuf, node_id: &str, job_id: &str, follow: bool) -> 
     Ok(())
 }
 
-fn job_cancel(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+fn job_stdin(
+    config_path: PathBuf,
+    node_id: &str,
+    job_id: &str,
+    content: Option<String>,
+    file: Option<PathBuf>,
+    close: bool,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    if close {
+        let closed: JobStdinClose = http_post_json_endpoint(
+            &endpoint,
+            &format!("/job/stdin/close?id={job_id}"),
+            &serde_json::json!({}),
+        )?;
+        if output.json {
+            print_json(&closed)?;
+        } else if !output.quiet {
+            println!("{} stdin_closed={}", closed.job_id, closed.closed);
+        }
+        return Ok(());
+    }
+    let written: JobStdin = match (content, file) {
+        (Some(content), None) => http_post_bytes_endpoint(
+            &endpoint,
+            &format!("/job/stdin?id={job_id}"),
+            content.as_bytes(),
+        )?,
+        (None, Some(file)) => {
+            http_post_file_endpoint(&endpoint, &format!("/job/stdin?id={job_id}"), &file)?
+        }
+        (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
+        (None, None) => anyhow::bail!("job stdin requires --content, --file, or --close"),
+    };
+    if output.json {
+        print_json(&written)?;
+    } else if !output.quiet {
+        println!(
+            "{} stdin_bytes_written={}",
+            written.job_id, written.bytes_written
+        );
+    }
+    Ok(())
+}
+
+fn job_cancel(
+    config_path: PathBuf,
+    node_id: &str,
+    job_id: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     let request = JobCancelRequest {
         job_id: job_id.to_string(),
     };
     let record: JobRecord = http_post_json_endpoint(&endpoint, "/job/cancel", &request)?;
+    if output.json {
+        print_json(&record)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
     print_job_status(&record);
     Ok(())
 }
 
-fn wait_for_job(config_path: PathBuf, node_id: &str, job_id: &str) -> anyhow::Result<()> {
+fn wait_for_job(
+    config_path: PathBuf,
+    node_id: &str,
+    job_id: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     loop {
         let record = load_job(config_path.clone(), node_id, job_id)?;
         match record.status {
             JobStatus::Running => std::thread::sleep(std::time::Duration::from_millis(100)),
             _ => {
-                print_job_status(&record);
-                for log in record.logs {
-                    print!("{}", log.data);
+                if output.json {
+                    print_json(&record)?;
+                } else if !output.quiet {
+                    print_job_status(&record);
+                    for log in record.logs {
+                        print!("{}", log.data);
+                    }
                 }
                 return Ok(());
             }
         }
     }
+}
+
+fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
+    let mut traces = Vec::new();
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        let content = fs::read_to_string(&path)?;
+        let Ok(trace) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+        traces.push(TraceFile {
+            path: path.display().to_string(),
+            run_id: trace
+                .get("run_id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+            name: trace
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+            status: trace
+                .get("status")
+                .cloned()
+                .and_then(|value| serde_json::from_value(value).ok()),
+        });
+    }
+    traces.sort_by(|a, b| a.path.cmp(&b.path));
+    let list = TraceFileList { traces };
+    if output.json {
+        print_json(&list)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    for trace in list.traces {
+        println!(
+            "{}\t{}\t{}",
+            trace.path,
+            trace.run_id.as_deref().unwrap_or("-"),
+            trace.name.as_deref().unwrap_or("-")
+        );
+    }
+    Ok(())
+}
+
+fn init_config(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
+    let content = r#"nodes:
+  local:
+    endpoint: http://127.0.0.1:7788
+    provider: manual
+    token: change-me
+"#;
+    fs::write(&path, content)?;
+    if !output.quiet {
+        println!("{}", path.display());
+    }
+    Ok(())
+}
+
+fn init_policy(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
+    let content = r#"subject: local-cli
+
+fs:
+  mounts:
+    - name: workspace
+      path: /
+      permissions:
+        read: true
+        write: true
+        delete: false
+
+job:
+  allowed_cwds:
+    - /
+  default_timeout_secs: 30
+  max_timeout_secs: 300
+  env_allowlist: []
+  allowed_secrets: []
+"#;
+    fs::write(&path, content)?;
+    if !output.quiet {
+        println!("{}", path.display());
+    }
+    Ok(())
+}
+
+fn discover_nodes(
+    provider: &str,
+    timeout: Duration,
+    output_config: Option<PathBuf>,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    if provider != "lan" {
+        anyhow::bail!("v0.3 discovery only supports --provider lan");
+    }
+    let mdns = ServiceDaemon::new()?;
+    let receiver = mdns.browse(OPERON_MDNS_SERVICE)?;
+    let deadline = Instant::now() + timeout;
+    let mut records = BTreeMap::new();
+    while Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match receiver.recv_timeout(remaining.min(Duration::from_millis(250))) {
+            Ok(ServiceEvent::ServiceResolved(info)) => {
+                let node_id = info
+                    .get_property_val_str("node_id")
+                    .unwrap_or(info.get_fullname())
+                    .trim_end_matches(OPERON_MDNS_SERVICE)
+                    .trim_end_matches('.')
+                    .to_string();
+                let fallback_endpoint = info
+                    .get_addresses_v4()
+                    .into_iter()
+                    .next()
+                    .map(|addr| format!("http://{}:{}", addr, info.get_port()))
+                    .unwrap_or_else(|| {
+                        format!("http://{}:{}", info.get_hostname(), info.get_port())
+                    });
+                let endpoint = info
+                    .get_property_val_str("endpoint")
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or(fallback_endpoint);
+                let capabilities = info
+                    .get_property_val_str("capabilities")
+                    .unwrap_or("")
+                    .split(',')
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                records.insert(
+                    node_id.clone(),
+                    DiscoveryRecord {
+                        node_id,
+                        endpoint,
+                        provider: "lan".to_string(),
+                        capabilities,
+                    },
+                );
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+    let list = DiscoveryList {
+        nodes: records.into_values().collect(),
+    };
+    if let Some(path) = output_config {
+        write_discovered_config(&path, &list)?;
+    }
+    if output.json {
+        print_json(&list)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    for node in list.nodes {
+        println!("{}\t{}\t{}", node.node_id, node.endpoint, node.provider);
+    }
+    Ok(())
+}
+
+fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<()> {
+    let mut nodes = BTreeMap::new();
+    for node in &list.nodes {
+        nodes.insert(
+            node.node_id.clone(),
+            operon_network::NodeConfig {
+                endpoint: node.endpoint.clone(),
+                provider: NetworkProviderKind::Lan,
+                token: None,
+            },
+        );
+    }
+    fs::write(path, serde_yaml::to_string(&NodesConfig { nodes })?)?;
+    Ok(())
+}
+
+fn mount_read_only(
+    config_path: PathBuf,
+    target: &str,
+    destination: PathBuf,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let target = parse_node_path(target)?;
+    fs::create_dir_all(&destination)?;
+    materialize_read_only(config_path, &target.node_id, &target.path, &destination)?;
+    let manifest = serde_json::json!({
+        "mode": "read-only-poc",
+        "node_id": target.node_id,
+        "path": target.path,
+        "destination": destination,
+        "cache": "one-shot materialized copy",
+        "consistency": "no live sync",
+    });
+    fs::write(
+        destination.join(".operon-mount.json"),
+        serde_json::to_string_pretty(&manifest)?,
+    )?;
+    if output.json {
+        print_json(&manifest)?;
+    } else if !output.quiet {
+        println!("{}", destination.display());
+    }
+    Ok(())
+}
+
+fn materialize_read_only(
+    config_path: PathBuf,
+    node_id: &str,
+    remote_path: &str,
+    local_path: &Path,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path.clone(), node_id)?;
+    let list: FsList = http_get_json_endpoint(
+        &endpoint,
+        &format!("/fs/list?path={}", encode_path(remote_path)),
+    )?;
+    for entry in list.entries {
+        let child_path = local_path.join(entry.name);
+        if entry.is_dir {
+            fs::create_dir_all(&child_path)?;
+            materialize_read_only(config_path.clone(), node_id, &entry.path, &child_path)?;
+        } else {
+            http_get_bytes_to_file_endpoint(
+                &endpoint,
+                &format!("/fs/read-stream?path={}", encode_path(&entry.path)),
+                &child_path,
+            )?;
+            set_readonly(&child_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn set_readonly(path: &Path) -> anyhow::Result<()> {
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
 }
 
 pub(crate) fn load_job(
@@ -524,15 +1124,33 @@ pub(crate) fn http_get_json_endpoint<T: serde::de::DeserializeOwned>(
     )
 }
 
-fn http_get_bytes_endpoint(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<Vec<u8>> {
-    http_bytes_request(
-        &endpoint.endpoint,
-        "GET",
-        path,
-        None,
-        "application/octet-stream",
-        endpoint.token.as_deref(),
-    )
+fn http_get_bytes_to_file_endpoint(
+    endpoint: &NodeEndpoint,
+    path: &str,
+    output: &Path,
+) -> anyhow::Result<()> {
+    let mut file = fs::File::create(output)?;
+    http_get_bytes_to_writer_endpoint(endpoint, path, &mut file)
+}
+
+fn http_get_bytes_to_writer_endpoint(
+    endpoint: &NodeEndpoint,
+    path: &str,
+    writer: &mut impl Write,
+) -> anyhow::Result<()> {
+    let target = parse_http_endpoint(&endpoint.endpoint)?;
+    let mut stream = TcpStream::connect((&*target.host, target.port))?;
+    let auth = endpoint
+        .token
+        .as_deref()
+        .map(|token| format!("Authorization: Bearer {token}\r\n"))
+        .unwrap_or_default();
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: */*\r\n{auth}Content-Length: 0\r\n\r\n",
+        target.host,
+    );
+    stream.write_all(request.as_bytes())?;
+    copy_http_body_to_writer(&endpoint.endpoint, path, stream, writer)
 }
 
 pub(crate) fn http_post_json_endpoint<T: serde::de::DeserializeOwned, B: serde::Serialize>(
@@ -563,6 +1181,117 @@ fn http_post_bytes_endpoint<T: serde::de::DeserializeOwned>(
         endpoint.token.as_deref(),
     )?;
     Ok(serde_json::from_slice(&response)?)
+}
+
+fn http_post_file_endpoint<T: serde::de::DeserializeOwned>(
+    endpoint: &NodeEndpoint,
+    path: &str,
+    file: &Path,
+) -> anyhow::Result<T> {
+    let target = parse_http_endpoint(&endpoint.endpoint)?;
+    let mut stream = TcpStream::connect((&*target.host, target.port))?;
+    let mut file = fs::File::open(file)?;
+    let body_len = file.metadata()?.len();
+    let auth = endpoint
+        .token
+        .as_deref()
+        .map(|token| format!("Authorization: Bearer {token}\r\n"))
+        .unwrap_or_default();
+    let request = format!(
+        "POST {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n{auth}Content-Type: application/octet-stream\r\nContent-Length: {body_len}\r\n\r\n",
+        target.host,
+    );
+    stream.write_all(request.as_bytes())?;
+    std::io::copy(&mut file, &mut stream)?;
+    let body = read_http_body(&endpoint.endpoint, path, stream)?;
+    Ok(serde_json::from_slice(&body)?)
+}
+
+fn copy_http_body_to_writer(
+    endpoint: &str,
+    path: &str,
+    mut stream: TcpStream,
+    writer: &mut impl Write,
+) -> anyhow::Result<()> {
+    let mut response = Vec::new();
+    let mut buffer = [0_u8; 8192];
+    let split = loop {
+        let count = stream.read(&mut buffer)?;
+        if count == 0 {
+            anyhow::bail!("invalid HTTP response from {endpoint}");
+        }
+        response.extend_from_slice(&buffer[..count]);
+        if let Some(split) = response.windows(4).position(|window| window == b"\r\n\r\n") {
+            break split;
+        }
+    };
+    let head = std::str::from_utf8(&response[..split])?;
+    let status = head
+        .lines()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("missing HTTP status from {endpoint}"))?;
+    let body_start = split + 4;
+    let chunked = head
+        .lines()
+        .any(|line| line.eq_ignore_ascii_case("transfer-encoding: chunked"));
+    if !status.contains(" 200 ") {
+        let mut body = response[body_start..].to_vec();
+        stream.read_to_end(&mut body)?;
+        anyhow::bail!(
+            "request to {endpoint}{path} failed: {status}: {}",
+            format_error_body(&String::from_utf8_lossy(&body))
+        );
+    }
+    if chunked {
+        return copy_chunked_http_body(&response[body_start..], stream, writer);
+    }
+    writer.write_all(&response[body_start..])?;
+    loop {
+        let count = stream.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        writer.write_all(&buffer[..count])?;
+    }
+    Ok(())
+}
+
+fn copy_chunked_http_body(
+    initial: &[u8],
+    mut stream: TcpStream,
+    writer: &mut impl Write,
+) -> anyhow::Result<()> {
+    let mut data = initial.to_vec();
+    stream.read_to_end(&mut data)?;
+    let mut cursor = 0;
+    loop {
+        let Some(line_end) = find_crlf(&data[cursor..]) else {
+            anyhow::bail!("invalid chunked HTTP response");
+        };
+        let size_line = std::str::from_utf8(&data[cursor..cursor + line_end])?;
+        let size_hex = size_line.split(';').next().unwrap_or(size_line).trim();
+        let size = usize::from_str_radix(size_hex, 16)?;
+        cursor += line_end + 2;
+        if size == 0 {
+            break;
+        }
+        if data.len() < cursor + size + 2 {
+            anyhow::bail!("truncated chunked HTTP response");
+        }
+        writer.write_all(&data[cursor..cursor + size])?;
+        cursor += size + 2;
+    }
+    Ok(())
+}
+
+fn find_crlf(data: &[u8]) -> Option<usize> {
+    data.windows(2).position(|window| window == b"\r\n")
+}
+
+fn read_http_body(endpoint: &str, path: &str, stream: TcpStream) -> anyhow::Result<Vec<u8>> {
+    let mut body = Vec::new();
+    copy_http_body_to_writer(endpoint, path, stream, &mut body)?;
+    Ok(body)
 }
 
 fn http_json_request<T: serde::de::DeserializeOwned>(
@@ -656,6 +1385,11 @@ fn format_error_body(body: &str) -> String {
     serde_json::from_str::<ErrorResponse>(body)
         .map(|error| format!("{}: {}", error.code, error.message))
         .unwrap_or_else(|_| body.trim().to_string())
+}
+
+fn print_json(value: &impl serde::Serialize) -> anyhow::Result<()> {
+    println!("{}", serde_json::to_string_pretty(value)?);
+    Ok(())
 }
 
 #[derive(Debug)]
