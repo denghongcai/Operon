@@ -71,6 +71,7 @@ Unary calls:
 - `RunJob`
 - `GetJob`
 - `ListJobs`
+- `ListJobLogs`
 - `CloseJobStdin`
 - `CancelJob`
 - `ListServices`
@@ -80,6 +81,7 @@ Unary calls:
 Server-streaming calls:
 
 - `ReadFile`
+- `WatchJob`
 - `StreamJobLogs`
 
 Client-streaming calls:
@@ -138,8 +140,17 @@ filesystem apply operations. Clients that need deterministic behavior should
 serialize mutations outside the protocol until a later versioning or lease
 contract exists.
 
-`StreamJobLogs` returns ordered `JobLog` messages. Each message has `stream`
-(`stdout` or `stderr`) and text `data`.
+`WatchJob` returns ordered `JobEvent` messages for the requested job. The first
+event is the current job state. Later events are status changes, including the
+terminal state. Clients that need to wait for a job should prefer `WatchJob`
+over polling `GetJob`.
+
+`ListJobLogs` returns the daemon's current in-memory log ring for a job.
+`StreamJobLogs` returns ordered `JobLog` messages and stays open while the job
+is running. Each message has `stream` (`stdout` or `stderr`), text `data`, and a
+monotonic `sequence` number. Job logs are not embedded in `JobRecord`; they are
+stored as separate append-only log records and retained in a bounded in-memory
+ring. `JobRecord` only reports `log_count` and `logs_truncated`.
 
 `WriteJobStdin` accepts ordered `JobStdinRequest` messages. The first message
 must set `job_id`. Later messages may leave `job_id` empty. A stream cannot

@@ -8,8 +8,9 @@ use std::{
 use anyhow::Context;
 use futures_util::stream;
 use operon_core::{
-    AuditLog, CapabilityList, FsList, FsStat, FsWrite, HealthStatus, JobList, JobRecord,
-    JobRunRequest, JobStdin, JobStdinClose, NodeInfo, ServiceCheck, ServiceList,
+    AuditLog, CapabilityList, FsList, FsStat, FsWrite, HealthStatus, JobEvent, JobList, JobLogList,
+    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
+    ServiceList,
 };
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
@@ -221,6 +222,37 @@ pub fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
             .into_inner()
             .try_into()
             .map_err(anyhow::Error::msg)
+    })
+}
+
+pub fn watch_job_to_terminal(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobEvent> {
+    let job_id = job_id.to_string();
+    block_on(endpoint, |mut client, endpoint| async move {
+        let mut stream = client
+            .watch_job(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .await?
+            .into_inner();
+        let mut latest = None;
+        while let Some(event) = stream.message().await? {
+            let event: JobEvent = event.try_into().map_err(anyhow::Error::msg)?;
+            let terminal = !matches!(event.status, JobStatus::Running);
+            latest = Some(event);
+            if terminal {
+                break;
+            }
+        }
+        latest.ok_or_else(|| anyhow::anyhow!("job watch stream ended without an event"))
+    })
+}
+
+pub fn list_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobLogList> {
+    let job_id = job_id.to_string();
+    block_on(endpoint, |mut client, endpoint| async move {
+        Ok(client
+            .list_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .await?
+            .into_inner()
+            .into())
     })
 }
 

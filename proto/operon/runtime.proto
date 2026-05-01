@@ -19,6 +19,8 @@ service OperonRuntime {
   rpc RunJob(JobRunRequest) returns (JobRecord);
   rpc GetJob(JobIdRequest) returns (JobRecord);
   rpc ListJobs(ListJobsRequest) returns (JobList);
+  rpc WatchJob(JobIdRequest) returns (stream JobEvent);
+  rpc ListJobLogs(JobIdRequest) returns (JobLogList);
   rpc StreamJobLogs(JobIdRequest) returns (stream JobLog);
   rpc WriteJobStdin(stream JobStdinRequest) returns (JobStdin);
   rpc CloseJobStdin(JobIdRequest) returns (JobStdinClose);
@@ -159,6 +161,7 @@ message JobCancelRequest {
 message JobLog {
   string stream = 1;
   string data = 2;
+  uint64 sequence = 3;
 }
 
 message JobRecord {
@@ -168,12 +171,30 @@ message JobRecord {
   string cwd = 4;
   string status = 5;
   int32 exit_code = 6;
-  repeated JobLog logs = 7;
+  reserved 7;
   bool has_exit_code = 8;
+  uint64 log_count = 9;
+  bool logs_truncated = 10;
 }
 
 message JobList {
   repeated JobRecord jobs = 1;
+}
+
+message JobLogList {
+  string job_id = 1;
+  repeated JobLog logs = 2;
+  bool truncated = 3;
+  uint64 dropped_log_count = 4;
+}
+
+message JobEvent {
+  string job_id = 1;
+  string status = 2;
+  int32 exit_code = 3;
+  bool has_exit_code = 4;
+  uint64 log_count = 5;
+  bool logs_truncated = 6;
 }
 
 message JobStdinRequest {

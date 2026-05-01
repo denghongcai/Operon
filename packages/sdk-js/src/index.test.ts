@@ -18,6 +18,8 @@ const niceGrpcMock = vi.hoisted(() => {
       runJob: vi.fn(),
       getJob: vi.fn(),
       listJobs: vi.fn(),
+      watchJob: vi.fn(),
+      listJobLogs: vi.fn(),
       streamJobLogs: vi.fn(),
       writeJobStdin: vi.fn(),
       closeJobStdin: vi.fn(),
@@ -63,29 +65,38 @@ describe("OperonClient", () => {
       status: "running",
       exitCode: 0,
       hasExitCode: false,
-      logs: [],
+      logCount: "0",
+      logsTruncated: false,
     });
-    niceGrpcMock.client.getJob
-      .mockResolvedValueOnce({
-        id: "job-1",
-        nodeId: "node-a",
-        command: "cat input.txt",
-        cwd: "/",
+    niceGrpcMock.client.watchJob.mockReturnValue(asyncIterable([
+      {
+        jobId: "job-1",
         status: "running",
         exitCode: 0,
         hasExitCode: false,
-        logs: [],
-      })
-      .mockResolvedValueOnce({
-        id: "job-1",
-        nodeId: "node-a",
-        command: "cat input.txt",
-        cwd: "/",
+        logCount: "0",
+        logsTruncated: false,
+      },
+      {
+        jobId: "job-1",
         status: "succeeded",
         exitCode: 0,
         hasExitCode: true,
-        logs: [{ stream: "stdout", data: "hello" }],
-      });
+        logCount: "1",
+        logsTruncated: false,
+      },
+    ]));
+    niceGrpcMock.client.getJob.mockResolvedValueOnce({
+      id: "job-1",
+      nodeId: "node-a",
+      command: "cat input.txt",
+      cwd: "/",
+      status: "succeeded",
+      exitCode: 0,
+      hasExitCode: true,
+      logCount: "1",
+      logsTruncated: false,
+    });
     niceGrpcMock.client.readFile.mockReturnValue(asyncIterable([{ data: new TextEncoder().encode("hello") }]));
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789", token: "test-token" }]);

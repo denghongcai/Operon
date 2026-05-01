@@ -17,9 +17,9 @@ use mdns_sd::{ServiceDaemon, ServiceInfo};
 use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
     AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList,
-    FsMountPolicy, FsPermissions, FsPolicy, FsStat, FsWrite, HealthStatus, JobList, JobLog,
-    JobPolicy, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo,
-    PolicyConfig, ServiceCheck, ServiceDefinition, ServiceList, ServicePolicy,
+    FsMountPolicy, FsPermissions, FsPolicy, FsStat, FsWrite, HealthStatus, JobEvent, JobList,
+    JobLog, JobLogList, JobPolicy, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
+    NodeInfo, PolicyConfig, ServiceCheck, ServiceDefinition, ServiceList, ServicePolicy,
 };
 use operon_protocol::runtime::v1::{
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
@@ -31,7 +31,7 @@ use operon_protocol::runtime::v1::{
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     process::{Child, Command as TokioCommand},
-    sync::{mpsc, oneshot},
+    sync::{broadcast, mpsc, oneshot},
     task::JoinHandle,
     time,
 };
@@ -40,9 +40,19 @@ use tonic::{metadata::MetadataMap, transport::Server, Request, Response as GrpcR
 
 const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
+const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
 
 type JobStdinSender = mpsc::UnboundedSender<Vec<u8>>;
 type JobStdinRegistry = Arc<Mutex<BTreeMap<String, JobStdinSender>>>;
+type JobEventSender = broadcast::Sender<JobEvent>;
+type JobLogSender = broadcast::Sender<JobLog>;
+
+#[derive(Debug, Default)]
+struct JobLogBuffer {
+    logs: VecDeque<JobLog>,
+    next_sequence: u64,
+    dropped_log_count: u64,
+}
 
 #[derive(Debug, Parser)]
 #[command(name = "operond", about = "Operon capability daemon")]
@@ -73,6 +83,9 @@ struct AppState {
     secrets: Arc<BTreeMap<String, String>>,
     audit: Arc<Mutex<VecDeque<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    job_logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
+    job_events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
+    job_log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
     job_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     job_stdin: JobStdinRegistry,
     next_job_id: Arc<AtomicU64>,
@@ -80,6 +93,9 @@ struct AppState {
 
 struct JobTask {
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
+    events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
+    log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
     cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     stdin: JobStdinRegistry,
     store: Option<PathBuf>,
@@ -90,6 +106,15 @@ struct JobTask {
     env: BTreeMap<String, String>,
     cancel_rx: oneshot::Receiver<()>,
     stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+}
+
+struct JobCompletion {
+    jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
+    cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    stdin: JobStdinRegistry,
+    store: Option<PathBuf>,
+    job_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,6 +172,9 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(VecDeque::new())),
         jobs,
+        job_logs: Arc::new(Mutex::new(BTreeMap::new())),
+        job_events: Arc::new(Mutex::new(BTreeMap::new())),
+        job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
         job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
         job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
         next_job_id: Arc::new(AtomicU64::new(next_job_id)),
@@ -186,6 +214,13 @@ type GrpcFileStream =
 type GrpcJobLogStream = Pin<
     Box<
         dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::JobLog, Status>>
+            + Send
+            + 'static,
+    >,
+>;
+type GrpcJobEventStream = Pin<
+    Box<
+        dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::JobEvent, Status>>
             + Send
             + 'static,
     >,
@@ -459,6 +494,72 @@ impl OperonRuntime for GrpcRuntime {
         Ok(GrpcResponse::new(JobList { jobs }.into()))
     }
 
+    type WatchJobStream = GrpcJobEventStream;
+
+    async fn watch_job(
+        &self,
+        request: Request<JobIdRequest>,
+    ) -> Result<GrpcResponse<Self::WatchJobStream>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let job_id = request.into_inner().job_id;
+        let mut receiver = self
+            .state
+            .job_events
+            .lock()
+            .expect("job event mutex poisoned")
+            .get(&job_id)
+            .map(JobEventSender::subscribe);
+        let initial = job_event_from_record(&get_job_record(&self.state, &job_id)?);
+        let state = self.state.clone();
+        let stream = async_stream::stream! {
+            let mut latest = initial;
+            yield Ok::<_, Status>(latest.clone().into());
+            if !matches!(latest.status, JobStatus::Running) {
+                return;
+            }
+            if let Some(receiver) = receiver.as_mut() {
+                loop {
+                    match receiver.recv().await {
+                        Ok(event) => {
+                            latest = event;
+                            yield Ok::<_, Status>(latest.clone().into());
+                            if !matches!(latest.status, JobStatus::Running) {
+                                break;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => {
+                            match get_job_record(&state, &job_id) {
+                                Ok(record) => {
+                                    latest = job_event_from_record(&record);
+                                    yield Ok::<_, Status>(latest.clone().into());
+                                    if !matches!(latest.status, JobStatus::Running) {
+                                        break;
+                                    }
+                                }
+                                Err(status) => {
+                                    yield Err(status);
+                                    break;
+                                }
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            }
+        };
+        Ok(GrpcResponse::new(Box::pin(stream)))
+    }
+
+    async fn list_job_logs(
+        &self,
+        request: Request<JobIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobLogList>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let job_id = request.into_inner().job_id;
+        get_job_record(&self.state, &job_id)?;
+        Ok(GrpcResponse::new(job_log_list(&self.state, &job_id).into()))
+    }
+
     type StreamJobLogsStream = GrpcJobLogStream;
 
     async fn stream_job_logs(
@@ -467,35 +568,77 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<Self::StreamJobLogsStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let job_id = request.into_inner().job_id;
-        if !self
+        let mut log_receiver = self
             .state
-            .jobs
+            .job_log_events
             .lock()
-            .expect("job map mutex poisoned")
-            .contains_key(&job_id)
-        {
-            return Err(Status::not_found(format!("job `{job_id}` not found")));
-        }
-        let jobs = self.state.jobs.clone();
+            .expect("job log event mutex poisoned")
+            .get(&job_id)
+            .map(JobLogSender::subscribe);
+        let mut event_receiver = self
+            .state
+            .job_events
+            .lock()
+            .expect("job event mutex poisoned")
+            .get(&job_id)
+            .map(JobEventSender::subscribe);
+        let initial_record = get_job_record(&self.state, &job_id)?;
+        let initial_logs = job_log_list(&self.state, &job_id);
+        let state = self.state.clone();
         let stream = async_stream::stream! {
-            let mut printed = 0;
-            loop {
-                let snapshot = jobs
-                    .lock()
-                    .expect("job map mutex poisoned")
-                    .get(&job_id)
-                    .cloned();
-                let Some(record) = snapshot else {
-                    break;
-                };
-                for log in record.logs.iter().skip(printed) {
-                    yield Ok::<_, Status>(log.clone().into());
+            let mut next_sequence = 0;
+            for log in initial_logs.logs {
+                next_sequence = log.sequence.saturating_add(1);
+                yield Ok::<_, Status>(log.into());
+            }
+            if !matches!(initial_record.status, JobStatus::Running) {
+                return;
+            }
+            if let (Some(log_receiver), Some(event_receiver)) =
+                (log_receiver.as_mut(), event_receiver.as_mut())
+            {
+                loop {
+                    tokio::select! {
+                        log = log_receiver.recv() => {
+                            match log {
+                                Ok(log) => {
+                                    if log.sequence >= next_sequence {
+                                        next_sequence = log.sequence.saturating_add(1);
+                                        yield Ok::<_, Status>(log.into());
+                                    }
+                                }
+                                Err(broadcast::error::RecvError::Lagged(_)) => {
+                                    let snapshot = job_log_list(&state, &job_id);
+                                    for log in snapshot.logs {
+                                        if log.sequence >= next_sequence {
+                                            next_sequence = log.sequence.saturating_add(1);
+                                            yield Ok::<_, Status>(log.into());
+                                        }
+                                    }
+                                }
+                                Err(broadcast::error::RecvError::Closed) => break,
+                            }
+                        }
+                        event = event_receiver.recv() => {
+                            match event {
+                                Ok(event) => {
+                                    if !matches!(event.status, JobStatus::Running) {
+                                        let snapshot = job_log_list(&state, &job_id);
+                                        for log in snapshot.logs {
+                                            if log.sequence >= next_sequence {
+                                                next_sequence = log.sequence.saturating_add(1);
+                                                yield Ok::<_, Status>(log.into());
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                                Err(broadcast::error::RecvError::Closed) => break,
+                            }
+                        }
+                    }
                 }
-                printed = record.logs.len();
-                if !matches!(record.status, JobStatus::Running) {
-                    break;
-                }
-                time::sleep(std::time::Duration::from_millis(100)).await;
             }
         };
         Ok(GrpcResponse::new(Box::pin(stream)))
@@ -950,13 +1093,31 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
         cwd: cwd_virtual,
         status: JobStatus::Running,
         exit_code: None,
-        logs: Vec::new(),
+        log_count: 0,
+        logs_truncated: false,
     };
+    let (event_tx, _) = broadcast::channel(32);
+    let (log_tx, _) = broadcast::channel(1024);
     state
         .jobs
         .lock()
         .expect("job map mutex poisoned")
         .insert(job_id.clone(), record.clone());
+    state
+        .job_logs
+        .lock()
+        .expect("job log mutex poisoned")
+        .insert(job_id.clone(), JobLogBuffer::default());
+    state
+        .job_events
+        .lock()
+        .expect("job event mutex poisoned")
+        .insert(job_id.clone(), event_tx);
+    state
+        .job_log_events
+        .lock()
+        .expect("job log event mutex poisoned")
+        .insert(job_id.clone(), log_tx);
     record_audit_capability(state, "job:default", "run", &job_id, true, "allowed");
     for secret in &request.secrets {
         record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
@@ -976,6 +1137,9 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
         .insert(job_id.clone(), stdin_tx);
 
     let jobs = state.jobs.clone();
+    let logs = state.job_logs.clone();
+    let events = state.job_events.clone();
+    let log_events = state.job_log_events.clone();
     let cancels = state.job_cancel.clone();
     let stdin = state.job_stdin.clone();
     let store = state.store.clone();
@@ -987,6 +1151,9 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
     tokio::spawn(async move {
         run_job_task(JobTask {
             jobs,
+            logs,
+            events,
+            log_events,
             cancels,
             stdin,
             store,
@@ -1477,6 +1644,14 @@ fn now_ms() -> u128 {
 }
 
 async fn run_job_task(task: JobTask) {
+    let completion = JobCompletion {
+        jobs: task.jobs.clone(),
+        events: task.events.clone(),
+        cancels: task.cancels.clone(),
+        stdin: task.stdin.clone(),
+        store: task.store.clone(),
+        job_id: task.job_id.clone(),
+    };
     let child = TokioCommand::new("sh")
         .arg("-c")
         .arg(&task.command)
@@ -1491,21 +1666,17 @@ async fn run_job_task(task: JobTask) {
     let Ok(mut child) = child else {
         append_job_log(
             &task.jobs,
+            &task.logs,
+            &task.log_events,
+            task.store.as_deref(),
             &task.job_id,
             JobLog {
                 stream: "stderr".to_string(),
                 data: "failed to spawn command".to_string(),
+                sequence: 0,
             },
         );
-        finish_job(
-            &task.jobs,
-            &task.cancels,
-            &task.stdin,
-            task.store.as_deref(),
-            &task.job_id,
-            JobStatus::Failed,
-            None,
-        );
+        finish_job(&completion, JobStatus::Failed, None);
         return;
     };
 
@@ -1516,6 +1687,9 @@ async fn run_job_task(task: JobTask) {
     if let Some(stdout) = child.stdout.take() {
         capture_tasks.push(tokio::spawn(capture_job_stream(
             task.jobs.clone(),
+            task.logs.clone(),
+            task.log_events.clone(),
+            task.store.clone(),
             task.job_id.clone(),
             "stdout",
             stdout,
@@ -1524,6 +1698,9 @@ async fn run_job_task(task: JobTask) {
     if let Some(stderr) = child.stderr.take() {
         capture_tasks.push(tokio::spawn(capture_job_stream(
             task.jobs.clone(),
+            task.logs.clone(),
+            task.log_events.clone(),
+            task.store.clone(),
             task.job_id.clone(),
             "stderr",
             stderr,
@@ -1531,7 +1708,7 @@ async fn run_job_task(task: JobTask) {
     }
 
     let (job_status, exit_code) = tokio::select! {
-        status = child.wait() => job_status_from_wait(status, &task.jobs, &task.job_id),
+        status = child.wait() => job_status_from_wait(status, &task.jobs, &task.logs, &task.log_events, task.store.as_deref(), &task.job_id),
         _ = task.cancel_rx => {
             terminate_child(&mut child).await;
             (JobStatus::Cancelled, None)
@@ -1543,20 +1720,15 @@ async fn run_job_task(task: JobTask) {
     };
 
     wait_for_capture_tasks(capture_tasks).await;
-    finish_job(
-        &task.jobs,
-        &task.cancels,
-        &task.stdin,
-        task.store.as_deref(),
-        &task.job_id,
-        job_status,
-        exit_code,
-    );
+    finish_job(&completion, job_status, exit_code);
 }
 
 fn job_status_from_wait(
     status: std::io::Result<std::process::ExitStatus>,
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
+    log_events: &Arc<Mutex<BTreeMap<String, JobLogSender>>>,
+    store: Option<&Path>,
     job_id: &str,
 ) -> (JobStatus, Option<i32>) {
     match status {
@@ -1571,10 +1743,14 @@ fn job_status_from_wait(
         Err(error) => {
             append_job_log(
                 jobs,
+                logs,
+                log_events,
+                store,
                 job_id,
                 JobLog {
                     stream: "stderr".to_string(),
                     data: error.to_string(),
+                    sequence: 0,
                 },
             );
             (JobStatus::Failed, None)
@@ -1601,6 +1777,9 @@ async fn wait_for_capture_tasks(capture_tasks: Vec<JoinHandle<()>>) {
 
 async fn capture_job_stream<R>(
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
+    log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
+    store: Option<PathBuf>,
     job_id: String,
     stream: &'static str,
     mut reader: R,
@@ -1613,19 +1792,27 @@ async fn capture_job_stream<R>(
             Ok(0) => break,
             Ok(count) => append_job_log(
                 &jobs,
+                &logs,
+                &log_events,
+                store.as_deref(),
                 &job_id,
                 JobLog {
                     stream: stream.to_string(),
                     data: String::from_utf8_lossy(&buffer[..count]).to_string(),
+                    sequence: 0,
                 },
             ),
             Err(error) => {
                 append_job_log(
                     &jobs,
+                    &logs,
+                    &log_events,
+                    store.as_deref(),
                     &job_id,
                     JobLog {
                         stream: "stderr".to_string(),
                         data: format!("failed to read {stream}: {error}"),
+                        sequence: 0,
                     },
                 );
                 break;
@@ -1645,40 +1832,121 @@ async fn pump_job_stdin(
     }
 }
 
-fn append_job_log(jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>, job_id: &str, log: JobLog) {
-    if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
-        record.logs.push(log);
+fn job_event_from_record(record: &JobRecord) -> JobEvent {
+    JobEvent {
+        job_id: record.id.clone(),
+        status: record.status.clone(),
+        exit_code: record.exit_code,
+        log_count: record.log_count,
+        logs_truncated: record.logs_truncated,
     }
 }
 
-fn finish_job(
+fn job_log_list(state: &AppState, job_id: &str) -> JobLogList {
+    let logs = state.job_logs.lock().expect("job log mutex poisoned");
+    let Some(buffer) = logs.get(job_id) else {
+        return JobLogList {
+            job_id: job_id.to_string(),
+            logs: Vec::new(),
+            truncated: false,
+            dropped_log_count: 0,
+        };
+    };
+    JobLogList {
+        job_id: job_id.to_string(),
+        logs: buffer.logs.iter().cloned().collect(),
+        truncated: buffer.dropped_log_count > 0,
+        dropped_log_count: buffer.dropped_log_count,
+    }
+}
+
+fn append_job_log(
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
-    cancels: &Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
-    stdin: &JobStdinRegistry,
+    logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
+    log_events: &Arc<Mutex<BTreeMap<String, JobLogSender>>>,
     store: Option<&Path>,
     job_id: &str,
-    status: JobStatus,
-    exit_code: Option<i32>,
+    mut log: JobLog,
 ) {
-    cancels
-        .lock()
-        .expect("job cancel mutex poisoned")
-        .remove(job_id);
-    stdin
-        .lock()
-        .expect("job stdin mutex poisoned")
-        .remove(job_id);
+    let (log_count, logs_truncated, dropped_log_count, log) = {
+        let mut buffers = logs.lock().expect("job log mutex poisoned");
+        let buffer = buffers.entry(job_id.to_string()).or_default();
+        log.sequence = buffer.next_sequence;
+        buffer.next_sequence = buffer.next_sequence.saturating_add(1);
+        buffer.logs.push_back(log);
+        while buffer.logs.len() > MAX_IN_MEMORY_JOB_LOGS {
+            buffer.logs.pop_front();
+            buffer.dropped_log_count = buffer.dropped_log_count.saturating_add(1);
+        }
+        (
+            buffer.next_sequence,
+            buffer.dropped_log_count > 0,
+            buffer.dropped_log_count,
+            buffer.logs.back().expect("just pushed job log").clone(),
+        )
+    };
 
     if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
-        record.status = status;
-        record.exit_code = exit_code;
-        append_store_record(
-            store,
-            &serde_json::json!({
-                "kind": "job",
-                "record": record,
-            }),
-        );
+        record.log_count = log_count;
+        record.logs_truncated = logs_truncated;
+    }
+    if let Some(sender) = log_events
+        .lock()
+        .expect("job log event mutex poisoned")
+        .get(job_id)
+    {
+        let _ = sender.send(log.clone());
+    }
+    append_store_record(
+        store,
+        &serde_json::json!({
+            "kind": "job_log",
+            "job_id": job_id,
+            "log": log,
+            "dropped_log_count": dropped_log_count,
+        }),
+    );
+}
+
+fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i32>) {
+    completion
+        .cancels
+        .lock()
+        .expect("job cancel mutex poisoned")
+        .remove(&completion.job_id);
+    completion
+        .stdin
+        .lock()
+        .expect("job stdin mutex poisoned")
+        .remove(&completion.job_id);
+
+    let event = {
+        let mut jobs = completion.jobs.lock().expect("job map mutex poisoned");
+        if let Some(record) = jobs.get_mut(&completion.job_id) {
+            record.status = status;
+            record.exit_code = exit_code;
+            let event = job_event_from_record(record);
+            append_store_record(
+                completion.store.as_deref(),
+                &serde_json::json!({
+                    "kind": "job",
+                    "record": record,
+                }),
+            );
+            Some(event)
+        } else {
+            None
+        }
+    };
+    if let Some(event) = event {
+        if let Some(sender) = completion
+            .events
+            .lock()
+            .expect("job event mutex poisoned")
+            .get(&completion.job_id)
+        {
+            let _ = sender.send(event);
+        }
     }
 }
 
@@ -1809,6 +2077,9 @@ mod tests {
             secrets: Arc::new(secrets),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_events: Arc::new(Mutex::new(BTreeMap::new())),
+            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
@@ -1842,6 +2113,9 @@ mod tests {
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_events: Arc::new(Mutex::new(BTreeMap::new())),
+            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
@@ -1874,6 +2148,9 @@ mod tests {
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_events: Arc::new(Mutex::new(BTreeMap::new())),
+            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
@@ -1893,5 +2170,57 @@ mod tests {
         let events = state.audit.lock().expect("audit log");
         assert_eq!(events.len(), MAX_IN_MEMORY_AUDIT_EVENTS);
         assert_eq!(events[0].resource, "/file-5.txt");
+    }
+
+    #[test]
+    fn job_logs_are_separate_and_bounded() {
+        let jobs = Arc::new(Mutex::new(BTreeMap::from([(
+            "job-1".to_string(),
+            JobRecord {
+                id: "job-1".to_string(),
+                node_id: "node-a".to_string(),
+                command: "echo test".to_string(),
+                cwd: "/workspace".to_string(),
+                status: JobStatus::Running,
+                exit_code: None,
+                log_count: 0,
+                logs_truncated: false,
+            },
+        )])));
+        let logs = Arc::new(Mutex::new(BTreeMap::from([(
+            "job-1".to_string(),
+            JobLogBuffer::default(),
+        )])));
+        let (sender, _) = broadcast::channel(1);
+        let log_events = Arc::new(Mutex::new(BTreeMap::from([("job-1".to_string(), sender)])));
+
+        for index in 0..(MAX_IN_MEMORY_JOB_LOGS + 5) {
+            append_job_log(
+                &jobs,
+                &logs,
+                &log_events,
+                None,
+                "job-1",
+                JobLog {
+                    stream: "stdout".to_string(),
+                    data: format!("line {index}"),
+                    sequence: 0,
+                },
+            );
+        }
+
+        let record = jobs
+            .lock()
+            .expect("job map")
+            .get("job-1")
+            .expect("job")
+            .clone();
+        assert_eq!(record.log_count, (MAX_IN_MEMORY_JOB_LOGS + 5) as u64);
+        assert!(record.logs_truncated);
+
+        let buffers = logs.lock().expect("job logs");
+        let buffer = buffers.get("job-1").expect("job log buffer");
+        assert_eq!(buffer.logs.len(), MAX_IN_MEMORY_JOB_LOGS);
+        assert_eq!(buffer.logs.front().expect("first retained").sequence, 5);
     }
 }

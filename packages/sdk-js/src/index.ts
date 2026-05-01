@@ -4,8 +4,10 @@ import {
   type FsList as GrpcFsList,
   type FsStat as GrpcFsStat,
   type FsWrite as GrpcFsWrite,
+  type JobEvent as GrpcJobEvent,
   type JobList as GrpcJobList,
   type JobLog as GrpcJobLog,
+  type JobLogList as GrpcJobLogList,
   type JobRecord as GrpcJobRecord,
   type JobStdin as GrpcJobStdin,
   type JobStdinClose as GrpcJobStdinClose,
@@ -76,11 +78,33 @@ export type JobRecord = {
   cwd: string;
   status: "running" | "succeeded" | "failed" | "cancelled" | "timed-out";
   exit_code?: number | null;
-  logs: Array<{ stream: string; data: string }>;
+  log_count: number;
+  logs_truncated: boolean;
 };
 
 export type JobList = {
   jobs: JobRecord[];
+};
+
+export type JobLog = {
+  stream: string;
+  data: string;
+  sequence: number;
+};
+
+export type JobLogList = {
+  job_id: string;
+  logs: JobLog[];
+  truncated: boolean;
+  dropped_log_count: number;
+};
+
+export type JobEvent = {
+  job_id: string;
+  status: JobRecord["status"];
+  exit_code?: number | null;
+  log_count: number;
+  logs_truncated: boolean;
 };
 
 export type JobStdinResult = {
@@ -180,6 +204,17 @@ export class OperonClient {
   async listJobs(nodeId: string): Promise<JobList> {
     const endpoint = this.endpointFor(nodeId);
     return fromGrpcJobList(await this.grpcClient(endpoint).listJobs({}, this.grpcOptions(endpoint)));
+  }
+
+  async listJobLogs(nodeId: string, jobId: string): Promise<JobLogList> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcJobLogList(await this.grpcClient(endpoint).listJobLogs({ jobId }, this.grpcOptions(endpoint)));
+  }
+
+  async watchJob(nodeId: string, jobId: string): Promise<AsyncIterable<JobEvent>> {
+    const endpoint = this.endpointFor(nodeId);
+    const events = this.grpcClient(endpoint).watchJob({ jobId }, this.grpcOptions(endpoint));
+    return mapGrpcJobEvents(events);
   }
 
   async streamJobLogs(nodeId: string, jobId: string): Promise<ReadableStream<Uint8Array>> {
@@ -347,17 +382,18 @@ export class OperonClient {
       ),
     );
 
-    while (true) {
-      const record = fromGrpcJobRecord(await client.getJob({ jobId: job.id }, options));
-      if (record.status === "running") {
-        await sleep(100);
+    for await (const event of client.watchJob({ jobId: job.id }, options)) {
+      const jobEvent = fromGrpcJobEvent(event);
+      if (jobEvent.status === "running") {
         continue;
       }
-      if (record.status === "succeeded") {
+      const record = fromGrpcJobRecord(await client.getJob({ jobId: job.id }, options));
+      if (jobEvent.status === "succeeded") {
         return record;
       }
-      throw new Error(`job ${record.id} ended with status ${record.status}`);
+      throw new Error(`job ${record.id} ended with status ${jobEvent.status}`);
     }
+    throw new Error(`job ${job.id} watch stream ended without a terminal event`);
   }
 }
 
@@ -366,10 +402,6 @@ function required(value: string | undefined, field: string): string {
     throw new Error(`step requires ${field}`);
   }
   return value;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function grpcTarget(endpoint: string): string {
@@ -493,15 +525,42 @@ function fromGrpcJobRecord(record: GrpcJobRecord): JobRecord {
     cwd: record.cwd,
     status: record.status as JobRecord["status"],
     exit_code: record.hasExitCode ? record.exitCode : null,
-    logs: record.logs.map(fromGrpcJobLog),
+    log_count: Number(record.logCount),
+    logs_truncated: record.logsTruncated,
   };
 }
 
-function fromGrpcJobLog(log: GrpcJobLog): { stream: string; data: string } {
+function fromGrpcJobLog(log: GrpcJobLog): JobLog {
   return {
     stream: log.stream,
     data: log.data,
+    sequence: Number(log.sequence),
   };
+}
+
+function fromGrpcJobLogList(list: GrpcJobLogList): JobLogList {
+  return {
+    job_id: list.jobId,
+    logs: list.logs.map(fromGrpcJobLog),
+    truncated: list.truncated,
+    dropped_log_count: Number(list.droppedLogCount),
+  };
+}
+
+function fromGrpcJobEvent(event: GrpcJobEvent): JobEvent {
+  return {
+    job_id: event.jobId,
+    status: event.status as JobEvent["status"],
+    exit_code: event.hasExitCode ? event.exitCode : null,
+    log_count: Number(event.logCount),
+    logs_truncated: event.logsTruncated,
+  };
+}
+
+async function* mapGrpcJobEvents(events: AsyncIterable<GrpcJobEvent>): AsyncIterable<JobEvent> {
+  for await (const event of events) {
+    yield fromGrpcJobEvent(event);
+  }
 }
 
 function fromGrpcJobList(list: GrpcJobList): JobList {

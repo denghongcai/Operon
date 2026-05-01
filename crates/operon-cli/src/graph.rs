@@ -120,14 +120,13 @@ fn run_job_step(config_path: PathBuf, step: &ExecutionStep) -> anyhow::Result<se
     };
     let record: JobRecord = grpc::run_job(&endpoint, request)?;
 
-    loop {
-        let record = load_job(config_path.clone(), &step.node, &record.id)?;
-        match record.status {
-            JobStatus::Running => std::thread::sleep(std::time::Duration::from_millis(100)),
-            JobStatus::Succeeded => return Ok(serde_json::to_value(record)?),
-            JobStatus::Failed | JobStatus::Cancelled | JobStatus::TimedOut => {
-                anyhow::bail!("job `{}` ended with status {:?}", record.id, record.status)
-            }
+    let event = grpc::watch_job_to_terminal(&endpoint, &record.id)?;
+    let record = load_job(config_path, &step.node, &record.id)?;
+    match event.status {
+        JobStatus::Succeeded => Ok(serde_json::to_value(record)?),
+        JobStatus::Running => anyhow::bail!("job `{}` watch ended while still running", record.id),
+        JobStatus::Failed | JobStatus::Cancelled | JobStatus::TimedOut => {
+            anyhow::bail!("job `{}` ended with status {:?}", record.id, event.status)
         }
     }
 }

@@ -1990,6 +1990,38 @@ Remaining:
 
 - None for Phase 32.13.
 
+## Phase 32.14: Job Event Stream And Log Storage Split
+
+Status: Completed.
+
+Goal: replace polling-based job waits and embedded job logs with streaming job
+events plus separate bounded log storage.
+
+Planned:
+
+- add a gRPC `WatchJob` stream for job status changes.
+- keep job logs behind dedicated log APIs instead of embedding them in
+  `JobRecord`.
+- store job logs in an append-only store record path and a bounded in-memory
+  ring buffer.
+- update CLI graph/wait/log paths and the TypeScript SDK to use streaming job
+  status rather than fixed polling.
+
+Completed:
+
+- Added `WatchJob` and `ListJobLogs` to the gRPC protocol.
+- Removed embedded logs from `JobRecord`; job records now report `log_count`
+  and `logs_truncated`.
+- Moved daemon job logs into append-only store records plus a bounded in-memory
+  ring buffer.
+- Updated CLI job wait, graph execution, and TypeScript SDK job execution to
+  wait through `WatchJob` instead of fixed polling.
+- Updated CLI/SDK log reads to use dedicated job log APIs.
+
+Remaining:
+
+- None for Phase 32.14.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

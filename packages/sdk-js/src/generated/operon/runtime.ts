@@ -147,6 +147,7 @@ export interface JobCancelRequest {
 export interface JobLog {
   stream: string;
   data: string;
+  sequence: string;
 }
 
 export interface JobRecord {
@@ -156,12 +157,29 @@ export interface JobRecord {
   cwd: string;
   status: string;
   exitCode: number;
-  logs: JobLog[];
   hasExitCode: boolean;
+  logCount: string;
+  logsTruncated: boolean;
 }
 
 export interface JobList {
   jobs: JobRecord[];
+}
+
+export interface JobLogList {
+  jobId: string;
+  logs: JobLog[];
+  truncated: boolean;
+  droppedLogCount: string;
+}
+
+export interface JobEvent {
+  jobId: string;
+  status: string;
+  exitCode: number;
+  hasExitCode: boolean;
+  logCount: string;
+  logsTruncated: boolean;
 }
 
 export interface JobStdinRequest {
@@ -2332,7 +2350,7 @@ export const JobCancelRequest: MessageFns<JobCancelRequest> = {
 };
 
 function createBaseJobLog(): JobLog {
-  return { stream: "", data: "" };
+  return { stream: "", data: "", sequence: "0" };
 }
 
 export const JobLog: MessageFns<JobLog> = {
@@ -2342,6 +2360,9 @@ export const JobLog: MessageFns<JobLog> = {
     }
     if (message.data !== "") {
       writer.uint32(18).string(message.data);
+    }
+    if (message.sequence !== "0") {
+      writer.uint32(24).uint64(message.sequence);
     }
     return writer;
   },
@@ -2369,6 +2390,14 @@ export const JobLog: MessageFns<JobLog> = {
           message.data = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.sequence = reader.uint64().toString();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2382,6 +2411,7 @@ export const JobLog: MessageFns<JobLog> = {
     return {
       stream: isSet(object.stream) ? globalThis.String(object.stream) : "",
       data: isSet(object.data) ? globalThis.String(object.data) : "",
+      sequence: isSet(object.sequence) ? globalThis.String(object.sequence) : "0",
     };
   },
 
@@ -2393,6 +2423,9 @@ export const JobLog: MessageFns<JobLog> = {
     if (message.data !== "") {
       obj.data = message.data;
     }
+    if (message.sequence !== "0") {
+      obj.sequence = message.sequence;
+    }
     return obj;
   },
 
@@ -2403,12 +2436,23 @@ export const JobLog: MessageFns<JobLog> = {
     const message = createBaseJobLog();
     message.stream = object.stream ?? "";
     message.data = object.data ?? "";
+    message.sequence = object.sequence ?? "0";
     return message;
   },
 };
 
 function createBaseJobRecord(): JobRecord {
-  return { id: "", nodeId: "", command: "", cwd: "", status: "", exitCode: 0, logs: [], hasExitCode: false };
+  return {
+    id: "",
+    nodeId: "",
+    command: "",
+    cwd: "",
+    status: "",
+    exitCode: 0,
+    hasExitCode: false,
+    logCount: "0",
+    logsTruncated: false,
+  };
 }
 
 export const JobRecord: MessageFns<JobRecord> = {
@@ -2431,11 +2475,14 @@ export const JobRecord: MessageFns<JobRecord> = {
     if (message.exitCode !== 0) {
       writer.uint32(48).int32(message.exitCode);
     }
-    for (const v of message.logs) {
-      JobLog.encode(v!, writer.uint32(58).fork()).join();
-    }
     if (message.hasExitCode !== false) {
       writer.uint32(64).bool(message.hasExitCode);
+    }
+    if (message.logCount !== "0") {
+      writer.uint32(72).uint64(message.logCount);
+    }
+    if (message.logsTruncated !== false) {
+      writer.uint32(80).bool(message.logsTruncated);
     }
     return writer;
   },
@@ -2495,20 +2542,28 @@ export const JobRecord: MessageFns<JobRecord> = {
           message.exitCode = reader.int32();
           continue;
         }
-        case 7: {
-          if (tag !== 58) {
-            break;
-          }
-
-          message.logs.push(JobLog.decode(reader, reader.uint32()));
-          continue;
-        }
         case 8: {
           if (tag !== 64) {
             break;
           }
 
           message.hasExitCode = reader.bool();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.logCount = reader.uint64().toString();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.logsTruncated = reader.bool();
           continue;
         }
       }
@@ -2536,13 +2591,20 @@ export const JobRecord: MessageFns<JobRecord> = {
         : isSet(object.exit_code)
         ? globalThis.Number(object.exit_code)
         : 0,
-      logs: globalThis.Array.isArray(object?.logs)
-        ? object.logs.map((e: any) => JobLog.fromJSON(e))
-        : [],
       hasExitCode: isSet(object.hasExitCode)
         ? globalThis.Boolean(object.hasExitCode)
         : isSet(object.has_exit_code)
         ? globalThis.Boolean(object.has_exit_code)
+        : false,
+      logCount: isSet(object.logCount)
+        ? globalThis.String(object.logCount)
+        : isSet(object.log_count)
+        ? globalThis.String(object.log_count)
+        : "0",
+      logsTruncated: isSet(object.logsTruncated)
+        ? globalThis.Boolean(object.logsTruncated)
+        : isSet(object.logs_truncated)
+        ? globalThis.Boolean(object.logs_truncated)
         : false,
     };
   },
@@ -2567,11 +2629,14 @@ export const JobRecord: MessageFns<JobRecord> = {
     if (message.exitCode !== 0) {
       obj.exitCode = Math.round(message.exitCode);
     }
-    if (message.logs?.length) {
-      obj.logs = message.logs.map((e) => JobLog.toJSON(e));
-    }
     if (message.hasExitCode !== false) {
       obj.hasExitCode = message.hasExitCode;
+    }
+    if (message.logCount !== "0") {
+      obj.logCount = message.logCount;
+    }
+    if (message.logsTruncated !== false) {
+      obj.logsTruncated = message.logsTruncated;
     }
     return obj;
   },
@@ -2587,8 +2652,9 @@ export const JobRecord: MessageFns<JobRecord> = {
     message.cwd = object.cwd ?? "";
     message.status = object.status ?? "";
     message.exitCode = object.exitCode ?? 0;
-    message.logs = object.logs?.map((e) => JobLog.fromPartial(e)) || [];
     message.hasExitCode = object.hasExitCode ?? false;
+    message.logCount = object.logCount ?? "0";
+    message.logsTruncated = object.logsTruncated ?? false;
     return message;
   },
 };
@@ -2647,6 +2713,282 @@ export const JobList: MessageFns<JobList> = {
   fromPartial(object: DeepPartial<JobList>): JobList {
     const message = createBaseJobList();
     message.jobs = object.jobs?.map((e) => JobRecord.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseJobLogList(): JobLogList {
+  return { jobId: "", logs: [], truncated: false, droppedLogCount: "0" };
+}
+
+export const JobLogList: MessageFns<JobLogList> = {
+  encode(message: JobLogList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.jobId !== "") {
+      writer.uint32(10).string(message.jobId);
+    }
+    for (const v of message.logs) {
+      JobLog.encode(v!, writer.uint32(18).fork()).join();
+    }
+    if (message.truncated !== false) {
+      writer.uint32(24).bool(message.truncated);
+    }
+    if (message.droppedLogCount !== "0") {
+      writer.uint32(32).uint64(message.droppedLogCount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): JobLogList {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseJobLogList();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.jobId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.logs.push(JobLog.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.truncated = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.droppedLogCount = reader.uint64().toString();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): JobLogList {
+    return {
+      jobId: isSet(object.jobId)
+        ? globalThis.String(object.jobId)
+        : isSet(object.job_id)
+        ? globalThis.String(object.job_id)
+        : "",
+      logs: globalThis.Array.isArray(object?.logs) ? object.logs.map((e: any) => JobLog.fromJSON(e)) : [],
+      truncated: isSet(object.truncated) ? globalThis.Boolean(object.truncated) : false,
+      droppedLogCount: isSet(object.droppedLogCount)
+        ? globalThis.String(object.droppedLogCount)
+        : isSet(object.dropped_log_count)
+        ? globalThis.String(object.dropped_log_count)
+        : "0",
+    };
+  },
+
+  toJSON(message: JobLogList): unknown {
+    const obj: any = {};
+    if (message.jobId !== "") {
+      obj.jobId = message.jobId;
+    }
+    if (message.logs?.length) {
+      obj.logs = message.logs.map((e) => JobLog.toJSON(e));
+    }
+    if (message.truncated !== false) {
+      obj.truncated = message.truncated;
+    }
+    if (message.droppedLogCount !== "0") {
+      obj.droppedLogCount = message.droppedLogCount;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<JobLogList>): JobLogList {
+    return JobLogList.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<JobLogList>): JobLogList {
+    const message = createBaseJobLogList();
+    message.jobId = object.jobId ?? "";
+    message.logs = object.logs?.map((e) => JobLog.fromPartial(e)) || [];
+    message.truncated = object.truncated ?? false;
+    message.droppedLogCount = object.droppedLogCount ?? "0";
+    return message;
+  },
+};
+
+function createBaseJobEvent(): JobEvent {
+  return { jobId: "", status: "", exitCode: 0, hasExitCode: false, logCount: "0", logsTruncated: false };
+}
+
+export const JobEvent: MessageFns<JobEvent> = {
+  encode(message: JobEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.jobId !== "") {
+      writer.uint32(10).string(message.jobId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.exitCode !== 0) {
+      writer.uint32(24).int32(message.exitCode);
+    }
+    if (message.hasExitCode !== false) {
+      writer.uint32(32).bool(message.hasExitCode);
+    }
+    if (message.logCount !== "0") {
+      writer.uint32(40).uint64(message.logCount);
+    }
+    if (message.logsTruncated !== false) {
+      writer.uint32(48).bool(message.logsTruncated);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): JobEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseJobEvent();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.jobId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.exitCode = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.hasExitCode = reader.bool();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.logCount = reader.uint64().toString();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.logsTruncated = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): JobEvent {
+    return {
+      jobId: isSet(object.jobId)
+        ? globalThis.String(object.jobId)
+        : isSet(object.job_id)
+        ? globalThis.String(object.job_id)
+        : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      exitCode: isSet(object.exitCode)
+        ? globalThis.Number(object.exitCode)
+        : isSet(object.exit_code)
+        ? globalThis.Number(object.exit_code)
+        : 0,
+      hasExitCode: isSet(object.hasExitCode)
+        ? globalThis.Boolean(object.hasExitCode)
+        : isSet(object.has_exit_code)
+        ? globalThis.Boolean(object.has_exit_code)
+        : false,
+      logCount: isSet(object.logCount)
+        ? globalThis.String(object.logCount)
+        : isSet(object.log_count)
+        ? globalThis.String(object.log_count)
+        : "0",
+      logsTruncated: isSet(object.logsTruncated)
+        ? globalThis.Boolean(object.logsTruncated)
+        : isSet(object.logs_truncated)
+        ? globalThis.Boolean(object.logs_truncated)
+        : false,
+    };
+  },
+
+  toJSON(message: JobEvent): unknown {
+    const obj: any = {};
+    if (message.jobId !== "") {
+      obj.jobId = message.jobId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.exitCode !== 0) {
+      obj.exitCode = Math.round(message.exitCode);
+    }
+    if (message.hasExitCode !== false) {
+      obj.hasExitCode = message.hasExitCode;
+    }
+    if (message.logCount !== "0") {
+      obj.logCount = message.logCount;
+    }
+    if (message.logsTruncated !== false) {
+      obj.logsTruncated = message.logsTruncated;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<JobEvent>): JobEvent {
+    return JobEvent.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<JobEvent>): JobEvent {
+    const message = createBaseJobEvent();
+    message.jobId = object.jobId ?? "";
+    message.status = object.status ?? "";
+    message.exitCode = object.exitCode ?? 0;
+    message.hasExitCode = object.hasExitCode ?? false;
+    message.logCount = object.logCount ?? "0";
+    message.logsTruncated = object.logsTruncated ?? false;
     return message;
   },
 };
@@ -3759,6 +4101,22 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
+    watchJob: {
+      name: "WatchJob",
+      requestType: JobIdRequest as typeof JobIdRequest,
+      requestStream: false,
+      responseType: JobEvent as typeof JobEvent,
+      responseStream: true,
+      options: {},
+    },
+    listJobLogs: {
+      name: "ListJobLogs",
+      requestType: JobIdRequest as typeof JobIdRequest,
+      requestStream: false,
+      responseType: JobLogList as typeof JobLogList,
+      responseStream: false,
+      options: {},
+    },
     streamJobLogs: {
       name: "StreamJobLogs",
       requestType: JobIdRequest as typeof JobIdRequest,
@@ -3844,6 +4202,11 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
   runJob(request: JobRunRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   getJob(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   listJobs(request: ListJobsRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobList>>;
+  watchJob(
+    request: JobIdRequest,
+    context: CallContext & CallContextExt,
+  ): ServerStreamingMethodResult<DeepPartial<JobEvent>>;
+  listJobLogs(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobLogList>>;
   streamJobLogs(
     request: JobIdRequest,
     context: CallContext & CallContextExt,
@@ -3882,6 +4245,8 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
   runJob(request: DeepPartial<JobRunRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   getJob(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   listJobs(request: DeepPartial<ListJobsRequest>, options?: CallOptions & CallOptionsExt): Promise<JobList>;
+  watchJob(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<JobEvent>;
+  listJobLogs(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobLogList>;
   streamJobLogs(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<JobLog>;
   writeJobStdin(
     request: AsyncIterable<DeepPartial<JobStdinRequest>>,

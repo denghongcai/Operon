@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap,
     fs,
-    io::Write,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -10,7 +9,7 @@ use clap::{Parser, Subcommand};
 use operon_config::{NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
     AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, FsList, FsRead, FsWrite, HealthStatus,
-    JobList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
+    JobList, JobRecord, JobRunRequest, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
     ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
 
@@ -949,34 +948,13 @@ fn job_logs(
     follow: bool,
     stream: bool,
 ) -> anyhow::Result<()> {
-    if stream {
-        let endpoint = load_endpoint(config_path, node_id)?;
+    let endpoint = load_endpoint(config_path, node_id)?;
+    if stream || follow {
         return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::stdout());
     }
-    if !follow {
-        let record = load_job_from_path(config_path, node_id, &format!("/job/logs?id={job_id}"))?;
-        for log in record.logs {
-            print!("{}", log.data);
-        }
-        return Ok(());
-    }
-
-    let mut printed = 0;
-    loop {
-        let record = load_job_from_path(
-            config_path.clone(),
-            node_id,
-            &format!("/job/logs?id={job_id}"),
-        )?;
-        for log in record.logs.iter().skip(printed) {
-            print!("{}", log.data);
-        }
-        std::io::stdout().flush()?;
-        printed = record.logs.len();
-        if !matches!(record.status, JobStatus::Running) {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+    let logs = grpc::list_job_logs(&endpoint, job_id)?;
+    for log in logs.logs {
+        print!("{}", log.data);
     }
     Ok(())
 }
@@ -1044,23 +1022,18 @@ fn wait_for_job(
     job_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
-    loop {
-        let record = load_job(config_path.clone(), node_id, job_id)?;
-        match record.status {
-            JobStatus::Running => std::thread::sleep(std::time::Duration::from_millis(100)),
-            _ => {
-                if output.json {
-                    print_json(&record)?;
-                } else if !output.quiet {
-                    print_job_status(&record);
-                    for log in record.logs {
-                        print!("{}", log.data);
-                    }
-                }
-                return Ok(());
-            }
+    let endpoint = load_endpoint(config_path, node_id)?;
+    let _ = grpc::watch_job_to_terminal(&endpoint, job_id)?;
+    let record = grpc::get_job(&endpoint, job_id)?;
+    if output.json {
+        print_json(&record)?;
+    } else if !output.quiet {
+        print_job_status(&record);
+        for log in grpc::list_job_logs(&endpoint, job_id)?.logs {
+            print!("{}", log.data);
         }
     }
+    Ok(())
 }
 
 fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
@@ -1269,22 +1242,15 @@ pub(crate) fn load_job(
     grpc::get_job(&endpoint, job_id)
 }
 
-fn load_job_from_path(
-    config_path: PathBuf,
-    node_id: &str,
-    path: &str,
-) -> anyhow::Result<JobRecord> {
-    let job_id = path
-        .split_once("id=")
-        .map(|(_, id)| id)
-        .ok_or_else(|| anyhow::anyhow!("job path must include id query"))?;
-    load_job(config_path, node_id, job_id)
-}
-
 fn print_job_status(record: &JobRecord) {
     println!(
-        "{} {} {:?} exit_code={:?}",
-        record.node_id, record.id, record.status, record.exit_code
+        "{} {} {:?} exit_code={:?} logs={} truncated={}",
+        record.node_id,
+        record.id,
+        record.status,
+        record.exit_code,
+        record.log_count,
+        record.logs_truncated
     );
 }
 

@@ -44,6 +44,7 @@ Unary calls:
 - `RunJob`
 - `GetJob`
 - `ListJobs`
+- `ListJobLogs`
 - `CloseJobStdin`
 - `CancelJob`
 - `ListServices`
@@ -53,6 +54,7 @@ Unary calls:
 Server-streaming calls:
 
 - `ReadFile`
+- `WatchJob`
 - `StreamJobLogs`
 
 Client-streaming calls:

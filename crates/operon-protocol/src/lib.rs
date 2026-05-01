@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.6.3";
+pub const PROTOCOL_VERSION: &str = "v0.6.6";
 
 pub mod runtime {
     pub mod v1 {
@@ -185,6 +185,7 @@ impl From<operon_core::JobLog> for runtime::v1::JobLog {
         Self {
             stream: value.stream,
             data: value.data,
+            sequence: value.sequence,
         }
     }
 }
@@ -194,6 +195,7 @@ impl From<runtime::v1::JobLog> for operon_core::JobLog {
         Self {
             stream: value.stream,
             data: value.data,
+            sequence: value.sequence,
         }
     }
 }
@@ -206,9 +208,10 @@ impl From<operon_core::JobRecord> for runtime::v1::JobRecord {
             command: value.command,
             cwd: value.cwd,
             status: format_job_status(&value.status).to_string(),
-            logs: value.logs.into_iter().map(Into::into).collect(),
             exit_code: value.exit_code.unwrap_or_default(),
             has_exit_code: value.exit_code.is_some(),
+            log_count: value.log_count,
+            logs_truncated: value.logs_truncated,
         }
     }
 }
@@ -223,8 +226,58 @@ impl TryFrom<runtime::v1::JobRecord> for operon_core::JobRecord {
             command: value.command,
             cwd: value.cwd,
             status: parse_job_status(&value.status)?,
-            logs: value.logs.into_iter().map(Into::into).collect(),
             exit_code: value.has_exit_code.then_some(value.exit_code),
+            log_count: value.log_count,
+            logs_truncated: value.logs_truncated,
+        })
+    }
+}
+
+impl From<operon_core::JobLogList> for runtime::v1::JobLogList {
+    fn from(value: operon_core::JobLogList) -> Self {
+        Self {
+            job_id: value.job_id,
+            logs: value.logs.into_iter().map(Into::into).collect(),
+            truncated: value.truncated,
+            dropped_log_count: value.dropped_log_count,
+        }
+    }
+}
+
+impl From<runtime::v1::JobLogList> for operon_core::JobLogList {
+    fn from(value: runtime::v1::JobLogList) -> Self {
+        Self {
+            job_id: value.job_id,
+            logs: value.logs.into_iter().map(Into::into).collect(),
+            truncated: value.truncated,
+            dropped_log_count: value.dropped_log_count,
+        }
+    }
+}
+
+impl From<operon_core::JobEvent> for runtime::v1::JobEvent {
+    fn from(value: operon_core::JobEvent) -> Self {
+        Self {
+            job_id: value.job_id,
+            status: format_job_status(&value.status).to_string(),
+            exit_code: value.exit_code.unwrap_or_default(),
+            has_exit_code: value.exit_code.is_some(),
+            log_count: value.log_count,
+            logs_truncated: value.logs_truncated,
+        }
+    }
+}
+
+impl TryFrom<runtime::v1::JobEvent> for operon_core::JobEvent {
+    type Error = String;
+
+    fn try_from(value: runtime::v1::JobEvent) -> Result<Self, Self::Error> {
+        Ok(Self {
+            job_id: value.job_id,
+            status: parse_job_status(&value.status)?,
+            exit_code: value.has_exit_code.then_some(value.exit_code),
+            log_count: value.log_count,
+            logs_truncated: value.logs_truncated,
         })
     }
 }
@@ -473,6 +526,6 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.6.3");
+        assert_eq!(PROTOCOL_VERSION, "v0.6.6");
     }
 }

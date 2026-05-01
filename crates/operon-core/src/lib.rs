@@ -202,6 +202,8 @@ pub struct JobCancelRequest {
 pub struct JobLog {
     pub stream: String,
     pub data: String,
+    #[serde(default)]
+    pub sequence: u64,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -222,7 +224,27 @@ pub struct JobRecord {
     pub cwd: String,
     pub status: JobStatus,
     pub exit_code: Option<i32>,
+    #[serde(default)]
+    pub log_count: u64,
+    #[serde(default)]
+    pub logs_truncated: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobLogList {
+    pub job_id: String,
     pub logs: Vec<JobLog>,
+    pub truncated: bool,
+    pub dropped_log_count: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobEvent {
+    pub job_id: String,
+    pub status: JobStatus,
+    pub exit_code: Option<i32>,
+    pub log_count: u64,
+    pub logs_truncated: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
