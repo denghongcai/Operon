@@ -1077,14 +1077,152 @@ Done when:
 - v0.3 has a canonical validation path.
 - docs accurately describe runtime limits and commands.
 
-### v0.4: Web Console and Advanced Capabilities
+## v0.4 Goal
+
+Operon v0.4 should stabilize the runtime API, add a focused service/port
+capability, and make trace/audit inspection more useful without expanding into
+Web Console, clipboard, or screen/input work.
+
+```text
+v0.4 = stable runtime API + service/port capability + trace/audit UX.
+```
+
+v0.4 still does not implement port forwarding, proxying, VPN behavior, remote
+desktop, clipboard, or Web Console.
+
+## Phase 21: Runtime API Stabilization
+
+Status: Completed.
+
+Goal: make the daemon API predictable before adding more capability types.
+
+Planned:
+
+- shared API envelope types for success and error responses.
+- stable error code naming.
+- request/response schema documentation.
+- SDK types aligned with daemon schemas.
+- API-level tests for auth, policy denial, not found, and validation errors.
+- notes on which interfaces may move to gRPC later.
+
+Done when:
+
+- API errors are consistent across core handlers.
+- SDK and CLI parse the same structured error shape.
+- docs describe current HTTP API boundaries and future gRPC candidates.
+
+Completed:
+
+- Added structured daemon errors with `code`, `message`, `status`, optional
+  `capability`, and optional `resource`.
+- Kept error parsing compatible for existing clients that only consume
+  `code` and `message`.
+- Aligned Rust core types and TypeScript SDK types with the daemon schema.
+- Documented current HTTP API boundaries, structured errors, and future gRPC
+  candidates in `docs/architecture/runtime-api.md`.
+- Verified with Rust unit tests, SDK tests, and v0.4 Docker validation.
+
+## Phase 22: Service / Port Capability
+
+Status: Completed.
+
+Goal: let nodes describe and health-check local services without becoming a proxy.
+
+Planned:
+
+- policy service allowlist.
+- daemon service capability metadata.
+- `/service/list` endpoint.
+- `/service/check` endpoint.
+- CLI `service list`.
+- CLI `service check`.
+- SDK service helpers.
+
+Done when:
+
+- configured services can be listed.
+- allowed services can be health checked.
+- denied services fail through policy.
+- docs explicitly say this does not forward ports or proxy traffic.
+
+Completed:
+
+- Added service allowlist policy under `service.services`.
+- Added daemon `/service/list` and `/service/check` endpoints.
+- Added service capability metadata and audit events for allowed and denied
+  service checks.
+- Added CLI `service list` and `service check`.
+- Added SDK `listServices` and `checkService`.
+- Updated Docker policy fixtures and validation for listed, reachable, and
+  denied services.
+- Documented that service capability is metadata and TCP health checking only,
+  not forwarding, proxying, relay, VPN, or reachability creation.
+
+## Phase 23: Trace and Audit UX
+
+Status: Completed.
+
+Goal: make runtime observability useful from the CLI.
+
+Planned:
+
+- audit filters for capability, action, allowed, and resource/job id.
+- trace list should target trace-like JSON files instead of every JSON file.
+- trace show should have a human-readable summary mode and JSON mode.
+- store query behavior documented.
+
+Done when:
+
+- audit output can be narrowed without shell filtering.
+- trace list avoids unrelated JSON files.
+- trace show is useful for humans and still scriptable.
+
+Completed:
+
+- Added CLI audit filters for `--capability`, `--action`, `--allowed`,
+  `--resource`, and `--limit`.
+- Updated `trace list` to only include trace-like JSON files.
+- Updated `trace show` to default to a human-readable summary while preserving
+  `--json` output.
+- Covered audit filter and trace UX paths in `scripts/verify-v0.4-docker.sh`.
+
+## Phase 24: v0.4 Acceptance
+
+Status: Completed.
+
+Goal: make v0.4 reproducible and documented.
+
+Planned:
+
+- `docs/plan/v0.4-acceptance.md`.
+- README updates for API stability, service capability, and trace/audit UX.
+- Docker validation covers service list/check, service policy denial, audit filters, and trace UX.
+- CI runs v0.4 validation on every branch.
+
+Done when:
+
+- v0.4 has a canonical validation path.
+- docs accurately describe runtime limits and commands.
+
+Completed:
+
+- Added `docs/plan/v0.4-acceptance.md`.
+- Updated README with v0.4 validation, service commands, policy config, audit
+  filters, and trace JSON/human usage.
+- Added `scripts/verify-v0.4-docker.sh` and made it repeatable around the
+  read-only mount PoC temp directory.
+- Updated CI to run on pull requests and pushes to every branch.
+- Updated CI Docker validation from v0.3 to v0.4.
+- Verified `scripts/verify-v0.4-docker.sh` locally against the two-node Docker
+  environment.
+
+### v0.5: Web Console and Advanced Capabilities
 
 - Web Console
-- screen/input capability
 - clipboard capability
-- service/port access capability
+- screen/input feasibility spike
 - richer policy language
-- trace visualization
+- trace visualization UI
 
 ## Planning Principle
 

@@ -26,7 +26,8 @@ use operon_core::{
     AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, ErrorResponse, FsEntry,
     FsList, FsMountPolicy, FsPermissions, FsPolicy, FsRead, FsStat, FsWrite, FsWriteRequest,
     HealthStatus, JobCancelRequest, JobList, JobLog, JobPolicy, JobRecord, JobRunRequest,
-    JobStatus, JobStdin, JobStdinClose, NodeInfo, PolicyConfig,
+    JobStatus, JobStdin, JobStdinClose, NodeInfo, PolicyConfig, ServiceCheck, ServiceDefinition,
+    ServiceList, ServicePolicy,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -111,34 +112,56 @@ struct JobTask {
 }
 
 #[derive(Debug)]
-struct AppError(StatusCode, String);
+struct AppError {
+    status: StatusCode,
+    code: &'static str,
+    message: String,
+    capability: Option<String>,
+    resource: Option<String>,
+}
 
 impl AppError {
-    fn code(&self) -> &'static str {
-        match self.0 {
+    fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        let code = match status {
             StatusCode::UNAUTHORIZED => "unauthorized",
             StatusCode::FORBIDDEN => "forbidden",
             StatusCode::NOT_FOUND => "not-found",
             StatusCode::BAD_REQUEST => "bad-request",
             StatusCode::REQUEST_TIMEOUT => "timeout",
             _ => "internal-error",
+        };
+        Self {
+            status,
+            code,
+            message: message.into(),
+            capability: None,
+            resource: None,
         }
+    }
+
+    fn with_context(mut self, capability: impl Into<String>, resource: impl Into<String>) -> Self {
+        self.capability = Some(capability.into());
+        self.resource = Some(resource.into());
+        self
     }
 }
 
 impl From<(StatusCode, String)> for AppError {
     fn from(error: (StatusCode, String)) -> Self {
-        Self(error.0, error.1)
+        Self::new(error.0, error.1)
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (
-            self.0,
+            self.status,
             Json(ErrorResponse {
-                code: self.code().to_string(),
-                message: self.1,
+                code: self.code.to_string(),
+                message: self.message,
+                status: self.status.as_u16(),
+                capability: self.capability,
+                resource: self.resource,
             }),
         )
             .into_response()
@@ -206,6 +229,8 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .route("/job/stdin", post(job_stdin))
         .route("/job/stdin/close", post(job_stdin_close))
         .route("/job/cancel", post(job_cancel))
+        .route("/service/list", get(service_list))
+        .route("/service/check", get(service_check))
         .route("/audit", get(audit_log))
         .with_state(state);
 
@@ -271,6 +296,11 @@ struct FsPathQuery {
 
 #[derive(Debug, serde::Deserialize)]
 struct JobIdQuery {
+    id: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ServiceIdQuery {
     id: String,
 }
 
@@ -619,10 +649,11 @@ async fn job_logs_stream(
         .expect("job map mutex poisoned")
         .contains_key(&query.id)
     {
-        return Err(AppError(
+        return Err(AppError::new(
             StatusCode::NOT_FOUND,
             format!("job `{}` not found", query.id),
-        ));
+        )
+        .with_context("job:default", query.id));
     }
 
     let jobs = state.jobs.clone();
@@ -666,10 +697,11 @@ async fn job_stdin(
         .get(&query.id)
         .cloned()
         .ok_or_else(|| {
-            AppError(
+            AppError::new(
                 StatusCode::NOT_FOUND,
                 format!("job `{}` has no open stdin", query.id),
             )
+            .with_context("job:default", query.id.clone())
         })?;
     let mut stream = body.into_data_stream();
     let mut bytes_written = 0_u64;
@@ -740,6 +772,66 @@ async fn job_cancel(
             )
         })?;
     Ok(Json(record))
+}
+
+async fn service_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ServiceList>, AppError> {
+    authorize_request(&state, &headers)?;
+    Ok(Json(ServiceList {
+        services: state.policy.service.services.clone(),
+    }))
+}
+
+async fn service_check(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<ServiceIdQuery>,
+) -> Result<Json<ServiceCheck>, AppError> {
+    authorize_request(&state, &headers)?;
+    let service = match authorize_service(&state.policy, &query.id) {
+        Ok(service) => service,
+        Err(error) => {
+            record_audit_capability(
+                &state,
+                "service:default",
+                "check",
+                &query.id,
+                false,
+                &error.1,
+            );
+            return Err(AppError::from(error).with_context("service:default", query.id));
+        }
+    };
+
+    let started = std::time::Instant::now();
+    let result = time::timeout(
+        std::time::Duration::from_secs(2),
+        tokio::net::TcpStream::connect((service.host.as_str(), service.port)),
+    )
+    .await;
+    let latency_ms = started.elapsed().as_millis();
+    let (ok, reason) = match result {
+        Ok(Ok(_)) => (true, None),
+        Ok(Err(error)) => (false, Some(error.to_string())),
+        Err(_) => (false, Some("service check timed out".to_string())),
+    };
+    record_audit_capability(
+        &state,
+        &format!("service:{}", service.id),
+        "check",
+        &service.id,
+        ok,
+        reason.as_deref().unwrap_or("reachable"),
+    );
+
+    Ok(Json(ServiceCheck {
+        id: service.id,
+        ok,
+        latency_ms,
+        reason,
+    }))
 }
 
 fn hostname() -> String {
@@ -892,6 +984,7 @@ fn default_policy() -> PolicyConfig {
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
         },
+        service: ServicePolicy::default(),
     }
 }
 
@@ -1054,6 +1147,24 @@ fn resolve_job_secrets(
         env.insert(name.clone(), value.clone());
     }
     Ok(env)
+}
+
+fn authorize_service(
+    policy: &PolicyConfig,
+    service_id: &str,
+) -> Result<ServiceDefinition, (StatusCode, String)> {
+    policy
+        .service
+        .services
+        .iter()
+        .find(|service| service.id == service_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::FORBIDDEN,
+                format!("service `{service_id}` denied by policy"),
+            )
+        })
 }
 
 fn path_in_policy_scope(path: &str, scope: &str) -> bool {
@@ -1392,6 +1503,16 @@ mod tests {
                 env_allowlist: Vec::new(),
                 allowed_secrets: vec!["TEST_SECRET".to_string()],
             },
+            service: ServicePolicy {
+                services: vec![ServiceDefinition {
+                    id: "daemon".to_string(),
+                    name: "daemon".to_string(),
+                    host: "127.0.0.1".to_string(),
+                    port: 7788,
+                    protocol: operon_core::ServiceProtocol::Tcp,
+                    description: "local daemon".to_string(),
+                }],
+            },
         }
     }
 
@@ -1417,6 +1538,23 @@ mod tests {
         assert!(path_in_policy_scope("/workspace", "/workspace"));
         assert!(path_in_policy_scope("/workspace/project", "/workspace"));
         assert!(!path_in_policy_scope("/workspace-other", "/workspace"));
+    }
+
+    #[test]
+    fn authorize_service_returns_allowed_service() {
+        let service = authorize_service(&test_policy(), "daemon").expect("service should resolve");
+
+        assert_eq!(service.id, "daemon");
+        assert_eq!(service.port, 7788);
+    }
+
+    #[test]
+    fn authorize_service_rejects_unknown_service() {
+        let error =
+            authorize_service(&test_policy(), "missing").expect_err("service should be denied");
+
+        assert_eq!(error.0, StatusCode::FORBIDDEN);
+        assert!(error.1.contains("denied by policy"));
     }
 
     #[test]

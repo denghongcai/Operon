@@ -62,7 +62,7 @@ Prerequisites:
 - Node.js and pnpm
 - Docker with Docker Compose
 
-Run the full v0.3 validation:
+Run the full v0.4 validation:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -70,16 +70,16 @@ cargo fmt --check
 cargo check --workspace --locked
 cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
-scripts/verify-v0.3-docker.sh
+scripts/verify-v0.4-docker.sh
 ```
 
-The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit, store queries, secret use, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph.
+The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph.
 
 ---
 
 ## CLI and Configuration
 
-The v0.3 runtime has two binaries:
+The v0.4 runtime has two binaries:
 
 - `operond`: the daemon that runs on each reachable machine.
 - `operon`: the CLI that talks to daemon endpoints.
@@ -100,7 +100,7 @@ operon --config examples/nodes.yaml node list
 
 ### Node Config
 
-The CLI reads node endpoints from a YAML file. In v0.3, the default path is:
+The CLI reads node endpoints from a YAML file. In v0.4, the default path is:
 
 ```text
 examples/nodes.yaml
@@ -131,7 +131,7 @@ nodes:
 
 `provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
 
-In v0.3, provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
+In v0.4, provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
 
 Supported provider values:
 
@@ -185,6 +185,15 @@ job:
   env_allowlist: []
   allowed_secrets:
     - GITHUB_TOKEN
+
+service:
+  services:
+    - id: daemon
+      name: daemon
+      host: 127.0.0.1
+      port: 7788
+      protocol: tcp
+      description: Operon daemon TCP listener
 ```
 
 Policy paths are virtual paths inside the daemon workspace. If the daemon starts with `--workspace /home/ubuntu/workspace`, policy path `/` means that workspace root, not the host root.
@@ -206,6 +215,8 @@ operon node discover --provider lan --timeout-secs 3
 operon --config ./operon.nodes.yaml node ping cloud-a
 operon provider list
 operon --config ./operon.nodes.yaml capability list cloud-a
+operon --config ./operon.nodes.yaml service list cloud-a
+operon --config ./operon.nodes.yaml service check cloud-a daemon
 
 operon init config ./operon.nodes.yaml
 operon init policy ./operon.policy.yaml
@@ -231,9 +242,11 @@ operon --config ./operon.nodes.yaml job cancel cloud-a job-1
 
 operon --config ./operon.nodes.yaml audit list cloud-a
 operon --config ./operon.nodes.yaml audit show cloud-a --limit 20
+operon --config ./operon.nodes.yaml audit show cloud-a --capability service:daemon --action check --allowed true --resource daemon --limit 5
 operon --config ./operon.nodes.yaml run --trace-output ./trace.json examples/train-model.yaml
 operon trace list .
 operon trace show ./trace.json
+operon --json trace show ./trace.json
 operon --config ./operon.nodes.yaml mount read-only cloud-a:/ --to ./cloud-a-readonly
 ```
 
@@ -264,7 +277,7 @@ nodes:
     endpoint: http://100.96.18.20:7788
 ```
 
-The current CLI speaks HTTP to daemon endpoints. In production-style deployments, run that HTTP service only on an existing encrypted private network or behind a trusted local tunnel. HTTPS and gRPC clients remain post-v0.3 protocol decisions.
+The current CLI speaks HTTP to daemon endpoints. In production-style deployments, run that HTTP service only on an existing encrypted private network or behind a trusted local tunnel. HTTPS and gRPC clients remain post-v0.4 protocol decisions.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another device. Operon decides whether that device can read a directory, run a job, use a secret, or inspect an execution trace.
 
@@ -272,13 +285,13 @@ Cloudflare Mesh or Tailscale can decide whether one device can reach another dev
 
 ## ⚡ Example
 
-Run the local Docker v0.3 demo:
+Run the local Docker v0.4 demo:
 
 ```bash
-scripts/verify-v0.3-docker.sh
+scripts/verify-v0.4-docker.sh
 ```
 
-This starts two `operond` containers, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, LAN mDNS discovery, policy denial, scoped secrets, persisted store output, audit output, mount PoC output, and runs:
+This starts two `operond` containers, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, LAN mDNS discovery, policy denial, scoped secrets, persisted store output, filtered audit output, trace summaries, mount PoC output, and runs:
 
 ```bash
 operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-trace.json examples/docker-copy-and-run.yaml
@@ -352,7 +365,7 @@ Supported (initial):
 - filesystem (read / write / list)
 - job execution
 - process control
-- service / port access over an existing private network
+- service / port metadata and TCP health checks over an existing private network
 
 Planned:
 
@@ -453,6 +466,8 @@ Roadmap:
 - [x] LAN mDNS discovery
 - [x] Queryable job/audit/trace commands
 - [x] Read-only mount PoC
+- [x] Service / port metadata and health checks
+- [x] Filtered audit and human-readable trace CLI UX
 - [ ] FUSE / WinFsp mount
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters

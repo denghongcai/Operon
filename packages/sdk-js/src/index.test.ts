@@ -79,6 +79,37 @@ describe("OperonClient", () => {
     expect(trace.steps[0].id).toBe("step-1");
     expect(trace.steps[0].error).toBe("node node-a not found");
   });
+
+  it("lists and checks configured services", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          services: [
+            {
+              id: "daemon",
+              name: "daemon",
+              host: "127.0.0.1",
+              port: 7788,
+              protocol: "tcp",
+              description: "Operon daemon",
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: "daemon", ok: true, latency_ms: 2, reason: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "http://127.0.0.1:7788", token: "test-token" }]);
+    const services = await client.listServices("node-a");
+    const check = await client.checkService("node-a", "daemon");
+
+    expect(services.services[0].id).toBe("daemon");
+    expect(check.ok).toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).toBe("http://127.0.0.1:7788/service/list");
+    expect(String(fetchMock.mock.calls[1][0])).toBe("http://127.0.0.1:7788/service/check?id=daemon");
+    expect((fetchMock.mock.calls[1][1]?.headers as Headers).get("authorization")).toBe("Bearer test-token");
+  });
 });
 
 function jsonResponse(body: unknown, status = 200, statusText = "OK"): Response {

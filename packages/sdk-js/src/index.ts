@@ -29,6 +29,9 @@ export type OperonStep = {
 export type OperonErrorResponse = {
   code: string;
   message: string;
+  status: number;
+  capability?: string;
+  resource?: string;
 };
 
 export type OperonRunRequest = {
@@ -78,6 +81,26 @@ export type JobStdinResult = {
 export type JobStdinCloseResult = {
   job_id: string;
   closed: boolean;
+};
+
+export type ServiceDefinition = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  protocol: "tcp";
+  description: string;
+};
+
+export type ServiceList = {
+  services: ServiceDefinition[];
+};
+
+export type ServiceCheck = {
+  id: string;
+  ok: boolean;
+  latency_ms: number;
+  reason?: string | null;
 };
 
 export class OperonClient {
@@ -149,6 +172,14 @@ export class OperonClient {
 
   async closeJobStdin(nodeId: string, jobId: string): Promise<JobStdinCloseResult> {
     return this.post<JobStdinCloseResult>(nodeId, `/job/stdin/close?id=${encodeURIComponent(jobId)}`, {});
+  }
+
+  async listServices(nodeId: string): Promise<ServiceList> {
+    return this.get<ServiceList>(nodeId, "/service/list");
+  }
+
+  async checkService(nodeId: string, serviceId: string): Promise<ServiceCheck> {
+    return this.get<ServiceCheck>(nodeId, `/service/check?id=${encodeURIComponent(serviceId)}`);
   }
 
   private async runStep(step: OperonStep, index: number): Promise<OperonStepTrace> {

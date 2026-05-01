@@ -17,3 +17,12 @@ job:
   env_allowlist: []
   allowed_secrets:
     - OPERON_TEST_SECRET
+
+service:
+  services:
+    - id: daemon
+      name: daemon
+      host: 127.0.0.1
+      port: 7788
+      protocol: tcp
+      description: Operon daemon TCP listener

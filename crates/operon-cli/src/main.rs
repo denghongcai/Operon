@@ -10,9 +10,10 @@ use std::{
 use clap::{Parser, Subcommand};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use operon_core::{
-    AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ErrorResponse, FsList, FsRead,
-    FsStat, FsWrite, FsWriteRequest, HealthStatus, JobCancelRequest, JobList, JobRecord,
-    JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, TraceFile, TraceFileList,
+    AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ErrorResponse, ExecutionTrace,
+    FsList, FsRead, FsStat, FsWrite, FsWriteRequest, HealthStatus, JobCancelRequest, JobList,
+    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
+    ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
 use operon_network::{NetworkProviderKind, NodeEndpoint, NodesConfig};
 
@@ -61,6 +62,10 @@ enum Command {
     Audit {
         #[command(subcommand)]
         command: AuditCommand,
+    },
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
     },
     Job {
         #[command(subcommand)]
@@ -147,7 +152,21 @@ enum AuditCommand {
         node_id: String,
         #[arg(long)]
         limit: Option<usize>,
+        #[arg(long)]
+        capability: Option<String>,
+        #[arg(long)]
+        action: Option<String>,
+        #[arg(long)]
+        allowed: Option<bool>,
+        #[arg(long)]
+        resource: Option<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ServiceCommand {
+    List { node_id: String },
+    Check { node_id: String, service_id: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -233,6 +252,15 @@ struct JobRunInput {
     output: OutputMode,
 }
 
+#[derive(Debug, Default)]
+struct AuditFilter {
+    limit: Option<usize>,
+    capability: Option<String>,
+    action: Option<String>,
+    allowed: Option<bool>,
+    resource: Option<String>,
+}
+
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let output = OutputMode {
@@ -281,9 +309,30 @@ fn main() -> anyhow::Result<()> {
         },
         Command::Audit { command } => match command {
             AuditCommand::List { node_id } => list_audit(args.config, &node_id, output),
-            AuditCommand::Show { node_id, limit } => {
-                audit_show(args.config, &node_id, limit, output)
+            AuditCommand::Show {
+                node_id,
+                limit,
+                capability,
+                action,
+                allowed,
+                resource,
+            } => {
+                let filter = AuditFilter {
+                    limit,
+                    capability,
+                    action,
+                    allowed,
+                    resource,
+                };
+                audit_show(args.config, &node_id, filter, output)
             }
+        },
+        Command::Service { command } => match command {
+            ServiceCommand::List { node_id } => service_list(args.config, &node_id, output),
+            ServiceCommand::Check {
+                node_id,
+                service_id,
+            } => service_check(args.config, &node_id, &service_id, output),
         },
         Command::Job { command } => match command {
             JobCommand::Run {
@@ -586,13 +635,13 @@ fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow
         print_json(&audit)?;
         return Ok(());
     }
-    print_audit(audit, None, output)
+    print_audit(audit, AuditFilter::default(), output)
 }
 
 fn audit_show(
     config_path: PathBuf,
     node_id: &str,
-    limit: Option<usize>,
+    filter: AuditFilter,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
@@ -601,23 +650,37 @@ fn audit_show(
         print_json(&audit)?;
         return Ok(());
     }
-    print_audit(audit, limit, output)
+    print_audit(audit, filter, output)
 }
 
-fn print_audit(audit: AuditLog, limit: Option<usize>, output: OutputMode) -> anyhow::Result<()> {
+fn print_audit(audit: AuditLog, filter: AuditFilter, output: OutputMode) -> anyhow::Result<()> {
     if output.quiet {
         return Ok(());
     }
-    let events = if let Some(limit) = limit {
-        audit
-            .events
-            .into_iter()
-            .rev()
-            .take(limit)
-            .collect::<Vec<_>>()
-    } else {
-        audit.events
-    };
+    let mut events = audit
+        .events
+        .into_iter()
+        .filter(|event| {
+            filter
+                .capability
+                .as_ref()
+                .map_or(true, |capability| &event.capability == capability)
+                && filter
+                    .action
+                    .as_ref()
+                    .map_or(true, |action| &event.action == action)
+                && filter
+                    .allowed
+                    .map_or(true, |allowed| event.allowed == allowed)
+                && filter
+                    .resource
+                    .as_ref()
+                    .map_or(true, |resource| event.resource.contains(resource))
+        })
+        .collect::<Vec<_>>();
+    if let Some(limit) = filter.limit {
+        events = events.into_iter().rev().take(limit).collect::<Vec<_>>();
+    }
     for event in events {
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
@@ -634,6 +697,57 @@ fn print_audit(audit: AuditLog, limit: Option<usize>, output: OutputMode) -> any
         );
     }
 
+    Ok(())
+}
+
+fn service_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    let list: ServiceList = http_get_json_endpoint(&endpoint, "/service/list")?;
+    if output.json {
+        print_json(&list)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    for service in list.services {
+        println!(
+            "{}\t{}\t{}:{}\t{}",
+            service.id,
+            service.name,
+            service.host,
+            service.port,
+            format_service_protocol(&service.protocol)
+        );
+    }
+    Ok(())
+}
+
+fn service_check(
+    config_path: PathBuf,
+    node_id: &str,
+    service_id: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+    let check: ServiceCheck = http_get_json_endpoint(
+        &endpoint,
+        &format!("/service/check?id={}", encode_path(service_id)),
+    )?;
+    if output.json {
+        print_json(&check)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    println!(
+        "{} ok={} latency_ms={} reason={}",
+        check.id,
+        check.ok,
+        check.latency_ms,
+        check.reason.as_deref().unwrap_or("-")
+    );
     Ok(())
 }
 
@@ -664,11 +778,27 @@ fn job_run(input: JobRunInput) -> anyhow::Result<()> {
 
 fn trace_show(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
     let content = std::fs::read_to_string(path)?;
-    let value: serde_json::Value = serde_json::from_str(&content)?;
     if output.quiet {
         return Ok(());
     }
-    println!("{}", serde_json::to_string_pretty(&value)?);
+    if output.json {
+        let value: serde_json::Value = serde_json::from_str(&content)?;
+        println!("{}", serde_json::to_string_pretty(&value)?);
+        return Ok(());
+    }
+    let trace: ExecutionTrace = serde_json::from_str(&content)?;
+    println!("{} {} {:?}", trace.run_id, trace.name, trace.status);
+    for step in trace.steps {
+        println!(
+            "{}\t{}\t{}\t{:?}\t{}ms\t{}",
+            step.id,
+            step.node,
+            step.action,
+            step.status,
+            step.ended_at_ms.saturating_sub(step.started_at_ms),
+            step.error.as_deref().unwrap_or("-")
+        );
+    }
     Ok(())
 }
 
@@ -854,6 +984,12 @@ fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
         let Ok(trace) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
+        if !(trace.get("run_id").is_some()
+            && trace.get("name").is_some()
+            && trace.get("steps").is_some())
+        {
+            continue;
+        }
         traces.push(TraceFile {
             path: path.display().to_string(),
             run_id: trace
@@ -923,6 +1059,15 @@ job:
   max_timeout_secs: 300
   env_allowlist: []
   allowed_secrets: []
+
+service:
+  services:
+    - id: local-daemon
+      name: local-daemon
+      host: 127.0.0.1
+      port: 7788
+      protocol: tcp
+      description: Operon daemon TCP health surface
 "#;
     fs::write(&path, content)?;
     if !output.quiet {
@@ -1385,6 +1530,12 @@ fn format_error_body(body: &str) -> String {
     serde_json::from_str::<ErrorResponse>(body)
         .map(|error| format!("{}: {}", error.code, error.message))
         .unwrap_or_else(|_| body.trim().to_string())
+}
+
+fn format_service_protocol(protocol: &ServiceProtocol) -> &'static str {
+    match protocol {
+        ServiceProtocol::Tcp => "tcp",
+    }
 }
 
 fn print_json(value: &impl serde::Serialize) -> anyhow::Result<()> {
