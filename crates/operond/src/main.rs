@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     env, fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Component, Path, PathBuf},
@@ -30,14 +30,16 @@ use operon_protocol::runtime::v1::{
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-    process::Command as TokioCommand,
+    process::{Child, Command as TokioCommand},
     sync::{mpsc, oneshot},
+    task::JoinHandle,
     time,
 };
 use tokio_util::io::ReaderStream;
 use tonic::{metadata::MetadataMap, transport::Server, Request, Response as GrpcResponse, Status};
 
 const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
+const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
 
 type JobStdinSender = mpsc::UnboundedSender<Vec<u8>>;
 type JobStdinRegistry = Arc<Mutex<BTreeMap<String, JobStdinSender>>>;
@@ -69,7 +71,7 @@ struct AppState {
     auth_token: Option<String>,
     store: Option<PathBuf>,
     secrets: Arc<BTreeMap<String, String>>,
-    audit: Arc<Mutex<Vec<AuditEvent>>>,
+    audit: Arc<Mutex<VecDeque<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     job_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     job_stdin: JobStdinRegistry,
@@ -143,7 +145,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         auth_token,
         store: store.clone(),
         secrets: Arc::new(secrets),
-        audit: Arc::new(Mutex::new(Vec::new())),
+        audit: Arc::new(Mutex::new(VecDeque::new())),
         jobs,
         job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
         job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
@@ -630,7 +632,9 @@ impl OperonRuntime for GrpcRuntime {
             .audit
             .lock()
             .expect("audit log mutex poisoned")
-            .clone();
+            .iter()
+            .cloned()
+            .collect();
         Ok(GrpcResponse::new(AuditLog { events }.into()))
     }
 }
@@ -1416,11 +1420,12 @@ fn record_audit_capability(
         run_id: None,
         step_id: None,
     };
-    state
-        .audit
-        .lock()
-        .expect("audit log mutex poisoned")
-        .push(event.clone());
+    let mut audit = state.audit.lock().expect("audit log mutex poisoned");
+    audit.push_back(event.clone());
+    while audit.len() > MAX_IN_MEMORY_AUDIT_EVENTS {
+        audit.pop_front();
+    }
+    drop(audit);
     append_store_record(
         state.store.as_deref(),
         &serde_json::json!({
@@ -1507,87 +1512,89 @@ async fn run_job_task(task: JobTask) {
     if let Some(stdin) = child.stdin.take() {
         tokio::spawn(pump_job_stdin(task.stdin_rx, stdin));
     }
+    let mut capture_tasks = Vec::new();
     if let Some(stdout) = child.stdout.take() {
-        tokio::spawn(capture_job_stream(
+        capture_tasks.push(tokio::spawn(capture_job_stream(
             task.jobs.clone(),
             task.job_id.clone(),
             "stdout",
             stdout,
-        ));
+        )));
     }
     if let Some(stderr) = child.stderr.take() {
-        tokio::spawn(capture_job_stream(
+        capture_tasks.push(tokio::spawn(capture_job_stream(
             task.jobs.clone(),
             task.job_id.clone(),
             "stderr",
             stderr,
-        ));
+        )));
     }
 
-    let wait = child.wait();
-    tokio::pin!(wait);
-
-    tokio::select! {
-        status = &mut wait => {
-            match status {
-                Ok(status) => {
-                    let job_status = if status.success() {
-                        JobStatus::Succeeded
-                    } else {
-                        JobStatus::Failed
-                    };
-                    finish_job(
-                        &task.jobs,
-                        &task.cancels,
-                        &task.stdin,
-                        task.store.as_deref(),
-                        &task.job_id,
-                        job_status,
-                        status.code(),
-                    );
-                }
-                Err(error) => {
-                    append_job_log(
-                        &task.jobs,
-                        &task.job_id,
-                        JobLog {
-                            stream: "stderr".to_string(),
-                            data: error.to_string(),
-                        },
-                    );
-                    finish_job(
-                        &task.jobs,
-                        &task.cancels,
-                        &task.stdin,
-                        task.store.as_deref(),
-                        &task.job_id,
-                        JobStatus::Failed,
-                        None,
-                    );
-                }
-            }
-        }
+    let (job_status, exit_code) = tokio::select! {
+        status = child.wait() => job_status_from_wait(status, &task.jobs, &task.job_id),
         _ = task.cancel_rx => {
-            finish_job(
-                &task.jobs,
-                &task.cancels,
-                &task.stdin,
-                task.store.as_deref(),
-                &task.job_id,
-                JobStatus::Cancelled,
-                None,
-            );
+            terminate_child(&mut child).await;
+            (JobStatus::Cancelled, None)
         }
         _ = time::sleep(std::time::Duration::from_secs(task.timeout_secs)) => {
-            finish_job(
-                &task.jobs,
-                &task.cancels,
-                &task.stdin,
-                task.store.as_deref(),
-                &task.job_id,
-                JobStatus::TimedOut,
-                None,
+            terminate_child(&mut child).await;
+            (JobStatus::TimedOut, None)
+        }
+    };
+
+    wait_for_capture_tasks(capture_tasks).await;
+    finish_job(
+        &task.jobs,
+        &task.cancels,
+        &task.stdin,
+        task.store.as_deref(),
+        &task.job_id,
+        job_status,
+        exit_code,
+    );
+}
+
+fn job_status_from_wait(
+    status: std::io::Result<std::process::ExitStatus>,
+    jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    job_id: &str,
+) -> (JobStatus, Option<i32>) {
+    match status {
+        Ok(status) => {
+            let job_status = if status.success() {
+                JobStatus::Succeeded
+            } else {
+                JobStatus::Failed
+            };
+            (job_status, status.code())
+        }
+        Err(error) => {
+            append_job_log(
+                jobs,
+                job_id,
+                JobLog {
+                    stream: "stderr".to_string(),
+                    data: error.to_string(),
+                },
             );
+            (JobStatus::Failed, None)
+        }
+    }
+}
+
+async fn terminate_child(child: &mut Child) {
+    if let Err(error) = child.start_kill() {
+        tracing::warn!("failed to kill job process: {error}");
+    }
+    if let Err(error) = child.wait().await {
+        tracing::warn!("failed to wait for killed job process: {error}");
+    }
+}
+
+async fn wait_for_capture_tasks(capture_tasks: Vec<JoinHandle<()>>) {
+    for task in capture_tasks {
+        if let Err(error) = task.await {
+            tracing::warn!("job stream capture task failed: {error}");
         }
     }
 }
@@ -1800,7 +1807,7 @@ mod tests {
             auth_token: None,
             store: None,
             secrets: Arc::new(secrets),
-            audit: Arc::new(Mutex::new(Vec::new())),
+            audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
@@ -1833,7 +1840,7 @@ mod tests {
             auth_token: None,
             store: None,
             secrets: Arc::new(BTreeMap::new()),
-            audit: Arc::new(Mutex::new(Vec::new())),
+            audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
@@ -1848,5 +1855,43 @@ mod tests {
         assert_eq!(events[0].node_id, "node-a");
         assert_eq!(events[0].capability, "fs:workspace");
         assert!(events[0].allowed);
+    }
+
+    #[test]
+    fn audit_log_is_bounded_in_memory() {
+        let state = AppState {
+            node: NodeInfo {
+                id: "node-a".to_string(),
+                hostname: "host".to_string(),
+                os: "linux".to_string(),
+                arch: "x86_64".to_string(),
+            },
+            capabilities: default_capabilities("node-a"),
+            workspace: PathBuf::from("/workspace"),
+            policy: test_policy(),
+            auth_token: None,
+            store: None,
+            secrets: Arc::new(BTreeMap::new()),
+            audit: Arc::new(Mutex::new(VecDeque::new())),
+            jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            next_job_id: Arc::new(AtomicU64::new(1)),
+        };
+
+        for index in 0..(MAX_IN_MEMORY_AUDIT_EVENTS + 5) {
+            record_audit_capability(
+                &state,
+                "fs:workspace",
+                "read",
+                &format!("/file-{index}.txt"),
+                true,
+                "allowed",
+            );
+        }
+
+        let events = state.audit.lock().expect("audit log");
+        assert_eq!(events.len(), MAX_IN_MEMORY_AUDIT_EVENTS);
+        assert_eq!(events[0].resource, "/file-5.txt");
     }
 }

@@ -4,20 +4,17 @@ use std::{
     fs,
     io::{self, Read, Write},
     path::PathBuf,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use clap::ValueEnum;
-use mdns_sd::{ServiceDaemon, ServiceEvent};
 use operon_config::{
     AuthConfig, ClientConfig, DaemonConfig, NetworkProviderKind, NodeConfig, OperonConfig,
     SecretsConfig,
 };
-use operon_core::{DiscoveryList, DiscoveryRecord};
+use operon_core::DiscoveryList;
 
 use crate::OutputMode;
-
-const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum OnboardRole {
@@ -496,57 +493,7 @@ fn generate_token() -> String {
 }
 
 fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
-    let mdns = ServiceDaemon::new()?;
-    let receiver = mdns.browse(OPERON_MDNS_SERVICE)?;
-    let deadline = Instant::now() + timeout;
-    let mut records = BTreeMap::new();
-    while Instant::now() < deadline {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        match receiver.recv_timeout(remaining.min(Duration::from_millis(250))) {
-            Ok(ServiceEvent::ServiceResolved(info)) => {
-                let node_id = info
-                    .get_property_val_str("node_id")
-                    .unwrap_or(info.get_fullname())
-                    .trim_end_matches(OPERON_MDNS_SERVICE)
-                    .trim_end_matches('.')
-                    .to_string();
-                let fallback_endpoint = info
-                    .get_addresses_v4()
-                    .into_iter()
-                    .next()
-                    .map(|addr| format!("grpc://{}:{}", addr, info.get_port()))
-                    .unwrap_or_else(|| {
-                        format!("grpc://{}:{}", info.get_hostname(), info.get_port())
-                    });
-                let endpoint = info
-                    .get_property_val_str("endpoint")
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-                    .unwrap_or(fallback_endpoint);
-                let capabilities = info
-                    .get_property_val_str("capabilities")
-                    .unwrap_or("")
-                    .split(',')
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-                    .collect();
-                records.insert(
-                    node_id.clone(),
-                    DiscoveryRecord {
-                        node_id,
-                        endpoint,
-                        provider: "lan".to_string(),
-                        capabilities,
-                    },
-                );
-            }
-            Ok(_) => {}
-            Err(_) => {}
-        }
-    }
-    Ok(DiscoveryList {
-        nodes: records.into_values().collect(),
-    })
+    operon_network::discover_lan_nodes(timeout)
 }
 
 #[cfg(test)]

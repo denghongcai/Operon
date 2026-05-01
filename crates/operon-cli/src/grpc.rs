@@ -2,6 +2,7 @@ use std::{
     fs,
     io::{Read, Write},
     path::Path,
+    sync::OnceLock,
 };
 
 use anyhow::Context;
@@ -18,6 +19,8 @@ use operon_protocol::runtime::v1::{
     ListServicesRequest, ServiceIdRequest, WriteFileRequest,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
+
+static CLI_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 pub fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthStatus, NodeInfo)> {
     block_on(endpoint, |mut client, endpoint| async move {
@@ -334,13 +337,25 @@ where
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
     let endpoint = endpoint.clone();
-    let runtime = tokio::runtime::Runtime::new()?;
+    let runtime = cli_runtime()?;
     runtime.block_on(async {
         let channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?
             .connect()
             .await?;
         f(OperonRuntimeClient::new(channel), endpoint).await
     })
+}
+
+fn cli_runtime() -> anyhow::Result<&'static tokio::runtime::Runtime> {
+    if let Some(runtime) = CLI_RUNTIME.get() {
+        return Ok(runtime);
+    }
+
+    let runtime = tokio::runtime::Runtime::new().context("create CLI tokio runtime")?;
+    let _ = CLI_RUNTIME.set(runtime);
+    Ok(CLI_RUNTIME
+        .get()
+        .expect("CLI runtime should be initialized"))
 }
 
 fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T>> {

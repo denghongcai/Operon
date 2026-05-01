@@ -1962,6 +1962,34 @@ Remaining:
 
 - None for v0.6.5.
 
+## Phase 32.13: Runtime Correctness Cleanup
+
+Status: Completed.
+
+Goal: address post-v0.6.5 review findings before v0.7 feature work.
+
+Planned:
+
+- drain job stdout/stderr capture tasks before marking jobs terminal.
+- bound the in-memory audit log while keeping store append behavior.
+- extract LAN mDNS discovery into the network crate.
+- reuse the CLI Tokio runtime across synchronous gRPC helper calls.
+
+Completed:
+
+- Job stdout/stderr capture tasks are awaited before jobs are marked terminal,
+  so terminal job records and live log streams include drained output.
+- In-memory audit retention is capped while store append behavior remains
+  unchanged.
+- LAN mDNS discovery is centralized in `operon-network` and reused by `node
+  discover` and `onboard`.
+- CLI gRPC helpers reuse one process-local Tokio runtime instead of creating a
+  new runtime for every call.
+
+Remaining:
+
+- None for Phase 32.13.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

@@ -7,4 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+mdns-sd.workspace = true
 operon-config = { path = "../operon-config" }
+operon-core = { path = "../operon-core" }

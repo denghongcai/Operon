@@ -841,7 +841,10 @@ dependencies = [
 name = "operon-network"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "mdns-sd",
  "operon-config",
+ "operon-core",
 ]
 
 [[package]]

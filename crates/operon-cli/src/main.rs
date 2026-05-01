@@ -3,23 +3,20 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use clap::{Parser, Subcommand};
-use mdns_sd::{ServiceDaemon, ServiceEvent};
 use operon_config::{NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
-    AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ExecutionTrace, FsList, FsRead,
-    FsWrite, HealthStatus, JobList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
-    NodeInfo, ServiceCheck, ServiceList, ServiceProtocol, TraceFile, TraceFileList,
+    AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, FsList, FsRead, FsWrite, HealthStatus,
+    JobList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
+    ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
 
 mod graph;
 mod grpc;
 mod onboard;
-
-const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
 #[derive(Debug, Parser)]
 #[command(name = "operon", about = "Operon CLI")]
@@ -1185,57 +1182,7 @@ fn discover_nodes(
     if provider != "lan" {
         anyhow::bail!("v0.3 discovery only supports --provider lan");
     }
-    let mdns = ServiceDaemon::new()?;
-    let receiver = mdns.browse(OPERON_MDNS_SERVICE)?;
-    let deadline = Instant::now() + timeout;
-    let mut records = BTreeMap::new();
-    while Instant::now() < deadline {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        match receiver.recv_timeout(remaining.min(Duration::from_millis(250))) {
-            Ok(ServiceEvent::ServiceResolved(info)) => {
-                let node_id = info
-                    .get_property_val_str("node_id")
-                    .unwrap_or(info.get_fullname())
-                    .trim_end_matches(OPERON_MDNS_SERVICE)
-                    .trim_end_matches('.')
-                    .to_string();
-                let fallback_endpoint = info
-                    .get_addresses_v4()
-                    .into_iter()
-                    .next()
-                    .map(|addr| format!("grpc://{}:{}", addr, info.get_port()))
-                    .unwrap_or_else(|| {
-                        format!("grpc://{}:{}", info.get_hostname(), info.get_port())
-                    });
-                let endpoint = info
-                    .get_property_val_str("endpoint")
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-                    .unwrap_or(fallback_endpoint);
-                let capabilities = info
-                    .get_property_val_str("capabilities")
-                    .unwrap_or("")
-                    .split(',')
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-                    .collect();
-                records.insert(
-                    node_id.clone(),
-                    DiscoveryRecord {
-                        node_id,
-                        endpoint,
-                        provider: "lan".to_string(),
-                        capabilities,
-                    },
-                );
-            }
-            Ok(_) => {}
-            Err(_) => {}
-        }
-    }
-    let list = DiscoveryList {
-        nodes: records.into_values().collect(),
-    };
+    let list = operon_network::discover_lan_nodes(timeout)?;
     if let Some(path) = output_config {
         write_discovered_config(&path, &list)?;
     }
