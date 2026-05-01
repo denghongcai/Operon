@@ -17,6 +17,7 @@ RUN useradd --create-home --shell /usr/sbin/nologin operon \
 COPY --from=builder /workspace/target/release/operond /usr/local/bin/operond
 COPY --from=builder /workspace/target/release/operon /usr/local/bin/operon
 COPY examples/docker-policy.yaml /etc/operon/policy.yaml
+COPY examples/docker-secrets.yaml /etc/operon/secrets.yaml
 
 USER operon
 

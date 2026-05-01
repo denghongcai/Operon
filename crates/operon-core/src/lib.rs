@@ -113,6 +113,12 @@ pub struct AuditLog {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ErrorResponse {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PolicyConfig {
     pub subject: String,
     pub fs: FsPolicy,
@@ -144,6 +150,8 @@ pub struct JobPolicy {
     pub default_timeout_secs: u64,
     pub max_timeout_secs: u64,
     pub env_allowlist: Vec<String>,
+    #[serde(default)]
+    pub allowed_secrets: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -151,6 +159,8 @@ pub struct JobRunRequest {
     pub command: String,
     pub cwd: Option<String>,
     pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -201,6 +211,8 @@ pub struct ExecutionStep {
     pub command: Option<String>,
     pub cwd: Option<String>,
     pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

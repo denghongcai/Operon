@@ -5,9 +5,15 @@ use operon_core::{
     FsRead, FsStat, FsWrite, FsWriteRequest, JobRecord, JobRunRequest, JobStatus,
 };
 
-use crate::{encode_path, http_get_json, http_post_json, load_endpoint, load_job};
+use crate::{
+    encode_path, http_get_json_endpoint, http_post_json_endpoint, load_endpoint, load_job,
+};
 
-pub(crate) fn run_graph(config_path: PathBuf, workflow_path: PathBuf) -> anyhow::Result<()> {
+pub(crate) fn run_graph(
+    config_path: PathBuf,
+    workflow_path: PathBuf,
+    trace_output: Option<PathBuf>,
+) -> anyhow::Result<()> {
     let workflow = std::fs::read_to_string(&workflow_path)?;
     let graph: ExecutionGraph = serde_yaml::from_str(&workflow)?;
     let mut trace = ExecutionTrace {
@@ -24,13 +30,13 @@ pub(crate) fn run_graph(config_path: PathBuf, workflow_path: PathBuf) -> anyhow:
 
         if failed {
             trace.status = ExecutionStatus::Failed;
-            print_trace(&trace)?;
+            write_trace(&trace, trace_output.as_deref())?;
             return Err(anyhow::anyhow!("execution graph `{}` failed", graph.name));
         }
     }
 
     trace.status = ExecutionStatus::Succeeded;
-    print_trace(&trace)
+    write_trace(&trace, trace_output.as_deref())
 }
 
 fn execute_step(config_path: PathBuf, index: usize, step: &ExecutionStep) -> ExecutionStepTrace {
@@ -74,28 +80,22 @@ fn execute_step_action(
         "fs.stat" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let stat: FsStat = http_get_json(
-                &endpoint.endpoint,
-                &format!("/fs/stat?path={}", encode_path(path)),
-            )?;
+            let stat: FsStat =
+                http_get_json_endpoint(&endpoint, &format!("/fs/stat?path={}", encode_path(path)))?;
             Ok(serde_json::to_value(stat)?)
         }
         "fs.list" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let list: FsList = http_get_json(
-                &endpoint.endpoint,
-                &format!("/fs/list?path={}", encode_path(path)),
-            )?;
+            let list: FsList =
+                http_get_json_endpoint(&endpoint, &format!("/fs/list?path={}", encode_path(path)))?;
             Ok(serde_json::to_value(list)?)
         }
         "fs.read" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let read: FsRead = http_get_json(
-                &endpoint.endpoint,
-                &format!("/fs/read?path={}", encode_path(path)),
-            )?;
+            let read: FsRead =
+                http_get_json_endpoint(&endpoint, &format!("/fs/read?path={}", encode_path(path)))?;
             Ok(serde_json::to_value(read)?)
         }
         "fs.write" => {
@@ -105,7 +105,7 @@ fn execute_step_action(
                 path: path.to_string(),
                 content: step.content.clone().unwrap_or_default(),
             };
-            let write: FsWrite = http_post_json(&endpoint.endpoint, "/fs/write", &request)?;
+            let write: FsWrite = http_post_json_endpoint(&endpoint, "/fs/write", &request)?;
             Ok(serde_json::to_value(write)?)
         }
         "job.run" => run_job_step(config_path, step),
@@ -119,8 +119,9 @@ fn run_job_step(config_path: PathBuf, step: &ExecutionStep) -> anyhow::Result<se
         command: required_field(step.command.as_deref(), "command")?.to_string(),
         cwd: step.cwd.clone(),
         timeout_secs: step.timeout_secs,
+        secrets: step.secrets.clone(),
     };
-    let record: JobRecord = http_post_json(&endpoint.endpoint, "/job/run", &request)?;
+    let record: JobRecord = http_post_json_endpoint(&endpoint, "/job/run", &request)?;
 
     loop {
         let record = load_job(config_path.clone(), &step.node, &record.id)?;
@@ -140,8 +141,12 @@ fn required_field<'a>(value: Option<&'a str>, field: &str) -> anyhow::Result<&'a
         .ok_or_else(|| anyhow::anyhow!("step requires `{field}`"))
 }
 
-fn print_trace(trace: &ExecutionTrace) -> anyhow::Result<()> {
-    println!("{}", serde_json::to_string_pretty(trace)?);
+fn write_trace(trace: &ExecutionTrace, output: Option<&std::path::Path>) -> anyhow::Result<()> {
+    let content = serde_json::to_string_pretty(trace)?;
+    if let Some(output) = output {
+        std::fs::write(output, &content)?;
+    }
+    println!("{content}");
     Ok(())
 }
 
@@ -181,6 +186,7 @@ mod tests {
             command: None,
             cwd: None,
             timeout_secs: None,
+            secrets: Vec::new(),
         };
 
         let trace = execute_step(PathBuf::from("missing-config.yaml"), 0, &step);
@@ -204,6 +210,7 @@ mod tests {
             command: None,
             cwd: None,
             timeout_secs: None,
+            secrets: Vec::new(),
         };
 
         let trace = execute_step(PathBuf::from("missing-config.yaml"), 2, &step);

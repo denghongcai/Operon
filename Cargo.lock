@@ -492,6 +492,7 @@ dependencies = [
  "operon-core",
  "operon-network",
  "serde",
+ "serde_json",
  "serde_yaml",
  "tokio",
  "tracing",

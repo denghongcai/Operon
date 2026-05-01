@@ -661,16 +661,221 @@ v0.1 is complete when:
 - audit records capture allowed and denied actions
 - README demo can be reproduced
 
-## Post-MVP Phases
+## v0.2 Goal
 
-### v0.2: Provider Adapters and Secrets
+Operon v0.2 should turn the v0.1 functional MVP into a more usable runtime:
 
-- Cloudflare Mesh endpoint adapter
-- Tailscale endpoint adapter
-- SSH endpoint adapter
-- SecretCapability MVP
-- stronger node identity and trust establishment
-- better error model
+```text
+Remote filesystem and job IO can be consumed incrementally, daemon calls have
+predictable errors and minimal authentication, provider resolution is explicit,
+audit/job/trace state can survive daemon restarts, and jobs can use scoped
+secrets without exposing secret values directly.
+```
+
+v0.2 still does not build network connectivity. Provider adapters resolve endpoints only.
+
+## Phase 9: Streaming IO Semantics
+
+Status: Completed.
+
+Goal: make fs/job IO usable for larger files and long-running commands.
+
+Planned:
+
+- fs read streaming endpoint.
+- fs write streaming endpoint.
+- job stdout/stderr follow endpoint.
+- CLI `fs read --output <file>`.
+- CLI `fs write --file <file>`.
+- CLI `job logs --follow`.
+- SDK streaming-friendly helpers.
+
+Completed:
+
+- Added daemon raw-body fs read/write endpoints at `/fs/read-stream` and `/fs/write-stream`.
+- Added CLI `fs read --output <file>` and `fs write --file <file>` paths.
+- Added CLI `job logs --follow` for long-running job output.
+- Added SDK raw fs byte helpers.
+- Extended Docker validation to cover raw fs transfer and followed logs.
+
+Remaining:
+
+- True chunked daemon-side fs streaming and job stdin streaming are deferred beyond v0.2.
+
+Done when:
+
+- large fs reads/writes avoid JSON string payloads.
+- job logs can be followed while a job is still running.
+- Docker validation covers streamed fs read/write and followed job output.
+
+## Phase 10: Structured Errors and Minimal Auth
+
+Status: Completed.
+
+Goal: make daemon failures predictable and prevent unauthenticated daemon access.
+
+Planned:
+
+- shared structured error response type.
+- daemon handlers return `{ code, message, capability, resource }`.
+- CLI preserves meaningful daemon error messages.
+- daemon `--auth-token` and `--auth-token-file`.
+- CLI node config supports `token`.
+- SDK supports bearer token.
+- audit subject comes from request identity when provided.
+
+Completed:
+
+- Added shared structured error response type and daemon JSON error responses.
+- Added daemon `--auth-token` and `--auth-token-file`.
+- Added per-node CLI config `token` support.
+- Added per-node SDK token support.
+- Updated CLI HTTP helpers to send bearer tokens and preserve daemon error messages.
+- Updated SDK error parsing for structured daemon error bodies.
+- Added CLI unit coverage for structured daemon error formatting.
+- Extended Docker validation to cover unauthorized and authorized calls.
+
+Remaining:
+
+- Request-derived audit identity remains future work.
+
+Done when:
+
+- unauthorized requests are rejected.
+- authorized CLI/SDK calls continue to work.
+- denied operations return structured JSON errors.
+- Docker validation covers unauthorized and authorized requests.
+
+## Phase 11: Provider Resolver Adapters
+
+Status: Completed.
+
+Goal: make network providers explicit without implementing connectivity.
+
+Planned:
+
+- provider resolver trait in `operon-network`.
+- manual resolver implementation.
+- provider metadata validation for Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, and Kubernetes.
+- CLI `node resolve <node-id>`.
+- CLI `provider list`.
+
+Completed:
+
+- Added explicit provider kinds in `operon-network`.
+- Added endpoint resolution through `NodesConfig::resolve`.
+- Added CLI `node resolve <node-id>` and `provider list`.
+- Extended Docker validation to cover manual provider resolution.
+
+Remaining:
+
+- Provider API discovery for Cloudflare Mesh, Tailscale, LAN mDNS, and Kubernetes is deferred.
+
+Done when:
+
+- config endpoints resolve through provider abstraction.
+- unsupported provider values fail clearly.
+- Docker validation covers manual provider resolution.
+
+## Phase 12: Persistent Store for Jobs, Audit, and Traces
+
+Status: Completed.
+
+Goal: keep runtime records useful after process-local operations complete.
+
+Planned:
+
+- local JSONL store path.
+- daemon `--store <path>`.
+- persist audit events.
+- persist job records on completion/update.
+- CLI `trace show <run-id>` for CLI-generated trace files.
+- graph execution can write trace JSON to disk.
+
+Completed:
+
+- Added daemon `--store <path>` JSONL append path.
+- Persisted audit events and final job records to the store.
+- Added graph `--trace-output <path>`.
+- Added CLI `trace show <path>`.
+- Extended Docker validation to assert store file creation and trace display.
+
+Remaining:
+
+- The store is append-only JSONL, not a queryable database.
+- Daemon-persisted graph traces are deferred.
+
+Done when:
+
+- audit/job records are appended to a local store.
+- graph traces can be written and shown.
+- Docker validation covers store file creation and trace show.
+
+## Phase 13: Secrets MVP
+
+Status: Completed.
+
+Goal: allow jobs to use scoped secrets without direct secret reads.
+
+Planned:
+
+- local secrets YAML.
+- daemon `--secrets <path>`.
+- policy secret allowlist.
+- `job.run` supports `secrets`.
+- daemon injects allowed secrets into job env.
+- audit records secret usage by name only.
+
+Completed:
+
+- Added daemon `--secrets <path>` local YAML loading.
+- Added policy `job.allowed_secrets`.
+- Added `job.run` secret requests and CLI `--secret <NAME>`.
+- Injected allowed secrets into job environment only for that job.
+- Audited secret usage by name.
+- Added daemon unit coverage for allowed and denied secret resolution.
+- Extended Docker validation to cover allowed and denied secret requests.
+
+Remaining:
+
+- Full secret manager integration and secret rotation are deferred.
+
+Done when:
+
+- jobs can use allowed secrets as env vars.
+- denied secrets are blocked.
+- secret values are never returned by API or audit output.
+
+## Phase 14: v0.2 Acceptance
+
+Status: Completed.
+
+Goal: make v0.2 reproducible and documented.
+
+Planned:
+
+- README updates for streaming, auth, providers, store, and secrets.
+- `docs/plan/v0.2-acceptance.md`.
+- Docker validation covers all v0.2 additions.
+- CI remains green.
+
+Completed:
+
+- Updated README for v0.2 CLI, node config, daemon policy, auth, store, provider resolution, secrets, trace, and Docker validation.
+- Added `docs/plan/v0.2-acceptance.md`.
+- Renamed Docker validation script to `scripts/verify-v0.2-docker.sh`.
+- Updated CI to run the v0.2 Docker validation job.
+
+Remaining:
+
+- Final CI status depends on the pushed branch run.
+
+Done when:
+
+- v0.2 has a canonical validation path.
+- docs accurately describe the runtime limits and commands.
+
+## Post-v0.2 Phases
 
 ### v0.3: Mounts and Developer Experience
 

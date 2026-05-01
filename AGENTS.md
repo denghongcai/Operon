@@ -32,6 +32,9 @@ Operon should not own:
   - Authoritative phase plan and phase status tracker.
   - Every completed task must update this document with what changed and which phase advanced.
 
+- `docs/plan/v0.2-acceptance.md`
+  - v0.2 acceptance scope, validation commands, and known limits.
+
 - `README.md`
   - Public-facing project positioning and high-level architecture.
   - Current framing: "AI-native capability runtime over existing private networks."

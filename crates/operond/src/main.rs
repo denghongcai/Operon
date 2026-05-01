@@ -11,17 +11,19 @@ use std::{
 };
 
 use axum::{
+    body::Bytes,
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use clap::{Parser, Subcommand};
 use operon_core::{
-    AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList,
-    FsMountPolicy, FsPermissions, FsPolicy, FsRead, FsStat, FsWrite, FsWriteRequest, HealthStatus,
-    JobCancelRequest, JobLog, JobPolicy, JobRecord, JobRunRequest, JobStatus, NodeInfo,
-    PolicyConfig,
+    AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, ErrorResponse, FsEntry,
+    FsList, FsMountPolicy, FsPermissions, FsPolicy, FsRead, FsStat, FsWrite, FsWriteRequest,
+    HealthStatus, JobCancelRequest, JobLog, JobPolicy, JobRecord, JobRunRequest, JobStatus,
+    NodeInfo, PolicyConfig,
 };
 use tokio::{io::AsyncReadExt, process::Command as TokioCommand, sync::oneshot, time};
 
@@ -50,6 +52,18 @@ struct StartArgs {
 
     #[arg(long)]
     policy: Option<PathBuf>,
+
+    #[arg(long)]
+    auth_token: Option<String>,
+
+    #[arg(long)]
+    auth_token_file: Option<PathBuf>,
+
+    #[arg(long)]
+    store: Option<PathBuf>,
+
+    #[arg(long)]
+    secrets: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,10 +72,60 @@ struct AppState {
     capabilities: CapabilityList,
     workspace: PathBuf,
     policy: PolicyConfig,
+    auth_token: Option<String>,
+    store: Option<PathBuf>,
+    secrets: Arc<BTreeMap<String, String>>,
     audit: Arc<Mutex<Vec<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     job_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     next_job_id: Arc<AtomicU64>,
+}
+
+struct JobTask {
+    jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
+    cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    store: Option<PathBuf>,
+    job_id: String,
+    command: String,
+    cwd: PathBuf,
+    timeout_secs: u64,
+    env: BTreeMap<String, String>,
+    cancel_rx: oneshot::Receiver<()>,
+}
+
+#[derive(Debug)]
+struct AppError(StatusCode, String);
+
+impl AppError {
+    fn code(&self) -> &'static str {
+        match self.0 {
+            StatusCode::UNAUTHORIZED => "unauthorized",
+            StatusCode::FORBIDDEN => "forbidden",
+            StatusCode::NOT_FOUND => "not-found",
+            StatusCode::BAD_REQUEST => "bad-request",
+            StatusCode::REQUEST_TIMEOUT => "timeout",
+            _ => "internal-error",
+        }
+    }
+}
+
+impl From<(StatusCode, String)> for AppError {
+    fn from(error: (StatusCode, String)) -> Self {
+        Self(error.0, error.1)
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (
+            self.0,
+            Json(ErrorResponse {
+                code: self.code().to_string(),
+                message: self.1,
+            }),
+        )
+            .into_response()
+    }
 }
 
 #[tokio::main]
@@ -75,6 +139,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn start(args: StartArgs) -> anyhow::Result<()> {
     let policy = load_policy(args.policy.as_deref())?;
+    let auth_token = load_auth_token(args.auth_token, args.auth_token_file.as_deref())?;
+    let secrets = load_secrets(args.secrets.as_deref())?;
     let node = NodeInfo {
         id: args.node_id,
         hostname: hostname(),
@@ -86,6 +152,9 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         node,
         workspace: args.workspace,
         policy,
+        auth_token,
+        store: args.store,
+        secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(Vec::new())),
         jobs: Arc::new(Mutex::new(BTreeMap::new())),
         job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
@@ -99,7 +168,9 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .route("/fs/stat", get(fs_stat))
         .route("/fs/list", get(fs_list))
         .route("/fs/read", get(fs_read))
+        .route("/fs/read-stream", get(fs_read_stream))
         .route("/fs/write", post(fs_write))
+        .route("/fs/write-stream", post(fs_write_stream))
         .route("/job/run", post(job_run))
         .route("/job/status", get(job_status))
         .route("/job/logs", get(job_logs))
@@ -119,29 +190,45 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health(State(state): State<AppState>) -> Json<HealthStatus> {
-    Json(HealthStatus {
+async fn health(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<HealthStatus>, AppError> {
+    authorize_request(&state, &headers)?;
+    Ok(Json(HealthStatus {
         ok: true,
         node_id: state.node.id,
         version: env!("CARGO_PKG_VERSION").to_string(),
-    })
+    }))
 }
 
-async fn node_info(State(state): State<AppState>) -> Json<NodeInfo> {
-    Json(state.node)
+async fn node_info(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<NodeInfo>, AppError> {
+    authorize_request(&state, &headers)?;
+    Ok(Json(state.node))
 }
 
-async fn capabilities(State(state): State<AppState>) -> Json<CapabilityList> {
-    Json(state.capabilities)
+async fn capabilities(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<CapabilityList>, AppError> {
+    authorize_request(&state, &headers)?;
+    Ok(Json(state.capabilities))
 }
 
-async fn audit_log(State(state): State<AppState>) -> Json<AuditLog> {
+async fn audit_log(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<AuditLog>, AppError> {
+    authorize_request(&state, &headers)?;
     let events = state
         .audit
         .lock()
         .expect("audit log mutex poisoned")
         .clone();
-    Json(AuditLog { events })
+    Ok(Json(AuditLog { events }))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -156,17 +243,19 @@ struct JobIdQuery {
 
 async fn fs_stat(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<FsPathQuery>,
-) -> Result<Json<FsStat>, (StatusCode, String)> {
+) -> Result<Json<FsStat>, AppError> {
+    authorize_request(&state, &headers)?;
     if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
         record_audit(&state, "stat", &query.path, false, &error.1);
-        return Err(error);
+        return Err(error.into());
     }
     let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(&state, "stat", &query.path, false, &error.1);
-            return Err(error);
+            return Err(error.into());
         }
     };
     let metadata = fs::metadata(&full_path).map_err(internal_error)?;
@@ -182,17 +271,19 @@ async fn fs_stat(
 
 async fn fs_list(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<FsPathQuery>,
-) -> Result<Json<FsList>, (StatusCode, String)> {
+) -> Result<Json<FsList>, AppError> {
+    authorize_request(&state, &headers)?;
     if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
         record_audit(&state, "list", &query.path, false, &error.1);
-        return Err(error);
+        return Err(error.into());
     }
     let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(&state, "list", &query.path, false, &error.1);
-            return Err(error);
+            return Err(error.into());
         }
     };
     let mut entries = Vec::new();
@@ -222,17 +313,19 @@ async fn fs_list(
 
 async fn fs_read(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<FsPathQuery>,
-) -> Result<Json<FsRead>, (StatusCode, String)> {
+) -> Result<Json<FsRead>, AppError> {
+    authorize_request(&state, &headers)?;
     if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
         record_audit(&state, "read", &query.path, false, &error.1);
-        return Err(error);
+        return Err(error.into());
     }
     let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(&state, "read", &query.path, false, &error.1);
-            return Err(error);
+            return Err(error.into());
         }
     };
     let content = fs::read_to_string(&full_path).map_err(internal_error)?;
@@ -244,19 +337,44 @@ async fn fs_read(
     }))
 }
 
+async fn fs_read_stream(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<FsPathQuery>,
+) -> Result<Vec<u8>, AppError> {
+    authorize_request(&state, &headers)?;
+    if let Err(error) = authorize_fs(&state.policy, "read", &query.path) {
+        record_audit(&state, "read-stream", &query.path, false, &error.1);
+        return Err(error.into());
+    }
+    let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit(&state, "read-stream", &query.path, false, &error.1);
+            return Err(error.into());
+        }
+    };
+    let content = fs::read(&full_path).map_err(internal_error)?;
+    record_audit(&state, "read-stream", &query.path, true, "allowed");
+
+    Ok(content)
+}
+
 async fn fs_write(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<FsWriteRequest>,
-) -> Result<Json<FsWrite>, (StatusCode, String)> {
+) -> Result<Json<FsWrite>, AppError> {
+    authorize_request(&state, &headers)?;
     if let Err(error) = authorize_fs(&state.policy, "write", &request.path) {
         record_audit(&state, "write", &request.path, false, &error.1);
-        return Err(error);
+        return Err(error.into());
     }
     let full_path = match resolve_workspace_path(&state.workspace, &request.path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(&state, "write", &request.path, false, &error.1);
-            return Err(error);
+            return Err(error.into());
         }
     };
     if let Some(parent) = full_path.parent() {
@@ -271,20 +389,59 @@ async fn fs_write(
     }))
 }
 
+async fn fs_write_stream(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<FsPathQuery>,
+    body: Bytes,
+) -> Result<Json<FsWrite>, AppError> {
+    authorize_request(&state, &headers)?;
+    if let Err(error) = authorize_fs(&state.policy, "write", &query.path) {
+        record_audit(&state, "write-stream", &query.path, false, &error.1);
+        return Err(error.into());
+    }
+    let full_path = match resolve_workspace_path(&state.workspace, &query.path) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit(&state, "write-stream", &query.path, false, &error.1);
+            return Err(error.into());
+        }
+    };
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent).map_err(internal_error)?;
+    }
+    fs::write(&full_path, &body).map_err(internal_error)?;
+    record_audit(&state, "write-stream", &query.path, true, "allowed");
+
+    Ok(Json(FsWrite {
+        path: query.path,
+        bytes_written: body.len() as u64,
+    }))
+}
+
 async fn job_run(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<JobRunRequest>,
-) -> Result<Json<JobRecord>, (StatusCode, String)> {
+) -> Result<Json<JobRecord>, AppError> {
+    authorize_request(&state, &headers)?;
     let cwd_virtual = request.cwd.clone().unwrap_or_else(|| "/".to_string());
     if let Err(error) = authorize_job(&state.policy, &cwd_virtual, request.timeout_secs) {
         record_audit_capability(&state, "job:default", "run", &cwd_virtual, false, &error.1);
-        return Err(error);
+        return Err(error.into());
     }
+    let secret_env = match resolve_job_secrets(&state, &request.secrets) {
+        Ok(secret_env) => secret_env,
+        Err(error) => {
+            record_audit_capability(&state, "secret:default", "use", "*", false, &error.1);
+            return Err(error.into());
+        }
+    };
     let cwd = match resolve_workspace_path(&state.workspace, &cwd_virtual) {
         Ok(path) => path,
         Err(error) => {
             record_audit_capability(&state, "job:default", "run", &cwd_virtual, false, &error.1);
-            return Err(error);
+            return Err(error.into());
         }
     };
     if !cwd.exists() {
@@ -307,6 +464,9 @@ async fn job_run(
         .expect("job map mutex poisoned")
         .insert(job_id.clone(), record.clone());
     record_audit_capability(&state, "job:default", "run", &job_id, true, "allowed");
+    for secret in &request.secrets {
+        record_audit_capability(&state, "secret:default", "use", secret, true, "allowed");
+    }
 
     let (cancel_tx, cancel_rx) = oneshot::channel();
     state
@@ -317,13 +477,25 @@ async fn job_run(
 
     let jobs = state.jobs.clone();
     let cancels = state.job_cancel.clone();
+    let store = state.store.clone();
     let command = request.command;
     let timeout_secs = request
         .timeout_secs
         .unwrap_or(state.policy.job.default_timeout_secs);
 
     tokio::spawn(async move {
-        run_job_task(jobs, cancels, job_id, command, cwd, timeout_secs, cancel_rx).await;
+        run_job_task(JobTask {
+            jobs,
+            cancels,
+            store,
+            job_id,
+            command,
+            cwd,
+            timeout_secs,
+            env: secret_env,
+            cancel_rx,
+        })
+        .await;
     });
 
     Ok(Json(record))
@@ -331,8 +503,10 @@ async fn job_run(
 
 async fn job_status(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<JobIdQuery>,
-) -> Result<Json<JobRecord>, (StatusCode, String)> {
+) -> Result<Json<JobRecord>, AppError> {
+    authorize_request(&state, &headers)?;
     let record = state
         .jobs
         .lock()
@@ -350,15 +524,19 @@ async fn job_status(
 
 async fn job_logs(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<JobIdQuery>,
-) -> Result<Json<JobRecord>, (StatusCode, String)> {
-    job_status(State(state), Query(query)).await
+) -> Result<Json<JobRecord>, AppError> {
+    authorize_request(&state, &headers)?;
+    job_status(State(state), headers, Query(query)).await
 }
 
 async fn job_cancel(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<JobCancelRequest>,
-) -> Result<Json<JobRecord>, (StatusCode, String)> {
+) -> Result<Json<JobRecord>, AppError> {
+    authorize_request(&state, &headers)?;
     if let Some(sender) = state
         .job_cancel
         .lock()
@@ -405,6 +583,46 @@ fn load_policy(path: Option<&Path>) -> anyhow::Result<PolicyConfig> {
     Ok(serde_yaml::from_str(&content)?)
 }
 
+fn load_auth_token(
+    token: Option<String>,
+    token_file: Option<&Path>,
+) -> anyhow::Result<Option<String>> {
+    match (token, token_file) {
+        (Some(token), None) => Ok(Some(token)),
+        (None, Some(path)) => Ok(Some(fs::read_to_string(path)?.trim().to_string())),
+        (None, None) => Ok(None),
+        (Some(_), Some(_)) => anyhow::bail!("use either --auth-token or --auth-token-file"),
+    }
+}
+
+fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>> {
+    let Some(path) = path else {
+        return Ok(BTreeMap::new());
+    };
+    let content = fs::read_to_string(path)?;
+    Ok(serde_yaml::from_str(&content)?)
+}
+
+fn authorize_request(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
+    let Some(expected) = &state.auth_token else {
+        return Ok(());
+    };
+    let Some(header) = headers.get(axum::http::header::AUTHORIZATION) else {
+        return Err((StatusCode::UNAUTHORIZED, "missing bearer token".to_string()));
+    };
+    let Ok(header) = header.to_str() else {
+        return Err((StatusCode::UNAUTHORIZED, "invalid bearer token".to_string()));
+    };
+    let Some(actual) = header.strip_prefix("Bearer ") else {
+        return Err((StatusCode::UNAUTHORIZED, "invalid bearer token".to_string()));
+    };
+    if actual == expected {
+        Ok(())
+    } else {
+        Err((StatusCode::UNAUTHORIZED, "invalid bearer token".to_string()))
+    }
+}
+
 fn default_policy() -> PolicyConfig {
     PolicyConfig {
         subject: "local-cli".to_string(),
@@ -424,6 +642,7 @@ fn default_policy() -> PolicyConfig {
             default_timeout_secs: 30,
             max_timeout_secs: 300,
             env_allowlist: Vec::new(),
+            allowed_secrets: Vec::new(),
         },
     }
 }
@@ -563,6 +782,32 @@ fn authorize_job(
     Ok(())
 }
 
+fn resolve_job_secrets(
+    state: &AppState,
+    requested: &[String],
+) -> Result<BTreeMap<String, String>, (StatusCode, String)> {
+    let mut env = BTreeMap::new();
+    for name in requested {
+        if !state
+            .policy
+            .job
+            .allowed_secrets
+            .iter()
+            .any(|allowed| allowed == name)
+        {
+            return Err((
+                StatusCode::FORBIDDEN,
+                format!("secret `{name}` denied by policy"),
+            ));
+        }
+        let Some(value) = state.secrets.get(name) else {
+            return Err((StatusCode::NOT_FOUND, format!("secret `{name}` not found")));
+        };
+        env.insert(name.clone(), value.clone());
+    }
+    Ok(env)
+}
+
 fn path_in_policy_scope(path: &str, scope: &str) -> bool {
     let path = normalize_virtual_path(path);
     let scope = normalize_virtual_path(scope);
@@ -619,7 +864,48 @@ fn record_audit_capability(
         .audit
         .lock()
         .expect("audit log mutex poisoned")
-        .push(event);
+        .push(event.clone());
+    append_store_record(
+        state.store.as_deref(),
+        &serde_json::json!({
+            "kind": "audit",
+            "event": event,
+        }),
+    );
+}
+
+fn append_store_record(path: Option<&Path>, record: &serde_json::Value) {
+    let Some(path) = path else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        if let Err(error) = fs::create_dir_all(parent) {
+            tracing::warn!(
+                "failed to create store directory {}: {error}",
+                parent.display()
+            );
+            return;
+        }
+    }
+    let line = match serde_json::to_string(record) {
+        Ok(line) => line,
+        Err(error) => {
+            tracing::warn!("failed to serialize store record: {error}");
+            return;
+        }
+    };
+    let mut options = fs::OpenOptions::new();
+    if let Err(error) = options
+        .create(true)
+        .append(true)
+        .open(path)
+        .and_then(|mut file| {
+            use std::io::Write;
+            writeln!(file, "{line}")
+        })
+    {
+        tracing::warn!("failed to append store record {}: {error}", path.display());
+    }
 }
 
 fn now_ms() -> u128 {
@@ -629,19 +915,12 @@ fn now_ms() -> u128 {
         .as_millis()
 }
 
-async fn run_job_task(
-    jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
-    cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
-    job_id: String,
-    command: String,
-    cwd: PathBuf,
-    timeout_secs: u64,
-    cancel_rx: oneshot::Receiver<()>,
-) {
+async fn run_job_task(task: JobTask) {
     let child = TokioCommand::new("sh")
         .arg("-c")
-        .arg(&command)
-        .current_dir(cwd)
+        .arg(&task.command)
+        .current_dir(task.cwd)
+        .envs(task.env)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -649,29 +928,36 @@ async fn run_job_task(
 
     let Ok(mut child) = child else {
         append_job_log(
-            &jobs,
-            &job_id,
+            &task.jobs,
+            &task.job_id,
             JobLog {
                 stream: "stderr".to_string(),
                 data: "failed to spawn command".to_string(),
             },
         );
-        finish_job(&jobs, &cancels, &job_id, JobStatus::Failed, None);
+        finish_job(
+            &task.jobs,
+            &task.cancels,
+            task.store.as_deref(),
+            &task.job_id,
+            JobStatus::Failed,
+            None,
+        );
         return;
     };
 
     if let Some(stdout) = child.stdout.take() {
         tokio::spawn(capture_job_stream(
-            jobs.clone(),
-            job_id.clone(),
+            task.jobs.clone(),
+            task.job_id.clone(),
             "stdout",
             stdout,
         ));
     }
     if let Some(stderr) = child.stderr.take() {
         tokio::spawn(capture_job_stream(
-            jobs.clone(),
-            job_id.clone(),
+            task.jobs.clone(),
+            task.job_id.clone(),
             "stderr",
             stderr,
         ));
@@ -689,32 +975,54 @@ async fn run_job_task(
                     } else {
                         JobStatus::Failed
                     };
-                    finish_job(&jobs, &cancels, &job_id, job_status, status.code());
+                    finish_job(
+                        &task.jobs,
+                        &task.cancels,
+                        task.store.as_deref(),
+                        &task.job_id,
+                        job_status,
+                        status.code(),
+                    );
                 }
                 Err(error) => {
                     append_job_log(
-                        &jobs,
-                        &job_id,
+                        &task.jobs,
+                        &task.job_id,
                         JobLog {
                             stream: "stderr".to_string(),
                             data: error.to_string(),
                         },
                     );
                     finish_job(
-                        &jobs,
-                        &cancels,
-                        &job_id,
+                        &task.jobs,
+                        &task.cancels,
+                        task.store.as_deref(),
+                        &task.job_id,
                         JobStatus::Failed,
                         None,
                     );
                 }
             }
         }
-        _ = cancel_rx => {
-            finish_job(&jobs, &cancels, &job_id, JobStatus::Cancelled, None);
+        _ = task.cancel_rx => {
+            finish_job(
+                &task.jobs,
+                &task.cancels,
+                task.store.as_deref(),
+                &task.job_id,
+                JobStatus::Cancelled,
+                None,
+            );
         }
-        _ = time::sleep(std::time::Duration::from_secs(timeout_secs)) => {
-            finish_job(&jobs, &cancels, &job_id, JobStatus::TimedOut, None);
+        _ = time::sleep(std::time::Duration::from_secs(task.timeout_secs)) => {
+            finish_job(
+                &task.jobs,
+                &task.cancels,
+                task.store.as_deref(),
+                &task.job_id,
+                JobStatus::TimedOut,
+                None,
+            );
         }
     }
 }
@@ -763,6 +1071,7 @@ fn append_job_log(jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>, job_id: &str, 
 fn finish_job(
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
     cancels: &Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    store: Option<&Path>,
     job_id: &str,
     status: JobStatus,
     exit_code: Option<i32>,
@@ -775,6 +1084,13 @@ fn finish_job(
     if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
         record.status = status;
         record.exit_code = exit_code;
+        append_store_record(
+            store,
+            &serde_json::json!({
+                "kind": "job",
+                "record": record,
+            }),
+        );
     }
 }
 
@@ -801,6 +1117,7 @@ mod tests {
                 default_timeout_secs: 10,
                 max_timeout_secs: 30,
                 env_allowlist: Vec::new(),
+                allowed_secrets: vec!["TEST_SECRET".to_string()],
             },
         }
     }
@@ -859,6 +1176,40 @@ mod tests {
     }
 
     #[test]
+    fn job_secrets_must_be_allowed_and_defined() {
+        let mut secrets = BTreeMap::new();
+        secrets.insert("TEST_SECRET".to_string(), "secret-value".to_string());
+        let state = AppState {
+            node: NodeInfo {
+                id: "node-a".to_string(),
+                hostname: "host".to_string(),
+                os: "linux".to_string(),
+                arch: "x86_64".to_string(),
+            },
+            capabilities: default_capabilities("node-a"),
+            workspace: PathBuf::from("/workspace"),
+            policy: test_policy(),
+            auth_token: None,
+            store: None,
+            secrets: Arc::new(secrets),
+            audit: Arc::new(Mutex::new(Vec::new())),
+            jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            next_job_id: Arc::new(AtomicU64::new(1)),
+        };
+
+        let resolved = resolve_job_secrets(&state, &["TEST_SECRET".to_string()]).expect("secret");
+        assert_eq!(
+            resolved.get("TEST_SECRET").map(String::as_str),
+            Some("secret-value")
+        );
+
+        let denied = resolve_job_secrets(&state, &["DENIED_SECRET".to_string()])
+            .expect_err("denied secret should fail");
+        assert_eq!(denied.0, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
     fn audit_event_uses_policy_subject_and_capability() {
         let state = AppState {
             node: NodeInfo {
@@ -870,6 +1221,9 @@ mod tests {
             capabilities: default_capabilities("node-a"),
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
+            auth_token: None,
+            store: None,
+            secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(Vec::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
             job_cancel: Arc::new(Mutex::new(BTreeMap::new())),

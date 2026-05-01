@@ -15,3 +15,5 @@ job:
   default_timeout_secs: 30
   max_timeout_secs: 30
   env_allowlist: []
+  allowed_secrets:
+    - OPERON_TEST_SECRET

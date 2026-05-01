@@ -11,6 +11,7 @@ export type NodeEndpoint = {
   nodeId: string;
   endpoint: string;
   provider?: NetworkProvider;
+  token?: string;
 };
 
 export type OperonStep = {
@@ -22,6 +23,12 @@ export type OperonStep = {
   command?: string;
   cwd?: string;
   timeoutSecs?: number;
+  secrets?: string[];
+};
+
+export type OperonErrorResponse = {
+  code: string;
+  message: string;
 };
 
 export type OperonRunRequest = {
@@ -88,6 +95,21 @@ export class OperonClient {
     return trace;
   }
 
+  async readFileBytes(nodeId: string, path: string): Promise<ArrayBuffer> {
+    return this.request<ArrayBuffer>(nodeId, `/fs/read-stream?path=${encodeURIComponent(path)}`, {
+      method: "GET",
+      headers: { accept: "application/octet-stream" },
+    });
+  }
+
+  async writeFileBytes(nodeId: string, path: string, body: BodyInit): Promise<unknown> {
+    return this.request(nodeId, `/fs/write-stream?path=${encodeURIComponent(path)}`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body,
+    });
+  }
+
   private async runStep(step: OperonStep, index: number): Promise<OperonStepTrace> {
     const startedAtMs = Date.now();
     const id = step.id ?? `step-${index + 1}`;
@@ -139,6 +161,7 @@ export class OperonClient {
       command: required(step.command, "command"),
       cwd: step.cwd,
       timeout_secs: step.timeoutSecs,
+      secrets: step.secrets ?? [],
     });
 
     while (true) {
@@ -172,11 +195,29 @@ export class OperonClient {
       throw new Error(`node ${nodeId} not found`);
     }
 
-    const response = await fetch(new URL(path, endpoint.endpoint), init);
-    if (!response.ok) {
-      throw new Error(`request to ${endpoint.endpoint}${path} failed: ${response.status} ${response.statusText}`);
+    const headers = new Headers(init.headers);
+    if (endpoint.token) {
+      headers.set("authorization", `Bearer ${endpoint.token}`);
     }
-    return response.json() as Promise<T>;
+
+    const response = await fetch(new URL(path, endpoint.endpoint), { ...init, headers });
+    if (!response.ok) {
+      throw new Error(`request to ${endpoint.endpoint}${path} failed: ${response.status} ${response.statusText}: ${await errorMessage(response)}`);
+    }
+    if (response.headers.get("content-type")?.startsWith("application/json") ?? false) {
+      return response.json() as Promise<T>;
+    }
+    return response.arrayBuffer() as Promise<T>;
+  }
+}
+
+async function errorMessage(response: Response): Promise<string> {
+  const text = await response.text();
+  try {
+    const error = JSON.parse(text) as OperonErrorResponse;
+    return `${error.code}: ${error.message}`;
+  } catch {
+    return text.trim();
   }
 }
 
