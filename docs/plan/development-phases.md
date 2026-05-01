@@ -623,6 +623,9 @@ Completed:
 - CI checkout and pnpm setup actions updated to `actions/checkout@v6` and `pnpm/action-setup@v6`.
 - Direct Rust and TypeScript dependencies refreshed to current compatible releases where available.
 - README CLI and configuration documentation added, including node config path, daemon policy config, and common commands.
+- Draft GitHub Release automation added for `v*` tags, producing Linux
+  `x86_64`, `arm64`, and `armv7` binary tarballs, a JavaScript SDK tarball, and
+  `SHA256SUMS` while leaving the release unpublished for manual review.
 
 Remaining:
 

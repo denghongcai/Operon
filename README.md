@@ -88,6 +88,20 @@ mkdir, truncate, rename, rm, denied mutations, and audit.
 The v0.6.3 fs copy validation checks same-node daemon-side copy, denied copy,
 and audit.
 
+## Draft Releases
+
+Pushing a tag that matches `v*` starts the `Draft Release` GitHub Actions
+workflow:
+
+```bash
+git tag v0.6.3
+git push origin v0.6.3
+```
+
+The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
+`armv7` binary tarballs, a JavaScript SDK tarball, and `SHA256SUMS`. Draft
+releases are intentionally left unpublished for manual review.
+
 ---
 
 ## CLI and Configuration
