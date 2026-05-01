@@ -51,6 +51,19 @@ authorization: Bearer <token>
 
 Missing or invalid metadata returns gRPC `Unauthenticated`.
 
+## Execution Context Metadata
+
+Clients that execute an Operon graph should attach optional context metadata to
+capability calls:
+
+```text
+x-operon-run-id: <run id>
+x-operon-step-id: <step id>
+```
+
+The daemon copies these values into audit events. Direct clients that do not
+run graphs can omit them.
+
 ## Service
 
 All methods are on `operon.runtime.v1.OperonRuntime`.
@@ -134,6 +147,9 @@ remote daemon, not a snapshot read. `WriteFile` replaces file content, and
 `WriteFileRange` writes the requested byte range, but neither operation checks
 that the file is unchanged since a prior read.
 
+The daemon resolves filesystem targets under the configured workspace and
+rejects symlink-resolved paths that escape that workspace.
+
 If multiple clients mutate the same path concurrently, Operon does not define a
 merge order beyond the order in which the remote daemon and underlying
 filesystem apply operations. Clients that need deterministic behavior should
@@ -167,6 +183,10 @@ switch jobs. Use `CloseJobStdin` to close the target job's stdin.
 
 `secrets` is a list of secret names requested for the process environment.
 Policy decides which names are allowed.
+
+The daemon clears the inherited process environment before spawning jobs. It
+then injects only variables named by `job.env_allowlist` from the daemon
+environment and authorized requested secrets.
 
 ## Errors
 
@@ -235,7 +255,10 @@ import { OperonRuntimeDefinition } from "./generated/operon/runtime";
 
 const channel = createChannel("http://127.0.0.1:17790");
 const client = createClient(OperonRuntimeDefinition, channel);
-const metadata = Metadata().set("authorization", "Bearer docker-token");
+const metadata = Metadata()
+  .set("authorization", "Bearer docker-token")
+  .set("x-operon-run-id", "run-example")
+  .set("x-operon-step-id", "step-read");
 
 const health = await client.health({}, { metadata });
 console.log(health);

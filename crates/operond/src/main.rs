@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, VecDeque},
     env, fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
     sync::{
@@ -19,8 +19,14 @@ use operon_core::{
     AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList,
     FsMountPolicy, FsPermissions, FsPolicy, FsStat, FsWrite, HealthStatus, JobEvent, JobList,
     JobLog, JobLogList, JobPolicy, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
-    NodeInfo, PolicyConfig, ServiceCheck, ServiceDefinition, ServiceList, ServicePolicy,
+    NodeInfo, PolicyConfig, RequestContext, RuntimeErrorKind, ServiceCheck, ServiceDefinition,
+    ServiceList, ServicePolicy,
 };
+use operon_fs::{
+    authorize_fs, join_virtual_path, resolve_create_workspace_path,
+    resolve_existing_workspace_path, resolve_write_workspace_path,
+};
+use operon_process::{authorize_job, job_environment, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
     FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest,
@@ -39,8 +45,14 @@ use tokio_util::io::ReaderStream;
 use tonic::{metadata::MetadataMap, transport::Server, Request, Response as GrpcResponse, Status};
 
 const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
+const RUN_ID_METADATA: &str = "x-operon-run-id";
+const STEP_ID_METADATA: &str = "x-operon-step-id";
 const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
 const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
+
+tokio::task_local! {
+    static AUDIT_CONTEXT: RequestContext;
+}
 
 type JobStdinSender = mpsc::UnboundedSender<Vec<u8>>;
 type JobStdinRegistry = Arc<Mutex<BTreeMap<String, JobStdinSender>>>;
@@ -117,12 +129,6 @@ struct JobCompletion {
     job_id: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RuntimeErrorKind {
-    Forbidden,
-    NotFound,
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -152,7 +158,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .and_then(|secrets| secrets.file.as_ref())
         .map(|path| resolve_path(&config_dir, path));
     let secrets = load_secrets(secrets_path.as_deref())?;
-    let stored_jobs = load_store_jobs(store.as_deref())?;
+    let stored_jobs = operon_store::load_jobs(store.as_deref())?;
     let next_job_id = next_job_sequence(&stored_jobs);
     let node = NodeInfo {
         id: daemon.node_id.clone(),
@@ -263,20 +269,28 @@ impl OperonRuntime for GrpcRuntime {
         &self,
         request: Request<FsPathRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsStat>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let path = request.into_inner().path;
-        let stat = grpc_fs_stat(&self.state, path).await?;
-        Ok(GrpcResponse::new(stat.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let stat = grpc_fs_stat(&self.state, path).await?;
+                Ok(GrpcResponse::new(stat.into()))
+            })
+            .await
     }
 
     async fn list_fs(
         &self,
         request: Request<FsPathRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsList>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let path = request.into_inner().path;
-        let list = grpc_fs_list(&self.state, path).await?;
-        Ok(GrpcResponse::new(list.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let list = grpc_fs_list(&self.state, path).await?;
+                Ok(GrpcResponse::new(list.into()))
+            })
+            .await
     }
 
     type ReadFileStream = GrpcFileStream;
@@ -285,187 +299,235 @@ impl OperonRuntime for GrpcRuntime {
         &self,
         request: Request<FsPathRequest>,
     ) -> Result<GrpcResponse<Self::ReadFileStream>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let path = request.into_inner().path;
-        if let Err(error) = authorize_fs(&self.state.policy, "read", &path) {
-            record_audit(&self.state, "read-stream", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-        let full_path = match resolve_workspace_path(&self.state.workspace, &path) {
-            Ok(path) => path,
-            Err(error) => {
-                record_audit(&self.state, "read-stream", &path, false, &error.1);
-                return Err(status_from_error(error));
-            }
-        };
-        let file = tokio::fs::File::open(&full_path)
+        AUDIT_CONTEXT
+            .scope(context, async {
+                if let Err(error) = authorize_fs(&self.state.policy, "read", &path) {
+                    record_audit(&self.state, "read-stream", &path, false, &error.1);
+                    return Err(status_from_error(error));
+                }
+                let full_path = match resolve_existing_workspace_path(&self.state.workspace, &path)
+                {
+                    Ok(path) => path,
+                    Err(error) => {
+                        record_audit(&self.state, "read-stream", &path, false, &error.1);
+                        return Err(status_from_error(error));
+                    }
+                };
+                let file = tokio::fs::File::open(&full_path)
+                    .await
+                    .map_err(|error| Status::internal(error.to_string()))?;
+                record_audit(&self.state, "read-stream", &path, true, "allowed");
+                let stream = ReaderStream::new(file).map(|chunk| {
+                    chunk
+                        .map(|data| FileChunk {
+                            data: data.to_vec(),
+                        })
+                        .map_err(|error| Status::internal(error.to_string()))
+                });
+                Ok(GrpcResponse::new(Box::pin(stream) as Self::ReadFileStream))
+            })
             .await
-            .map_err(|error| Status::internal(error.to_string()))?;
-        record_audit(&self.state, "read-stream", &path, true, "allowed");
-        let stream = ReaderStream::new(file).map(|chunk| {
-            chunk
-                .map(|data| FileChunk {
-                    data: data.to_vec(),
-                })
-                .map_err(|error| Status::internal(error.to_string()))
-        });
-        Ok(GrpcResponse::new(Box::pin(stream)))
     }
 
     async fn write_file(
         &self,
         request: Request<tonic::Streaming<WriteFileRequest>>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsWrite>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let mut stream = request.into_inner();
-        let mut path = None;
-        let mut file = None;
-        let mut bytes_written = 0_u64;
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let mut path = None;
+                let mut file = None;
+                let mut bytes_written = 0_u64;
 
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            if path.is_none() {
-                if chunk.path.is_empty() {
-                    return Err(Status::invalid_argument(
-                        "first write chunk must include a path",
-                    ));
-                }
-                if let Err(error) = authorize_fs(&self.state.policy, "write", &chunk.path) {
-                    record_audit(&self.state, "write-stream", &chunk.path, false, &error.1);
-                    return Err(status_from_error(error));
-                }
-                let full_path = match resolve_workspace_path(&self.state.workspace, &chunk.path) {
-                    Ok(path) => path,
-                    Err(error) => {
-                        record_audit(&self.state, "write-stream", &chunk.path, false, &error.1);
-                        return Err(status_from_error(error));
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk?;
+                    if path.is_none() {
+                        if chunk.path.is_empty() {
+                            return Err(Status::invalid_argument(
+                                "first write chunk must include a path",
+                            ));
+                        }
+                        if let Err(error) = authorize_fs(&self.state.policy, "write", &chunk.path) {
+                            record_audit(&self.state, "write-stream", &chunk.path, false, &error.1);
+                            return Err(status_from_error(error));
+                        }
+                        let full_path = match resolve_write_workspace_path(
+                            &self.state.workspace,
+                            &chunk.path,
+                        ) {
+                            Ok(path) => path,
+                            Err(error) => {
+                                record_audit(
+                                    &self.state,
+                                    "write-stream",
+                                    &chunk.path,
+                                    false,
+                                    &error.1,
+                                );
+                                return Err(status_from_error(error));
+                            }
+                        };
+                        if let Some(parent) = full_path.parent() {
+                            tokio::fs::create_dir_all(parent)
+                                .await
+                                .map_err(|error| Status::internal(error.to_string()))?;
+                        }
+                        file = Some(
+                            tokio::fs::File::create(&full_path)
+                                .await
+                                .map_err(|error| Status::internal(error.to_string()))?,
+                        );
+                        path = Some(chunk.path.clone());
+                    } else if !chunk.path.is_empty() && Some(&chunk.path) != path.as_ref() {
+                        return Err(Status::invalid_argument(
+                            "write stream cannot change path after the first chunk",
+                        ));
                     }
-                };
-                if let Some(parent) = full_path.parent() {
-                    tokio::fs::create_dir_all(parent)
-                        .await
-                        .map_err(|error| Status::internal(error.to_string()))?;
+                    if let Some(file) = &mut file {
+                        file.write_all(&chunk.data)
+                            .await
+                            .map_err(|error| Status::internal(error.to_string()))?;
+                        bytes_written += chunk.data.len() as u64;
+                    }
                 }
-                file = Some(
-                    tokio::fs::File::create(&full_path)
-                        .await
-                        .map_err(|error| Status::internal(error.to_string()))?,
-                );
-                path = Some(chunk.path.clone());
-            } else if !chunk.path.is_empty() && Some(&chunk.path) != path.as_ref() {
-                return Err(Status::invalid_argument(
-                    "write stream cannot change path after the first chunk",
-                ));
-            }
-            if let Some(file) = &mut file {
-                file.write_all(&chunk.data)
-                    .await
-                    .map_err(|error| Status::internal(error.to_string()))?;
-                bytes_written += chunk.data.len() as u64;
-            }
-        }
 
-        let Some(path) = path else {
-            return Err(Status::invalid_argument(
-                "write stream did not include a path",
-            ));
-        };
-        record_audit(&self.state, "write-stream", &path, true, "allowed");
-        Ok(GrpcResponse::new(
-            FsWrite {
-                path,
-                bytes_written,
-            }
-            .into(),
-        ))
+                let Some(path) = path else {
+                    return Err(Status::invalid_argument(
+                        "write stream did not include a path",
+                    ));
+                };
+                record_audit(&self.state, "write-stream", &path, true, "allowed");
+                Ok(GrpcResponse::new(
+                    FsWrite {
+                        path,
+                        bytes_written,
+                    }
+                    .into(),
+                ))
+            })
+            .await
     }
 
     async fn write_file_range(
         &self,
         request: Request<FsWriteRangeRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsWrite>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let write =
-            grpc_fs_write_range(&self.state, request.path, request.offset, request.data).await?;
-        Ok(GrpcResponse::new(write.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let write =
+                    grpc_fs_write_range(&self.state, request.path, request.offset, request.data)
+                        .await?;
+                Ok(GrpcResponse::new(write.into()))
+            })
+            .await
     }
 
     async fn truncate_fs(
         &self,
         request: Request<FsTruncateRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsStat>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let stat = grpc_fs_truncate(&self.state, request.path, request.size).await?;
-        Ok(GrpcResponse::new(stat.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let stat = grpc_fs_truncate(&self.state, request.path, request.size).await?;
+                Ok(GrpcResponse::new(stat.into()))
+            })
+            .await
     }
 
     async fn mkdir_fs(
         &self,
         request: Request<FsPathRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsStat>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let path = request.into_inner().path;
-        let stat = grpc_fs_mkdir(&self.state, path).await?;
-        Ok(GrpcResponse::new(stat.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let stat = grpc_fs_mkdir(&self.state, path).await?;
+                Ok(GrpcResponse::new(stat.into()))
+            })
+            .await
     }
 
     async fn delete_fs(
         &self,
         request: Request<FsPathRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsDelete>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let path = request.into_inner().path;
-        let path = grpc_fs_delete(&self.state, path).await?;
-        Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsDelete {
-            path,
-        }))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let path = grpc_fs_delete(&self.state, path).await?;
+                Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsDelete {
+                    path,
+                }))
+            })
+            .await
     }
 
     async fn rename_fs(
         &self,
         request: Request<FsRenameRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsRename>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        grpc_fs_rename(&self.state, &request.from_path, &request.to_path).await?;
-        Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsRename {
-            from_path: request.from_path,
-            to_path: request.to_path,
-        }))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                grpc_fs_rename(&self.state, &request.from_path, &request.to_path).await?;
+                Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsRename {
+                    from_path: request.from_path,
+                    to_path: request.to_path,
+                }))
+            })
+            .await
     }
 
     async fn copy_fs(
         &self,
         request: Request<FsCopyRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsCopy>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let bytes_copied = grpc_fs_copy(&self.state, &request.from_path, &request.to_path).await?;
-        Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsCopy {
-            from_path: request.from_path,
-            to_path: request.to_path,
-            bytes_copied,
-        }))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let bytes_copied =
+                    grpc_fs_copy(&self.state, &request.from_path, &request.to_path).await?;
+                Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsCopy {
+                    from_path: request.from_path,
+                    to_path: request.to_path,
+                    bytes_copied,
+                }))
+            })
+            .await
     }
 
     async fn run_job(
         &self,
         request: Request<operon_protocol::runtime::v1::JobRunRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let record = start_job(
-            &self.state,
-            JobRunRequest {
-                command: request.command,
-                cwd: (!request.cwd.is_empty()).then_some(request.cwd),
-                timeout_secs: request.has_timeout_secs.then_some(request.timeout_secs),
-                secrets: request.secrets,
-            },
-        )?;
-        Ok(GrpcResponse::new(record.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let record = start_job(
+                    &self.state,
+                    JobRunRequest {
+                        command: request.command,
+                        cwd: (!request.cwd.is_empty()).then_some(request.cwd),
+                        timeout_secs: request.has_timeout_secs.then_some(request.timeout_secs),
+                        secrets: request.secrets,
+                    },
+                )?;
+                Ok(GrpcResponse::new(record.into()))
+            })
+            .await
     }
 
     async fn get_job(
@@ -719,27 +781,31 @@ impl OperonRuntime for GrpcRuntime {
         &self,
         request: Request<operon_protocol::runtime::v1::JobCancelRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let job_id = request.into_inner().job_id;
-        if let Some(sender) = self
-            .state
-            .job_cancel
-            .lock()
-            .expect("job cancel mutex poisoned")
-            .remove(&job_id)
-        {
-            let _ = sender.send(());
-            record_audit_capability(
-                &self.state,
-                "job:default",
-                "cancel",
-                &job_id,
-                true,
-                "cancel requested",
-            );
-        }
-        let record = get_job_record(&self.state, &job_id)?;
-        Ok(GrpcResponse::new(record.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                if let Some(sender) = self
+                    .state
+                    .job_cancel
+                    .lock()
+                    .expect("job cancel mutex poisoned")
+                    .remove(&job_id)
+                {
+                    let _ = sender.send(());
+                    record_audit_capability(
+                        &self.state,
+                        "job:default",
+                        "cancel",
+                        &job_id,
+                        true,
+                        "cancel requested",
+                    );
+                }
+                let record = get_job_record(&self.state, &job_id)?;
+                Ok(GrpcResponse::new(record.into()))
+            })
+            .await
     }
 
     async fn list_services(
@@ -759,10 +825,14 @@ impl OperonRuntime for GrpcRuntime {
         &self,
         request: Request<ServiceIdRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ServiceCheck>, Status> {
-        authorize_grpc(&self.state, request.metadata())?;
+        let context = authorize_grpc(&self.state, request.metadata())?;
         let service_id = request.into_inner().service_id;
-        let check = grpc_service_check(&self.state, service_id).await?;
-        Ok(GrpcResponse::new(check.into()))
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let check = grpc_service_check(&self.state, service_id).await?;
+                Ok(GrpcResponse::new(check.into()))
+            })
+            .await
     }
 
     async fn list_audit(
@@ -782,24 +852,34 @@ impl OperonRuntime for GrpcRuntime {
     }
 }
 
-fn authorize_grpc(state: &AppState, metadata: &MetadataMap) -> Result<(), Status> {
-    let Some(expected) = &state.auth_token else {
-        return Ok(());
-    };
-    let Some(header) = metadata.get("authorization") else {
-        return Err(Status::unauthenticated("missing bearer token"));
-    };
-    let Ok(header) = header.to_str() else {
-        return Err(Status::unauthenticated("invalid bearer token"));
-    };
-    let Some(actual) = header.strip_prefix("Bearer ") else {
-        return Err(Status::unauthenticated("invalid bearer token"));
-    };
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(Status::unauthenticated("invalid bearer token"))
+fn authorize_grpc(state: &AppState, metadata: &MetadataMap) -> Result<RequestContext, Status> {
+    if let Some(expected) = &state.auth_token {
+        let Some(header) = metadata.get("authorization") else {
+            return Err(Status::unauthenticated("missing bearer token"));
+        };
+        let Ok(header) = header.to_str() else {
+            return Err(Status::unauthenticated("invalid bearer token"));
+        };
+        let Some(actual) = header.strip_prefix("Bearer ") else {
+            return Err(Status::unauthenticated("invalid bearer token"));
+        };
+        if actual != expected {
+            return Err(Status::unauthenticated("invalid bearer token"));
+        }
     }
+
+    Ok(RequestContext {
+        run_id: metadata_value(metadata, RUN_ID_METADATA),
+        step_id: metadata_value(metadata, STEP_ID_METADATA),
+    })
+}
+
+fn metadata_value(metadata: &MetadataMap, key: &'static str) -> Option<String> {
+    metadata
+        .get(key)
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 async fn grpc_fs_stat(state: &AppState, path: String) -> Result<FsStat, Status> {
@@ -807,7 +887,7 @@ async fn grpc_fs_stat(state: &AppState, path: String) -> Result<FsStat, Status> 
         record_audit(state, "stat", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "stat", &path, false, &error.1);
@@ -831,7 +911,7 @@ async fn grpc_fs_list(state: &AppState, path: String) -> Result<FsList, Status> 
         record_audit(state, "list", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "list", &path, false, &error.1);
@@ -843,7 +923,9 @@ async fn grpc_fs_list(state: &AppState, path: String) -> Result<FsList, Status> 
         .await
         .map_err(status_from_io_error)?;
     while let Some(entry) = reader.next_entry().await.map_err(status_from_io_error)? {
-        let metadata = entry.metadata().await.map_err(status_from_io_error)?;
+        let metadata = tokio::fs::symlink_metadata(entry.path())
+            .await
+            .map_err(status_from_io_error)?;
         let name = entry.file_name().to_string_lossy().to_string();
         let child_path = join_virtual_path(&path, &name);
         entries.push(FsEntry {
@@ -869,7 +951,7 @@ async fn grpc_fs_write_range(
         record_audit(state, "write-range", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_write_workspace_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "write-range", &path, false, &error.1);
@@ -905,7 +987,7 @@ async fn grpc_fs_truncate(state: &AppState, path: String, size: u64) -> Result<F
         record_audit(state, "truncate", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_write_workspace_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "truncate", &path, false, &error.1);
@@ -942,7 +1024,7 @@ async fn grpc_fs_mkdir(state: &AppState, path: String) -> Result<FsStat, Status>
         record_audit(state, "mkdir", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_create_workspace_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "mkdir", &path, false, &error.1);
@@ -969,7 +1051,7 @@ async fn grpc_fs_delete(state: &AppState, path: String) -> Result<String, Status
         record_audit(state, "delete", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "delete", &path, false, &error.1);
@@ -1002,14 +1084,14 @@ async fn grpc_fs_rename(state: &AppState, from_path: &str, to_path: &str) -> Res
         record_audit(state, "rename", &resource, false, &error.1);
         return Err(status_from_error(error));
     }
-    let from_full_path = match resolve_workspace_path(&state.workspace, from_path) {
+    let from_full_path = match resolve_existing_workspace_path(&state.workspace, from_path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "rename", &resource, false, &error.1);
             return Err(status_from_error(error));
         }
     };
-    let to_full_path = match resolve_workspace_path(&state.workspace, to_path) {
+    let to_full_path = match resolve_write_workspace_path(&state.workspace, to_path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "rename", &resource, false, &error.1);
@@ -1033,14 +1115,14 @@ async fn grpc_fs_copy(state: &AppState, from_path: &str, to_path: &str) -> Resul
         record_audit(state, "copy", &resource, false, &error.1);
         return Err(status_from_error(error));
     }
-    let from_full_path = match resolve_workspace_path(&state.workspace, from_path) {
+    let from_full_path = match resolve_existing_workspace_path(&state.workspace, from_path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "copy", &resource, false, &error.1);
             return Err(status_from_error(error));
         }
     };
-    let to_full_path = match resolve_workspace_path(&state.workspace, to_path) {
+    let to_full_path = match resolve_write_workspace_path(&state.workspace, to_path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "copy", &resource, false, &error.1);
@@ -1063,27 +1145,26 @@ async fn grpc_fs_copy(state: &AppState, from_path: &str, to_path: &str) -> Resul
 
 fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Status> {
     let cwd_virtual = request.cwd.clone().unwrap_or_else(|| "/".to_string());
-    if let Err(error) = authorize_job(&state.policy, &cwd_virtual, request.timeout_secs) {
+    if let Err(error) = authorize_job(&state.policy.job, &cwd_virtual, request.timeout_secs) {
         record_audit_capability(state, "job:default", "run", &cwd_virtual, false, &error.1);
         return Err(status_from_error(error));
     }
-    let secret_env = match resolve_job_secrets(state, &request.secrets) {
+    let secret_env = match resolve_job_secrets(&state.policy.job, &state.secrets, &request.secrets)
+    {
         Ok(secret_env) => secret_env,
         Err(error) => {
             record_audit_capability(state, "secret:default", "use", "*", false, &error.1);
             return Err(status_from_error(error));
         }
     };
-    let cwd = match resolve_workspace_path(&state.workspace, &cwd_virtual) {
+    let cwd = match resolve_existing_workspace_path(&state.workspace, &cwd_virtual) {
         Ok(path) => path,
         Err(error) => {
             record_audit_capability(state, "job:default", "run", &cwd_virtual, false, &error.1);
             return Err(status_from_error(error));
         }
     };
-    if !cwd.exists() {
-        fs::create_dir_all(&cwd).map_err(|error| Status::internal(error.to_string()))?;
-    }
+    let env = job_environment(&state.policy.job, secret_env);
 
     let job_id = format!("job-{}", state.next_job_id.fetch_add(1, Ordering::SeqCst));
     let record = JobRecord {
@@ -1161,7 +1242,7 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
             command,
             cwd,
             timeout_secs,
-            env: secret_env,
+            env,
             cancel_rx,
             stdin_rx,
         })
@@ -1197,33 +1278,18 @@ async fn grpc_service_check(state: &AppState, service_id: String) -> Result<Serv
         }
     };
 
-    let started = std::time::Instant::now();
-    let result = time::timeout(
-        std::time::Duration::from_secs(2),
-        tokio::net::TcpStream::connect((service.host.as_str(), service.port)),
-    )
-    .await;
-    let latency_ms = started.elapsed().as_millis();
-    let (ok, reason) = match result {
-        Ok(Ok(_)) => (true, None),
-        Ok(Err(error)) => (false, Some(error.to_string())),
-        Err(_) => (false, Some("service check timed out".to_string())),
-    };
+    let check =
+        operon_network::check_tcp_service(&service, std::time::Duration::from_secs(2)).await;
     record_audit_capability(
         state,
         &format!("service:{}", service.id),
         "check",
         &service.id,
-        ok,
-        reason.as_deref().unwrap_or("reachable"),
+        check.ok,
+        check.reason.as_deref().unwrap_or("reachable"),
     );
 
-    Ok(ServiceCheck {
-        id: service.id,
-        ok,
-        latency_ms,
-        reason,
-    })
+    Ok(check)
 }
 
 fn status_from_error(error: (RuntimeErrorKind, String)) -> Status {
@@ -1255,28 +1321,6 @@ fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>>
     };
     let content = fs::read_to_string(path)?;
     Ok(serde_yaml::from_str(&content)?)
-}
-
-fn load_store_jobs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, JobRecord>> {
-    let Some(path) = path else {
-        return Ok(BTreeMap::new());
-    };
-    if !path.exists() {
-        return Ok(BTreeMap::new());
-    }
-    let content = fs::read_to_string(path)?;
-    let mut jobs = BTreeMap::new();
-    for line in content.lines().filter(|line| !line.trim().is_empty()) {
-        let value: serde_json::Value = serde_json::from_str(line)?;
-        if value.get("kind").and_then(serde_json::Value::as_str) != Some("job") {
-            continue;
-        }
-        if let Some(record) = value.get("record") {
-            let record: JobRecord = serde_json::from_value(record.clone())?;
-            jobs.insert(record.id.clone(), record);
-        }
-    }
-    Ok(jobs)
 }
 
 fn next_job_sequence(jobs: &BTreeMap<String, JobRecord>) -> u64 {
@@ -1404,123 +1448,6 @@ fn default_capabilities(node_id: &str) -> CapabilityList {
     }
 }
 
-fn resolve_workspace_path(
-    workspace: &Path,
-    virtual_path: &str,
-) -> Result<PathBuf, (RuntimeErrorKind, String)> {
-    let trimmed = virtual_path.trim_start_matches('/');
-    let mut resolved = workspace.to_path_buf();
-
-    for component in Path::new(trimmed).components() {
-        match component {
-            Component::Normal(part) => resolved.push(part),
-            Component::CurDir => {}
-            Component::RootDir | Component::Prefix(_) | Component::ParentDir => {
-                return Err((
-                    RuntimeErrorKind::Forbidden,
-                    "path escapes workspace mount".to_string(),
-                ));
-            }
-        }
-    }
-
-    Ok(resolved)
-}
-
-fn authorize_fs(
-    policy: &PolicyConfig,
-    operation: &str,
-    virtual_path: &str,
-) -> Result<(), (RuntimeErrorKind, String)> {
-    let Some(mount) = policy
-        .fs
-        .mounts
-        .iter()
-        .find(|mount| path_in_policy_scope(virtual_path, &mount.path))
-    else {
-        return Err((
-            RuntimeErrorKind::Forbidden,
-            "path is outside allowed fs mounts".to_string(),
-        ));
-    };
-
-    let allowed = match operation {
-        "read" => mount.permissions.read,
-        "write" => mount.permissions.write,
-        "delete" => mount.permissions.delete,
-        _ => false,
-    };
-
-    if allowed {
-        Ok(())
-    } else {
-        Err((
-            RuntimeErrorKind::Forbidden,
-            format!("fs {operation} denied by policy"),
-        ))
-    }
-}
-
-fn authorize_job(
-    policy: &PolicyConfig,
-    cwd: &str,
-    requested_timeout_secs: Option<u64>,
-) -> Result<(), (RuntimeErrorKind, String)> {
-    if !policy
-        .job
-        .allowed_cwds
-        .iter()
-        .any(|allowed_cwd| path_in_policy_scope(cwd, allowed_cwd))
-    {
-        return Err((
-            RuntimeErrorKind::Forbidden,
-            "job cwd denied by policy".to_string(),
-        ));
-    }
-
-    let timeout_secs = requested_timeout_secs.unwrap_or(policy.job.default_timeout_secs);
-    if timeout_secs > policy.job.max_timeout_secs {
-        return Err((
-            RuntimeErrorKind::Forbidden,
-            format!(
-                "job timeout {timeout_secs}s exceeds policy maximum {}s",
-                policy.job.max_timeout_secs
-            ),
-        ));
-    }
-
-    Ok(())
-}
-
-fn resolve_job_secrets(
-    state: &AppState,
-    requested: &[String],
-) -> Result<BTreeMap<String, String>, (RuntimeErrorKind, String)> {
-    let mut env = BTreeMap::new();
-    for name in requested {
-        if !state
-            .policy
-            .job
-            .allowed_secrets
-            .iter()
-            .any(|allowed| allowed == name)
-        {
-            return Err((
-                RuntimeErrorKind::Forbidden,
-                format!("secret `{name}` denied by policy"),
-            ));
-        }
-        let Some(value) = state.secrets.get(name) else {
-            return Err((
-                RuntimeErrorKind::NotFound,
-                format!("secret `{name}` not found"),
-            ));
-        };
-        env.insert(name.clone(), value.clone());
-    }
-    Ok(env)
-}
-
 fn authorize_service(
     policy: &PolicyConfig,
     service_id: &str,
@@ -1539,30 +1466,6 @@ fn authorize_service(
         })
 }
 
-fn path_in_policy_scope(path: &str, scope: &str) -> bool {
-    let path = normalize_virtual_path(path);
-    let scope = normalize_virtual_path(scope);
-
-    scope == "/" || path == scope || path.starts_with(&format!("{scope}/"))
-}
-
-fn normalize_virtual_path(path: &str) -> String {
-    let trimmed = path.trim();
-    if trimmed.is_empty() || trimmed == "/" {
-        return "/".to_string();
-    }
-    format!("/{}", trimmed.trim_matches('/'))
-}
-
-fn join_virtual_path(base: &str, name: &str) -> String {
-    let base = base.trim_end_matches('/');
-    if base.is_empty() || base == "/" {
-        format!("/{name}")
-    } else {
-        format!("{base}/{name}")
-    }
-}
-
 fn record_audit(state: &AppState, action: &str, resource: &str, allowed: bool, reason: &str) {
     record_audit_capability(state, "fs:workspace", action, resource, allowed, reason);
 }
@@ -1575,6 +1478,7 @@ fn record_audit_capability(
     allowed: bool,
     reason: &str,
 ) {
+    let context = current_request_context();
     let event = AuditEvent {
         subject: state.policy.subject.clone(),
         timestamp_ms: now_ms(),
@@ -1584,8 +1488,8 @@ fn record_audit_capability(
         resource: resource.to_string(),
         allowed,
         reason: reason.to_string(),
-        run_id: None,
-        step_id: None,
+        run_id: context.run_id,
+        step_id: context.step_id,
     };
     let mut audit = state.audit.lock().expect("audit log mutex poisoned");
     audit.push_back(event.clone());
@@ -1602,38 +1506,12 @@ fn record_audit_capability(
     );
 }
 
+fn current_request_context() -> RequestContext {
+    AUDIT_CONTEXT.try_with(Clone::clone).unwrap_or_default()
+}
+
 fn append_store_record(path: Option<&Path>, record: &serde_json::Value) {
-    let Some(path) = path else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        if let Err(error) = fs::create_dir_all(parent) {
-            tracing::warn!(
-                "failed to create store directory {}: {error}",
-                parent.display()
-            );
-            return;
-        }
-    }
-    let line = match serde_json::to_string(record) {
-        Ok(line) => line,
-        Err(error) => {
-            tracing::warn!("failed to serialize store record: {error}");
-            return;
-        }
-    };
-    let mut options = fs::OpenOptions::new();
-    if let Err(error) = options
-        .create(true)
-        .append(true)
-        .open(path)
-        .and_then(|mut file| {
-            use std::io::Write;
-            writeln!(file, "{line}")
-        })
-    {
-        tracing::warn!("failed to append store record {}: {error}", path.display());
-    }
+    operon_store::append_record(path, record);
 }
 
 fn now_ms() -> u128 {
@@ -1652,10 +1530,11 @@ async fn run_job_task(task: JobTask) {
         store: task.store.clone(),
         job_id: task.job_id.clone(),
     };
-    let child = TokioCommand::new("sh")
+    let child = TokioCommand::new("/bin/sh")
         .arg("-c")
         .arg(&task.command)
         .current_dir(task.cwd)
+        .env_clear()
         .envs(task.env)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1990,15 +1869,16 @@ mod tests {
 
     #[test]
     fn resolves_virtual_paths_under_workspace() {
-        let resolved = resolve_workspace_path(Path::new("/srv/operon"), "/nested/file.txt")
-            .expect("path should resolve");
+        let resolved =
+            operon_fs::resolve_workspace_path(Path::new("/srv/operon"), "/nested/file.txt")
+                .expect("path should resolve");
 
         assert_eq!(resolved, PathBuf::from("/srv/operon/nested/file.txt"));
     }
 
     #[test]
     fn rejects_parent_dir_workspace_escape() {
-        let error = resolve_workspace_path(Path::new("/srv/operon"), "/../etc/passwd")
+        let error = operon_fs::resolve_workspace_path(Path::new("/srv/operon"), "/../etc/passwd")
             .expect_err("path escape should be rejected");
 
         assert_eq!(error.0, RuntimeErrorKind::Forbidden);
@@ -2007,9 +1887,15 @@ mod tests {
 
     #[test]
     fn policy_scope_matches_exact_path_and_children_only() {
-        assert!(path_in_policy_scope("/workspace", "/workspace"));
-        assert!(path_in_policy_scope("/workspace/project", "/workspace"));
-        assert!(!path_in_policy_scope("/workspace-other", "/workspace"));
+        assert!(operon_fs::path_in_policy_scope("/workspace", "/workspace"));
+        assert!(operon_fs::path_in_policy_scope(
+            "/workspace/project",
+            "/workspace"
+        ));
+        assert!(!operon_fs::path_in_policy_scope(
+            "/workspace-other",
+            "/workspace"
+        ));
     }
 
     #[test]
@@ -2048,13 +1934,14 @@ mod tests {
     fn job_policy_enforces_cwd_and_timeout() {
         let policy = test_policy();
 
-        assert!(authorize_job(&policy, "/workspace/project", Some(30)).is_ok());
+        assert!(authorize_job(&policy.job, "/workspace/project", Some(30)).is_ok());
 
-        let cwd_error = authorize_job(&policy, "/tmp", Some(1)).expect_err("cwd should be denied");
+        let cwd_error =
+            authorize_job(&policy.job, "/tmp", Some(1)).expect_err("cwd should be denied");
         assert_eq!(cwd_error.1, "job cwd denied by policy");
 
-        let timeout_error =
-            authorize_job(&policy, "/workspace", Some(31)).expect_err("timeout should be denied");
+        let timeout_error = authorize_job(&policy.job, "/workspace", Some(31))
+            .expect_err("timeout should be denied");
         assert!(timeout_error.1.contains("exceeds policy maximum"));
     }
 
@@ -2085,19 +1972,28 @@ mod tests {
             next_job_id: Arc::new(AtomicU64::new(1)),
         };
 
-        let resolved = resolve_job_secrets(&state, &["TEST_SECRET".to_string()]).expect("secret");
+        let resolved = resolve_job_secrets(
+            &state.policy.job,
+            &state.secrets,
+            &["TEST_SECRET".to_string()],
+        )
+        .expect("secret");
         assert_eq!(
             resolved.get("TEST_SECRET").map(String::as_str),
             Some("secret-value")
         );
 
-        let denied = resolve_job_secrets(&state, &["DENIED_SECRET".to_string()])
-            .expect_err("denied secret should fail");
+        let denied = resolve_job_secrets(
+            &state.policy.job,
+            &state.secrets,
+            &["DENIED_SECRET".to_string()],
+        )
+        .expect_err("denied secret should fail");
         assert_eq!(denied.0, RuntimeErrorKind::Forbidden);
     }
 
-    #[test]
-    fn audit_event_uses_policy_subject_and_capability() {
+    #[tokio::test]
+    async fn audit_event_uses_policy_subject_capability_and_context() {
         let state = AppState {
             node: NodeInfo {
                 id: "node-a".to_string(),
@@ -2121,13 +2017,32 @@ mod tests {
             next_job_id: Arc::new(AtomicU64::new(1)),
         };
 
-        record_audit_capability(&state, "fs:workspace", "read", "/file.txt", true, "allowed");
+        AUDIT_CONTEXT
+            .scope(
+                RequestContext {
+                    run_id: Some("run-1".to_string()),
+                    step_id: Some("step-1".to_string()),
+                },
+                async {
+                    record_audit_capability(
+                        &state,
+                        "fs:workspace",
+                        "read",
+                        "/file.txt",
+                        true,
+                        "allowed",
+                    );
+                },
+            )
+            .await;
 
         let events = state.audit.lock().expect("audit log");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].subject, "test-subject");
         assert_eq!(events[0].node_id, "node-a");
         assert_eq!(events[0].capability, "fs:workspace");
+        assert_eq!(events[0].run_id.as_deref(), Some("run-1"));
+        assert_eq!(events[0].step_id.as_deref(), Some("step-1"));
         assert!(events[0].allowed);
     }
 

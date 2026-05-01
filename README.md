@@ -631,6 +631,7 @@ Roadmap:
 - [x] Linux write FUSE mount
 - [x] CLI fs mutation commands
 - [x] Same-node fs copy
+- [x] Workspace containment and isolated job environment hardening
 - [ ] CLI TUI console
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters

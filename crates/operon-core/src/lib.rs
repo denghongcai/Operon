@@ -1,6 +1,21 @@
 pub type NodeId = String;
 pub type CapabilityId = String;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeErrorKind {
+    Forbidden,
+    NotFound,
+}
+
+pub type RuntimeResult<T> = Result<T, (RuntimeErrorKind, String)>;
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct RequestContext {
+    pub run_id: Option<String>,
+    pub step_id: Option<String>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeRef {
     pub id: NodeId,

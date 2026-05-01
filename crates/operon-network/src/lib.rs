@@ -4,7 +4,7 @@ use std::{
 };
 
 use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent};
-use operon_core::{DiscoveryList, DiscoveryRecord};
+use operon_core::{DiscoveryList, DiscoveryRecord, ServiceCheck, ServiceDefinition};
 
 pub use operon_config::{NetworkProviderKind, NodeEndpoint};
 
@@ -29,6 +29,28 @@ pub fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
     Ok(DiscoveryList {
         nodes: records.into_values().collect(),
     })
+}
+
+pub async fn check_tcp_service(service: &ServiceDefinition, timeout: Duration) -> ServiceCheck {
+    let started = Instant::now();
+    let result = tokio::time::timeout(
+        timeout,
+        tokio::net::TcpStream::connect((service.host.as_str(), service.port)),
+    )
+    .await;
+    let latency_ms = started.elapsed().as_millis();
+    let (ok, reason) = match result {
+        Ok(Ok(_)) => (true, None),
+        Ok(Err(error)) => (false, Some(error.to_string())),
+        Err(_) => (false, Some("service check timed out".to_string())),
+    };
+
+    ServiceCheck {
+        id: service.id.clone(),
+        ok,
+        latency_ms,
+        reason,
+    }
 }
 
 fn discovery_record_from_info(info: &ResolvedService) -> DiscoveryRecord {

@@ -11,3 +11,4 @@ anyhow.workspace = true
 mdns-sd.workspace = true
 operon-config = { path = "../operon-config" }
 operon-core = { path = "../operon-core" }
+tokio.workspace = true

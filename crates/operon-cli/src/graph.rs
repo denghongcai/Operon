@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::SystemTime};
 
 use operon_core::{
     ExecutionGraph, ExecutionStatus, ExecutionStep, ExecutionStepTrace, ExecutionTrace, FsRead,
-    JobRecord, JobRunRequest, JobStatus,
+    JobRecord, JobRunRequest, JobStatus, RequestContext,
 };
 
 use crate::{grpc, load_endpoint, load_job};
@@ -22,7 +22,7 @@ pub(crate) fn run_graph(
     };
 
     for (index, step) in graph.steps.iter().enumerate() {
-        let step_trace = execute_step(config_path.clone(), index, step);
+        let step_trace = execute_step(config_path.clone(), &trace.run_id, index, step);
         let failed = matches!(step_trace.status, ExecutionStatus::Failed);
         trace.steps.push(step_trace);
 
@@ -37,13 +37,24 @@ pub(crate) fn run_graph(
     write_trace(&trace, trace_output.as_deref())
 }
 
-fn execute_step(config_path: PathBuf, index: usize, step: &ExecutionStep) -> ExecutionStepTrace {
+fn execute_step(
+    config_path: PathBuf,
+    run_id: &str,
+    index: usize,
+    step: &ExecutionStep,
+) -> ExecutionStepTrace {
     let id = step
         .id
         .clone()
         .unwrap_or_else(|| format!("step-{}", index + 1));
     let started_at_ms = now_ms();
-    let result = execute_step_action(config_path, step);
+    let result = grpc::with_request_context(
+        RequestContext {
+            run_id: Some(run_id.to_string()),
+            step_id: Some(id.clone()),
+        },
+        || execute_step_action(config_path, step),
+    );
     let ended_at_ms = now_ms();
 
     match result {
@@ -185,7 +196,7 @@ mod tests {
             secrets: Vec::new(),
         };
 
-        let trace = execute_step(PathBuf::from("missing-config.yaml"), 0, &step);
+        let trace = execute_step(PathBuf::from("missing-config.yaml"), "run-test", 0, &step);
 
         assert_eq!(trace.id, "bad-step");
         assert!(matches!(trace.status, ExecutionStatus::Failed));
@@ -209,7 +220,7 @@ mod tests {
             secrets: Vec::new(),
         };
 
-        let trace = execute_step(PathBuf::from("missing-config.yaml"), 2, &step);
+        let trace = execute_step(PathBuf::from("missing-config.yaml"), "run-test", 2, &step);
 
         assert_eq!(trace.id, "step-3");
     }

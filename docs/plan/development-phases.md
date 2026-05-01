@@ -2022,6 +2022,62 @@ Remaining:
 
 - None for Phase 32.14.
 
+## v0.6.6 Release Goal
+
+Operon v0.6.6 should stabilize and release the job event/log protocol cleanup
+before v0.7 TUI work starts.
+
+```text
+v0.6.6 = WatchJob status stream, separate job log APIs, and bounded job log retention.
+```
+
+v0.6.6 should not add new runtime capabilities. It is an acceptance and release
+checkpoint for the protocol-breaking job record cleanup.
+
+## Phase 32.15: v0.6.6 Release Hardening
+
+Status: Completed.
+
+Goal: close the release-blocking security and streaming gaps before tagging
+v0.6.6.
+
+Completed:
+
+- enforced real workspace containment for symlink-resolving filesystem and job
+  cwd operations.
+- applied `job.env_allowlist` by clearing inherited daemon environment and
+  injecting only allowed variables plus authorized secrets.
+- propagated execution graph run/step context into audit events through gRPC
+  metadata.
+- streamed CLI file reads and job logs directly to writers instead of buffering
+  whole streams in memory.
+- exposed a true TypeScript SDK file stream API while keeping read-all helpers.
+- added `docs/plan/v0.6.6-acceptance.md` and release validation notes.
+
+Remaining:
+
+- None for Phase 32.15.
+
+## Phase 32.16: Runtime Crate Boundary Refactor
+
+Status: Completed.
+
+Goal: create stable crate APIs for runtime areas that the v0.7 TUI and v0.8
+agent integration will reuse.
+
+Completed:
+
+- moved workspace path containment and fs policy helpers into `operon-fs`.
+- moved job authorization and environment construction into `operon-process`.
+- moved append-only store helpers into `operon-store`.
+- moved service health check helper into `operon-network`.
+- updated daemon code to use these crate APIs instead of local copies.
+
+Remaining:
+
+- Further daemon decomposition can happen before v0.7 if needed, but no
+  release-blocking runtime helper duplication remains in this phase.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

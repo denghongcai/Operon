@@ -65,6 +65,10 @@ Operon should not own:
 - `docs/plan/v0.6.5-unified-config-acceptance.md`
   - v0.6.5 acceptance scope for unified `config.yaml`.
 
+- `docs/plan/v0.6.6-acceptance.md`
+  - v0.6.6 acceptance scope for release hardening, job environment isolation,
+    graph audit context, streaming clients, and runtime crate boundaries.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -113,6 +117,9 @@ Operon should not own:
 - Completed fs milestone: v0.6.3 same-node fs copy for protocol, CLI, and SDK.
 - Completed onboarding milestone: v0.6.4 guided first-run setup through `operon onboard`.
 - Completed config milestone: v0.6.5 unified `config.yaml` through `operon-config`.
+- Completed hardening milestone: v0.6.6 workspace containment, isolated job
+  environment construction, graph audit context, streaming client cleanup, and
+  runtime helper crate boundaries.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.

@@ -71,6 +71,11 @@ export type OperonStepTrace = {
   output?: unknown;
 };
 
+type RequestContext = {
+  runId?: string;
+  stepId?: string;
+};
+
 export type JobRecord = {
   id: string;
   node_id: string;
@@ -161,7 +166,7 @@ export class OperonClient {
     };
 
     for (const [index, step] of request.steps.entries()) {
-      const stepTrace = await this.runStep(step, index);
+      const stepTrace = await this.runStep(step, index, trace.runId);
       trace.steps.push(stepTrace);
 
       if (stepTrace.status === "failed") {
@@ -175,12 +180,22 @@ export class OperonClient {
   }
 
   async readFileBytes(nodeId: string, path: string): Promise<ArrayBuffer> {
-    const endpoint = this.endpointFor(nodeId);
     const chunks: Uint8Array[] = [];
-    for await (const chunk of this.grpcClient(endpoint).readFile({ path }, this.grpcOptions(endpoint))) {
-      chunks.push(chunk.data);
+    const stream = await this.readFileStream(nodeId, path);
+    const reader = stream.getReader();
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        break;
+      }
+      chunks.push(next.value);
     }
     return toArrayBuffer(concatChunks(chunks));
+  }
+
+  async readFileStream(nodeId: string, path: string): Promise<ReadableStream<Uint8Array>> {
+    const endpoint = this.endpointFor(nodeId);
+    return this.readFileStreamWithEndpoint(endpoint, path);
   }
 
   async writeFileBytes(nodeId: string, path: string, body: BodyInit): Promise<unknown> {
@@ -264,12 +279,12 @@ export class OperonClient {
     );
   }
 
-  private async runStep(step: OperonStep, index: number): Promise<OperonStepTrace> {
+  private async runStep(step: OperonStep, index: number, runId: string): Promise<OperonStepTrace> {
     const startedAtMs = Date.now();
     const id = step.id ?? `step-${index + 1}`;
 
     try {
-      const output = await this.runAction(step);
+      const output = await this.runAction(step, { runId, stepId: id });
       return {
         id,
         node: step.node,
@@ -292,9 +307,9 @@ export class OperonClient {
     }
   }
 
-  private async runAction(step: OperonStep): Promise<unknown> {
+  private async runAction(step: OperonStep, context?: RequestContext): Promise<unknown> {
     const endpoint = this.endpointFor(step.node);
-    return this.runGrpcAction(endpoint, step);
+    return this.runGrpcAction(endpoint, step, context);
   }
 
   private endpointFor(nodeId: string): NodeEndpoint {
@@ -316,29 +331,40 @@ export class OperonClient {
     return client;
   }
 
-  private grpcOptions(endpoint: NodeEndpoint): CallOptions {
-    if (!endpoint.token) {
+  private grpcOptions(endpoint: NodeEndpoint, context?: RequestContext): CallOptions {
+    if (!endpoint.token && !context?.runId && !context?.stepId) {
       return {};
     }
+    let metadata = Metadata();
+    if (endpoint.token) {
+      metadata = metadata.set("authorization", `Bearer ${endpoint.token}`);
+    }
+    if (context?.runId) {
+      metadata = metadata.set("x-operon-run-id", context.runId);
+    }
+    if (context?.stepId) {
+      metadata = metadata.set("x-operon-step-id", context.stepId);
+    }
     return {
-      metadata: Metadata().set("authorization", `Bearer ${endpoint.token}`),
+      metadata,
     };
   }
 
-  private async runGrpcAction(endpoint: NodeEndpoint, step: OperonStep): Promise<unknown> {
+  private async runGrpcAction(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<unknown> {
     const client = this.grpcClient(endpoint);
-    const options = this.grpcOptions(endpoint);
+    const options = this.grpcOptions(endpoint, context);
     switch (step.action) {
       case "fs.stat":
         return fromGrpcFsStat(await client.statFs({ path: required(step.path, "path") }, options));
       case "fs.list":
         return fromGrpcFsList(await client.listFs({ path: required(step.path, "path") }, options));
       case "fs.read": {
-        const chunks: Uint8Array[] = [];
-        for await (const chunk of client.readFile({ path: required(step.path, "path") }, options)) {
-          chunks.push(chunk.data);
-        }
-        return { path: required(step.path, "path"), content: new TextDecoder().decode(concatChunks(chunks)) };
+        return {
+          path: required(step.path, "path"),
+          content: new TextDecoder().decode(
+            await streamToBytes(await this.readFileStreamWithEndpoint(endpoint, required(step.path, "path"), context)),
+          ),
+        };
       }
       case "fs.write":
         return fromGrpcFsWrite(
@@ -362,13 +388,13 @@ export class OperonClient {
         };
       }
       case "job.run":
-        return this.runGrpcJob(endpoint, step);
+        return this.runGrpcJob(endpoint, step, context);
     }
   }
 
-  private async runGrpcJob(endpoint: NodeEndpoint, step: OperonStep): Promise<JobRecord> {
+  private async runGrpcJob(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<JobRecord> {
     const client = this.grpcClient(endpoint);
-    const options = this.grpcOptions(endpoint);
+    const options = this.grpcOptions(endpoint, context);
     const job = fromGrpcJobRecord(
       await client.runJob(
         {
@@ -394,6 +420,29 @@ export class OperonClient {
       throw new Error(`job ${record.id} ended with status ${jobEvent.status}`);
     }
     throw new Error(`job ${job.id} watch stream ended without a terminal event`);
+  }
+
+  private async readFileStreamWithEndpoint(
+    endpoint: NodeEndpoint,
+    path: string,
+    context?: RequestContext,
+  ): Promise<ReadableStream<Uint8Array>> {
+    const iterator = this.grpcClient(endpoint).readFile({ path }, this.grpcOptions(endpoint, context))[Symbol.asyncIterator]();
+    return new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        const next = await iterator.next();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(next.value.data);
+      },
+      async cancel() {
+        if (iterator.return) {
+          await iterator.return();
+        }
+      },
+    });
   }
 }
 
@@ -460,6 +509,19 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
+}
+
+async function streamToBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const next = await reader.read();
+    if (next.done) {
+      break;
+    }
+    chunks.push(next.value);
+  }
+  return concatChunks(chunks);
 }
 
 async function* grpcFileChunks(path: string, bytes: Uint8Array): AsyncIterable<{ path: string; data: Uint8Array }> {

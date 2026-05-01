@@ -113,6 +113,10 @@ describe("OperonClient", () => {
     expect(trace.steps.map((step) => step.id)).toEqual(["write", "run", "read"]);
     expect(niceGrpcMock.createChannel).toHaveBeenCalledWith("http://127.0.0.1:7789");
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("authorization", "Bearer test-token");
+    expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith(expect.stringMatching(/^x-operon-run-id$/), expect.stringMatching(/^run-/));
+    expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "write");
+    expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "run");
+    expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "read");
     expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
       expect.objectContaining({ command: "cat input.txt", secrets: ["GITHUB_TOKEN"] }),
       expect.any(Object),

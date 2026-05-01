@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     fs,
     io::{Read, Write},
     path::Path,
@@ -9,8 +10,8 @@ use anyhow::Context;
 use futures_util::stream;
 use operon_core::{
     AuditLog, CapabilityList, FsList, FsStat, FsWrite, HealthStatus, JobEvent, JobList, JobLogList,
-    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
-    ServiceList,
+    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, RequestContext,
+    ServiceCheck, ServiceList,
 };
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
@@ -22,6 +23,22 @@ use operon_protocol::runtime::v1::{
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
 static CLI_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+thread_local! {
+    static REQUEST_CONTEXT: RefCell<Option<RequestContext>> = const { RefCell::new(None) };
+}
+
+pub fn with_request_context<T>(
+    context: RequestContext,
+    f: impl FnOnce() -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    let previous = REQUEST_CONTEXT.with(|slot| slot.replace(Some(context)));
+    let result = f();
+    REQUEST_CONTEXT.with(|slot| {
+        slot.replace(previous);
+    });
+    result
+}
 
 pub fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthStatus, NodeInfo)> {
     block_on(endpoint, |mut client, endpoint| async move {
@@ -83,14 +100,9 @@ pub fn read_file_to_writer(
             .read_file(with_auth(&endpoint, FsPathRequest { path })?)
             .await?
             .into_inner();
-        let mut data = Vec::new();
         while let Some(chunk) = stream.message().await? {
-            data.extend_from_slice(&chunk.data);
+            writer.write_all(&chunk.data)?;
         }
-        Ok(data)
-    })
-    .and_then(|data| {
-        writer.write_all(&data)?;
         Ok(())
     })
 }
@@ -267,14 +279,9 @@ pub fn stream_job_logs_to_writer(
             .stream_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
             .into_inner();
-        let mut data = Vec::new();
         while let Some(log) = stream.message().await? {
-            data.extend_from_slice(log.data.as_bytes());
+            writer.write_all(log.data.as_bytes())?;
         }
-        Ok(data)
-    })
-    .and_then(|data| {
-        writer.write_all(&data)?;
         Ok(())
     })
 }
@@ -398,6 +405,22 @@ fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T
             MetadataValue::try_from(format!("Bearer {token}"))?,
         );
     }
+    REQUEST_CONTEXT.with(|slot| -> anyhow::Result<()> {
+        if let Some(context) = slot.borrow().as_ref() {
+            if let Some(run_id) = &context.run_id {
+                request
+                    .metadata_mut()
+                    .insert("x-operon-run-id", MetadataValue::try_from(run_id.as_str())?);
+            }
+            if let Some(step_id) = &context.step_id {
+                request.metadata_mut().insert(
+                    "x-operon-step-id",
+                    MetadataValue::try_from(step_id.as_str())?,
+                );
+            }
+        }
+        Ok(())
+    })?;
     Ok(request)
 }
 
@@ -481,5 +504,48 @@ mod tests {
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].path, "file.txt");
         assert!(chunks[1].path.is_empty());
+    }
+
+    #[test]
+    fn with_auth_includes_execution_context_metadata() {
+        let endpoint = NodeEndpoint {
+            node_id: "node-a".to_string(),
+            endpoint: "grpc://127.0.0.1:7789".to_string(),
+            provider: operon_network::NetworkProviderKind::Manual,
+            token: Some("test-token".to_string()),
+        };
+
+        with_request_context(
+            RequestContext {
+                run_id: Some("run-1".to_string()),
+                step_id: Some("step-1".to_string()),
+            },
+            || {
+                let request = with_auth(&endpoint, HealthRequest {})?;
+                assert_eq!(
+                    request
+                        .metadata()
+                        .get("authorization")
+                        .and_then(|value| value.to_str().ok()),
+                    Some("Bearer test-token")
+                );
+                assert_eq!(
+                    request
+                        .metadata()
+                        .get("x-operon-run-id")
+                        .and_then(|value| value.to_str().ok()),
+                    Some("run-1")
+                );
+                assert_eq!(
+                    request
+                        .metadata()
+                        .get("x-operon-step-id")
+                        .and_then(|value| value.to_str().ok()),
+                    Some("step-1")
+                );
+                Ok(())
+            },
+        )
+        .expect("context metadata");
     }
 }

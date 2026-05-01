@@ -14,8 +14,11 @@ futures-util.workspace = true
 mdns-sd.workspace = true
 operon-config = { path = "../operon-config" }
 operon-core = { path = "../operon-core" }
+operon-fs = { path = "../operon-fs" }
 operon-network = { path = "../operon-network" }
+operon-process = { path = "../operon-process" }
 operon-protocol = { path = "../operon-protocol" }
+operon-store = { path = "../operon-store" }
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true

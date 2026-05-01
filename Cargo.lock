@@ -845,6 +845,7 @@ dependencies = [
  "mdns-sd",
  "operon-config",
  "operon-core",
+ "tokio",
 ]
 
 [[package]]
@@ -869,7 +870,9 @@ dependencies = [
 name = "operon-store"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "operon-core",
+ "serde_json",
 ]
 
 [[package]]
@@ -883,8 +886,11 @@ dependencies = [
  "mdns-sd",
  "operon-config",
  "operon-core",
+ "operon-fs",
  "operon-network",
+ "operon-process",
  "operon-protocol",
+ "operon-store",
  "serde",
  "serde_json",
  "serde_yaml",
