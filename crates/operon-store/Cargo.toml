@@ -8,5 +8,6 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+libc.workspace = true
 operon-core = { path = "../operon-core" }
 serde_json.workspace = true

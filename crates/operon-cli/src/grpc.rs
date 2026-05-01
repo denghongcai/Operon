@@ -87,7 +87,10 @@ pub async fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<Capabi
         }
         page_token = response.next_page_token;
     }
-    Ok(CapabilityList { capabilities })
+    Ok(CapabilityList {
+        capabilities,
+        next_page_token: String::new(),
+    })
 }
 
 pub async fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
@@ -297,7 +300,10 @@ pub async fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
         }
         page_token = response.next_page_token;
     }
-    Ok(JobList { jobs })
+    Ok(JobList {
+        jobs,
+        next_page_token: String::new(),
+    })
 }
 
 pub async fn watch_job_to_terminal(
@@ -466,7 +472,10 @@ pub async fn list_services(endpoint: &NodeEndpoint) -> anyhow::Result<ServiceLis
         }
         page_token = response.next_page_token;
     }
-    Ok(ServiceList { services })
+    Ok(ServiceList {
+        services,
+        next_page_token: String::new(),
+    })
 }
 
 pub async fn check_service(
@@ -510,7 +519,10 @@ pub async fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {
         }
         page_token = response.next_page_token;
     }
-    Ok(AuditLog { events })
+    Ok(AuditLog {
+        events,
+        next_page_token: String::new(),
+    })
 }
 
 async fn call<T, Fut>(

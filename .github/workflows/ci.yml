@@ -90,6 +90,8 @@ jobs:
             script: scripts/verify-v0.6.7-runtime.sh
           - name: v0.6.9 CLI Contract Validation
             script: scripts/verify-v0.6.9-cli-contract.sh
+          - name: v0.6.10 Runtime Hardening Validation
+            script: scripts/verify-v0.6.10-runtime-hardening.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

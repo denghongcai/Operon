@@ -11,6 +11,7 @@ use std::{
     },
 };
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
@@ -52,6 +53,8 @@ const STEP_ID_METADATA: &str = "x-operon-step-id";
 const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
 const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
 const MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS: usize = 512;
+const MAX_FS_WRITE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+const MAX_FS_FILE_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
 
 tokio::task_local! {
     static AUDIT_CONTEXT: RequestContext;
@@ -107,6 +110,7 @@ struct AppState {
 }
 
 struct JobTask {
+    audit: Arc<Mutex<VecDeque<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
     events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
@@ -119,11 +123,15 @@ struct JobTask {
     cwd: PathBuf,
     timeout_secs: u64,
     env: BTreeMap<String, String>,
+    subject: String,
+    node_id: String,
+    audit_context: RequestContext,
     cancel_rx: oneshot::Receiver<()>,
     stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
 }
 
 struct JobCompletion {
+    audit: Arc<Mutex<VecDeque<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
     events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
@@ -132,6 +140,9 @@ struct JobCompletion {
     stdin: JobStdinRegistry,
     store: Option<PathBuf>,
     job_id: String,
+    subject: String,
+    node_id: String,
+    audit_context: RequestContext,
 }
 
 #[tokio::main]
@@ -153,10 +164,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("config is missing daemon section"))?;
     let policy = config.policy.unwrap_or_else(default_policy);
     let auth_token = daemon.auth.resolve(&config_dir)?;
-    let store = daemon
-        .store
-        .as_ref()
-        .map(|path| resolve_path(&config_dir, path));
+    let store = resolve_store_path(&config_dir, daemon.store.as_deref())?;
     let secrets_path = config
         .secrets
         .as_ref()
@@ -213,6 +221,53 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
 
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
+}
+
+fn resolve_store_path(
+    config_dir: &Path,
+    configured: Option<&Path>,
+) -> anyhow::Result<Option<PathBuf>> {
+    let Some(configured) = configured else {
+        return Ok(None);
+    };
+    let path = resolve_path(config_dir, configured);
+    validate_store_path(config_dir, &path)?;
+    Ok(Some(path))
+}
+
+fn validate_store_path(config_dir: &Path, path: &Path) -> anyhow::Result<()> {
+    let config_root = config_dir
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize config dir {}", config_dir.display()))?;
+    let mut ancestor = path.parent().unwrap_or(config_dir);
+    while !ancestor.exists() {
+        ancestor = ancestor
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("store path has no existing parent"))?;
+    }
+    let ancestor = ancestor
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize store parent {}", ancestor.display()))?;
+    if !ancestor.starts_with(&config_root) {
+        anyhow::bail!(
+            "daemon store path {} must stay under config directory {}",
+            path.display(),
+            config_root.display()
+        );
+    }
+    if let Ok(metadata) = fs::symlink_metadata(path) {
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            anyhow::bail!("daemon store path {} must not be a symlink", path.display());
+        }
+        if !file_type.is_file() {
+            anyhow::bail!(
+                "daemon store path {} must be a regular file",
+                path.display()
+            );
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -273,8 +328,11 @@ impl OperonRuntime for GrpcRuntime {
             request.page_size,
             &request.page_token,
         )?;
-        let mut response: operon_protocol::runtime::v1::CapabilityList =
-            CapabilityList { capabilities }.into();
+        let mut response: operon_protocol::runtime::v1::CapabilityList = CapabilityList {
+            capabilities,
+            next_page_token: String::new(),
+        }
+        .into();
         response.next_page_token = next_page_token;
         Ok(GrpcResponse::new(response))
     }
@@ -417,10 +475,12 @@ impl OperonRuntime for GrpcRuntime {
                                     "write stream chunk arrived before target metadata",
                                 ));
                             };
+                            validate_write_chunk(chunk.data.len())?;
+                            bytes_written =
+                                checked_file_end(bytes_written, chunk.data.len(), "write stream")?;
                             file.write_all(&chunk.data)
                                 .await
                                 .map_err(|error| Status::internal(error.to_string()))?;
-                            bytes_written += chunk.data.len() as u64;
                         }
                         None => {
                             return Err(Status::invalid_argument(
@@ -591,7 +651,11 @@ impl OperonRuntime for GrpcRuntime {
             .collect::<Vec<_>>();
         let (jobs, next_page_token) =
             paginate_items(&jobs, request.page_size, &request.page_token)?;
-        let mut response: operon_protocol::runtime::v1::JobList = JobList { jobs }.into();
+        let mut response: operon_protocol::runtime::v1::JobList = JobList {
+            jobs,
+            next_page_token: String::new(),
+        }
+        .into();
         response.next_page_token = next_page_token;
         Ok(GrpcResponse::new(response))
     }
@@ -875,8 +939,11 @@ impl OperonRuntime for GrpcRuntime {
             request.page_size,
             &request.page_token,
         )?;
-        let mut response: operon_protocol::runtime::v1::ServiceList =
-            ServiceList { services }.into();
+        let mut response: operon_protocol::runtime::v1::ServiceList = ServiceList {
+            services,
+            next_page_token: String::new(),
+        }
+        .into();
         response.next_page_token = next_page_token;
         Ok(GrpcResponse::new(response))
     }
@@ -911,7 +978,11 @@ impl OperonRuntime for GrpcRuntime {
             .collect::<Vec<_>>();
         let (events, next_page_token) =
             paginate_items(&events, request.page_size, &request.page_token)?;
-        let mut response: operon_protocol::runtime::v1::AuditLog = AuditLog { events }.into();
+        let mut response: operon_protocol::runtime::v1::AuditLog = AuditLog {
+            events,
+            next_page_token: String::new(),
+        }
+        .into();
         response.next_page_token = next_page_token;
         Ok(GrpcResponse::new(response))
     }
@@ -943,6 +1014,31 @@ fn paginate_items<T: Clone>(
         String::new()
     };
     Ok((items[start..end].to_vec(), next))
+}
+
+fn validate_write_chunk(data_len: usize) -> Result<(), Status> {
+    if data_len > MAX_FS_WRITE_CHUNK_BYTES {
+        return Err(Status::invalid_argument(format!(
+            "fs write chunk exceeds {} bytes",
+            MAX_FS_WRITE_CHUNK_BYTES
+        )));
+    }
+    Ok(())
+}
+
+fn checked_file_end(offset: u64, data_len: usize, operation: &str) -> Result<u64, Status> {
+    let len = u64::try_from(data_len)
+        .map_err(|_| Status::invalid_argument(format!("{operation} data length is too large")))?;
+    let end = offset.checked_add(len).ok_or_else(|| {
+        Status::invalid_argument(format!("{operation} offset plus data length overflows"))
+    })?;
+    if end > MAX_FS_FILE_BYTES {
+        return Err(Status::invalid_argument(format!(
+            "{operation} exceeds maximum fs object size of {} bytes",
+            MAX_FS_FILE_BYTES
+        )));
+    }
+    Ok(end)
 }
 
 fn authorize_grpc(state: &AppState, metadata: &MetadataMap) -> Result<RequestContext, Status> {
@@ -1040,6 +1136,8 @@ async fn grpc_fs_write_range(
     offset: u64,
     data: Vec<u8>,
 ) -> Result<FsWrite, Status> {
+    validate_write_chunk(data.len())?;
+    checked_file_end(offset, data.len(), "write range")?;
     if let Err(error) = authorize_fs(&state.policy, "write", &path) {
         record_audit(state, "write-range", &path, false, &error.1);
         return Err(status_from_error(error));
@@ -1076,6 +1174,12 @@ async fn grpc_fs_write_range(
 }
 
 async fn grpc_fs_truncate(state: &AppState, path: String, size: u64) -> Result<FsStat, Status> {
+    if size > MAX_FS_FILE_BYTES {
+        return Err(Status::invalid_argument(format!(
+            "truncate size exceeds maximum fs object size of {} bytes",
+            MAX_FS_FILE_BYTES
+        )));
+    }
     if let Err(error) = authorize_fs(&state.policy, "write", &path) {
         record_audit(state, "truncate", &path, false, &error.1);
         return Err(status_from_error(error));
@@ -1124,7 +1228,7 @@ async fn grpc_fs_mkdir(state: &AppState, path: String) -> Result<FsStat, Status>
             return Err(status_from_error(error));
         }
     };
-    tokio::fs::create_dir(&full_path)
+    tokio::fs::create_dir_all(&full_path)
         .await
         .map_err(status_from_io_error)?;
     record_audit(state, "mkdir", &path, true, "allowed");
@@ -1310,6 +1414,7 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
         .expect("job stdin mutex poisoned")
         .insert(job_id.clone(), stdin_tx);
 
+    let audit = state.audit.clone();
     let jobs = state.jobs.clone();
     let logs = state.job_logs.clone();
     let events = state.job_events.clone();
@@ -1322,12 +1427,15 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
         .timeout_secs
         .unwrap_or(state.policy.job.default_timeout_secs);
     let audit_context = current_request_context();
+    let subject = state.policy.subject.clone();
+    let node_id = state.node.id.clone();
 
     tokio::spawn(async move {
         let context = audit_context.clone();
         AUDIT_CONTEXT
             .scope(context, async move {
                 run_job_task(JobTask {
+                    audit,
                     jobs,
                     logs,
                     events,
@@ -1340,6 +1448,9 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
                     cwd,
                     timeout_secs,
                     env,
+                    subject,
+                    node_id,
+                    audit_context,
                     cancel_rx,
                     stdin_rx,
                 })
@@ -1395,6 +1506,9 @@ fn status_from_error(error: (RuntimeErrorKind, String)) -> Status {
     match error.0 {
         RuntimeErrorKind::Forbidden => Status::permission_denied(error.1),
         RuntimeErrorKind::NotFound => Status::not_found(error.1),
+        RuntimeErrorKind::AlreadyExists => Status::already_exists(error.1),
+        RuntimeErrorKind::InvalidArgument => Status::invalid_argument(error.1),
+        RuntimeErrorKind::Internal => Status::internal(error.1),
     }
 }
 
@@ -1548,6 +1662,7 @@ fn default_capabilities(node_id: &str) -> CapabilityList {
                 description: "Service access over an existing private network".to_string(),
             },
         ],
+        next_page_token: String::new(),
     }
 }
 
@@ -1594,14 +1709,22 @@ fn record_audit_capability(
         run_id: context.run_id,
         step_id: context.step_id,
     };
-    let mut audit = state.audit.lock().expect("audit log mutex poisoned");
+    push_audit_event(&state.audit, state.store.as_deref(), event);
+}
+
+fn push_audit_event(
+    audit: &Arc<Mutex<VecDeque<AuditEvent>>>,
+    store: Option<&Path>,
+    event: AuditEvent,
+) {
+    let mut audit = audit.lock().expect("audit log mutex poisoned");
     audit.push_back(event.clone());
     while audit.len() > MAX_IN_MEMORY_AUDIT_EVENTS {
         audit.pop_front();
     }
     drop(audit);
     append_store_record(
-        state.store.as_deref(),
+        store,
         &serde_json::json!({
             "kind": "audit",
             "event": event,
@@ -1626,6 +1749,7 @@ fn now_ms() -> u128 {
 
 async fn run_job_task(task: JobTask) {
     let completion = JobCompletion {
+        audit: task.audit.clone(),
         jobs: task.jobs.clone(),
         logs: task.logs.clone(),
         events: task.events.clone(),
@@ -1634,24 +1758,28 @@ async fn run_job_task(task: JobTask) {
         stdin: task.stdin.clone(),
         store: task.store.clone(),
         job_id: task.job_id.clone(),
+        subject: task.subject.clone(),
+        node_id: task.node_id.clone(),
+        audit_context: task.audit_context.clone(),
     };
-    let child = build_job_command(&task).spawn();
-
-    let Ok(mut child) = child else {
-        append_job_log(
-            &task.jobs,
-            &task.logs,
-            &task.log_events,
-            task.store.as_deref(),
-            &task.job_id,
-            JobLog {
-                stream: "stderr".to_string(),
-                data: b"failed to spawn command".to_vec(),
-                sequence: 0,
-            },
-        );
-        finish_job(&completion, JobStatus::Failed, None);
-        return;
+    let mut child = match build_job_command(&task).spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            append_job_log(
+                &task.jobs,
+                &task.logs,
+                &task.log_events,
+                task.store.as_deref(),
+                &task.job_id,
+                JobLog {
+                    stream: "stderr".to_string(),
+                    data: format!("failed to spawn command: {error}").into_bytes(),
+                    sequence: 0,
+                },
+            );
+            finish_job(&completion, JobStatus::Failed, None);
+            return;
+        }
     };
 
     if let Some(stdin) = child.stdin.take() {
@@ -1967,25 +2095,26 @@ fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i
         .expect("job stdin mutex poisoned")
         .remove(&completion.job_id);
 
-    let event = {
+    let terminal = {
         let mut jobs = completion.jobs.lock().expect("job map mutex poisoned");
         if let Some(record) = jobs.get_mut(&completion.job_id) {
             record.status = status;
             record.exit_code = exit_code;
             let event = job_event_from_record(record);
-            append_store_record(
-                completion.store.as_deref(),
-                &serde_json::json!({
-                    "kind": "job",
-                    "record": record,
-                }),
-            );
-            Some(event)
+            Some((event, record.clone()))
         } else {
             None
         }
     };
-    if let Some(event) = event {
+    if let Some((event, record)) = terminal {
+        append_store_record(
+            completion.store.as_deref(),
+            &serde_json::json!({
+                "kind": "job",
+                "record": record,
+            }),
+        );
+        record_job_completion_audit(completion, &record);
         if let Some(sender) = completion
             .events
             .lock()
@@ -1996,6 +2125,35 @@ fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i
         }
     }
     cleanup_finished_job_runtime(completion);
+}
+
+fn record_job_completion_audit(completion: &JobCompletion, record: &JobRecord) {
+    let reason = match record.exit_code {
+        Some(code) => format!(
+            "status={} exit_code={code}",
+            operon_protocol::format_job_status(&record.status)
+        ),
+        None => format!(
+            "status={}",
+            operon_protocol::format_job_status(&record.status)
+        ),
+    };
+    push_audit_event(
+        &completion.audit,
+        completion.store.as_deref(),
+        AuditEvent {
+            subject: completion.subject.clone(),
+            timestamp_ms: now_ms(),
+            node_id: completion.node_id.clone(),
+            capability: "job:default".to_string(),
+            action: "finish".to_string(),
+            resource: completion.job_id.clone(),
+            allowed: true,
+            reason,
+            run_id: completion.audit_context.run_id.clone(),
+            step_id: completion.audit_context.step_id.clone(),
+        },
+    );
 }
 
 fn cleanup_finished_job_runtime(completion: &JobCompletion) {
@@ -2105,6 +2263,76 @@ mod tests {
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
         }
+    }
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("{name}-{}-{}", std::process::id(), now_ms()))
+    }
+
+    #[test]
+    fn store_path_must_stay_under_config_dir() {
+        let base = unique_temp_dir("operond-store-path-test");
+        let config_dir = base.join("config");
+        let outside = base.join("outside");
+        fs::create_dir_all(&config_dir).expect("config dir");
+        fs::create_dir_all(&outside).expect("outside dir");
+
+        let allowed = resolve_store_path(&config_dir, Some(Path::new("store.jsonl")))
+            .expect("relative store path");
+        assert_eq!(allowed, Some(config_dir.join("store.jsonl")));
+
+        let denied = resolve_store_path(&config_dir, Some(&outside.join("store.jsonl")))
+            .expect_err("absolute outside store path should be denied");
+        assert!(denied
+            .to_string()
+            .contains("must stay under config directory"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn store_path_rejects_symlink() {
+        let base = unique_temp_dir("operond-store-symlink-test");
+        let config_dir = base.join("config");
+        fs::create_dir_all(&config_dir).expect("config dir");
+        let target = config_dir.join("target.jsonl");
+        let link = config_dir.join("store.jsonl");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+
+        let denied = resolve_store_path(&config_dir, Some(Path::new("store.jsonl")))
+            .expect_err("symlink store path should be denied");
+        assert!(denied.to_string().contains("must not be a symlink"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn fs_range_validation_rejects_overflow_and_large_chunks() {
+        let chunk_error =
+            validate_write_chunk(MAX_FS_WRITE_CHUNK_BYTES + 1).expect_err("chunk too large");
+        assert_eq!(chunk_error.code(), tonic::Code::InvalidArgument);
+
+        let overflow =
+            checked_file_end(u64::MAX, 1, "write range").expect_err("offset should overflow");
+        assert_eq!(overflow.code(), tonic::Code::InvalidArgument);
+
+        let too_large_end = checked_file_end(MAX_FS_FILE_BYTES, 1, "write range")
+            .expect_err("file bound should be enforced");
+        assert_eq!(too_large_end.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn mkdir_creates_missing_parent_directories() {
+        let base = unique_temp_dir("operond-mkdir-all-test");
+        let workspace = base.join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let state = test_state(default_policy(), workspace.clone());
+
+        grpc_fs_mkdir(&state, "/a/b/c".to_string())
+            .await
+            .expect("mkdir nested");
+
+        assert!(workspace.join("a/b/c").is_dir());
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
@@ -2487,6 +2715,7 @@ mod tests {
             log_sender,
         )])));
         let completion = JobCompletion {
+            audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs,
             logs: logs.clone(),
             events: events.clone(),
@@ -2495,6 +2724,12 @@ mod tests {
             stdin: Arc::new(Mutex::new(BTreeMap::new())),
             store: None,
             job_id: target_job_id.clone(),
+            subject: "test-subject".to_string(),
+            node_id: "node-a".to_string(),
+            audit_context: RequestContext {
+                run_id: Some("run-1".to_string()),
+                step_id: Some("step-1".to_string()),
+            },
         };
 
         finish_job(&completion, JobStatus::Succeeded, Some(0));
@@ -2509,5 +2744,56 @@ mod tests {
         assert!(!logs.contains_key("job-1"));
         assert!(!logs.contains_key("job-2"));
         assert!(logs.contains_key(&target_job_id));
+    }
+
+    #[test]
+    fn finish_job_records_terminal_audit_event() {
+        let job_id = "job-1".to_string();
+        let jobs = Arc::new(Mutex::new(BTreeMap::from([(
+            job_id.clone(),
+            JobRecord {
+                id: job_id.clone(),
+                node_id: "node-a".to_string(),
+                command: "true".to_string(),
+                cwd: "/".to_string(),
+                status: JobStatus::Running,
+                exit_code: None,
+                log_count: 0,
+                logs_truncated: false,
+            },
+        )])));
+        let logs = Arc::new(Mutex::new(BTreeMap::new()));
+        let (event_sender, _) = broadcast::channel(1);
+        let (log_sender, _) = broadcast::channel(1);
+        let audit = Arc::new(Mutex::new(VecDeque::new()));
+        let completion = JobCompletion {
+            audit: audit.clone(),
+            jobs,
+            logs,
+            events: Arc::new(Mutex::new(BTreeMap::from([(job_id.clone(), event_sender)]))),
+            log_events: Arc::new(Mutex::new(BTreeMap::from([(job_id.clone(), log_sender)]))),
+            cancels: Arc::new(Mutex::new(BTreeMap::new())),
+            stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            store: None,
+            job_id: job_id.clone(),
+            subject: "test-subject".to_string(),
+            node_id: "node-a".to_string(),
+            audit_context: RequestContext {
+                run_id: Some("run-1".to_string()),
+                step_id: Some("step-1".to_string()),
+            },
+        };
+
+        finish_job(&completion, JobStatus::Failed, Some(7));
+
+        let events = audit.lock().expect("audit");
+        let event = events.back().expect("completion audit");
+        assert_eq!(event.capability, "job:default");
+        assert_eq!(event.action, "finish");
+        assert_eq!(event.resource, job_id);
+        assert!(event.allowed);
+        assert_eq!(event.reason, "status=failed exit_code=7");
+        assert_eq!(event.run_id.as_deref(), Some("run-1"));
+        assert_eq!(event.step_id.as_deref(), Some("step-1"));
     }
 }

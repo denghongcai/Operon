@@ -143,6 +143,8 @@ Operon should not own:
 - Completed release cleanup milestone: v0.6.8 runtime retention bounding,
   current CI validation coverage, unified config docs, and protocol version
   alignment.
+- Completed hardening milestone: v0.6.10 runtime store, audit, fs range,
+  pagination, spawn-error, and LAN discovery hardening.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.
@@ -196,3 +198,7 @@ Defer:
 - Phase updates must state which phase changed, what was completed, and what remains.
 - If implementation changes the phase scope, update the phase text itself instead of only adding a note.
 - If no phase status changed, explicitly record that in the relevant phase or explain it in the final response.
+- Latest phase status update: v0.6.10 completed store durability/path
+  hardening, terminal job audit, spawn error detail, fs range validation,
+  mkdir parent creation, core pagination metadata, mDNS removal handling, and
+  CI validation coverage. Nothing remains in v0.6.10.

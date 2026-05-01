@@ -6,6 +6,9 @@ pub type CapabilityId = String;
 pub enum RuntimeErrorKind {
     Forbidden,
     NotFound,
+    AlreadyExists,
+    InvalidArgument,
+    Internal,
 }
 
 pub type RuntimeResult<T> = Result<T, (RuntimeErrorKind, String)>;
@@ -65,6 +68,8 @@ pub enum CapabilityKind {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CapabilityList {
     pub capabilities: Vec<Capability>,
+    #[serde(default)]
+    pub next_page_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -125,6 +130,8 @@ pub struct AuditEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuditLog {
     pub events: Vec<AuditEvent>,
+    #[serde(default)]
+    pub next_page_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -200,6 +207,8 @@ pub enum ServiceProtocol {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ServiceList {
     pub services: Vec<ServiceDefinition>,
+    #[serde(default)]
+    pub next_page_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -267,6 +276,8 @@ pub struct JobEvent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct JobList {
     pub jobs: Vec<JobRecord>,
+    #[serde(default)]
+    pub next_page_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

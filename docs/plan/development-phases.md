@@ -2550,6 +2550,52 @@ Completed:
 - Added unit tests and `scripts/verify-v0.6.9-cli-contract.sh`, and wired the
   script into CI.
 
+## Phase 32.31: v0.6.10 Runtime Hardening
+
+Status: Completed.
+
+Goal: harden the runtime issues validated after v0.6.9.
+
+Planned:
+
+- `docs/plan/v0.6.10-runtime-hardening.md`.
+- make JSONL store appends use secure file handling and sync completed writes.
+- reject unsafe daemon store paths outside the config directory or through
+  symlinks/special files.
+- add terminal job audit events and include real spawn errors in job stderr.
+- validate fs range write chunk size, offset overflow, and maximum file bounds.
+- align `mkdir` behavior with other fs mutation RPCs.
+- preserve `next_page_token` in Rust core list models and protocol conversions.
+- handle mDNS removal events during one-shot LAN discovery and surface receiver
+  failures.
+
+Done when:
+
+- the validated hardening issues are fixed or explicitly bounded by tests.
+- Rust workspace tests cover the key regressions.
+- workspace validation passes before commit.
+
+Completed:
+
+- Added `docs/plan/v0.6.10-runtime-hardening.md`.
+- Hardened JSONL store appends with secure file opening and sync after record
+  writes.
+- Rejected daemon store paths outside the config directory and symlink/special
+  store targets.
+- Added job terminal audit events with run/step context.
+- Logged concrete spawn errors into job stderr.
+- Added fs write-range chunk, overflow, and maximum object size validation.
+- Made `MkdirFs` create missing parent directories.
+- Preserved `next_page_token` in Rust core list models and protocol
+  conversions.
+- Handled mDNS `ServiceRemoved` events in one-shot LAN discovery and surfaced
+  receiver failures.
+- Added focused tests plus `scripts/verify-v0.6.10-runtime-hardening.sh` to CI.
+
+Remaining:
+
+- No open v0.6.10 items.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

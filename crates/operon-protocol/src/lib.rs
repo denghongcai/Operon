@@ -80,7 +80,7 @@ impl From<operon_core::CapabilityList> for runtime::v1::CapabilityList {
     fn from(value: operon_core::CapabilityList) -> Self {
         Self {
             capabilities: value.capabilities.into_iter().map(Into::into).collect(),
-            next_page_token: String::new(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -95,6 +95,7 @@ impl TryFrom<runtime::v1::CapabilityList> for operon_core::CapabilityList {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            next_page_token: value.next_page_token,
         })
     }
 }
@@ -285,7 +286,7 @@ impl From<operon_core::JobList> for runtime::v1::JobList {
     fn from(value: operon_core::JobList) -> Self {
         Self {
             jobs: value.jobs.into_iter().map(Into::into).collect(),
-            next_page_token: String::new(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -300,6 +301,7 @@ impl TryFrom<runtime::v1::JobList> for operon_core::JobList {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            next_page_token: value.next_page_token,
         })
     }
 }
@@ -372,7 +374,7 @@ impl From<operon_core::ServiceList> for runtime::v1::ServiceList {
     fn from(value: operon_core::ServiceList) -> Self {
         Self {
             services: value.services.into_iter().map(Into::into).collect(),
-            next_page_token: String::new(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -387,6 +389,7 @@ impl TryFrom<runtime::v1::ServiceList> for operon_core::ServiceList {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
+            next_page_token: value.next_page_token,
         })
     }
 }
@@ -451,7 +454,7 @@ impl From<operon_core::AuditLog> for runtime::v1::AuditLog {
     fn from(value: operon_core::AuditLog) -> Self {
         Self {
             events: value.events.into_iter().map(Into::into).collect(),
-            next_page_token: String::new(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -460,6 +463,7 @@ impl From<runtime::v1::AuditLog> for operon_core::AuditLog {
     fn from(value: runtime::v1::AuditLog) -> Self {
         Self {
             events: value.events.into_iter().map(Into::into).collect(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -557,5 +561,44 @@ mod tests {
     #[test]
     fn protocol_version_matches_grpc_release_line() {
         assert_eq!(PROTOCOL_VERSION, "v0.6.8");
+    }
+
+    #[test]
+    fn list_conversions_preserve_page_tokens() {
+        let capabilities = operon_core::CapabilityList {
+            capabilities: Vec::new(),
+            next_page_token: "cap-next".to_string(),
+        };
+        let grpc: runtime::v1::CapabilityList = capabilities.into();
+        assert_eq!(grpc.next_page_token, "cap-next");
+        let core = operon_core::CapabilityList::try_from(grpc).expect("capability list");
+        assert_eq!(core.next_page_token, "cap-next");
+
+        let jobs = operon_core::JobList {
+            jobs: Vec::new(),
+            next_page_token: "job-next".to_string(),
+        };
+        let grpc: runtime::v1::JobList = jobs.into();
+        assert_eq!(grpc.next_page_token, "job-next");
+        let core = operon_core::JobList::try_from(grpc).expect("job list");
+        assert_eq!(core.next_page_token, "job-next");
+
+        let services = operon_core::ServiceList {
+            services: Vec::new(),
+            next_page_token: "service-next".to_string(),
+        };
+        let grpc: runtime::v1::ServiceList = services.into();
+        assert_eq!(grpc.next_page_token, "service-next");
+        let core = operon_core::ServiceList::try_from(grpc).expect("service list");
+        assert_eq!(core.next_page_token, "service-next");
+
+        let audit = operon_core::AuditLog {
+            events: Vec::new(),
+            next_page_token: "audit-next".to_string(),
+        };
+        let grpc: runtime::v1::AuditLog = audit.into();
+        assert_eq!(grpc.next_page_token, "audit-next");
+        let core = operon_core::AuditLog::from(grpc);
+        assert_eq!(core.next_page_token, "audit-next");
     }
 }

@@ -136,12 +136,15 @@ the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
 targets or switch paths. It replaces the file content.
 
 `WriteFileRange` writes one byte range at `offset`. It is intended for OS mount
-adapters and other clients that need write-through random write behavior.
+adapters and other clients that need write-through random write behavior. The
+daemon rejects oversized chunks, offset/data overflow, and writes beyond its
+maximum fs object size bound.
 
 `TruncateFs`, `MkdirFs`, `DeleteFs`, and `RenameFs` are unary filesystem
 mutation calls used by the Linux mount adapter. `CopyFs` is a daemon-side,
 same-node file copy convenience operation for CLI, SDK, and direct protocol
-clients. The daemon still owns policy and audit for these operations.
+clients. `MkdirFs` creates missing parent directories. The daemon still owns
+policy and audit for these operations.
 
 The human CLI maps these mutation calls to:
 

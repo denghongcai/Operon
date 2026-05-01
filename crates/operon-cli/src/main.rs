@@ -817,7 +817,10 @@ fn filter_audit(audit: AuditLog, filter: &AuditFilter) -> AuditLog {
     if let Some(limit) = filter.limit {
         events = events.into_iter().rev().take(limit).collect::<Vec<_>>();
     }
-    AuditLog { events }
+    AuditLog {
+        events,
+        next_page_token: audit.next_page_token,
+    }
 }
 
 fn print_audit(audit: AuditLog, output: OutputMode) -> anyhow::Result<()> {
@@ -1518,6 +1521,7 @@ mod tests {
                 test_audit_event("job:default", "run", true, "/"),
                 test_audit_event("fs:workspace", "read", false, "/secret"),
             ],
+            next_page_token: String::new(),
         };
         let filter = AuditFilter {
             limit: Some(1),

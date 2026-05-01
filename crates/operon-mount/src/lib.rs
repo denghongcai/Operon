@@ -169,7 +169,8 @@ impl RemoteFs for GrpcRemoteFs {
                 .read_file(with_auth(&self.endpoint, FsPathRequest { path })?)
                 .await?
                 .into_inner();
-            let mut remaining_skip = offset as usize;
+            let mut remaining_skip =
+                usize::try_from(offset).map_err(|_| anyhow::anyhow!("read offset too large"))?;
             let mut remaining_take = size as usize;
             let mut data = Vec::with_capacity(remaining_take);
 
@@ -846,7 +847,8 @@ impl fuser::Filesystem for OperonFuseFs {
             }
         }
 
-        for (index, (ino, kind, name)) in entries.into_iter().enumerate().skip(offset as usize) {
+        let skip = usize::try_from(offset).unwrap_or(usize::MAX);
+        for (index, (ino, kind, name)) in entries.into_iter().enumerate().skip(skip) {
             if reply.add(ino, (index + 1) as u64, kind, name) {
                 break;
             }

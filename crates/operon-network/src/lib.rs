@@ -15,15 +15,25 @@ pub fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
     let receiver = mdns.browse(OPERON_MDNS_SERVICE)?;
     let deadline = Instant::now() + timeout;
     let mut records = BTreeMap::new();
+    let mut fullnames = BTreeMap::new();
     while Instant::now() < deadline {
         let remaining = deadline.saturating_duration_since(Instant::now());
-        match receiver.recv_timeout(remaining.min(Duration::from_millis(250))) {
+        match receiver.recv_timeout(remaining) {
             Ok(ServiceEvent::ServiceResolved(info)) => {
                 let record = discovery_record_from_info(&info);
+                fullnames.insert(info.get_fullname().to_string(), record.node_id.clone());
                 records.insert(record.node_id.clone(), record);
             }
+            Ok(ServiceEvent::ServiceRemoved(_, fullname)) => {
+                remove_discovered_service(&mut records, &mut fullnames, &fullname);
+            }
             Ok(_) => {}
-            Err(_) => {}
+            Err(error) => {
+                if Instant::now() >= deadline {
+                    break;
+                }
+                anyhow::bail!("mDNS discovery receiver failed: {error}");
+            }
         }
     }
     Ok(DiscoveryList {
@@ -50,6 +60,16 @@ pub async fn check_tcp_service(service: &ServiceDefinition, timeout: Duration) -
         ok,
         latency_ms,
         reason,
+    }
+}
+
+fn remove_discovered_service(
+    records: &mut BTreeMap<String, DiscoveryRecord>,
+    fullnames: &mut BTreeMap<String, String>,
+    fullname: &str,
+) {
+    if let Some(node_id) = fullnames.remove(fullname) {
+        records.remove(&node_id);
     }
 }
 
@@ -84,5 +104,32 @@ fn discovery_record_from_info(info: &ResolvedService) -> DiscoveryRecord {
         endpoint,
         provider: "lan".to_string(),
         capabilities,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn service_removed_event_removes_discovered_record() {
+        let mut records = BTreeMap::from([(
+            "node-a".to_string(),
+            DiscoveryRecord {
+                node_id: "node-a".to_string(),
+                endpoint: "grpc://127.0.0.1:7788".to_string(),
+                provider: "lan".to_string(),
+                capabilities: Vec::new(),
+            },
+        )]);
+        let mut fullnames = BTreeMap::from([(
+            "node-a._operon._tcp.local.".to_string(),
+            "node-a".to_string(),
+        )]);
+
+        remove_discovered_service(&mut records, &mut fullnames, "node-a._operon._tcp.local.");
+
+        assert!(records.is_empty());
+        assert!(fullnames.is_empty());
     }
 }
