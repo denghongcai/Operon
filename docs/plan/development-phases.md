@@ -497,6 +497,7 @@ job:
     - /
   default_timeout_secs: 30
   max_timeout_secs: 300
+  preserve_env: false
   env_allowlist: []
 ```
 
@@ -2077,6 +2078,54 @@ Remaining:
 
 - Further daemon decomposition can happen before v0.7 if needed, but no
   release-blocking runtime helper duplication remains in this phase.
+
+## Phase 32.17: Job Environment Preserve Option
+
+Status: Completed.
+
+Goal: allow deployments to opt into preserving the daemon environment for jobs
+without making full environment inheritance the default.
+
+Completed:
+
+- added `policy.job.preserve_env` with a default of `false`.
+- kept job spawning on `env_clear()` so the daemon always passes an explicit
+  environment map.
+- when `preserve_env: true`, job environment construction includes all daemon
+  environment variables before applying authorized secrets.
+- documented the security tradeoff in README and PROTOCOL.
+
+Remaining:
+
+- None for Phase 32.17.
+
+## Phase 32.18: v0.6.6 Security Review Follow-up
+
+Status: Completed.
+
+Goal: close security and semantic issues found after the v0.6.6 hardening
+review.
+
+Completed:
+
+- onboard token generation now uses OS CSPRNG and fails instead of falling back
+  to predictable values.
+- onboard token files are written with owner-only permissions on Unix, and
+  existing private files with group/world permissions or symlink paths are
+  rejected.
+- `fs rm` and `fs rename` now use leaf-symlink semantics so they operate on the
+  symlink entry instead of the canonical target.
+- documented the remaining path-based containment TOCTOU limit and the longer
+  term `openat2(RESOLVE_BENEATH)` direction.
+- CLI job command assembly now preserves argument boundaries for multiple CLI
+  tokens while preserving single-token shell command strings.
+
+Remaining:
+
+- Long term: replace path-based workspace traversal with fd-relative Linux
+  `openat2` resolution.
+- Long term: add protocol-level `argv[]` job execution if shell-free command
+  execution becomes a product requirement.
 
 ## v0.7 Goal
 

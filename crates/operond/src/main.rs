@@ -24,7 +24,8 @@ use operon_core::{
 };
 use operon_fs::{
     authorize_fs, join_virtual_path, resolve_create_workspace_path,
-    resolve_existing_workspace_path, resolve_write_workspace_path,
+    resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
+    resolve_write_workspace_path,
 };
 use operon_process::{authorize_job, job_environment, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
@@ -1051,14 +1052,14 @@ async fn grpc_fs_delete(state: &AppState, path: String) -> Result<String, Status
         record_audit(state, "delete", &path, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
+    let full_path = match resolve_existing_workspace_leaf_path(&state.workspace, &path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "delete", &path, false, &error.1);
             return Err(status_from_error(error));
         }
     };
-    let metadata = tokio::fs::metadata(&full_path)
+    let metadata = tokio::fs::symlink_metadata(&full_path)
         .await
         .map_err(status_from_io_error)?;
     if metadata.is_dir() {
@@ -1084,7 +1085,7 @@ async fn grpc_fs_rename(state: &AppState, from_path: &str, to_path: &str) -> Res
         record_audit(state, "rename", &resource, false, &error.1);
         return Err(status_from_error(error));
     }
-    let from_full_path = match resolve_existing_workspace_path(&state.workspace, from_path) {
+    let from_full_path = match resolve_existing_workspace_leaf_path(&state.workspace, from_path) {
         Ok(path) => path,
         Err(error) => {
             record_audit(state, "rename", &resource, false, &error.1);
@@ -1394,6 +1395,7 @@ fn default_policy() -> PolicyConfig {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 300,
+            preserve_env: false,
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
         },
@@ -1851,6 +1853,7 @@ mod tests {
                 allowed_cwds: vec!["/workspace".to_string()],
                 default_timeout_secs: 10,
                 max_timeout_secs: 30,
+                preserve_env: false,
                 env_allowlist: Vec::new(),
                 allowed_secrets: vec!["TEST_SECRET".to_string()],
             },
@@ -1864,6 +1867,31 @@ mod tests {
                     description: "local daemon".to_string(),
                 }],
             },
+        }
+    }
+
+    fn test_state(policy: PolicyConfig, workspace: PathBuf) -> AppState {
+        AppState {
+            node: NodeInfo {
+                id: "node-a".to_string(),
+                hostname: "host".to_string(),
+                os: "linux".to_string(),
+                arch: "x86_64".to_string(),
+            },
+            capabilities: default_capabilities("node-a"),
+            workspace,
+            policy,
+            auth_token: None,
+            store: None,
+            secrets: Arc::new(BTreeMap::new()),
+            audit: Arc::new(Mutex::new(VecDeque::new())),
+            jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_events: Arc::new(Mutex::new(BTreeMap::new())),
+            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
+            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            next_job_id: Arc::new(AtomicU64::new(1)),
         }
     }
 
@@ -1913,6 +1941,39 @@ mod tests {
 
         assert_eq!(error.0, RuntimeErrorKind::Forbidden);
         assert!(error.1.contains("denied by policy"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn delete_removes_leaf_symlink_not_target() {
+        let base = std::env::temp_dir().join(format!(
+            "operond-delete-link-test-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let workspace = base.join("workspace");
+        let outside = base.join("outside");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::create_dir_all(&outside).expect("outside");
+        let target = outside.join("secret.txt");
+        fs::write(&target, "secret").expect("target");
+        let link = workspace.join("link");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+
+        let mut policy = default_policy();
+        policy.fs.mounts[0].permissions.delete = true;
+        let state = test_state(policy, workspace);
+
+        grpc_fs_delete(&state, "/link".to_string())
+            .await
+            .expect("delete symlink");
+
+        assert!(!link.exists());
+        assert_eq!(
+            fs::read_to_string(target).expect("target still exists"),
+            "secret"
+        );
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]

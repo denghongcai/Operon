@@ -782,6 +782,7 @@ dependencies = [
  "anyhow",
  "clap",
  "futures-util",
+ "getrandom",
  "mdns-sd",
  "operon-config",
  "operon-core",

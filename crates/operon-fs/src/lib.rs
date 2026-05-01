@@ -32,6 +32,17 @@ pub fn resolve_existing_workspace_path(
     contained_canonical_path(workspace, &raw)
 }
 
+pub fn resolve_existing_workspace_leaf_path(
+    workspace: &Path,
+    virtual_path: &str,
+) -> RuntimeResult<PathBuf> {
+    let raw = resolve_workspace_path(workspace, virtual_path)?;
+    ensure_leaf_parent_contained(workspace, &raw)?;
+    std::fs::symlink_metadata(&raw)
+        .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
+    Ok(raw)
+}
+
 pub fn resolve_write_workspace_path(
     workspace: &Path,
     virtual_path: &str,
@@ -83,6 +94,27 @@ fn ensure_creatable_path_contained(workspace: &Path, raw: &Path) -> RuntimeResul
         })?;
     }
     let canonical = ancestor
+        .canonicalize()
+        .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
+    if canonical.starts_with(&workspace) {
+        Ok(())
+    } else {
+        Err((
+            RuntimeErrorKind::Forbidden,
+            "path parent resolves outside workspace mount".to_string(),
+        ))
+    }
+}
+
+fn ensure_leaf_parent_contained(workspace: &Path, raw: &Path) -> RuntimeResult<()> {
+    let workspace = canonicalize_workspace(workspace)?;
+    let parent = raw.parent().ok_or_else(|| {
+        (
+            RuntimeErrorKind::Forbidden,
+            "path has no workspace parent".to_string(),
+        )
+    })?;
+    let canonical = parent
         .canonicalize()
         .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
     if canonical.starts_with(&workspace) {
@@ -208,6 +240,34 @@ mod tests {
             let error = resolve_existing_workspace_path(&workspace, "/link/secret.txt")
                 .expect_err("symlink escape should be rejected");
             assert_eq!(error.0, RuntimeErrorKind::Forbidden);
+        }
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn existing_leaf_symlink_resolves_to_link_itself() {
+        let base = std::env::temp_dir().join(format!(
+            "operon-fs-leaf-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        let workspace = base.join("workspace");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::fs::write(outside.join("secret.txt"), "secret").expect("secret");
+
+        #[cfg(unix)]
+        {
+            let link = workspace.join("link");
+            std::os::unix::fs::symlink(outside.join("secret.txt"), &link).expect("symlink");
+            let resolved = resolve_existing_workspace_leaf_path(&workspace, "/link")
+                .expect("leaf symlink should resolve to link path");
+            assert_eq!(resolved, link);
         }
 
         let _ = std::fs::remove_dir_all(base);

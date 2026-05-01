@@ -248,6 +248,7 @@ policy:
       - /
     default_timeout_secs: 30
     max_timeout_secs: 300
+    preserve_env: false
     env_allowlist: []
     allowed_secrets: []
   service:
@@ -304,6 +305,7 @@ job:
     - /
   default_timeout_secs: 30
   max_timeout_secs: 300
+  preserve_env: false
   env_allowlist: []
   allowed_secrets:
     - GITHUB_TOKEN
@@ -321,6 +323,12 @@ service:
 Policy paths are virtual paths inside the daemon workspace. If the daemon
 config sets `workspace: /home/ubuntu/workspace`, policy path `/` means that
 workspace root, not the host root.
+
+`preserve_env: false` keeps job process environments isolated. With this
+default, the daemon clears inherited environment variables and injects only
+`env_allowlist` variables plus authorized requested secrets. Set
+`preserve_env: true` only when jobs need the full daemon environment, including
+values such as `HOME`, `PATH`, proxy settings, or toolchain variables.
 
 Secret file shape:
 
@@ -357,7 +365,7 @@ operon --config ./operon.config.yaml fs copy cloud-a:/work/renamed.txt cloud-a:/
 operon --config ./operon.config.yaml fs rm cloud-a:/work/renamed.txt
 
 operon --config ./operon.config.yaml job run cloud-a -- echo hello
-operon --config ./operon.config.yaml job run cloud-a --secret GITHUB_TOKEN -- test x'$GITHUB_TOKEN' = xexpected
+operon --config ./operon.config.yaml job run cloud-a --secret GITHUB_TOKEN -- 'test x$GITHUB_TOKEN = xexpected'
 operon --config ./operon.config.yaml job run cloud-a --detach -- sleep 10
 operon --config ./operon.config.yaml job status cloud-a job-1
 operon --config ./operon.config.yaml job list cloud-a
@@ -377,6 +385,11 @@ operon trace show ./trace.json
 operon --json trace show ./trace.json
 operon --config ./operon.config.yaml mount cloud-a:/ --to ./cloud-a
 ```
+
+`operon job run` treats one argument after `--` as an explicit shell command
+string. Multiple arguments are shell-escaped before being sent to the daemon so
+argument boundaries are preserved. For shell operators, expansion, or pipelines,
+pass one quoted command string or call `sh -c`.
 
 Add `--json` for structured command output or `--quiet` to suppress non-essential output.
 

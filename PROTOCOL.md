@@ -150,11 +150,21 @@ that the file is unchanged since a prior read.
 The daemon resolves filesystem targets under the configured workspace and
 rejects symlink-resolved paths that escape that workspace.
 
+`DeleteFs` and `RenameFs` use leaf-symlink semantics: when the requested path
+itself is a symlink inside the workspace, the operation applies to the symlink
+entry, not the symlink target. Parent directories are still resolved and checked
+for workspace containment.
+
 If multiple clients mutate the same path concurrently, Operon does not define a
 merge order beyond the order in which the remote daemon and underlying
 filesystem apply operations. Clients that need deterministic behavior should
 serialize mutations outside the protocol until a later versioning or lease
 contract exists.
+
+Current containment checks are path-based and do not yet use Linux
+`openat2(RESOLVE_BENEATH)`. Deployments should not allow untrusted local
+processes to concurrently mutate the daemon workspace until fd-relative
+resolution is added.
 
 `WatchJob` returns ordered `JobEvent` messages for the requested job. The first
 event is the current job state. Later events are status changes, including the
@@ -174,7 +184,8 @@ switch jobs. Use `CloseJobStdin` to close the target job's stdin.
 
 ## Job Semantics
 
-`RunJob` requires `command`.
+`RunJob` requires `command`. The protocol command is a shell command string
+executed by the daemon with `/bin/sh -c`.
 
 `cwd` may be empty; the daemon treats an empty cwd as its policy default.
 
@@ -187,6 +198,11 @@ Policy decides which names are allowed.
 The daemon clears the inherited process environment before spawning jobs. It
 then injects only variables named by `job.env_allowlist` from the daemon
 environment and authorized requested secrets.
+
+Set `policy.job.preserve_env: true` to preserve the daemon's complete
+environment for spawned jobs. This is useful when commands need normal process
+context such as `HOME`, `PATH`, proxy variables, or toolchain variables, but it
+also grants jobs access to every environment variable visible to `operond`.
 
 ## Errors
 

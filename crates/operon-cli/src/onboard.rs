@@ -1,11 +1,14 @@
 use std::{
     collections::BTreeMap,
     fmt::Write as _,
-    fs,
-    io::{self, Read, Write},
+    fs::{self, OpenOptions},
+    io::{self, Write},
     path::PathBuf,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use clap::ValueEnum;
 use operon_config::{
@@ -105,7 +108,7 @@ pub(crate) fn run(args: OnboardArgs, output: OutputMode) -> anyhow::Result<()> {
 
     fs::create_dir_all(&plan.output_dir)?;
     for file in &plan.files {
-        fs::write(&file.path, &file.content)?;
+        write_generated_file(file)?;
     }
 
     if output.json {
@@ -163,6 +166,7 @@ impl OnboardPlan {
 struct GeneratedFile {
     path: PathBuf,
     content: String,
+    private: bool,
 }
 
 trait Prompt {
@@ -228,7 +232,10 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
         .unwrap_or_else(|| endpoint_from_listen_address(&listen));
     let provided_token = args.token;
     let daemon_token = if matches!(role, OnboardRole::Daemon | OnboardRole::Both) {
-        Some(provided_token.clone().unwrap_or_else(generate_token))
+        Some(match provided_token.clone() {
+            Some(token) => token,
+            None => generate_token()?,
+        })
     } else {
         None
     };
@@ -279,6 +286,7 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
         files.push(GeneratedFile {
             path: token_path.clone(),
             content: format!("{token}\n"),
+            private: true,
         });
         policy = Some(build_policy(
             &node_id,
@@ -301,6 +309,7 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
         files.push(GeneratedFile {
             path: daemon_readme_path,
             content: format!("{command}\n"),
+            private: false,
         });
         daemon_command = Some(command);
     }
@@ -344,6 +353,7 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
             policy,
             secrets: Some(SecretsConfig::default()),
         })?,
+        private: false,
     });
 
     Ok(OnboardPlan {
@@ -404,6 +414,7 @@ job:
     - /
   default_timeout_secs: {default_timeout_secs}
   max_timeout_secs: {max_timeout_secs}
+  preserve_env: false
   env_allowlist: []
   allowed_secrets: []
 
@@ -471,25 +482,57 @@ fn listen_port(listen: &str) -> Option<&str> {
         .filter(|port| !port.is_empty())
 }
 
-fn generate_token() -> String {
-    let mut bytes = [0_u8; 32];
-    if fs::File::open("/dev/urandom")
-        .and_then(|mut file| file.read_exact(&mut bytes))
-        .is_err()
-    {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default();
-        for (index, byte) in bytes.iter_mut().enumerate() {
-            *byte = ((nanos >> ((index % 16) * 8)) & 0xff) as u8;
-        }
+fn write_generated_file(file: &GeneratedFile) -> anyhow::Result<()> {
+    if file.private {
+        return write_private_file(file);
     }
+    fs::write(&file.path, &file.content)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn write_private_file(file: &GeneratedFile) -> anyhow::Result<()> {
+    if file.path.exists() {
+        let metadata = fs::symlink_metadata(&file.path)?;
+        anyhow::ensure!(
+            !metadata.file_type().is_symlink(),
+            "refusing to write private file {} because it is a symlink",
+            file.path.display()
+        );
+        let mode = metadata.permissions().mode() & 0o777;
+        anyhow::ensure!(
+            mode & 0o077 == 0,
+            "refusing to write private file {} with permissions {:03o}; set permissions to 600 first",
+            file.path.display(),
+            mode
+        );
+    }
+
+    let mut handle = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .open(&file.path)?;
+    handle.write_all(file.content.as_bytes())?;
+    fs::set_permissions(&file.path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_private_file(file: &GeneratedFile) -> anyhow::Result<()> {
+    fs::write(&file.path, &file.content)?;
+    Ok(())
+}
+
+fn generate_token() -> anyhow::Result<String> {
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes)?;
     let mut token = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
         write!(&mut token, "{byte:02x}").expect("writing to String should not fail");
     }
-    token
+    Ok(token)
 }
 
 fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
@@ -569,7 +612,7 @@ mod tests {
 
     #[test]
     fn generated_token_is_hex_encoded() {
-        let token = generate_token();
+        let token = generate_token().expect("token");
         assert_eq!(token.len(), 64);
         assert!(token.chars().all(|value| value.is_ascii_hexdigit()));
     }
@@ -585,5 +628,58 @@ mod tests {
             .expect("config file");
 
         assert!(!nodes.content.contains("token:"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_generated_file_refuses_broad_existing_permissions() {
+        let base = std::env::temp_dir().join(format!(
+            "operon-onboard-private-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&base).expect("dir");
+        let path = base.join("token");
+        fs::write(&path, "old\n").expect("write");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("chmod");
+
+        let error = write_generated_file(&GeneratedFile {
+            path: path.clone(),
+            content: "new\n".to_string(),
+            private: true,
+        })
+        .expect_err("broad token file should be rejected");
+
+        assert!(error.to_string().contains("refusing to write private file"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_generated_file_is_written_with_owner_only_permissions() {
+        let base = std::env::temp_dir().join(format!(
+            "operon-onboard-private-write-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&base).expect("dir");
+        let path = base.join("token");
+
+        write_generated_file(&GeneratedFile {
+            path: path.clone(),
+            content: "new\n".to_string(),
+            private: true,
+        })
+        .expect("write private file");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = fs::remove_dir_all(base);
     }
 }

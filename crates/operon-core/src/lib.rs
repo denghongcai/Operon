@@ -160,6 +160,8 @@ pub struct JobPolicy {
     pub allowed_cwds: Vec<String>,
     pub default_timeout_secs: u64,
     pub max_timeout_secs: u64,
+    #[serde(default)]
+    pub preserve_env: bool,
     pub env_allowlist: Vec<String>,
     #[serde(default)]
     pub allowed_secrets: Vec<String>,
@@ -383,6 +385,7 @@ job:
     - /
   default_timeout_secs: 30
   max_timeout_secs: 300
+  preserve_env: false
   env_allowlist:
     - GITHUB_TOKEN
 "#,
@@ -394,6 +397,7 @@ job:
         assert!(policy.fs.mounts[0].permissions.read);
         assert!(!policy.fs.mounts[0].permissions.delete);
         assert_eq!(policy.job.max_timeout_secs, 300);
+        assert!(!policy.job.preserve_env);
         assert_eq!(policy.job.env_allowlist, vec!["GITHUB_TOKEN"]);
         assert!(policy.service.services.is_empty());
     }

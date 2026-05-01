@@ -62,12 +62,17 @@ pub fn job_environment(
     policy: &JobPolicy,
     secrets: BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
-    let mut env = BTreeMap::new();
-    for name in &policy.env_allowlist {
-        if let Ok(value) = std::env::var(name) {
-            env.insert(name.clone(), value);
+    let mut env = if policy.preserve_env {
+        std::env::vars().collect()
+    } else {
+        let mut env = BTreeMap::new();
+        for name in &policy.env_allowlist {
+            if let Ok(value) = std::env::var(name) {
+                env.insert(name.clone(), value);
+            }
         }
-    }
+        env
+    };
     env.extend(secrets);
     env
 }
@@ -105,6 +110,7 @@ mod tests {
             allowed_cwds: vec!["/workspace".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            preserve_env: false,
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
         };
@@ -125,12 +131,32 @@ mod tests {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            preserve_env: false,
             env_allowlist: vec!["PATH".to_string()],
             allowed_secrets: Vec::new(),
         };
         let mut secrets = BTreeMap::new();
         secrets.insert("TOKEN".to_string(), "secret".to_string());
         let env = job_environment(&policy, secrets);
+        assert!(env.contains_key("PATH"));
+        assert_eq!(env.get("TOKEN").map(String::as_str), Some("secret"));
+    }
+
+    #[test]
+    fn job_environment_can_preserve_parent_environment() {
+        let policy = JobPolicy {
+            allowed_cwds: vec!["/".to_string()],
+            default_timeout_secs: 30,
+            max_timeout_secs: 60,
+            preserve_env: true,
+            env_allowlist: Vec::new(),
+            allowed_secrets: Vec::new(),
+        };
+        let mut secrets = BTreeMap::new();
+        secrets.insert("TOKEN".to_string(), "secret".to_string());
+
+        let env = job_environment(&policy, secrets);
+
         assert!(env.contains_key("PATH"));
         assert_eq!(env.get("TOKEN").map(String::as_str), Some("secret"));
     }

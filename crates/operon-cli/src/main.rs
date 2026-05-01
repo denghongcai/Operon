@@ -859,7 +859,7 @@ fn service_check(
 fn job_run(input: JobRunInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
     let request = JobRunRequest {
-        command: input.command.join(" "),
+        command: job_command_from_cli_args(&input.command),
         cwd: input.cwd,
         timeout_secs: Some(input.timeout_secs),
         secrets: input.secrets,
@@ -879,6 +879,29 @@ fn job_run(input: JobRunInput) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn job_command_from_cli_args(args: &[String]) -> String {
+    if args.len() == 1 {
+        return args[0].clone();
+    }
+    args.iter()
+        .map(|arg| shell_escape_arg(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn shell_escape_arg(arg: &str) -> String {
+    if arg.is_empty() {
+        return "''".to_string();
+    }
+    if arg.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric()
+            || matches!(byte, b'_' | b'-' | b'.' | b'/' | b':' | b'=' | b'@')
+    }) {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
 fn trace_show(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
@@ -1125,6 +1148,7 @@ policy:
       - /
     default_timeout_secs: 30
     max_timeout_secs: 300
+    preserve_env: false
     env_allowlist: []
     allowed_secrets: []
   service:
@@ -1309,5 +1333,23 @@ mod tests {
     fn rejects_node_path_without_separator() {
         let error = parse_node_path("node-a/workspace").expect_err("target should fail");
         assert!(error.to_string().contains("node:/path"));
+    }
+
+    #[test]
+    fn job_command_preserves_single_shell_command_string() {
+        let command = job_command_from_cli_args(&["echo hello | cat".to_string()]);
+
+        assert_eq!(command, "echo hello | cat");
+    }
+
+    #[test]
+    fn job_command_shell_escapes_multiple_cli_args() {
+        let command = job_command_from_cli_args(&[
+            "printf".to_string(),
+            "hello world".to_string(),
+            "it's ok".to_string(),
+        ]);
+
+        assert_eq!(command, "printf 'hello world' 'it'\\''s ok'");
     }
 }
