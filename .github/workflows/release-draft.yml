@@ -142,6 +142,9 @@ jobs:
       - build-rust
       - build-sdk
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download archives
         uses: actions/download-artifact@v8
         with:
