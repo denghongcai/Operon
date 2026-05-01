@@ -937,9 +937,11 @@ fn paginate_items<T: Clone>(
     }
     let size = usize::min(page_size as usize, 1000);
     let end = usize::min(start.saturating_add(size), items.len());
-    let next = (end < items.len())
-        .then(|| end.to_string())
-        .unwrap_or_default();
+    let next = if end < items.len() {
+        end.to_string()
+    } else {
+        String::new()
+    };
     Ok((items[start..end].to_vec(), next))
 }
 
