@@ -620,6 +620,8 @@ Completed:
 - Unit test baseline added across core Rust modules and the TypeScript SDK.
 - CI Node setup updated to `actions/setup-node@v6`.
 - CI checkout and pnpm setup actions updated to `actions/checkout@v6` and `pnpm/action-setup@v6`.
+- Direct Rust and TypeScript dependencies refreshed to current compatible releases where available.
+- README CLI and configuration documentation added, including node config path, daemon policy config, and common commands.
 
 Remaining:
 

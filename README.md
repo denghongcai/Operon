@@ -77,6 +77,133 @@ The Docker validation starts two reachable `operond` nodes, exercises capabiliti
 
 ---
 
+## CLI and Configuration
+
+The MVP has two binaries:
+
+- `operond`: the daemon that runs on each reachable machine.
+- `operon`: the CLI that talks to daemon endpoints.
+
+From the repo, run them through Cargo:
+
+```bash
+cargo run -p operond -- start --listen 0.0.0.0:7788 --node-id local --workspace /workspace
+cargo run -p operon-cli -- --config examples/nodes.yaml node list
+```
+
+After installing built binaries, the same commands are:
+
+```bash
+operond start --listen 0.0.0.0:7788 --node-id local --workspace /workspace
+operon --config examples/nodes.yaml node list
+```
+
+### Node Config
+
+The CLI reads node endpoints from a YAML file. In the current MVP, the default path is:
+
+```text
+examples/nodes.yaml
+```
+
+That default is useful for local development from the repo root. For real use, keep your own config file anywhere you want and pass it explicitly with `--config`:
+
+```bash
+operon --config ./operon.nodes.yaml node list
+operon --config ./operon.nodes.yaml node ping cloud-a
+operon --config ./operon.nodes.yaml capability list cloud-a
+```
+
+Config shape:
+
+```yaml
+nodes:
+  local:
+    endpoint: http://127.0.0.1:7788
+  cloud-a:
+    endpoint: http://100.96.12.34:7788
+    provider: tailscale
+  gpu-node:
+    endpoint: http://100.96.18.20:7788
+    provider: cloudflare-mesh
+```
+
+`provider` is optional and defaults to `manual`. In v0.1 it is metadata only; Operon does not create VPNs, assign mesh IPs, or discover nodes automatically.
+
+Supported provider values:
+
+```text
+manual
+cloudflare-mesh
+tailscale
+wireguard
+ssh
+lan
+kubernetes
+```
+
+### Daemon Policy Config
+
+`operond` accepts a local policy file:
+
+```bash
+operond start \
+  --listen 0.0.0.0:7788 \
+  --node-id cloud-a \
+  --workspace /home/ubuntu/workspace \
+  --policy ./operon.policy.yaml
+```
+
+If `--policy` is omitted, the daemon uses a permissive MVP default for the configured workspace. For any real machine, pass an explicit policy file.
+
+Policy shape:
+
+```yaml
+subject: local-cli
+
+fs:
+  mounts:
+    - name: workspace
+      path: /
+      permissions:
+        read: true
+        write: true
+        delete: false
+
+job:
+  allowed_cwds:
+    - /
+  default_timeout_secs: 30
+  max_timeout_secs: 300
+  env_allowlist: []
+```
+
+Policy paths are virtual paths inside the daemon workspace. If the daemon starts with `--workspace /home/ubuntu/workspace`, policy path `/` means that workspace root, not the host root.
+
+### Common Commands
+
+```bash
+operon --config ./operon.nodes.yaml node list
+operon --config ./operon.nodes.yaml node ping cloud-a
+operon --config ./operon.nodes.yaml capability list cloud-a
+
+operon --config ./operon.nodes.yaml fs stat cloud-a:/README.md
+operon --config ./operon.nodes.yaml fs list cloud-a:/
+operon --config ./operon.nodes.yaml fs read cloud-a:/input.txt
+operon --config ./operon.nodes.yaml fs write cloud-a:/input.txt --content "hello"
+
+operon --config ./operon.nodes.yaml job run cloud-a -- echo hello
+operon --config ./operon.nodes.yaml job run cloud-a --detach -- sleep 10
+operon --config ./operon.nodes.yaml job status cloud-a job-1
+operon --config ./operon.nodes.yaml job logs cloud-a job-1
+operon --config ./operon.nodes.yaml job cancel cloud-a job-1
+
+operon --config ./operon.nodes.yaml audit list cloud-a
+operon --config ./operon.nodes.yaml run examples/train-model.yaml
+```
+
+---
+
 ## 🌐 Network Boundary
 
 Operon assumes your nodes can already reach each other.
