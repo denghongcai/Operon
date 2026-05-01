@@ -1532,17 +1532,7 @@ async fn run_job_task(task: JobTask) {
         store: task.store.clone(),
         job_id: task.job_id.clone(),
     };
-    let child = TokioCommand::new("/bin/sh")
-        .arg("-c")
-        .arg(&task.command)
-        .current_dir(task.cwd)
-        .env_clear()
-        .envs(task.env)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn();
+    let child = build_job_command(&task).spawn();
 
     let Ok(mut child) = child else {
         append_job_log(
@@ -1553,7 +1543,7 @@ async fn run_job_task(task: JobTask) {
             &task.job_id,
             JobLog {
                 stream: "stderr".to_string(),
-                data: "failed to spawn command".to_string(),
+                data: b"failed to spawn command".to_vec(),
                 sequence: 0,
             },
         );
@@ -1630,7 +1620,7 @@ fn job_status_from_wait(
                 job_id,
                 JobLog {
                     stream: "stderr".to_string(),
-                    data: error.to_string(),
+                    data: error.to_string().into_bytes(),
                     sequence: 0,
                 },
             );
@@ -1639,7 +1629,80 @@ fn job_status_from_wait(
     }
 }
 
+fn build_job_command(task: &JobTask) -> TokioCommand {
+    let mut command = TokioCommand::new("/bin/sh");
+    command
+        .arg("-c")
+        .arg(&task.command)
+        .current_dir(&task.cwd)
+        .env_clear()
+        .envs(&task.env)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    configure_job_process_group(&mut command);
+    command
+}
+
+#[cfg(unix)]
+fn configure_job_process_group(command: &mut TokioCommand) {
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_job_process_group(_command: &mut TokioCommand) {}
+
 async fn terminate_child(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        terminate_child_process_group(child).await
+    }
+
+    #[cfg(not(unix))]
+    {
+        terminate_direct_child(child).await
+    }
+}
+
+#[cfg(unix)]
+async fn terminate_child_process_group(child: &mut Child) {
+    let Some(pid) = child.id().map(|pid| pid as libc::pid_t) else {
+        if let Err(error) = child.wait().await {
+            tracing::warn!("failed to wait for finished job process: {error}");
+        }
+        return;
+    };
+
+    signal_process_group(pid, libc::SIGTERM);
+    match time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
+        Ok(Ok(_)) => return,
+        Ok(Err(error)) => {
+            tracing::warn!("failed to wait for terminated job process group: {error}");
+            return;
+        }
+        Err(_) => {}
+    }
+
+    signal_process_group(pid, libc::SIGKILL);
+    if let Err(error) = child.wait().await {
+        tracing::warn!("failed to wait for killed job process group: {error}");
+    }
+}
+
+#[cfg(unix)]
+fn signal_process_group(pgid: libc::pid_t, signal: libc::c_int) {
+    let result = unsafe { libc::kill(-pgid, signal) };
+    if result == -1 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(libc::ESRCH) {
+            tracing::warn!("failed to signal job process group {pgid}: {error}");
+        }
+    }
+}
+
+#[cfg(not(unix))]
+async fn terminate_direct_child(child: &mut Child) {
     if let Err(error) = child.start_kill() {
         tracing::warn!("failed to kill job process: {error}");
     }
@@ -1679,7 +1742,7 @@ async fn capture_job_stream<R>(
                 &job_id,
                 JobLog {
                     stream: stream.to_string(),
-                    data: String::from_utf8_lossy(&buffer[..count]).to_string(),
+                    data: buffer[..count].to_vec(),
                     sequence: 0,
                 },
             ),
@@ -1692,7 +1755,7 @@ async fn capture_job_stream<R>(
                     &job_id,
                     JobLog {
                         stream: "stderr".to_string(),
-                        data: format!("failed to read {stream}: {error}"),
+                        data: format!("failed to read {stream}: {error}").into_bytes(),
                         sequence: 0,
                     },
                 );
@@ -2179,7 +2242,7 @@ mod tests {
                 "job-1",
                 JobLog {
                     stream: "stdout".to_string(),
-                    data: format!("line {index}"),
+                    data: format!("line {index}").into_bytes(),
                     sequence: 0,
                 },
             );

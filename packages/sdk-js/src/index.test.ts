@@ -198,6 +198,22 @@ describe("OperonClient", () => {
     );
   });
 
+  it("streams job logs as bytes without string re-encoding", async () => {
+    const first = new Uint8Array([0xff, 0x00, 0x41]);
+    const second = new Uint8Array([0x42]);
+    niceGrpcMock.client.streamJobLogs.mockReturnValue(asyncIterable([
+      { stream: "stdout", data: first, sequence: "0" },
+      { stream: "stderr", data: second, sequence: "1" },
+    ]));
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    const reader = (await client.streamJobLogs("node-a", "job-1")).getReader();
+
+    await expect(reader.read()).resolves.toEqual({ done: false, value: first });
+    await expect(reader.read()).resolves.toEqual({ done: false, value: second });
+    await expect(reader.read()).resolves.toEqual({ done: true, value: undefined });
+  });
+
   it("runs fs.copy steps over gRPC", async () => {
     niceGrpcMock.client.copyFs.mockResolvedValue({
       fromPath: "/a.txt",

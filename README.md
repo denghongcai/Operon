@@ -391,6 +391,10 @@ string. Multiple arguments are shell-escaped before being sent to the daemon so
 argument boundaries are preserved. For shell operators, expansion, or pipelines,
 pass one quoted command string or call `sh -c`.
 
+Job stdout/stderr logs are transported as bytes. Human CLI output writes those
+bytes directly; JSON output exposes byte arrays so clients can choose their own
+decoding.
+
 Add `--json` for structured command output or `--quiet` to suppress non-essential output.
 
 `operon mount` is a Linux-only foreground FUSE mount. In v0.6.1 it uses

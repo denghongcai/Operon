@@ -884,6 +884,7 @@ dependencies = [
  "async-stream",
  "clap",
  "futures-util",
+ "libc",
  "mdns-sd",
  "operon-config",
  "operon-core",

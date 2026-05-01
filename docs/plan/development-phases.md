@@ -2127,6 +2127,156 @@ Remaining:
 - Long term: add protocol-level `argv[]` job execution if shell-free command
   execution becomes a product requirement.
 
+## v0.6.7 Goal
+
+Operon v0.6.7 should close the remaining runtime infrastructure issues before
+building the CLI TUI console.
+
+```text
+v0.6.7 = process lifecycle, binary job logs, and explicit async CLI runtime.
+```
+
+This milestone should not add new user-facing capabilities. It should make the
+existing job and CLI surfaces safer and cleaner so v0.7 can reuse them without
+carrying avoidable runtime debt.
+
+## Phase 32.19: Job Process Group Termination
+
+Status: Completed.
+
+Goal: make job cancellation and timeout terminate the whole Linux job process
+tree, not only the direct shell child.
+
+Planned:
+
+- on Linux, start each job in its own process group or session.
+- on cancel and timeout, send termination to the process group instead of only
+  calling `start_kill()` on the direct child.
+- keep the current `kill_on_drop(true)` behavior as a last-resort cleanup guard,
+  not as the primary lifecycle mechanism.
+- document Linux-only semantics and the non-Linux fallback if the code remains
+  portable at compile time.
+- add a test or validation script that starts a child which spawns a long-lived
+  descendant, cancels the job, and verifies the descendant exits.
+
+Completed:
+
+- Linux job commands now start in their own process group.
+- cancel and timeout now signal the process group with `SIGTERM`, escalate to
+  `SIGKILL` after a short wait, and keep direct-child kill as the non-Unix
+  fallback.
+- added `scripts/verify-v0.6.7-runtime.sh` to validate descendant termination
+  through the CLI and daemon.
+
+Done when:
+
+- cancelling a Linux job reliably terminates shell-spawned descendants.
+- timing out a Linux job follows the same process-group termination path.
+- job status and audit behavior remain unchanged for cancel and timeout.
+
+## Phase 32.20: Binary-Safe Job Log Protocol
+
+Status: Completed.
+
+Goal: preserve stdout/stderr bytes end to end instead of forcing job logs
+through UTF-8 strings.
+
+Planned:
+
+- change runtime `JobLog.data` from `string` to `bytes` in the gRPC protocol.
+- update Rust core/protocol conversions, daemon capture, ring buffer storage,
+  job log listing, and job log streaming to use byte buffers internally.
+- update CLI output paths to write log bytes directly to stdout/stderr sinks,
+  only decoding for JSON or human display when unavoidable.
+- update the TypeScript SDK so `streamJobLogs` yields `Uint8Array` chunks
+  without `TextEncoder` re-encoding.
+- document the protocol change in `PROTOCOL.md`.
+
+Completed:
+
+- runtime `JobLog.data` is now `bytes` in the gRPC protocol.
+- Rust core, protocol conversion, daemon capture, ring buffer storage, and CLI
+  log output now preserve log bytes.
+- TS generated bindings and SDK types now expose job log data as `Uint8Array`.
+- SDK tests cover byte-preserving `streamJobLogs`.
+- README and PROTOCOL document binary-safe log behavior.
+
+Done when:
+
+- non-UTF-8 stdout/stderr survives daemon capture, CLI streaming, and TS SDK
+  streaming without data loss.
+- list and stream log APIs have consistent binary-safe semantics.
+- generated TS protocol bindings and SDK tests are updated.
+
+## Phase 32.21: Explicit Async CLI Runtime
+
+Status: Completed.
+
+Goal: remove the hidden singleton Tokio runtime from the CLI gRPC layer and make
+the CLI entrypoint own async execution explicitly.
+
+Planned:
+
+- convert `operon-cli` entrypoint to an explicit Tokio runtime, preferably
+  `#[tokio::main] async fn main()`.
+- convert `crates/operon-cli/src/grpc.rs` public gRPC helper functions to
+  async functions.
+- remove `OnceLock<tokio::runtime::Runtime>` and the internal `block_on`
+  wrapper from `grpc.rs`.
+- propagate `.await` through CLI command handlers and graph execution where
+  they call gRPC.
+- preserve synchronous local file/config parsing where there is no runtime
+  benefit to changing it.
+- keep `operon_mount::spawn_mount` unchanged unless the mount command requires a
+  follow-up integration adjustment.
+
+Completed:
+
+- CLI entrypoint now owns the Tokio runtime explicitly.
+- `operon-cli/src/grpc.rs` no longer owns a singleton runtime or internal
+  `block_on` wrapper.
+- gRPC helper functions are async and command handlers/graph execution await
+  them directly.
+- request context propagation moved to a Tokio task-local so graph audit
+  metadata survives async execution.
+
+Done when:
+
+- `operon-cli/src/grpc.rs` no longer creates or owns a Tokio runtime.
+- all gRPC calls are awaited from the CLI command path.
+- graph audit context propagation still works after async conversion.
+- CLI tests and Docker smoke validation pass.
+
+## Phase 32.22: v0.6.7 Acceptance
+
+Status: Completed.
+
+Goal: make the infrastructure cleanup reproducible before moving to v0.7.
+
+Planned:
+
+- create `docs/plan/v0.6.7-acceptance.md`.
+- add validation commands for process-group cancellation, binary log streaming,
+  and async CLI runtime behavior.
+- update README and PROTOCOL only where user-visible behavior or protocol shape
+  changes.
+- update AGENTS.md after completion so the next planned milestone returns to
+  v0.7 CLI TUI console.
+
+Completed:
+
+- created and executed `scripts/verify-v0.6.7-runtime.sh`.
+- updated `docs/plan/v0.6.7-acceptance.md`, README, PROTOCOL, and AGENTS.md.
+- completed Rust, SDK, and runtime validations for v0.6.7.
+
+Done when:
+
+- `cargo fmt --check` passes.
+- `cargo clippy --workspace --locked -- -D warnings` passes.
+- `cargo test --workspace --locked` passes.
+- `pnpm --filter @operon/sdk typecheck` passes.
+- Docker-backed runtime validation covers the changed job and log behavior.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

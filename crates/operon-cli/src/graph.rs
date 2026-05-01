@@ -7,7 +7,7 @@ use operon_core::{
 
 use crate::{grpc, load_endpoint, load_job};
 
-pub(crate) fn run_graph(
+pub(crate) async fn run_graph(
     config_path: PathBuf,
     workflow_path: PathBuf,
     trace_output: Option<PathBuf>,
@@ -22,7 +22,7 @@ pub(crate) fn run_graph(
     };
 
     for (index, step) in graph.steps.iter().enumerate() {
-        let step_trace = execute_step(config_path.clone(), &trace.run_id, index, step);
+        let step_trace = execute_step(config_path.clone(), &trace.run_id, index, step).await;
         let failed = matches!(step_trace.status, ExecutionStatus::Failed);
         trace.steps.push(step_trace);
 
@@ -37,7 +37,7 @@ pub(crate) fn run_graph(
     write_trace(&trace, trace_output.as_deref())
 }
 
-fn execute_step(
+async fn execute_step(
     config_path: PathBuf,
     run_id: &str,
     index: usize,
@@ -54,7 +54,8 @@ fn execute_step(
             step_id: Some(id.clone()),
         },
         || execute_step_action(config_path, step),
-    );
+    )
+    .await;
     let ended_at_ms = now_ms();
 
     match result {
@@ -81,7 +82,7 @@ fn execute_step(
     }
 }
 
-fn execute_step_action(
+async fn execute_step_action(
     config_path: PathBuf,
     step: &ExecutionStep,
 ) -> anyhow::Result<serde_json::Value> {
@@ -89,20 +90,20 @@ fn execute_step_action(
         "fs.stat" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let stat = grpc::fs_stat(&endpoint, path)?;
+            let stat = grpc::fs_stat(&endpoint, path).await?;
             Ok(serde_json::to_value(stat)?)
         }
         "fs.list" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let list = grpc::fs_list(&endpoint, path)?;
+            let list = grpc::fs_list(&endpoint, path).await?;
             Ok(serde_json::to_value(list)?)
         }
         "fs.read" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
             let mut content = Vec::new();
-            grpc::read_file_to_writer(&endpoint, path, &mut content)?;
+            grpc::read_file_to_writer(&endpoint, path, &mut content).await?;
             let read = FsRead {
                 path: path.to_string(),
                 content: String::from_utf8(content)?,
@@ -113,15 +114,18 @@ fn execute_step_action(
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
             let content = step.content.clone().unwrap_or_default();
-            let write = grpc::write_file_bytes(&endpoint, path, content.as_bytes())?;
+            let write = grpc::write_file_bytes(&endpoint, path, content.as_bytes()).await?;
             Ok(serde_json::to_value(write)?)
         }
-        "job.run" => run_job_step(config_path, step),
+        "job.run" => run_job_step(config_path, step).await,
         action => anyhow::bail!("unsupported graph action `{action}`"),
     }
 }
 
-fn run_job_step(config_path: PathBuf, step: &ExecutionStep) -> anyhow::Result<serde_json::Value> {
+async fn run_job_step(
+    config_path: PathBuf,
+    step: &ExecutionStep,
+) -> anyhow::Result<serde_json::Value> {
     let endpoint = load_endpoint(config_path.clone(), &step.node)?;
     let request = JobRunRequest {
         command: required_field(step.command.as_deref(), "command")?.to_string(),
@@ -129,10 +133,10 @@ fn run_job_step(config_path: PathBuf, step: &ExecutionStep) -> anyhow::Result<se
         timeout_secs: step.timeout_secs,
         secrets: step.secrets.clone(),
     };
-    let record: JobRecord = grpc::run_job(&endpoint, request)?;
+    let record: JobRecord = grpc::run_job(&endpoint, request).await?;
 
-    let event = grpc::watch_job_to_terminal(&endpoint, &record.id)?;
-    let record = load_job(config_path, &step.node, &record.id)?;
+    let event = grpc::watch_job_to_terminal(&endpoint, &record.id).await?;
+    let record = load_job(config_path, &step.node, &record.id).await?;
     match event.status {
         JobStatus::Succeeded => Ok(serde_json::to_value(record)?),
         JobStatus::Running => anyhow::bail!("job `{}` watch ended while still running", record.id),
@@ -182,8 +186,8 @@ mod tests {
         assert_eq!(error.to_string(), "step requires `command`");
     }
 
-    #[test]
-    fn execute_step_reports_unsupported_action_as_failed_trace() {
+    #[tokio::test]
+    async fn execute_step_reports_unsupported_action_as_failed_trace() {
         let step = ExecutionStep {
             id: Some("bad-step".to_string()),
             node: "node-a".to_string(),
@@ -196,7 +200,7 @@ mod tests {
             secrets: Vec::new(),
         };
 
-        let trace = execute_step(PathBuf::from("missing-config.yaml"), "run-test", 0, &step);
+        let trace = execute_step(PathBuf::from("missing-config.yaml"), "run-test", 0, &step).await;
 
         assert_eq!(trace.id, "bad-step");
         assert!(matches!(trace.status, ExecutionStatus::Failed));
@@ -206,8 +210,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn execute_step_generates_default_step_id() {
+    #[tokio::test]
+    async fn execute_step_generates_default_step_id() {
         let step = ExecutionStep {
             id: None,
             node: "node-a".to_string(),
@@ -220,7 +224,7 @@ mod tests {
             secrets: Vec::new(),
         };
 
-        let trace = execute_step(PathBuf::from("missing-config.yaml"), "run-test", 2, &step);
+        let trace = execute_step(PathBuf::from("missing-config.yaml"), "run-test", 2, &step).await;
 
         assert_eq!(trace.id, "step-3");
     }

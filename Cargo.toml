@@ -27,6 +27,7 @@ ctrlc = { version = "3.5.2", features = ["termination"] }
 fuser = "0.17.0"
 futures-util = "0.3"
 getrandom = "0.4.2"
+libc = "0.2"
 mdns-sd = "0.19.1"
 prost = "0.14.3"
 serde = { version = "1", features = ["derive"] }

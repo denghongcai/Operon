@@ -93,7 +93,7 @@ export type JobList = {
 
 export type JobLog = {
   stream: string;
-  data: string;
+  data: Uint8Array;
   sequence: number;
 };
 
@@ -242,7 +242,7 @@ export class OperonClient {
           controller.close();
           return;
         }
-        controller.enqueue(new TextEncoder().encode(next.value.data));
+        controller.enqueue(next.value.data);
       },
       async cancel() {
         if (iterator.return) {

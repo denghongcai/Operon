@@ -160,7 +160,7 @@ message JobCancelRequest {
 
 message JobLog {
   string stream = 1;
-  string data = 2;
+  bytes data = 2;
   uint64 sequence = 3;
 }
 

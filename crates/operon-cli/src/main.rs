@@ -268,7 +268,8 @@ struct AuditFilter {
     resource: Option<String>,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
     let output = OutputMode {
@@ -290,7 +291,7 @@ fn main() -> anyhow::Result<()> {
                 output,
             ),
             NodeCommand::Resolve { node_id } => resolve_node(config_path, &node_id, output),
-            NodeCommand::Ping { node_id } => ping_node(config_path, &node_id, output),
+            NodeCommand::Ping { node_id } => ping_node(config_path, &node_id, output).await,
         },
         Command::Init { command } => match command {
             InitCommand::Config { path } => init_config(path, output),
@@ -300,28 +301,32 @@ fn main() -> anyhow::Result<()> {
             ProviderCommand::List => list_providers(output),
         },
         Command::Capability { command } => match command {
-            CapabilityCommand::List { node_id } => list_capabilities(config_path, &node_id, output),
+            CapabilityCommand::List { node_id } => {
+                list_capabilities(config_path, &node_id, output).await
+            }
         },
         Command::Fs { command } => match command {
-            FsCommand::Stat { target } => fs_stat(config_path, &target, output),
-            FsCommand::List { target } => fs_list(config_path, &target, output),
+            FsCommand::Stat { target } => fs_stat(config_path, &target, output).await,
+            FsCommand::List { target } => fs_list(config_path, &target, output).await,
             FsCommand::Read {
                 target,
                 output: file_output,
-            } => fs_read(config_path, &target, file_output, output),
+            } => fs_read(config_path, &target, file_output, output).await,
             FsCommand::Write {
                 target,
                 content,
                 file,
-            } => fs_write(config_path, &target, content, file, output),
-            FsCommand::Mkdir { target } => fs_mkdir(config_path, &target, output),
-            FsCommand::Rm { target } => fs_rm(config_path, &target, output),
-            FsCommand::Rename { from, to } => fs_rename(config_path, &from, &to, output),
-            FsCommand::Copy { from, to } => fs_copy(config_path, &from, &to, output),
-            FsCommand::Truncate { target, size } => fs_truncate(config_path, &target, size, output),
+            } => fs_write(config_path, &target, content, file, output).await,
+            FsCommand::Mkdir { target } => fs_mkdir(config_path, &target, output).await,
+            FsCommand::Rm { target } => fs_rm(config_path, &target, output).await,
+            FsCommand::Rename { from, to } => fs_rename(config_path, &from, &to, output).await,
+            FsCommand::Copy { from, to } => fs_copy(config_path, &from, &to, output).await,
+            FsCommand::Truncate { target, size } => {
+                fs_truncate(config_path, &target, size, output).await
+            }
         },
         Command::Audit { command } => match command {
-            AuditCommand::List { node_id } => list_audit(config_path, &node_id, output),
+            AuditCommand::List { node_id } => list_audit(config_path, &node_id, output).await,
             AuditCommand::Show {
                 node_id,
                 limit,
@@ -337,15 +342,15 @@ fn main() -> anyhow::Result<()> {
                     allowed,
                     resource,
                 };
-                audit_show(config_path, &node_id, filter, output)
+                audit_show(config_path, &node_id, filter, output).await
             }
         },
         Command::Service { command } => match command {
-            ServiceCommand::List { node_id } => service_list(config_path, &node_id, output),
+            ServiceCommand::List { node_id } => service_list(config_path, &node_id, output).await,
             ServiceCommand::Check {
                 node_id,
                 service_id,
-            } => service_check(config_path, &node_id, &service_id, output),
+            } => service_check(config_path, &node_id, &service_id, output).await,
         },
         Command::Job { command } => match command {
             JobCommand::Run {
@@ -355,41 +360,44 @@ fn main() -> anyhow::Result<()> {
                 secret,
                 detach,
                 command,
-            } => job_run(JobRunInput {
-                config_path,
-                node_id,
-                cwd,
-                timeout_secs,
-                secrets: secret,
-                detach,
-                command,
-                output,
-            }),
-            JobCommand::List { node_id } => job_list(config_path, &node_id, output),
+            } => {
+                job_run(JobRunInput {
+                    config_path,
+                    node_id,
+                    cwd,
+                    timeout_secs,
+                    secrets: secret,
+                    detach,
+                    command,
+                    output,
+                })
+                .await
+            }
+            JobCommand::List { node_id } => job_list(config_path, &node_id, output).await,
             JobCommand::Status { node_id, job_id } => {
-                job_status(config_path, &node_id, &job_id, output)
+                job_status(config_path, &node_id, &job_id, output).await
             }
             JobCommand::Logs {
                 node_id,
                 job_id,
                 follow,
                 stream,
-            } => job_logs(config_path, &node_id, &job_id, follow, stream),
+            } => job_logs(config_path, &node_id, &job_id, follow, stream).await,
             JobCommand::Stdin {
                 node_id,
                 job_id,
                 content,
                 file,
                 close,
-            } => job_stdin(config_path, &node_id, &job_id, content, file, close, output),
+            } => job_stdin(config_path, &node_id, &job_id, content, file, close, output).await,
             JobCommand::Cancel { node_id, job_id } => {
-                job_cancel(config_path, &node_id, &job_id, output)
+                job_cancel(config_path, &node_id, &job_id, output).await
             }
         },
         Command::Run {
             workflow,
             trace_output,
-        } => graph::run_graph(config_path, workflow, trace_output),
+        } => graph::run_graph(config_path, workflow, trace_output).await,
         Command::Trace { command } => match command {
             TraceCommand::Show { path } => trace_show(path, output),
             TraceCommand::List { dir } => trace_list(dir, output),
@@ -458,10 +466,10 @@ fn resolve_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyh
     Ok(())
 }
 
-fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
 
-    let (health, node): (HealthStatus, NodeInfo) = grpc::health_and_node(&endpoint)?;
+    let (health, node): (HealthStatus, NodeInfo) = grpc::health_and_node(&endpoint).await?;
     if output.json {
         print_json(&serde_json::json!({ "health": health, "node": node }))?;
         return Ok(());
@@ -478,14 +486,14 @@ fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow:
     Ok(())
 }
 
-fn list_capabilities(
+async fn list_capabilities(
     config_path: PathBuf,
     node_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
 
-    let list: CapabilityList = grpc::list_capabilities(&endpoint)?;
+    let list: CapabilityList = grpc::list_capabilities(&endpoint).await?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -507,10 +515,10 @@ fn list_capabilities(
     Ok(())
 }
 
-fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat = grpc::fs_stat(&endpoint, &target.path)?;
+    let stat = grpc::fs_stat(&endpoint, &target.path).await?;
     if output.json {
         print_json(&stat)?;
         return Ok(());
@@ -527,10 +535,10 @@ fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Re
     Ok(())
 }
 
-fn fs_list(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn fs_list(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let list: FsList = grpc::fs_list(&endpoint, &target.path)?;
+    let list: FsList = grpc::fs_list(&endpoint, &target.path).await?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -551,7 +559,7 @@ fn fs_list(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Re
     Ok(())
 }
 
-fn fs_read(
+async fn fs_read(
     config_path: PathBuf,
     target: &str,
     file_output: Option<PathBuf>,
@@ -562,10 +570,10 @@ fn fs_read(
 
     if let Some(file_output) = file_output {
         let mut file = fs::File::create(&file_output)?;
-        grpc::read_file_to_writer(&endpoint, &target.path, &mut file)?;
+        grpc::read_file_to_writer(&endpoint, &target.path, &mut file).await?;
     } else {
         let mut content = Vec::new();
-        grpc::read_file_to_writer(&endpoint, &target.path, &mut content)?;
+        grpc::read_file_to_writer(&endpoint, &target.path, &mut content).await?;
         let read = FsRead {
             path: target.path.clone(),
             content: String::from_utf8(content)?,
@@ -583,7 +591,7 @@ fn fs_read(
     Ok(())
 }
 
-fn fs_write(
+async fn fs_write(
     config_path: PathBuf,
     target: &str,
     content: Option<String>,
@@ -595,9 +603,9 @@ fn fs_write(
 
     let write: FsWrite = match (content, file) {
         (Some(content), None) => {
-            grpc::write_file_bytes(&endpoint, &target.path, content.as_bytes())?
+            grpc::write_file_bytes(&endpoint, &target.path, content.as_bytes()).await?
         }
-        (None, Some(file)) => grpc::write_file(&endpoint, &target.path, &file)?,
+        (None, Some(file)) => grpc::write_file(&endpoint, &target.path, &file).await?,
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
         (None, None) => anyhow::bail!("fs write requires --content or --file"),
     };
@@ -617,10 +625,10 @@ fn fs_write(
     Ok(())
 }
 
-fn fs_mkdir(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn fs_mkdir(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat = grpc::fs_mkdir(&endpoint, &target.path)?;
+    let stat = grpc::fs_mkdir(&endpoint, &target.path).await?;
     if output.json {
         print_json(&stat)?;
         return Ok(());
@@ -635,10 +643,10 @@ fn fs_mkdir(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::R
     Ok(())
 }
 
-fn fs_rm(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn fs_rm(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let path = grpc::fs_delete(&endpoint, &target.path)?;
+    let path = grpc::fs_delete(&endpoint, &target.path).await?;
     let result = serde_json::json!({ "path": path });
     if output.json {
         print_json(&result)?;
@@ -655,14 +663,19 @@ fn fs_rm(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Resu
     Ok(())
 }
 
-fn fs_rename(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn fs_rename(
+    config_path: PathBuf,
+    from: &str,
+    to: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let from = parse_node_path(from)?;
     let to = parse_node_path(to)?;
     if from.node_id != to.node_id {
         anyhow::bail!("fs rename requires source and target to use the same node");
     }
     let endpoint = load_endpoint(config_path, &from.node_id)?;
-    let (from_path, to_path) = grpc::fs_rename(&endpoint, &from.path, &to.path)?;
+    let (from_path, to_path) = grpc::fs_rename(&endpoint, &from.path, &to.path).await?;
     let result = serde_json::json!({
         "from_path": from_path,
         "to_path": to_path,
@@ -683,14 +696,19 @@ fn fs_rename(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> 
     Ok(())
 }
 
-fn fs_copy(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn fs_copy(
+    config_path: PathBuf,
+    from: &str,
+    to: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let from = parse_node_path(from)?;
     let to = parse_node_path(to)?;
     if from.node_id != to.node_id {
         anyhow::bail!("fs copy requires source and target to use the same node");
     }
     let endpoint = load_endpoint(config_path, &from.node_id)?;
-    let (from_path, to_path, bytes_copied) = grpc::fs_copy(&endpoint, &from.path, &to.path)?;
+    let (from_path, to_path, bytes_copied) = grpc::fs_copy(&endpoint, &from.path, &to.path).await?;
     let result = serde_json::json!({
         "from_path": from_path,
         "to_path": to_path,
@@ -713,7 +731,7 @@ fn fs_copy(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> an
     Ok(())
 }
 
-fn fs_truncate(
+async fn fs_truncate(
     config_path: PathBuf,
     target: &str,
     size: u64,
@@ -721,7 +739,7 @@ fn fs_truncate(
 ) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat = grpc::fs_truncate(&endpoint, &target.path, size)?;
+    let stat = grpc::fs_truncate(&endpoint, &target.path, size).await?;
     if output.json {
         print_json(&stat)?;
         return Ok(());
@@ -736,9 +754,9 @@ fn fs_truncate(
     Ok(())
 }
 
-fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let audit: AuditLog = grpc::list_audit(&endpoint)?;
+    let audit: AuditLog = grpc::list_audit(&endpoint).await?;
     if output.json {
         print_json(&audit)?;
         return Ok(());
@@ -746,14 +764,14 @@ fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow
     print_audit(audit, AuditFilter::default(), output)
 }
 
-fn audit_show(
+async fn audit_show(
     config_path: PathBuf,
     node_id: &str,
     filter: AuditFilter,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let audit: AuditLog = grpc::list_audit(&endpoint)?;
+    let audit: AuditLog = grpc::list_audit(&endpoint).await?;
     if output.json {
         print_json(&audit)?;
         return Ok(());
@@ -808,9 +826,13 @@ fn print_audit(audit: AuditLog, filter: AuditFilter, output: OutputMode) -> anyh
     Ok(())
 }
 
-fn service_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn service_list(
+    config_path: PathBuf,
+    node_id: &str,
+    output: OutputMode,
+) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let list: ServiceList = grpc::list_services(&endpoint)?;
+    let list: ServiceList = grpc::list_services(&endpoint).await?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -831,14 +853,14 @@ fn service_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyh
     Ok(())
 }
 
-fn service_check(
+async fn service_check(
     config_path: PathBuf,
     node_id: &str,
     service_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let check: ServiceCheck = grpc::check_service(&endpoint, service_id)?;
+    let check: ServiceCheck = grpc::check_service(&endpoint, service_id).await?;
     if output.json {
         print_json(&check)?;
         return Ok(());
@@ -856,7 +878,7 @@ fn service_check(
     Ok(())
 }
 
-fn job_run(input: JobRunInput) -> anyhow::Result<()> {
+async fn job_run(input: JobRunInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
     let request = JobRunRequest {
         command: job_command_from_cli_args(&input.command),
@@ -864,7 +886,7 @@ fn job_run(input: JobRunInput) -> anyhow::Result<()> {
         timeout_secs: Some(input.timeout_secs),
         secrets: input.secrets,
     };
-    let record: JobRecord = grpc::run_job(&endpoint, request)?;
+    let record: JobRecord = grpc::run_job(&endpoint, request).await?;
     if input.output.json {
         print_json(&record)?;
     } else if !input.output.quiet {
@@ -875,7 +897,7 @@ fn job_run(input: JobRunInput) -> anyhow::Result<()> {
     }
 
     if !input.detach {
-        wait_for_job(input.config_path, &input.node_id, &record.id, input.output)?;
+        wait_for_job(input.config_path, &input.node_id, &record.id, input.output).await?;
     }
 
     Ok(())
@@ -930,9 +952,9 @@ fn trace_show(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn job_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
+async fn job_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let list: JobList = grpc::list_jobs(&endpoint)?;
+    let list: JobList = grpc::list_jobs(&endpoint).await?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -946,13 +968,13 @@ fn job_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::
     Ok(())
 }
 
-fn job_status(
+async fn job_status(
     config_path: PathBuf,
     node_id: &str,
     job_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
-    let record = load_job(config_path, node_id, job_id)?;
+    let record = load_job(config_path, node_id, job_id).await?;
     if output.json {
         print_json(&record)?;
         return Ok(());
@@ -964,7 +986,7 @@ fn job_status(
     Ok(())
 }
 
-fn job_logs(
+async fn job_logs(
     config_path: PathBuf,
     node_id: &str,
     job_id: &str,
@@ -973,16 +995,18 @@ fn job_logs(
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     if stream || follow {
-        return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::stdout());
+        return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::stdout()).await;
     }
-    let logs = grpc::list_job_logs(&endpoint, job_id)?;
+    let logs = grpc::list_job_logs(&endpoint, job_id).await?;
+    let mut stdout = std::io::stdout();
     for log in logs.logs {
-        print!("{}", log.data);
+        use std::io::Write;
+        stdout.write_all(&log.data)?;
     }
     Ok(())
 }
 
-fn job_stdin(
+async fn job_stdin(
     config_path: PathBuf,
     node_id: &str,
     job_id: &str,
@@ -993,7 +1017,7 @@ fn job_stdin(
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     if close {
-        let closed: JobStdinClose = grpc::close_job_stdin(&endpoint, job_id)?;
+        let closed: JobStdinClose = grpc::close_job_stdin(&endpoint, job_id).await?;
         if output.json {
             print_json(&closed)?;
         } else if !output.quiet {
@@ -1003,9 +1027,9 @@ fn job_stdin(
     }
     let written: JobStdin = match (content, file) {
         (Some(content), None) => {
-            grpc::write_job_stdin_bytes(&endpoint, job_id, content.as_bytes())?
+            grpc::write_job_stdin_bytes(&endpoint, job_id, content.as_bytes()).await?
         }
-        (None, Some(file)) => grpc::write_job_stdin_file(&endpoint, job_id, &file)?,
+        (None, Some(file)) => grpc::write_job_stdin_file(&endpoint, job_id, &file).await?,
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
         (None, None) => anyhow::bail!("job stdin requires --content, --file, or --close"),
     };
@@ -1020,14 +1044,14 @@ fn job_stdin(
     Ok(())
 }
 
-fn job_cancel(
+async fn job_cancel(
     config_path: PathBuf,
     node_id: &str,
     job_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let record: JobRecord = grpc::cancel_job(&endpoint, job_id)?;
+    let record: JobRecord = grpc::cancel_job(&endpoint, job_id).await?;
     if output.json {
         print_json(&record)?;
         return Ok(());
@@ -1039,21 +1063,23 @@ fn job_cancel(
     Ok(())
 }
 
-fn wait_for_job(
+async fn wait_for_job(
     config_path: PathBuf,
     node_id: &str,
     job_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let _ = grpc::watch_job_to_terminal(&endpoint, job_id)?;
-    let record = grpc::get_job(&endpoint, job_id)?;
+    let _ = grpc::watch_job_to_terminal(&endpoint, job_id).await?;
+    let record = grpc::get_job(&endpoint, job_id).await?;
     if output.json {
         print_json(&record)?;
     } else if !output.quiet {
         print_job_status(&record);
-        for log in grpc::list_job_logs(&endpoint, job_id)?.logs {
-            print!("{}", log.data);
+        let mut stdout = std::io::stdout();
+        for log in grpc::list_job_logs(&endpoint, job_id).await?.logs {
+            use std::io::Write;
+            stdout.write_all(&log.data)?;
         }
     }
     Ok(())
@@ -1257,13 +1283,13 @@ fn mount_fs(
     mount.wait_for_shutdown()
 }
 
-pub(crate) fn load_job(
+pub(crate) async fn load_job(
     config_path: PathBuf,
     node_id: &str,
     job_id: &str,
 ) -> anyhow::Result<JobRecord> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    grpc::get_job(&endpoint, job_id)
+    grpc::get_job(&endpoint, job_id).await
 }
 
 fn print_job_status(record: &JobRecord) {

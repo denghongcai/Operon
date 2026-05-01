@@ -146,7 +146,7 @@ export interface JobCancelRequest {
 
 export interface JobLog {
   stream: string;
-  data: string;
+  data: Uint8Array;
   sequence: string;
 }
 
@@ -2350,7 +2350,7 @@ export const JobCancelRequest: MessageFns<JobCancelRequest> = {
 };
 
 function createBaseJobLog(): JobLog {
-  return { stream: "", data: "", sequence: "0" };
+  return { stream: "", data: new Uint8Array(0), sequence: "0" };
 }
 
 export const JobLog: MessageFns<JobLog> = {
@@ -2358,8 +2358,8 @@ export const JobLog: MessageFns<JobLog> = {
     if (message.stream !== "") {
       writer.uint32(10).string(message.stream);
     }
-    if (message.data !== "") {
-      writer.uint32(18).string(message.data);
+    if (message.data.length !== 0) {
+      writer.uint32(18).bytes(message.data);
     }
     if (message.sequence !== "0") {
       writer.uint32(24).uint64(message.sequence);
@@ -2387,7 +2387,7 @@ export const JobLog: MessageFns<JobLog> = {
             break;
           }
 
-          message.data = reader.string();
+          message.data = reader.bytes();
           continue;
         }
         case 3: {
@@ -2410,7 +2410,7 @@ export const JobLog: MessageFns<JobLog> = {
   fromJSON(object: any): JobLog {
     return {
       stream: isSet(object.stream) ? globalThis.String(object.stream) : "",
-      data: isSet(object.data) ? globalThis.String(object.data) : "",
+      data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
       sequence: isSet(object.sequence) ? globalThis.String(object.sequence) : "0",
     };
   },
@@ -2420,8 +2420,8 @@ export const JobLog: MessageFns<JobLog> = {
     if (message.stream !== "") {
       obj.stream = message.stream;
     }
-    if (message.data !== "") {
-      obj.data = message.data;
+    if (message.data.length !== 0) {
+      obj.data = base64FromBytes(message.data);
     }
     if (message.sequence !== "0") {
       obj.sequence = message.sequence;
@@ -2435,7 +2435,7 @@ export const JobLog: MessageFns<JobLog> = {
   fromPartial(object: DeepPartial<JobLog>): JobLog {
     const message = createBaseJobLog();
     message.stream = object.stream ?? "";
-    message.data = object.data ?? "";
+    message.data = object.data ?? new Uint8Array(0);
     message.sequence = object.sequence ?? "0";
     return message;
   },

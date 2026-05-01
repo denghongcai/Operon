@@ -218,7 +218,7 @@ pub struct JobCancelRequest {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct JobLog {
     pub stream: String,
-    pub data: String,
+    pub data: Vec<u8>,
     #[serde(default)]
     pub sequence: u64,
 }

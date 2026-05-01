@@ -1,9 +1,7 @@
 use std::{
-    cell::RefCell,
     fs,
     io::{Read, Write},
     path::Path,
-    sync::OnceLock,
 };
 
 use anyhow::Context;
@@ -22,26 +20,22 @@ use operon_protocol::runtime::v1::{
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
-static CLI_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-
-thread_local! {
-    static REQUEST_CONTEXT: RefCell<Option<RequestContext>> = const { RefCell::new(None) };
+tokio::task_local! {
+    static REQUEST_CONTEXT: RequestContext;
 }
 
-pub fn with_request_context<T>(
+pub async fn with_request_context<T, Fut>(
     context: RequestContext,
-    f: impl FnOnce() -> anyhow::Result<T>,
-) -> anyhow::Result<T> {
-    let previous = REQUEST_CONTEXT.with(|slot| slot.replace(Some(context)));
-    let result = f();
-    REQUEST_CONTEXT.with(|slot| {
-        slot.replace(previous);
-    });
-    result
+    f: impl FnOnce() -> Fut,
+) -> anyhow::Result<T>
+where
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    REQUEST_CONTEXT.scope(context, f()).await
 }
 
-pub fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthStatus, NodeInfo)> {
-    block_on(endpoint, |mut client, endpoint| async move {
+pub async fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthStatus, NodeInfo)> {
+    call(endpoint, |mut client, endpoint| async move {
         let health = client
             .health(with_auth(&endpoint, HealthRequest {})?)
             .await?
@@ -54,10 +48,11 @@ pub fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthStatus,
             .into();
         Ok((health, node))
     })
+    .await
 }
 
-pub fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<CapabilityList> {
-    block_on(endpoint, |mut client, endpoint| async move {
+pub async fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<CapabilityList> {
+    call(endpoint, |mut client, endpoint| async move {
         client
             .list_capabilities(with_auth(&endpoint, ListCapabilitiesRequest {})?)
             .await?
@@ -65,37 +60,40 @@ pub fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<CapabilityLi
             .try_into()
             .map_err(anyhow::Error::msg)
     })
+    .await
 }
 
-pub fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
+pub async fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
     let path = path.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .stat_fs(with_auth(&endpoint, FsPathRequest { path })?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn fs_list(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsList> {
+pub async fn fs_list(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsList> {
     let path = path.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .list_fs(with_auth(&endpoint, FsPathRequest { path })?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn read_file_to_writer(
+pub async fn read_file_to_writer(
     endpoint: &NodeEndpoint,
     path: &str,
     writer: &mut impl Write,
 ) -> anyhow::Result<()> {
     let path = path.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         let mut stream = client
             .read_file(with_auth(&endpoint, FsPathRequest { path })?)
             .await?
@@ -105,55 +103,63 @@ pub fn read_file_to_writer(
         }
         Ok(())
     })
+    .await
 }
 
-pub fn write_file_bytes(
+pub async fn write_file_bytes(
     endpoint: &NodeEndpoint,
     path: &str,
     body: &[u8],
 ) -> anyhow::Result<FsWrite> {
     let path = path.to_string();
     let chunks = chunk_write_requests(path, body);
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .write_file(with_auth(&endpoint, stream::iter(chunks))?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn write_file(endpoint: &NodeEndpoint, path: &str, file: &Path) -> anyhow::Result<FsWrite> {
+pub async fn write_file(
+    endpoint: &NodeEndpoint,
+    path: &str,
+    file: &Path,
+) -> anyhow::Result<FsWrite> {
     let mut data = Vec::new();
     fs::File::open(file)
         .with_context(|| format!("failed to open {}", file.display()))?
         .read_to_end(&mut data)?;
-    write_file_bytes(endpoint, path, &data)
+    write_file_bytes(endpoint, path, &data).await
 }
 
-pub fn fs_mkdir(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
+pub async fn fs_mkdir(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
     let path = path.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .mkdir_fs(with_auth(&endpoint, FsPathRequest { path })?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn fs_delete(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<String> {
+pub async fn fs_delete(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<String> {
     let path = path.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .delete_fs(with_auth(&endpoint, FsPathRequest { path })?)
             .await?
             .into_inner()
             .path)
     })
+    .await
 }
 
-pub fn fs_rename(
+pub async fn fs_rename(
     endpoint: &NodeEndpoint,
     from_path: &str,
     to_path: &str,
@@ -162,16 +168,17 @@ pub fn fs_rename(
         from_path: from_path.to_string(),
         to_path: to_path.to_string(),
     };
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         let response = client
             .rename_fs(with_auth(&endpoint, request)?)
             .await?
             .into_inner();
         Ok((response.from_path, response.to_path))
     })
+    .await
 }
 
-pub fn fs_copy(
+pub async fn fs_copy(
     endpoint: &NodeEndpoint,
     from_path: &str,
     to_path: &str,
@@ -180,31 +187,33 @@ pub fn fs_copy(
         from_path: from_path.to_string(),
         to_path: to_path.to_string(),
     };
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         let response = client
             .copy_fs(with_auth(&endpoint, request)?)
             .await?
             .into_inner();
         Ok((response.from_path, response.to_path, response.bytes_copied))
     })
+    .await
 }
 
-pub fn fs_truncate(endpoint: &NodeEndpoint, path: &str, size: u64) -> anyhow::Result<FsStat> {
+pub async fn fs_truncate(endpoint: &NodeEndpoint, path: &str, size: u64) -> anyhow::Result<FsStat> {
     let request = FsTruncateRequest {
         path: path.to_string(),
         size,
     };
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .truncate_fs(with_auth(&endpoint, request)?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn run_job(endpoint: &NodeEndpoint, request: JobRunRequest) -> anyhow::Result<JobRecord> {
-    block_on(endpoint, |mut client, endpoint| async move {
+pub async fn run_job(endpoint: &NodeEndpoint, request: JobRunRequest) -> anyhow::Result<JobRecord> {
+    call(endpoint, |mut client, endpoint| async move {
         client
             .run_job(with_auth(&endpoint, grpc_job_run_request(request))?)
             .await?
@@ -212,11 +221,12 @@ pub fn run_job(endpoint: &NodeEndpoint, request: JobRunRequest) -> anyhow::Resul
             .try_into()
             .map_err(anyhow::Error::msg)
     })
+    .await
 }
 
-pub fn get_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecord> {
+pub async fn get_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecord> {
     let job_id = job_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         client
             .get_job(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
@@ -224,10 +234,11 @@ pub fn get_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecor
             .try_into()
             .map_err(anyhow::Error::msg)
     })
+    .await
 }
 
-pub fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
-    block_on(endpoint, |mut client, endpoint| async move {
+pub async fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
+    call(endpoint, |mut client, endpoint| async move {
         client
             .list_jobs(with_auth(&endpoint, ListJobsRequest {})?)
             .await?
@@ -235,11 +246,15 @@ pub fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
             .try_into()
             .map_err(anyhow::Error::msg)
     })
+    .await
 }
 
-pub fn watch_job_to_terminal(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobEvent> {
+pub async fn watch_job_to_terminal(
+    endpoint: &NodeEndpoint,
+    job_id: &str,
+) -> anyhow::Result<JobEvent> {
     let job_id = job_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         let mut stream = client
             .watch_job(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
@@ -255,53 +270,57 @@ pub fn watch_job_to_terminal(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::R
         }
         latest.ok_or_else(|| anyhow::anyhow!("job watch stream ended without an event"))
     })
+    .await
 }
 
-pub fn list_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobLogList> {
+pub async fn list_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobLogList> {
     let job_id = job_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .list_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn stream_job_logs_to_writer(
+pub async fn stream_job_logs_to_writer(
     endpoint: &NodeEndpoint,
     job_id: &str,
     writer: &mut impl Write,
 ) -> anyhow::Result<()> {
     let job_id = job_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         let mut stream = client
             .stream_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
             .into_inner();
         while let Some(log) = stream.message().await? {
-            writer.write_all(log.data.as_bytes())?;
+            writer.write_all(&log.data)?;
         }
         Ok(())
     })
+    .await
 }
 
-pub fn write_job_stdin_bytes(
+pub async fn write_job_stdin_bytes(
     endpoint: &NodeEndpoint,
     job_id: &str,
     body: &[u8],
 ) -> anyhow::Result<JobStdin> {
     let chunks = chunk_stdin_requests(job_id.to_string(), body);
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .write_job_stdin(with_auth(&endpoint, stream::iter(chunks))?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn write_job_stdin_file(
+pub async fn write_job_stdin_file(
     endpoint: &NodeEndpoint,
     job_id: &str,
     file: &Path,
@@ -310,23 +329,27 @@ pub fn write_job_stdin_file(
     fs::File::open(file)
         .with_context(|| format!("failed to open {}", file.display()))?
         .read_to_end(&mut data)?;
-    write_job_stdin_bytes(endpoint, job_id, &data)
+    write_job_stdin_bytes(endpoint, job_id, &data).await
 }
 
-pub fn close_job_stdin(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobStdinClose> {
+pub async fn close_job_stdin(
+    endpoint: &NodeEndpoint,
+    job_id: &str,
+) -> anyhow::Result<JobStdinClose> {
     let job_id = job_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .close_job_stdin(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn cancel_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecord> {
+pub async fn cancel_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecord> {
     let job_id = job_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         client
             .cancel_job(with_auth(&endpoint, JobCancelRequest { job_id })?)
             .await?
@@ -334,10 +357,11 @@ pub fn cancel_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRe
             .try_into()
             .map_err(anyhow::Error::msg)
     })
+    .await
 }
 
-pub fn list_services(endpoint: &NodeEndpoint) -> anyhow::Result<ServiceList> {
-    block_on(endpoint, |mut client, endpoint| async move {
+pub async fn list_services(endpoint: &NodeEndpoint) -> anyhow::Result<ServiceList> {
+    call(endpoint, |mut client, endpoint| async move {
         client
             .list_services(with_auth(&endpoint, ListServicesRequest {})?)
             .await?
@@ -345,30 +369,36 @@ pub fn list_services(endpoint: &NodeEndpoint) -> anyhow::Result<ServiceList> {
             .try_into()
             .map_err(anyhow::Error::msg)
     })
+    .await
 }
 
-pub fn check_service(endpoint: &NodeEndpoint, service_id: &str) -> anyhow::Result<ServiceCheck> {
+pub async fn check_service(
+    endpoint: &NodeEndpoint,
+    service_id: &str,
+) -> anyhow::Result<ServiceCheck> {
     let service_id = service_id.to_string();
-    block_on(endpoint, |mut client, endpoint| async move {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .check_service(with_auth(&endpoint, ServiceIdRequest { service_id })?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-pub fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {
-    block_on(endpoint, |mut client, endpoint| async move {
+pub async fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {
+    call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .list_audit(with_auth(&endpoint, ListAuditRequest {})?)
             .await?
             .into_inner()
             .into())
     })
+    .await
 }
 
-fn block_on<T, Fut>(
+async fn call<T, Fut>(
     endpoint: &NodeEndpoint,
     f: impl FnOnce(OperonRuntimeClient<Channel>, NodeEndpoint) -> Fut,
 ) -> anyhow::Result<T>
@@ -376,25 +406,10 @@ where
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
     let endpoint = endpoint.clone();
-    let runtime = cli_runtime()?;
-    runtime.block_on(async {
-        let channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?
-            .connect()
-            .await?;
-        f(OperonRuntimeClient::new(channel), endpoint).await
-    })
-}
-
-fn cli_runtime() -> anyhow::Result<&'static tokio::runtime::Runtime> {
-    if let Some(runtime) = CLI_RUNTIME.get() {
-        return Ok(runtime);
-    }
-
-    let runtime = tokio::runtime::Runtime::new().context("create CLI tokio runtime")?;
-    let _ = CLI_RUNTIME.set(runtime);
-    Ok(CLI_RUNTIME
-        .get()
-        .expect("CLI runtime should be initialized"))
+    let channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?
+        .connect()
+        .await?;
+    f(OperonRuntimeClient::new(channel), endpoint).await
 }
 
 fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T>> {
@@ -405,22 +420,19 @@ fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T
             MetadataValue::try_from(format!("Bearer {token}"))?,
         );
     }
-    REQUEST_CONTEXT.with(|slot| -> anyhow::Result<()> {
-        if let Some(context) = slot.borrow().as_ref() {
-            if let Some(run_id) = &context.run_id {
-                request
-                    .metadata_mut()
-                    .insert("x-operon-run-id", MetadataValue::try_from(run_id.as_str())?);
-            }
-            if let Some(step_id) = &context.step_id {
-                request.metadata_mut().insert(
-                    "x-operon-step-id",
-                    MetadataValue::try_from(step_id.as_str())?,
-                );
-            }
+    if let Ok(context) = REQUEST_CONTEXT.try_with(Clone::clone) {
+        if let Some(run_id) = &context.run_id {
+            request
+                .metadata_mut()
+                .insert("x-operon-run-id", MetadataValue::try_from(run_id.as_str())?);
         }
-        Ok(())
-    })?;
+        if let Some(step_id) = &context.step_id {
+            request.metadata_mut().insert(
+                "x-operon-step-id",
+                MetadataValue::try_from(step_id.as_str())?,
+            );
+        }
+    }
     Ok(request)
 }
 
@@ -506,8 +518,8 @@ mod tests {
         assert!(chunks[1].path.is_empty());
     }
 
-    #[test]
-    fn with_auth_includes_execution_context_metadata() {
+    #[tokio::test]
+    async fn with_auth_includes_execution_context_metadata() {
         let endpoint = NodeEndpoint {
             node_id: "node-a".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
@@ -520,7 +532,7 @@ mod tests {
                 run_id: Some("run-1".to_string()),
                 step_id: Some("step-1".to_string()),
             },
-            || {
+            || async {
                 let request = with_auth(&endpoint, HealthRequest {})?;
                 assert_eq!(
                     request
@@ -546,6 +558,7 @@ mod tests {
                 Ok(())
             },
         )
+        .await
         .expect("context metadata");
     }
 }

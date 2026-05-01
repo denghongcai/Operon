@@ -173,10 +173,12 @@ over polling `GetJob`.
 
 `ListJobLogs` returns the daemon's current in-memory log ring for a job.
 `StreamJobLogs` returns ordered `JobLog` messages and stays open while the job
-is running. Each message has `stream` (`stdout` or `stderr`), text `data`, and a
-monotonic `sequence` number. Job logs are not embedded in `JobRecord`; they are
-stored as separate append-only log records and retained in a bounded in-memory
-ring. `JobRecord` only reports `log_count` and `logs_truncated`.
+is running. Each message has `stream` (`stdout` or `stderr`), binary `data`, and
+a monotonic `sequence` number. Job logs are not embedded in `JobRecord`; they
+are stored as separate append-only log records and retained in a bounded
+in-memory ring. `JobRecord` only reports `log_count` and `logs_truncated`.
+Clients should decode `data` only at presentation boundaries; the protocol
+preserves stdout/stderr bytes, including non-UTF-8 output.
 
 `WriteJobStdin` accepts ordered `JobStdinRequest` messages. The first message
 must set `job_id`. Later messages may leave `job_id` empty. A stream cannot
@@ -282,6 +284,10 @@ console.log(health);
 const chunks: Uint8Array[] = [];
 for await (const chunk of client.readFile({ path: "/hello.txt" }, { metadata })) {
   chunks.push(chunk.data);
+}
+
+for await (const log of client.streamJobLogs({ jobId: "job-1" }, { metadata })) {
+  process.stdout.write(Buffer.from(log.data));
 }
 ```
 
