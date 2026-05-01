@@ -61,3 +61,63 @@ impl NodesConfig {
 fn default_provider() -> NetworkProviderKind {
     NetworkProviderKind::Manual
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loads_nodes_with_default_manual_provider() {
+        let config: NodesConfig = serde_yaml::from_str(
+            r#"
+nodes:
+  local:
+    endpoint: http://127.0.0.1:7788
+"#,
+        )
+        .expect("config should parse");
+
+        let endpoint = config.endpoint("local").expect("local endpoint");
+        assert_eq!(endpoint.node_id, "local");
+        assert_eq!(endpoint.endpoint, "http://127.0.0.1:7788");
+        assert!(matches!(endpoint.provider, NetworkProviderKind::Manual));
+    }
+
+    #[test]
+    fn preserves_explicit_provider_kind() {
+        let config: NodesConfig = serde_yaml::from_str(
+            r#"
+nodes:
+  gpu:
+    endpoint: http://100.96.18.20:7788
+    provider: tailscale
+"#,
+        )
+        .expect("config should parse");
+
+        let endpoint = config.endpoint("gpu").expect("gpu endpoint");
+        assert!(matches!(endpoint.provider, NetworkProviderKind::Tailscale));
+    }
+
+    #[test]
+    fn returns_endpoints_in_node_id_order() {
+        let config: NodesConfig = serde_yaml::from_str(
+            r#"
+nodes:
+  node-b:
+    endpoint: http://127.0.0.1:17789
+  node-a:
+    endpoint: http://127.0.0.1:17788
+"#,
+        )
+        .expect("config should parse");
+
+        let ids: Vec<_> = config
+            .endpoints()
+            .into_iter()
+            .map(|endpoint| endpoint.node_id)
+            .collect();
+
+        assert_eq!(ids, vec!["node-a", "node-b"]);
+    }
+}

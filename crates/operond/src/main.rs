@@ -777,3 +777,112 @@ fn finish_job(
         record.exit_code = exit_code;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_policy() -> PolicyConfig {
+        PolicyConfig {
+            subject: "test-subject".to_string(),
+            fs: FsPolicy {
+                mounts: vec![FsMountPolicy {
+                    name: "workspace".to_string(),
+                    path: "/workspace".to_string(),
+                    permissions: FsPermissions {
+                        read: true,
+                        write: false,
+                        delete: false,
+                    },
+                }],
+            },
+            job: JobPolicy {
+                allowed_cwds: vec!["/workspace".to_string()],
+                default_timeout_secs: 10,
+                max_timeout_secs: 30,
+                env_allowlist: Vec::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn resolves_virtual_paths_under_workspace() {
+        let resolved = resolve_workspace_path(Path::new("/srv/operon"), "/nested/file.txt")
+            .expect("path should resolve");
+
+        assert_eq!(resolved, PathBuf::from("/srv/operon/nested/file.txt"));
+    }
+
+    #[test]
+    fn rejects_parent_dir_workspace_escape() {
+        let error = resolve_workspace_path(Path::new("/srv/operon"), "/../etc/passwd")
+            .expect_err("path escape should be rejected");
+
+        assert_eq!(error.0, StatusCode::FORBIDDEN);
+        assert!(error.1.contains("escapes workspace"));
+    }
+
+    #[test]
+    fn policy_scope_matches_exact_path_and_children_only() {
+        assert!(path_in_policy_scope("/workspace", "/workspace"));
+        assert!(path_in_policy_scope("/workspace/project", "/workspace"));
+        assert!(!path_in_policy_scope("/workspace-other", "/workspace"));
+    }
+
+    #[test]
+    fn fs_policy_enforces_mount_permissions() {
+        let policy = test_policy();
+
+        assert!(authorize_fs(&policy, "read", "/workspace/file.txt").is_ok());
+
+        let write_error = authorize_fs(&policy, "write", "/workspace/file.txt")
+            .expect_err("write should be denied");
+        assert_eq!(write_error.0, StatusCode::FORBIDDEN);
+
+        let outside_error =
+            authorize_fs(&policy, "read", "/outside/file.txt").expect_err("outside mount");
+        assert_eq!(outside_error.1, "path is outside allowed fs mounts");
+    }
+
+    #[test]
+    fn job_policy_enforces_cwd_and_timeout() {
+        let policy = test_policy();
+
+        assert!(authorize_job(&policy, "/workspace/project", Some(30)).is_ok());
+
+        let cwd_error = authorize_job(&policy, "/tmp", Some(1)).expect_err("cwd should be denied");
+        assert_eq!(cwd_error.1, "job cwd denied by policy");
+
+        let timeout_error =
+            authorize_job(&policy, "/workspace", Some(31)).expect_err("timeout should be denied");
+        assert!(timeout_error.1.contains("exceeds policy maximum"));
+    }
+
+    #[test]
+    fn audit_event_uses_policy_subject_and_capability() {
+        let state = AppState {
+            node: NodeInfo {
+                id: "node-a".to_string(),
+                hostname: "host".to_string(),
+                os: "linux".to_string(),
+                arch: "x86_64".to_string(),
+            },
+            capabilities: default_capabilities("node-a"),
+            workspace: PathBuf::from("/workspace"),
+            policy: test_policy(),
+            audit: Arc::new(Mutex::new(Vec::new())),
+            jobs: Arc::new(Mutex::new(BTreeMap::new())),
+            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            next_job_id: Arc::new(AtomicU64::new(1)),
+        };
+
+        record_audit_capability(&state, "fs:workspace", "read", "/file.txt", true, "allowed");
+
+        let events = state.audit.lock().expect("audit log");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].subject, "test-subject");
+        assert_eq!(events[0].node_id, "node-a");
+        assert_eq!(events[0].capability, "fs:workspace");
+        assert!(events[0].allowed);
+    }
+}

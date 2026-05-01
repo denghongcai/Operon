@@ -428,6 +428,7 @@ fn http_json_request<T: serde::de::DeserializeOwned>(
     Ok(serde_json::from_str(body)?)
 }
 
+#[derive(Debug)]
 struct NodePath {
     node_id: String,
     path: String,
@@ -464,6 +465,7 @@ pub(crate) fn encode_path(path: &str) -> String {
         .replace('?', "%3F")
 }
 
+#[derive(Debug)]
 struct HttpEndpoint {
     host: String,
     port: u16,
@@ -482,4 +484,46 @@ fn parse_http_endpoint(endpoint: &str) -> anyhow::Result<HttpEndpoint> {
         host: host.to_string(),
         port: port.parse()?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_node_path_target() {
+        let target = parse_node_path("node-a:/workspace/file.txt").expect("target should parse");
+
+        assert_eq!(target.node_id, "node-a");
+        assert_eq!(target.path, "/workspace/file.txt");
+    }
+
+    #[test]
+    fn rejects_node_path_without_separator() {
+        let error = parse_node_path("node-a/workspace").expect_err("target should fail");
+        assert!(error.to_string().contains("node:/path"));
+    }
+
+    #[test]
+    fn encodes_query_path_reserved_characters() {
+        assert_eq!(
+            encode_path("/a b/%file?x=1&y=2#frag"),
+            "/a%20b/%25file%3Fx=1%26y=2%23frag"
+        );
+    }
+
+    #[test]
+    fn parses_http_endpoint_with_port() {
+        let endpoint =
+            parse_http_endpoint("http://127.0.0.1:17788").expect("endpoint should parse");
+
+        assert_eq!(endpoint.host, "127.0.0.1");
+        assert_eq!(endpoint.port, 17788);
+    }
+
+    #[test]
+    fn rejects_non_http_endpoint_for_current_client() {
+        let error = parse_http_endpoint("https://127.0.0.1:7788").expect_err("https unsupported");
+        assert!(error.to_string().contains("only http://"));
+    }
 }

@@ -230,3 +230,75 @@ pub struct ExecutionStepTrace {
     pub error: Option<String>,
     pub output: Option<serde_json::Value>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn job_status_uses_kebab_case_wire_names() {
+        assert_eq!(
+            serde_json::to_string(&JobStatus::TimedOut).expect("serialize"),
+            "\"timed-out\""
+        );
+    }
+
+    #[test]
+    fn policy_config_round_trips_from_yaml() {
+        let policy: PolicyConfig = serde_yaml::from_str(
+            r#"
+subject: local-cli
+fs:
+  mounts:
+    - name: workspace
+      path: /
+      permissions:
+        read: true
+        write: true
+        delete: false
+job:
+  allowed_cwds:
+    - /
+  default_timeout_secs: 30
+  max_timeout_secs: 300
+  env_allowlist:
+    - GITHUB_TOKEN
+"#,
+        )
+        .expect("policy should parse");
+
+        assert_eq!(policy.subject, "local-cli");
+        assert_eq!(policy.fs.mounts[0].name, "workspace");
+        assert!(policy.fs.mounts[0].permissions.read);
+        assert!(!policy.fs.mounts[0].permissions.delete);
+        assert_eq!(policy.job.max_timeout_secs, 300);
+        assert_eq!(policy.job.env_allowlist, vec!["GITHUB_TOKEN"]);
+    }
+
+    #[test]
+    fn execution_graph_yaml_supports_mvp_step_fields() {
+        let graph: ExecutionGraph = serde_yaml::from_str(
+            r#"
+name: copy-and-run
+steps:
+  - id: write-input
+    node: node-a
+    action: fs.write
+    path: /input.txt
+    content: hello
+  - id: run-command
+    node: node-a
+    action: job.run
+    cwd: /
+    timeout_secs: 5
+    command: cat input.txt
+"#,
+        )
+        .expect("graph should parse");
+
+        assert_eq!(graph.name, "copy-and-run");
+        assert_eq!(graph.steps.len(), 2);
+        assert_eq!(graph.steps[0].content.as_deref(), Some("hello"));
+        assert_eq!(graph.steps[1].timeout_secs, Some(5));
+    }
+}

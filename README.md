@@ -54,6 +54,29 @@ Operon is not a VPN. It runs on top of Cloudflare Mesh, Tailscale, WireGuard, SS
 
 ---
 
+## Quickstart
+
+Prerequisites:
+
+- Rust stable toolchain
+- Node.js and pnpm
+- Docker with Docker Compose
+
+Run the full MVP validation:
+
+```bash
+pnpm install --frozen-lockfile
+cargo fmt --check
+cargo check --workspace --locked
+cargo clippy --workspace --locked -- -D warnings
+pnpm typecheck
+scripts/verify-mvp-docker.sh
+```
+
+The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks policy and audit behavior, and runs the example execution graph.
+
+---
+
 ## 🌐 Network Boundary
 
 Operon assumes your nodes can already reach each other.
@@ -86,7 +109,7 @@ Cloudflare Mesh or Tailscale can decide whether one device can reach another dev
 Run the local Docker MVP demo:
 
 ```bash
-scripts/verify-phase1-docker.sh
+scripts/verify-mvp-docker.sh
 ```
 
 This starts two `operond` containers, validates capability discovery, fs operations, job execution, policy denial, audit output, and runs:

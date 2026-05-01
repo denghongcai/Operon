@@ -151,3 +151,63 @@ fn now_ms() -> u128 {
         .unwrap_or_default()
         .as_millis()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn required_field_accepts_non_empty_value() {
+        assert_eq!(
+            required_field(Some("/workspace"), "path").expect("value"),
+            "/workspace"
+        );
+    }
+
+    #[test]
+    fn required_field_rejects_empty_value() {
+        let error = required_field(Some(""), "command").expect_err("empty should fail");
+        assert_eq!(error.to_string(), "step requires `command`");
+    }
+
+    #[test]
+    fn execute_step_reports_unsupported_action_as_failed_trace() {
+        let step = ExecutionStep {
+            id: Some("bad-step".to_string()),
+            node: "node-a".to_string(),
+            action: "screen.read".to_string(),
+            path: None,
+            content: None,
+            command: None,
+            cwd: None,
+            timeout_secs: None,
+        };
+
+        let trace = execute_step(PathBuf::from("missing-config.yaml"), 0, &step);
+
+        assert_eq!(trace.id, "bad-step");
+        assert!(matches!(trace.status, ExecutionStatus::Failed));
+        assert_eq!(
+            trace.error.as_deref(),
+            Some("unsupported graph action `screen.read`")
+        );
+    }
+
+    #[test]
+    fn execute_step_generates_default_step_id() {
+        let step = ExecutionStep {
+            id: None,
+            node: "node-a".to_string(),
+            action: "unsupported".to_string(),
+            path: None,
+            content: None,
+            command: None,
+            cwd: None,
+            timeout_secs: None,
+        };
+
+        let trace = execute_step(PathBuf::from("missing-config.yaml"), 2, &step);
+
+        assert_eq!(trace.id, "step-3");
+    }
+}

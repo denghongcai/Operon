@@ -114,7 +114,7 @@ Completed:
 - `operon node ping <node-id>` implemented for Phase 1 `http://` endpoints.
 - `examples/nodes.yaml` includes a local endpoint.
 - local validation passed with `operond` on `127.0.0.1:7788` and `operon node ping local`.
-- Docker two-node validation added through `docker-compose.yml`, `docker/Dockerfile`, `examples/docker-nodes.yaml`, and `scripts/verify-phase1-docker.sh`.
+- Docker two-node validation added through `docker-compose.yml`, `docker/Dockerfile`, `examples/docker-nodes.yaml`, and `scripts/verify-mvp-docker.sh`.
 - Docker two-node validation passed with `node-a` and `node-b`.
 
 Remaining:
@@ -180,7 +180,7 @@ Completed:
 - default Phase 2 capabilities are advertised: `fs`, `process`, `job`, `device-info`, and `service`.
 - `operon capability list <node-id>` implemented.
 - Docker two-node validation passed for `node-a` and `node-b` capability discovery.
-- `scripts/verify-phase1-docker.sh` now validates both node health and capability discovery.
+- `scripts/verify-mvp-docker.sh` now validates both node health and capability discovery.
 
 Remaining:
 
@@ -590,7 +590,7 @@ workflow:
 Demo command:
 
 ```bash
-scripts/verify-phase1-docker.sh
+scripts/verify-mvp-docker.sh
 ```
 
 Done when:
@@ -598,6 +598,49 @@ Done when:
 - README demo can be run from a fresh checkout
 - SDK can submit a run request
 - trace output is useful for humans and agents
+
+## Phase 8: MVP Release Baseline
+
+Status: Completed.
+
+Goal: make v0.1.0 explicit, reproducible, and ready to tag.
+
+Current status: completed on 2026-05-01 with local validation and CI workflow updates.
+
+Completed:
+
+- Docker MVP validation script renamed to `scripts/verify-mvp-docker.sh`.
+- README Quickstart added with the full MVP validation command set.
+- README demo command updated to use the MVP validation script.
+- `docs/plan/mvp-acceptance.md` added as the v0.1.0 acceptance baseline.
+- MVP acceptance document records scope, non-goals, validation commands, release checklist, and known limitations.
+- CI now runs on pushes to both `main` and `mvp`.
+- CI now includes an `MVP Docker Validation` job that runs `scripts/verify-mvp-docker.sh` after Rust and TypeScript checks.
+- Old `verify-phase1-docker.sh` references were updated to the MVP script name.
+- Unit test baseline added across core Rust modules and the TypeScript SDK.
+
+Remaining:
+
+- None for Phase 8.
+
+Validation:
+
+```bash
+cargo fmt --check
+cargo test --workspace --locked
+cargo check --workspace --locked
+cargo clippy --workspace --locked -- -D warnings
+pnpm -r test
+pnpm typecheck
+scripts/verify-mvp-docker.sh
+```
+
+Done when:
+
+- MVP validation has one canonical command.
+- README Quickstart matches the canonical command.
+- v0.1.0 acceptance criteria are documented.
+- CI covers Rust, TypeScript, and Docker MVP validation.
 
 ## MVP Definition of Done
 
