@@ -73,6 +73,9 @@ Operon should not own:
   - v0.6.7 acceptance scope for Linux job process-group termination,
     binary-safe job logs, and explicit async CLI runtime ownership.
 
+- `docs/plan/v0.6.8-acceptance.md`
+  - v0.6.8 acceptance scope for gRPC schema-level protocol stabilization.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -124,8 +127,11 @@ Operon should not own:
 - Completed hardening milestone: v0.6.6 workspace containment, isolated job
   environment construction, graph audit context, streaming client cleanup, and
   runtime helper crate boundaries.
-- Completed runtime cleanup milestone: v0.6.7 process lifecycle, binary job logs, and
-  explicit async CLI runtime.
+- Completed runtime cleanup milestone: v0.6.7 process lifecycle, binary job
+  logs, and explicit async CLI runtime.
+- Completed protocol stabilization milestone: v0.6.8 typed runtime enums,
+  proto3 optional presence, streaming request envelopes, paginated list APIs,
+  and active proto surface pruning.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.

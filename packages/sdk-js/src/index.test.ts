@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { JobStatus, ServiceProtocol } from "./generated/operon/runtime";
 import { OperonClient } from "./index";
 
 const niceGrpcMock = vi.hoisted(() => {
@@ -62,26 +63,21 @@ describe("OperonClient", () => {
       nodeId: "node-a",
       command: "cat input.txt",
       cwd: "/",
-      status: "running",
-      exitCode: 0,
-      hasExitCode: false,
+      status: JobStatus.JOB_STATUS_RUNNING,
       logCount: "0",
       logsTruncated: false,
     });
     niceGrpcMock.client.watchJob.mockReturnValue(asyncIterable([
       {
         jobId: "job-1",
-        status: "running",
-        exitCode: 0,
-        hasExitCode: false,
+        status: JobStatus.JOB_STATUS_RUNNING,
         logCount: "0",
         logsTruncated: false,
       },
       {
         jobId: "job-1",
-        status: "succeeded",
+        status: JobStatus.JOB_STATUS_SUCCEEDED,
         exitCode: 0,
-        hasExitCode: true,
         logCount: "1",
         logsTruncated: false,
       },
@@ -91,9 +87,8 @@ describe("OperonClient", () => {
       nodeId: "node-a",
       command: "cat input.txt",
       cwd: "/",
-      status: "succeeded",
+      status: JobStatus.JOB_STATUS_SUCCEEDED,
       exitCode: 0,
-      hasExitCode: true,
       logCount: "1",
       logsTruncated: false,
     });
@@ -156,28 +151,43 @@ describe("OperonClient", () => {
   });
 
   it("lists and checks configured services over gRPC", async () => {
-    niceGrpcMock.client.listServices.mockResolvedValue({
+    niceGrpcMock.client.listServices.mockResolvedValueOnce({
       services: [
         {
           id: "daemon",
           name: "daemon",
           host: "127.0.0.1",
           port: 7789,
-          protocol: "tcp",
+          protocol: ServiceProtocol.SERVICE_PROTOCOL_TCP,
           description: "Operon gRPC daemon",
         },
       ],
+      nextPageToken: "1",
+    }).mockResolvedValueOnce({
+      services: [
+        {
+          id: "app",
+          name: "app",
+          host: "127.0.0.1",
+          port: 3000,
+          protocol: ServiceProtocol.SERVICE_PROTOCOL_TCP,
+          description: "application",
+        },
+      ],
+      nextPageToken: "",
     });
-    niceGrpcMock.client.checkService.mockResolvedValue({ id: "daemon", ok: true, latencyMs: 2, reason: "", hasReason: false });
+    niceGrpcMock.client.checkService.mockResolvedValue({ id: "daemon", ok: true, latencyMs: 2 });
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789", token: "test-token" }]);
     const services = await client.listServices("node-a");
     const check = await client.checkService("node-a", "daemon");
 
     expect(services.services[0].id).toBe("daemon");
+    expect(services.services[1].id).toBe("app");
     expect(services.services[0].port).toBe(7789);
     expect(check.ok).toBe(true);
-    expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({}, expect.any(Object));
+    expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "" }, expect.any(Object));
+    expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "1" }, expect.any(Object));
     expect(niceGrpcMock.client.checkService).toHaveBeenCalledWith({ serviceId: "daemon" }, expect.any(Object));
   });
 

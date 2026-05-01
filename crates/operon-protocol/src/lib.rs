@@ -52,7 +52,7 @@ impl From<operon_core::Capability> for runtime::v1::Capability {
     fn from(value: operon_core::Capability) -> Self {
         Self {
             id: value.id,
-            kind: format_capability_kind(&value.kind).to_string(),
+            kind: grpc_capability_kind(&value.kind) as i32,
             node_id: value.node_id,
             name: value.name,
             permissions: value.permissions,
@@ -67,7 +67,7 @@ impl TryFrom<runtime::v1::Capability> for operon_core::Capability {
     fn try_from(value: runtime::v1::Capability) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
-            kind: parse_capability_kind(&value.kind)?,
+            kind: parse_grpc_capability_kind(value.kind)?,
             node_id: value.node_id,
             name: value.name,
             permissions: value.permissions,
@@ -80,6 +80,7 @@ impl From<operon_core::CapabilityList> for runtime::v1::CapabilityList {
     fn from(value: operon_core::CapabilityList) -> Self {
         Self {
             capabilities: value.capabilities.into_iter().map(Into::into).collect(),
+            next_page_token: String::new(),
         }
     }
 }
@@ -207,9 +208,8 @@ impl From<operon_core::JobRecord> for runtime::v1::JobRecord {
             node_id: value.node_id,
             command: value.command,
             cwd: value.cwd,
-            status: format_job_status(&value.status).to_string(),
-            exit_code: value.exit_code.unwrap_or_default(),
-            has_exit_code: value.exit_code.is_some(),
+            status: grpc_job_status(&value.status) as i32,
+            exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
         }
@@ -225,8 +225,8 @@ impl TryFrom<runtime::v1::JobRecord> for operon_core::JobRecord {
             node_id: value.node_id,
             command: value.command,
             cwd: value.cwd,
-            status: parse_job_status(&value.status)?,
-            exit_code: value.has_exit_code.then_some(value.exit_code),
+            status: parse_grpc_job_status(value.status)?,
+            exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
         })
@@ -259,9 +259,8 @@ impl From<operon_core::JobEvent> for runtime::v1::JobEvent {
     fn from(value: operon_core::JobEvent) -> Self {
         Self {
             job_id: value.job_id,
-            status: format_job_status(&value.status).to_string(),
-            exit_code: value.exit_code.unwrap_or_default(),
-            has_exit_code: value.exit_code.is_some(),
+            status: grpc_job_status(&value.status) as i32,
+            exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
         }
@@ -274,8 +273,8 @@ impl TryFrom<runtime::v1::JobEvent> for operon_core::JobEvent {
     fn try_from(value: runtime::v1::JobEvent) -> Result<Self, Self::Error> {
         Ok(Self {
             job_id: value.job_id,
-            status: parse_job_status(&value.status)?,
-            exit_code: value.has_exit_code.then_some(value.exit_code),
+            status: parse_grpc_job_status(value.status)?,
+            exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
         })
@@ -286,6 +285,7 @@ impl From<operon_core::JobList> for runtime::v1::JobList {
     fn from(value: operon_core::JobList) -> Self {
         Self {
             jobs: value.jobs.into_iter().map(Into::into).collect(),
+            next_page_token: String::new(),
         }
     }
 }
@@ -347,7 +347,7 @@ impl From<operon_core::ServiceDefinition> for runtime::v1::ServiceDefinition {
             name: value.name,
             host: value.host,
             port: value.port as u32,
-            protocol: format_service_protocol(&value.protocol).to_string(),
+            protocol: grpc_service_protocol(&value.protocol) as i32,
             description: value.description,
         }
     }
@@ -362,7 +362,7 @@ impl TryFrom<runtime::v1::ServiceDefinition> for operon_core::ServiceDefinition 
             name: value.name,
             host: value.host,
             port: u16::try_from(value.port).map_err(|_| "service port out of range")?,
-            protocol: parse_service_protocol(&value.protocol)?,
+            protocol: parse_grpc_service_protocol(value.protocol)?,
             description: value.description,
         })
     }
@@ -372,6 +372,7 @@ impl From<operon_core::ServiceList> for runtime::v1::ServiceList {
     fn from(value: operon_core::ServiceList) -> Self {
         Self {
             services: value.services.into_iter().map(Into::into).collect(),
+            next_page_token: String::new(),
         }
     }
 }
@@ -396,8 +397,7 @@ impl From<operon_core::ServiceCheck> for runtime::v1::ServiceCheck {
             id: value.id,
             ok: value.ok,
             latency_ms: value.latency_ms as u64,
-            reason: value.reason.clone().unwrap_or_default(),
-            has_reason: value.reason.is_some(),
+            reason: value.reason,
         }
     }
 }
@@ -408,7 +408,7 @@ impl From<runtime::v1::ServiceCheck> for operon_core::ServiceCheck {
             id: value.id,
             ok: value.ok,
             latency_ms: value.latency_ms as u128,
-            reason: value.has_reason.then_some(value.reason),
+            reason: value.reason,
         }
     }
 }
@@ -424,10 +424,8 @@ impl From<operon_core::AuditEvent> for runtime::v1::AuditEvent {
             resource: value.resource,
             allowed: value.allowed,
             reason: value.reason,
-            run_id: value.run_id.clone().unwrap_or_default(),
-            step_id: value.step_id.clone().unwrap_or_default(),
-            has_run_id: value.run_id.is_some(),
-            has_step_id: value.step_id.is_some(),
+            run_id: value.run_id,
+            step_id: value.step_id,
         }
     }
 }
@@ -443,8 +441,8 @@ impl From<runtime::v1::AuditEvent> for operon_core::AuditEvent {
             resource: value.resource,
             allowed: value.allowed,
             reason: value.reason,
-            run_id: value.has_run_id.then_some(value.run_id),
-            step_id: value.has_step_id.then_some(value.step_id),
+            run_id: value.run_id,
+            step_id: value.step_id,
         }
     }
 }
@@ -453,6 +451,7 @@ impl From<operon_core::AuditLog> for runtime::v1::AuditLog {
     fn from(value: operon_core::AuditLog) -> Self {
         Self {
             events: value.events.into_iter().map(Into::into).collect(),
+            next_page_token: String::new(),
         }
     }
 }
@@ -486,37 +485,68 @@ pub fn parse_job_status(value: &str) -> Result<operon_core::JobStatus, String> {
     }
 }
 
-fn format_capability_kind(kind: &operon_core::CapabilityKind) -> &'static str {
+fn grpc_capability_kind(kind: &operon_core::CapabilityKind) -> runtime::v1::CapabilityKind {
     match kind {
-        operon_core::CapabilityKind::Fs => "fs",
-        operon_core::CapabilityKind::Process => "process",
-        operon_core::CapabilityKind::Job => "job",
-        operon_core::CapabilityKind::DeviceInfo => "device-info",
-        operon_core::CapabilityKind::Service => "service",
+        operon_core::CapabilityKind::Fs => runtime::v1::CapabilityKind::Fs,
+        operon_core::CapabilityKind::Process => runtime::v1::CapabilityKind::Process,
+        operon_core::CapabilityKind::Job => runtime::v1::CapabilityKind::Job,
+        operon_core::CapabilityKind::DeviceInfo => runtime::v1::CapabilityKind::DeviceInfo,
+        operon_core::CapabilityKind::Service => runtime::v1::CapabilityKind::Service,
     }
 }
 
-fn parse_capability_kind(value: &str) -> Result<operon_core::CapabilityKind, String> {
-    match value {
-        "fs" => Ok(operon_core::CapabilityKind::Fs),
-        "process" => Ok(operon_core::CapabilityKind::Process),
-        "job" => Ok(operon_core::CapabilityKind::Job),
-        "device-info" => Ok(operon_core::CapabilityKind::DeviceInfo),
-        "service" => Ok(operon_core::CapabilityKind::Service),
-        _ => Err(format!("unknown capability kind `{value}`")),
+fn parse_grpc_capability_kind(value: i32) -> Result<operon_core::CapabilityKind, String> {
+    match runtime::v1::CapabilityKind::try_from(value)
+        .map_err(|_| format!("unknown capability kind `{value}`"))?
+    {
+        runtime::v1::CapabilityKind::Fs => Ok(operon_core::CapabilityKind::Fs),
+        runtime::v1::CapabilityKind::Process => Ok(operon_core::CapabilityKind::Process),
+        runtime::v1::CapabilityKind::Job => Ok(operon_core::CapabilityKind::Job),
+        runtime::v1::CapabilityKind::DeviceInfo => Ok(operon_core::CapabilityKind::DeviceInfo),
+        runtime::v1::CapabilityKind::Service => Ok(operon_core::CapabilityKind::Service),
+        runtime::v1::CapabilityKind::Unspecified => {
+            Err("capability kind is unspecified".to_string())
+        }
     }
 }
 
-fn format_service_protocol(protocol: &operon_core::ServiceProtocol) -> &'static str {
+fn grpc_job_status(status: &operon_core::JobStatus) -> runtime::v1::JobStatus {
+    match status {
+        operon_core::JobStatus::Running => runtime::v1::JobStatus::Running,
+        operon_core::JobStatus::Succeeded => runtime::v1::JobStatus::Succeeded,
+        operon_core::JobStatus::Failed => runtime::v1::JobStatus::Failed,
+        operon_core::JobStatus::Cancelled => runtime::v1::JobStatus::Cancelled,
+        operon_core::JobStatus::TimedOut => runtime::v1::JobStatus::TimedOut,
+    }
+}
+
+fn parse_grpc_job_status(value: i32) -> Result<operon_core::JobStatus, String> {
+    match runtime::v1::JobStatus::try_from(value)
+        .map_err(|_| format!("unknown job status `{value}`"))?
+    {
+        runtime::v1::JobStatus::Running => Ok(operon_core::JobStatus::Running),
+        runtime::v1::JobStatus::Succeeded => Ok(operon_core::JobStatus::Succeeded),
+        runtime::v1::JobStatus::Failed => Ok(operon_core::JobStatus::Failed),
+        runtime::v1::JobStatus::Cancelled => Ok(operon_core::JobStatus::Cancelled),
+        runtime::v1::JobStatus::TimedOut => Ok(operon_core::JobStatus::TimedOut),
+        runtime::v1::JobStatus::Unspecified => Err("job status is unspecified".to_string()),
+    }
+}
+
+fn grpc_service_protocol(protocol: &operon_core::ServiceProtocol) -> runtime::v1::ServiceProtocol {
     match protocol {
-        operon_core::ServiceProtocol::Tcp => "tcp",
+        operon_core::ServiceProtocol::Tcp => runtime::v1::ServiceProtocol::Tcp,
     }
 }
 
-fn parse_service_protocol(value: &str) -> Result<operon_core::ServiceProtocol, String> {
-    match value {
-        "tcp" => Ok(operon_core::ServiceProtocol::Tcp),
-        _ => Err(format!("unknown service protocol `{value}`")),
+fn parse_grpc_service_protocol(value: i32) -> Result<operon_core::ServiceProtocol, String> {
+    match runtime::v1::ServiceProtocol::try_from(value)
+        .map_err(|_| format!("unknown service protocol `{value}`"))?
+    {
+        runtime::v1::ServiceProtocol::Tcp => Ok(operon_core::ServiceProtocol::Tcp),
+        runtime::v1::ServiceProtocol::Unspecified => {
+            Err("service protocol is unspecified".to_string())
+        }
     }
 }
 

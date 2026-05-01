@@ -125,20 +125,22 @@ gRPC handles these better than ad hoc JSON-RPC:
 - backpressure through HTTP/2 streaming
 - standard metadata for auth/session context
 
-The protobuf schema should be treated as the source of truth for node protocol contracts. In v0.5, that contract lives at `proto/operon/runtime.proto`, Rust bindings are generated through tonic/prost, and the TypeScript SDK uses `nice-grpc` with generated `ts-proto` types for `grpc://` endpoints.
+The protobuf schema should be treated as the source of truth for node protocol
+contracts. In v0.6.8, the active contract lives at
+`proto/operon/runtime.proto`, Rust bindings are generated through tonic/prost,
+and the TypeScript SDK uses `nice-grpc` with generated `ts-proto` types for
+`grpc://` endpoints. Legacy design proto files live under `proto/archive/` and
+are not compiled into the runtime API.
 
 Example shape:
 
 ```proto
-service OperonNode {
-  rpc Stat(StatRequest) returns (StatResponse);
-  rpc ReadFile(ReadFileRequest) returns (stream FileChunk);
-  rpc WriteFile(stream WriteFileChunk) returns (WriteFileResponse);
-
-  rpc RunProcess(RunProcessRequest) returns (stream ProcessEvent);
-  rpc ExecuteOperon(ExecuteRequest) returns (stream ExecutionEvent);
-
-  rpc WatchFs(WatchFsRequest) returns (stream FsEvent);
+service OperonRuntime {
+  rpc ReadFile(FsPathRequest) returns (stream FileChunk);
+  rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
+  rpc RunJob(JobRunRequest) returns (JobRecord);
+  rpc WatchJob(JobIdRequest) returns (stream JobEvent);
+  rpc StreamJobLogs(JobIdRequest) returns (stream JobLog);
 }
 ```
 
@@ -196,10 +198,13 @@ packages/
 
 proto/
   operon/
-    node.proto
-    capability.proto
-    execution.proto
-    policy.proto
+    runtime.proto
+  archive/
+    operon/
+      node.proto
+      capability.proto
+      execution.proto
+      policy.proto
 ```
 
 ## Decision 6: Mount Layer Boundary

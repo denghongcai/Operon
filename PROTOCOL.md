@@ -64,6 +64,29 @@ x-operon-step-id: <step id>
 The daemon copies these values into audit events. Direct clients that do not
 run graphs can omit them.
 
+## Schema Conventions
+
+Runtime enum fields are protobuf enums on the wire:
+
+- `Capability.kind`: `CAPABILITY_KIND_FS`, `CAPABILITY_KIND_PROCESS`,
+  `CAPABILITY_KIND_JOB`, `CAPABILITY_KIND_DEVICE_INFO`,
+  `CAPABILITY_KIND_SERVICE`.
+- `JobRecord.status` and `JobEvent.status`: `JOB_STATUS_RUNNING`,
+  `JOB_STATUS_SUCCEEDED`, `JOB_STATUS_FAILED`, `JOB_STATUS_CANCELLED`,
+  `JOB_STATUS_TIMED_OUT`.
+- `ServiceDefinition.protocol`: `SERVICE_PROTOCOL_TCP`.
+
+Fields whose absence is meaningful use proto3 `optional`, not paired `has_*`
+booleans. This applies to job timeout, job exit code, service check reason, and
+audit run/step context. Generated clients should leave the optional field unset
+when the value is absent.
+
+List request messages use `page_size` and `page_token`. A `page_size` of `0`
+means "return all remaining items" for low-level protocol clients. Non-zero
+page sizes are capped by the daemon. Responses include `next_page_token`; an
+empty token means there are no more pages. The `operon` CLI and high-level SDK
+helpers walk pages internally to preserve complete-list behavior.
+
 ## Service
 
 All methods are on `operon.runtime.v1.OperonRuntime`.
@@ -108,8 +131,9 @@ Client-streaming calls:
 receive order.
 
 `WriteFile` accepts ordered `WriteFileRequest` messages. The first message must
-set `path`. Later messages may leave `path` empty. A stream cannot switch paths.
-It replaces the file content.
+set the `target` variant with `WriteFileTarget.path`. Later messages must set
+the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
+targets or switch paths. It replaces the file content.
 
 `WriteFileRange` writes one byte range at `offset`. It is intended for OS mount
 adapters and other clients that need write-through random write behavior.
@@ -181,8 +205,9 @@ Clients should decode `data` only at presentation boundaries; the protocol
 preserves stdout/stderr bytes, including non-UTF-8 output.
 
 `WriteJobStdin` accepts ordered `JobStdinRequest` messages. The first message
-must set `job_id`. Later messages may leave `job_id` empty. A stream cannot
-switch jobs. Use `CloseJobStdin` to close the target job's stdin.
+must set the `target` variant with `JobStdinTarget.job_id`. Later messages must
+set the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
+targets or switch jobs. Use `CloseJobStdin` to close the target job's stdin.
 
 ## Job Semantics
 
@@ -191,8 +216,8 @@ executed by the daemon with `/bin/sh -c`.
 
 `cwd` may be empty; the daemon treats an empty cwd as its policy default.
 
-`timeout_secs` is used only when `has_timeout_secs` is true. Leave
-`has_timeout_secs` false to use daemon policy defaults.
+Set optional `timeout_secs` to request a per-job timeout. Leave it unset to use
+daemon policy defaults.
 
 `secrets` is a list of secret names requested for the process environment.
 Policy decides which names are allowed.

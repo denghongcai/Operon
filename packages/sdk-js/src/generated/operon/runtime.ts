@@ -10,6 +10,153 @@ import type { CallContext, CallOptions } from "nice-grpc-common";
 
 export const protobufPackage = "operon.runtime.v1";
 
+export enum CapabilityKind {
+  CAPABILITY_KIND_UNSPECIFIED = 0,
+  CAPABILITY_KIND_FS = 1,
+  CAPABILITY_KIND_PROCESS = 2,
+  CAPABILITY_KIND_JOB = 3,
+  CAPABILITY_KIND_DEVICE_INFO = 4,
+  CAPABILITY_KIND_SERVICE = 5,
+  UNRECOGNIZED = -1,
+}
+
+export function capabilityKindFromJSON(object: any): CapabilityKind {
+  switch (object) {
+    case 0:
+    case "CAPABILITY_KIND_UNSPECIFIED":
+      return CapabilityKind.CAPABILITY_KIND_UNSPECIFIED;
+    case 1:
+    case "CAPABILITY_KIND_FS":
+      return CapabilityKind.CAPABILITY_KIND_FS;
+    case 2:
+    case "CAPABILITY_KIND_PROCESS":
+      return CapabilityKind.CAPABILITY_KIND_PROCESS;
+    case 3:
+    case "CAPABILITY_KIND_JOB":
+      return CapabilityKind.CAPABILITY_KIND_JOB;
+    case 4:
+    case "CAPABILITY_KIND_DEVICE_INFO":
+      return CapabilityKind.CAPABILITY_KIND_DEVICE_INFO;
+    case 5:
+    case "CAPABILITY_KIND_SERVICE":
+      return CapabilityKind.CAPABILITY_KIND_SERVICE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return CapabilityKind.UNRECOGNIZED;
+  }
+}
+
+export function capabilityKindToJSON(object: CapabilityKind): string {
+  switch (object) {
+    case CapabilityKind.CAPABILITY_KIND_UNSPECIFIED:
+      return "CAPABILITY_KIND_UNSPECIFIED";
+    case CapabilityKind.CAPABILITY_KIND_FS:
+      return "CAPABILITY_KIND_FS";
+    case CapabilityKind.CAPABILITY_KIND_PROCESS:
+      return "CAPABILITY_KIND_PROCESS";
+    case CapabilityKind.CAPABILITY_KIND_JOB:
+      return "CAPABILITY_KIND_JOB";
+    case CapabilityKind.CAPABILITY_KIND_DEVICE_INFO:
+      return "CAPABILITY_KIND_DEVICE_INFO";
+    case CapabilityKind.CAPABILITY_KIND_SERVICE:
+      return "CAPABILITY_KIND_SERVICE";
+    case CapabilityKind.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum JobStatus {
+  JOB_STATUS_UNSPECIFIED = 0,
+  JOB_STATUS_RUNNING = 1,
+  JOB_STATUS_SUCCEEDED = 2,
+  JOB_STATUS_FAILED = 3,
+  JOB_STATUS_CANCELLED = 4,
+  JOB_STATUS_TIMED_OUT = 5,
+  UNRECOGNIZED = -1,
+}
+
+export function jobStatusFromJSON(object: any): JobStatus {
+  switch (object) {
+    case 0:
+    case "JOB_STATUS_UNSPECIFIED":
+      return JobStatus.JOB_STATUS_UNSPECIFIED;
+    case 1:
+    case "JOB_STATUS_RUNNING":
+      return JobStatus.JOB_STATUS_RUNNING;
+    case 2:
+    case "JOB_STATUS_SUCCEEDED":
+      return JobStatus.JOB_STATUS_SUCCEEDED;
+    case 3:
+    case "JOB_STATUS_FAILED":
+      return JobStatus.JOB_STATUS_FAILED;
+    case 4:
+    case "JOB_STATUS_CANCELLED":
+      return JobStatus.JOB_STATUS_CANCELLED;
+    case 5:
+    case "JOB_STATUS_TIMED_OUT":
+      return JobStatus.JOB_STATUS_TIMED_OUT;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return JobStatus.UNRECOGNIZED;
+  }
+}
+
+export function jobStatusToJSON(object: JobStatus): string {
+  switch (object) {
+    case JobStatus.JOB_STATUS_UNSPECIFIED:
+      return "JOB_STATUS_UNSPECIFIED";
+    case JobStatus.JOB_STATUS_RUNNING:
+      return "JOB_STATUS_RUNNING";
+    case JobStatus.JOB_STATUS_SUCCEEDED:
+      return "JOB_STATUS_SUCCEEDED";
+    case JobStatus.JOB_STATUS_FAILED:
+      return "JOB_STATUS_FAILED";
+    case JobStatus.JOB_STATUS_CANCELLED:
+      return "JOB_STATUS_CANCELLED";
+    case JobStatus.JOB_STATUS_TIMED_OUT:
+      return "JOB_STATUS_TIMED_OUT";
+    case JobStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum ServiceProtocol {
+  SERVICE_PROTOCOL_UNSPECIFIED = 0,
+  SERVICE_PROTOCOL_TCP = 1,
+  UNRECOGNIZED = -1,
+}
+
+export function serviceProtocolFromJSON(object: any): ServiceProtocol {
+  switch (object) {
+    case 0:
+    case "SERVICE_PROTOCOL_UNSPECIFIED":
+      return ServiceProtocol.SERVICE_PROTOCOL_UNSPECIFIED;
+    case 1:
+    case "SERVICE_PROTOCOL_TCP":
+      return ServiceProtocol.SERVICE_PROTOCOL_TCP;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return ServiceProtocol.UNRECOGNIZED;
+  }
+}
+
+export function serviceProtocolToJSON(object: ServiceProtocol): string {
+  switch (object) {
+    case ServiceProtocol.SERVICE_PROTOCOL_UNSPECIFIED:
+      return "SERVICE_PROTOCOL_UNSPECIFIED";
+    case ServiceProtocol.SERVICE_PROTOCOL_TCP:
+      return "SERVICE_PROTOCOL_TCP";
+    case ServiceProtocol.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface HealthRequest {
 }
 
@@ -17,15 +164,23 @@ export interface GetNodeRequest {
 }
 
 export interface ListCapabilitiesRequest {
+  pageSize: number;
+  pageToken: string;
 }
 
 export interface ListJobsRequest {
+  pageSize: number;
+  pageToken: string;
 }
 
 export interface ListServicesRequest {
+  pageSize: number;
+  pageToken: string;
 }
 
 export interface ListAuditRequest {
+  pageSize: number;
+  pageToken: string;
 }
 
 export interface HealthStatus {
@@ -43,7 +198,7 @@ export interface NodeInfo {
 
 export interface Capability {
   id: string;
-  kind: string;
+  kind: CapabilityKind;
   nodeId: string;
   name: string;
   permissions: string[];
@@ -52,6 +207,7 @@ export interface Capability {
 
 export interface CapabilityList {
   capabilities: Capability[];
+  nextPageToken: string;
 }
 
 export interface FsPathRequest {
@@ -83,8 +239,12 @@ export interface FileChunk {
 }
 
 export interface WriteFileRequest {
+  target?: WriteFileTarget | undefined;
+  chunk?: FileChunk | undefined;
+}
+
+export interface WriteFileTarget {
   path: string;
-  data: Uint8Array;
 }
 
 export interface FsWrite {
@@ -131,9 +291,8 @@ export interface FsCopy {
 export interface JobRunRequest {
   command: string;
   cwd: string;
-  timeoutSecs: string;
+  timeoutSecs?: string | undefined;
   secrets: string[];
-  hasTimeoutSecs: boolean;
 }
 
 export interface JobIdRequest {
@@ -155,15 +314,15 @@ export interface JobRecord {
   nodeId: string;
   command: string;
   cwd: string;
-  status: string;
-  exitCode: number;
-  hasExitCode: boolean;
+  status: JobStatus;
+  exitCode?: number | undefined;
   logCount: string;
   logsTruncated: boolean;
 }
 
 export interface JobList {
   jobs: JobRecord[];
+  nextPageToken: string;
 }
 
 export interface JobLogList {
@@ -175,16 +334,19 @@ export interface JobLogList {
 
 export interface JobEvent {
   jobId: string;
-  status: string;
-  exitCode: number;
-  hasExitCode: boolean;
+  status: JobStatus;
+  exitCode?: number | undefined;
   logCount: string;
   logsTruncated: boolean;
 }
 
 export interface JobStdinRequest {
+  target?: JobStdinTarget | undefined;
+  chunk?: FileChunk | undefined;
+}
+
+export interface JobStdinTarget {
   jobId: string;
-  data: Uint8Array;
 }
 
 export interface JobStdin {
@@ -206,20 +368,20 @@ export interface ServiceDefinition {
   name: string;
   host: string;
   port: number;
-  protocol: string;
+  protocol: ServiceProtocol;
   description: string;
 }
 
 export interface ServiceList {
   services: ServiceDefinition[];
+  nextPageToken: string;
 }
 
 export interface ServiceCheck {
   id: string;
   ok: boolean;
   latencyMs: string;
-  reason: string;
-  hasReason: boolean;
+  reason?: string | undefined;
 }
 
 export interface AuditEvent {
@@ -231,14 +393,13 @@ export interface AuditEvent {
   resource: string;
   allowed: boolean;
   reason: string;
-  runId: string;
-  stepId: string;
-  hasRunId: boolean;
-  hasStepId: boolean;
+  runId?: string | undefined;
+  stepId?: string | undefined;
 }
 
 export interface AuditLog {
   events: AuditEvent[];
+  nextPageToken: string;
 }
 
 function createBaseHealthRequest(): HealthRequest {
@@ -328,11 +489,17 @@ export const GetNodeRequest: MessageFns<GetNodeRequest> = {
 };
 
 function createBaseListCapabilitiesRequest(): ListCapabilitiesRequest {
-  return {};
+  return { pageSize: 0, pageToken: "" };
 }
 
 export const ListCapabilitiesRequest: MessageFns<ListCapabilitiesRequest> = {
-  encode(_: ListCapabilitiesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: ListCapabilitiesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pageSize !== 0) {
+      writer.uint32(8).uint32(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      writer.uint32(18).string(message.pageToken);
+    }
     return writer;
   },
 
@@ -343,6 +510,22 @@ export const ListCapabilitiesRequest: MessageFns<ListCapabilitiesRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.pageSize = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -352,30 +535,55 @@ export const ListCapabilitiesRequest: MessageFns<ListCapabilitiesRequest> = {
     return message;
   },
 
-  fromJSON(_: any): ListCapabilitiesRequest {
-    return {};
+  fromJSON(object: any): ListCapabilitiesRequest {
+    return {
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : "",
+    };
   },
 
-  toJSON(_: ListCapabilitiesRequest): unknown {
+  toJSON(message: ListCapabilitiesRequest): unknown {
     const obj: any = {};
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      obj.pageToken = message.pageToken;
+    }
     return obj;
   },
 
   create(base?: DeepPartial<ListCapabilitiesRequest>): ListCapabilitiesRequest {
     return ListCapabilitiesRequest.fromPartial(base ?? {});
   },
-  fromPartial(_: DeepPartial<ListCapabilitiesRequest>): ListCapabilitiesRequest {
+  fromPartial(object: DeepPartial<ListCapabilitiesRequest>): ListCapabilitiesRequest {
     const message = createBaseListCapabilitiesRequest();
+    message.pageSize = object.pageSize ?? 0;
+    message.pageToken = object.pageToken ?? "";
     return message;
   },
 };
 
 function createBaseListJobsRequest(): ListJobsRequest {
-  return {};
+  return { pageSize: 0, pageToken: "" };
 }
 
 export const ListJobsRequest: MessageFns<ListJobsRequest> = {
-  encode(_: ListJobsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: ListJobsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pageSize !== 0) {
+      writer.uint32(8).uint32(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      writer.uint32(18).string(message.pageToken);
+    }
     return writer;
   },
 
@@ -386,6 +594,22 @@ export const ListJobsRequest: MessageFns<ListJobsRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.pageSize = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -395,30 +619,55 @@ export const ListJobsRequest: MessageFns<ListJobsRequest> = {
     return message;
   },
 
-  fromJSON(_: any): ListJobsRequest {
-    return {};
+  fromJSON(object: any): ListJobsRequest {
+    return {
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : "",
+    };
   },
 
-  toJSON(_: ListJobsRequest): unknown {
+  toJSON(message: ListJobsRequest): unknown {
     const obj: any = {};
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      obj.pageToken = message.pageToken;
+    }
     return obj;
   },
 
   create(base?: DeepPartial<ListJobsRequest>): ListJobsRequest {
     return ListJobsRequest.fromPartial(base ?? {});
   },
-  fromPartial(_: DeepPartial<ListJobsRequest>): ListJobsRequest {
+  fromPartial(object: DeepPartial<ListJobsRequest>): ListJobsRequest {
     const message = createBaseListJobsRequest();
+    message.pageSize = object.pageSize ?? 0;
+    message.pageToken = object.pageToken ?? "";
     return message;
   },
 };
 
 function createBaseListServicesRequest(): ListServicesRequest {
-  return {};
+  return { pageSize: 0, pageToken: "" };
 }
 
 export const ListServicesRequest: MessageFns<ListServicesRequest> = {
-  encode(_: ListServicesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: ListServicesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pageSize !== 0) {
+      writer.uint32(8).uint32(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      writer.uint32(18).string(message.pageToken);
+    }
     return writer;
   },
 
@@ -429,6 +678,22 @@ export const ListServicesRequest: MessageFns<ListServicesRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.pageSize = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -438,30 +703,55 @@ export const ListServicesRequest: MessageFns<ListServicesRequest> = {
     return message;
   },
 
-  fromJSON(_: any): ListServicesRequest {
-    return {};
+  fromJSON(object: any): ListServicesRequest {
+    return {
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : "",
+    };
   },
 
-  toJSON(_: ListServicesRequest): unknown {
+  toJSON(message: ListServicesRequest): unknown {
     const obj: any = {};
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      obj.pageToken = message.pageToken;
+    }
     return obj;
   },
 
   create(base?: DeepPartial<ListServicesRequest>): ListServicesRequest {
     return ListServicesRequest.fromPartial(base ?? {});
   },
-  fromPartial(_: DeepPartial<ListServicesRequest>): ListServicesRequest {
+  fromPartial(object: DeepPartial<ListServicesRequest>): ListServicesRequest {
     const message = createBaseListServicesRequest();
+    message.pageSize = object.pageSize ?? 0;
+    message.pageToken = object.pageToken ?? "";
     return message;
   },
 };
 
 function createBaseListAuditRequest(): ListAuditRequest {
-  return {};
+  return { pageSize: 0, pageToken: "" };
 }
 
 export const ListAuditRequest: MessageFns<ListAuditRequest> = {
-  encode(_: ListAuditRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: ListAuditRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pageSize !== 0) {
+      writer.uint32(8).uint32(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      writer.uint32(18).string(message.pageToken);
+    }
     return writer;
   },
 
@@ -472,6 +762,22 @@ export const ListAuditRequest: MessageFns<ListAuditRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.pageSize = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -481,20 +787,39 @@ export const ListAuditRequest: MessageFns<ListAuditRequest> = {
     return message;
   },
 
-  fromJSON(_: any): ListAuditRequest {
-    return {};
+  fromJSON(object: any): ListAuditRequest {
+    return {
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : "",
+    };
   },
 
-  toJSON(_: ListAuditRequest): unknown {
+  toJSON(message: ListAuditRequest): unknown {
     const obj: any = {};
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      obj.pageToken = message.pageToken;
+    }
     return obj;
   },
 
   create(base?: DeepPartial<ListAuditRequest>): ListAuditRequest {
     return ListAuditRequest.fromPartial(base ?? {});
   },
-  fromPartial(_: DeepPartial<ListAuditRequest>): ListAuditRequest {
+  fromPartial(object: DeepPartial<ListAuditRequest>): ListAuditRequest {
     const message = createBaseListAuditRequest();
+    message.pageSize = object.pageSize ?? 0;
+    message.pageToken = object.pageToken ?? "";
     return message;
   },
 };
@@ -704,7 +1029,7 @@ export const NodeInfo: MessageFns<NodeInfo> = {
 };
 
 function createBaseCapability(): Capability {
-  return { id: "", kind: "", nodeId: "", name: "", permissions: [], description: "" };
+  return { id: "", kind: 0, nodeId: "", name: "", permissions: [], description: "" };
 }
 
 export const Capability: MessageFns<Capability> = {
@@ -712,8 +1037,8 @@ export const Capability: MessageFns<Capability> = {
     if (message.id !== "") {
       writer.uint32(10).string(message.id);
     }
-    if (message.kind !== "") {
-      writer.uint32(18).string(message.kind);
+    if (message.kind !== 0) {
+      writer.uint32(16).int32(message.kind);
     }
     if (message.nodeId !== "") {
       writer.uint32(26).string(message.nodeId);
@@ -746,11 +1071,11 @@ export const Capability: MessageFns<Capability> = {
           continue;
         }
         case 2: {
-          if (tag !== 18) {
+          if (tag !== 16) {
             break;
           }
 
-          message.kind = reader.string();
+          message.kind = reader.int32() as any;
           continue;
         }
         case 3: {
@@ -797,7 +1122,7 @@ export const Capability: MessageFns<Capability> = {
   fromJSON(object: any): Capability {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
-      kind: isSet(object.kind) ? globalThis.String(object.kind) : "",
+      kind: isSet(object.kind) ? capabilityKindFromJSON(object.kind) : 0,
       nodeId: isSet(object.nodeId)
         ? globalThis.String(object.nodeId)
         : isSet(object.node_id)
@@ -816,8 +1141,8 @@ export const Capability: MessageFns<Capability> = {
     if (message.id !== "") {
       obj.id = message.id;
     }
-    if (message.kind !== "") {
-      obj.kind = message.kind;
+    if (message.kind !== 0) {
+      obj.kind = capabilityKindToJSON(message.kind);
     }
     if (message.nodeId !== "") {
       obj.nodeId = message.nodeId;
@@ -840,7 +1165,7 @@ export const Capability: MessageFns<Capability> = {
   fromPartial(object: DeepPartial<Capability>): Capability {
     const message = createBaseCapability();
     message.id = object.id ?? "";
-    message.kind = object.kind ?? "";
+    message.kind = object.kind ?? 0;
     message.nodeId = object.nodeId ?? "";
     message.name = object.name ?? "";
     message.permissions = object.permissions?.map((e) => e) || [];
@@ -850,13 +1175,16 @@ export const Capability: MessageFns<Capability> = {
 };
 
 function createBaseCapabilityList(): CapabilityList {
-  return { capabilities: [] };
+  return { capabilities: [], nextPageToken: "" };
 }
 
 export const CapabilityList: MessageFns<CapabilityList> = {
   encode(message: CapabilityList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     for (const v of message.capabilities) {
       Capability.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== "") {
+      writer.uint32(18).string(message.nextPageToken);
     }
     return writer;
   },
@@ -876,6 +1204,14 @@ export const CapabilityList: MessageFns<CapabilityList> = {
           message.capabilities.push(Capability.decode(reader, reader.uint32()));
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -890,6 +1226,11 @@ export const CapabilityList: MessageFns<CapabilityList> = {
       capabilities: globalThis.Array.isArray(object?.capabilities)
         ? object.capabilities.map((e: any) => Capability.fromJSON(e))
         : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : "",
     };
   },
 
@@ -897,6 +1238,9 @@ export const CapabilityList: MessageFns<CapabilityList> = {
     const obj: any = {};
     if (message.capabilities?.length) {
       obj.capabilities = message.capabilities.map((e) => Capability.toJSON(e));
+    }
+    if (message.nextPageToken !== "") {
+      obj.nextPageToken = message.nextPageToken;
     }
     return obj;
   },
@@ -907,6 +1251,7 @@ export const CapabilityList: MessageFns<CapabilityList> = {
   fromPartial(object: DeepPartial<CapabilityList>): CapabilityList {
     const message = createBaseCapabilityList();
     message.capabilities = object.capabilities?.map((e) => Capability.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? "";
     return message;
   },
 };
@@ -1352,16 +1697,16 @@ export const FileChunk: MessageFns<FileChunk> = {
 };
 
 function createBaseWriteFileRequest(): WriteFileRequest {
-  return { path: "", data: new Uint8Array(0) };
+  return { target: undefined, chunk: undefined };
 }
 
 export const WriteFileRequest: MessageFns<WriteFileRequest> = {
   encode(message: WriteFileRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.path !== "") {
-      writer.uint32(10).string(message.path);
+    if (message.target !== undefined) {
+      WriteFileTarget.encode(message.target, writer.uint32(10).fork()).join();
     }
-    if (message.data.length !== 0) {
-      writer.uint32(18).bytes(message.data);
+    if (message.chunk !== undefined) {
+      FileChunk.encode(message.chunk, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -1378,7 +1723,7 @@ export const WriteFileRequest: MessageFns<WriteFileRequest> = {
             break;
           }
 
-          message.path = reader.string();
+          message.target = WriteFileTarget.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -1386,7 +1731,7 @@ export const WriteFileRequest: MessageFns<WriteFileRequest> = {
             break;
           }
 
-          message.data = reader.bytes();
+          message.chunk = FileChunk.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -1400,18 +1745,18 @@ export const WriteFileRequest: MessageFns<WriteFileRequest> = {
 
   fromJSON(object: any): WriteFileRequest {
     return {
-      path: isSet(object.path) ? globalThis.String(object.path) : "",
-      data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
+      target: isSet(object.target) ? WriteFileTarget.fromJSON(object.target) : undefined,
+      chunk: isSet(object.chunk) ? FileChunk.fromJSON(object.chunk) : undefined,
     };
   },
 
   toJSON(message: WriteFileRequest): unknown {
     const obj: any = {};
-    if (message.path !== "") {
-      obj.path = message.path;
+    if (message.target !== undefined) {
+      obj.target = WriteFileTarget.toJSON(message.target);
     }
-    if (message.data.length !== 0) {
-      obj.data = base64FromBytes(message.data);
+    if (message.chunk !== undefined) {
+      obj.chunk = FileChunk.toJSON(message.chunk);
     }
     return obj;
   },
@@ -1421,8 +1766,70 @@ export const WriteFileRequest: MessageFns<WriteFileRequest> = {
   },
   fromPartial(object: DeepPartial<WriteFileRequest>): WriteFileRequest {
     const message = createBaseWriteFileRequest();
+    message.target = (object.target !== undefined && object.target !== null)
+      ? WriteFileTarget.fromPartial(object.target)
+      : undefined;
+    message.chunk = (object.chunk !== undefined && object.chunk !== null)
+      ? FileChunk.fromPartial(object.chunk)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseWriteFileTarget(): WriteFileTarget {
+  return { path: "" };
+}
+
+export const WriteFileTarget: MessageFns<WriteFileTarget> = {
+  encode(message: WriteFileTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WriteFileTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWriteFileTarget();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): WriteFileTarget {
+    return { path: isSet(object.path) ? globalThis.String(object.path) : "" };
+  },
+
+  toJSON(message: WriteFileTarget): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<WriteFileTarget>): WriteFileTarget {
+    return WriteFileTarget.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<WriteFileTarget>): WriteFileTarget {
+    const message = createBaseWriteFileTarget();
     message.path = object.path ?? "";
-    message.data = object.data ?? new Uint8Array(0);
     return message;
   },
 };
@@ -2090,7 +2497,7 @@ export const FsCopy: MessageFns<FsCopy> = {
 };
 
 function createBaseJobRunRequest(): JobRunRequest {
-  return { command: "", cwd: "", timeoutSecs: "0", secrets: [], hasTimeoutSecs: false };
+  return { command: "", cwd: "", timeoutSecs: undefined, secrets: [] };
 }
 
 export const JobRunRequest: MessageFns<JobRunRequest> = {
@@ -2101,14 +2508,11 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     if (message.cwd !== "") {
       writer.uint32(18).string(message.cwd);
     }
-    if (message.timeoutSecs !== "0") {
+    if (message.timeoutSecs !== undefined) {
       writer.uint32(24).uint64(message.timeoutSecs);
     }
     for (const v of message.secrets) {
       writer.uint32(34).string(v!);
-    }
-    if (message.hasTimeoutSecs !== false) {
-      writer.uint32(40).bool(message.hasTimeoutSecs);
     }
     return writer;
   },
@@ -2152,14 +2556,6 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
           message.secrets.push(reader.string());
           continue;
         }
-        case 5: {
-          if (tag !== 40) {
-            break;
-          }
-
-          message.hasTimeoutSecs = reader.bool();
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2177,13 +2573,8 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
         ? globalThis.String(object.timeoutSecs)
         : isSet(object.timeout_secs)
         ? globalThis.String(object.timeout_secs)
-        : "0",
+        : undefined,
       secrets: globalThis.Array.isArray(object?.secrets) ? object.secrets.map((e: any) => globalThis.String(e)) : [],
-      hasTimeoutSecs: isSet(object.hasTimeoutSecs)
-        ? globalThis.Boolean(object.hasTimeoutSecs)
-        : isSet(object.has_timeout_secs)
-        ? globalThis.Boolean(object.has_timeout_secs)
-        : false,
     };
   },
 
@@ -2195,14 +2586,11 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     if (message.cwd !== "") {
       obj.cwd = message.cwd;
     }
-    if (message.timeoutSecs !== "0") {
+    if (message.timeoutSecs !== undefined) {
       obj.timeoutSecs = message.timeoutSecs;
     }
     if (message.secrets?.length) {
       obj.secrets = message.secrets;
-    }
-    if (message.hasTimeoutSecs !== false) {
-      obj.hasTimeoutSecs = message.hasTimeoutSecs;
     }
     return obj;
   },
@@ -2214,9 +2602,8 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     const message = createBaseJobRunRequest();
     message.command = object.command ?? "";
     message.cwd = object.cwd ?? "";
-    message.timeoutSecs = object.timeoutSecs ?? "0";
+    message.timeoutSecs = object.timeoutSecs ?? undefined;
     message.secrets = object.secrets?.map((e) => e) || [];
-    message.hasTimeoutSecs = object.hasTimeoutSecs ?? false;
     return message;
   },
 };
@@ -2447,9 +2834,8 @@ function createBaseJobRecord(): JobRecord {
     nodeId: "",
     command: "",
     cwd: "",
-    status: "",
-    exitCode: 0,
-    hasExitCode: false,
+    status: 0,
+    exitCode: undefined,
     logCount: "0",
     logsTruncated: false,
   };
@@ -2469,14 +2855,11 @@ export const JobRecord: MessageFns<JobRecord> = {
     if (message.cwd !== "") {
       writer.uint32(34).string(message.cwd);
     }
-    if (message.status !== "") {
-      writer.uint32(42).string(message.status);
+    if (message.status !== 0) {
+      writer.uint32(40).int32(message.status);
     }
-    if (message.exitCode !== 0) {
+    if (message.exitCode !== undefined) {
       writer.uint32(48).int32(message.exitCode);
-    }
-    if (message.hasExitCode !== false) {
-      writer.uint32(64).bool(message.hasExitCode);
     }
     if (message.logCount !== "0") {
       writer.uint32(72).uint64(message.logCount);
@@ -2527,11 +2910,11 @@ export const JobRecord: MessageFns<JobRecord> = {
           continue;
         }
         case 5: {
-          if (tag !== 42) {
+          if (tag !== 40) {
             break;
           }
 
-          message.status = reader.string();
+          message.status = reader.int32() as any;
           continue;
         }
         case 6: {
@@ -2540,14 +2923,6 @@ export const JobRecord: MessageFns<JobRecord> = {
           }
 
           message.exitCode = reader.int32();
-          continue;
-        }
-        case 8: {
-          if (tag !== 64) {
-            break;
-          }
-
-          message.hasExitCode = reader.bool();
           continue;
         }
         case 9: {
@@ -2585,17 +2960,12 @@ export const JobRecord: MessageFns<JobRecord> = {
         : "",
       command: isSet(object.command) ? globalThis.String(object.command) : "",
       cwd: isSet(object.cwd) ? globalThis.String(object.cwd) : "",
-      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      status: isSet(object.status) ? jobStatusFromJSON(object.status) : 0,
       exitCode: isSet(object.exitCode)
         ? globalThis.Number(object.exitCode)
         : isSet(object.exit_code)
         ? globalThis.Number(object.exit_code)
-        : 0,
-      hasExitCode: isSet(object.hasExitCode)
-        ? globalThis.Boolean(object.hasExitCode)
-        : isSet(object.has_exit_code)
-        ? globalThis.Boolean(object.has_exit_code)
-        : false,
+        : undefined,
       logCount: isSet(object.logCount)
         ? globalThis.String(object.logCount)
         : isSet(object.log_count)
@@ -2623,14 +2993,11 @@ export const JobRecord: MessageFns<JobRecord> = {
     if (message.cwd !== "") {
       obj.cwd = message.cwd;
     }
-    if (message.status !== "") {
-      obj.status = message.status;
+    if (message.status !== 0) {
+      obj.status = jobStatusToJSON(message.status);
     }
-    if (message.exitCode !== 0) {
+    if (message.exitCode !== undefined) {
       obj.exitCode = Math.round(message.exitCode);
-    }
-    if (message.hasExitCode !== false) {
-      obj.hasExitCode = message.hasExitCode;
     }
     if (message.logCount !== "0") {
       obj.logCount = message.logCount;
@@ -2650,9 +3017,8 @@ export const JobRecord: MessageFns<JobRecord> = {
     message.nodeId = object.nodeId ?? "";
     message.command = object.command ?? "";
     message.cwd = object.cwd ?? "";
-    message.status = object.status ?? "";
-    message.exitCode = object.exitCode ?? 0;
-    message.hasExitCode = object.hasExitCode ?? false;
+    message.status = object.status ?? 0;
+    message.exitCode = object.exitCode ?? undefined;
     message.logCount = object.logCount ?? "0";
     message.logsTruncated = object.logsTruncated ?? false;
     return message;
@@ -2660,13 +3026,16 @@ export const JobRecord: MessageFns<JobRecord> = {
 };
 
 function createBaseJobList(): JobList {
-  return { jobs: [] };
+  return { jobs: [], nextPageToken: "" };
 }
 
 export const JobList: MessageFns<JobList> = {
   encode(message: JobList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     for (const v of message.jobs) {
       JobRecord.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== "") {
+      writer.uint32(18).string(message.nextPageToken);
     }
     return writer;
   },
@@ -2686,6 +3055,14 @@ export const JobList: MessageFns<JobList> = {
           message.jobs.push(JobRecord.decode(reader, reader.uint32()));
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2696,13 +3073,23 @@ export const JobList: MessageFns<JobList> = {
   },
 
   fromJSON(object: any): JobList {
-    return { jobs: globalThis.Array.isArray(object?.jobs) ? object.jobs.map((e: any) => JobRecord.fromJSON(e)) : [] };
+    return {
+      jobs: globalThis.Array.isArray(object?.jobs) ? object.jobs.map((e: any) => JobRecord.fromJSON(e)) : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : "",
+    };
   },
 
   toJSON(message: JobList): unknown {
     const obj: any = {};
     if (message.jobs?.length) {
       obj.jobs = message.jobs.map((e) => JobRecord.toJSON(e));
+    }
+    if (message.nextPageToken !== "") {
+      obj.nextPageToken = message.nextPageToken;
     }
     return obj;
   },
@@ -2713,6 +3100,7 @@ export const JobList: MessageFns<JobList> = {
   fromPartial(object: DeepPartial<JobList>): JobList {
     const message = createBaseJobList();
     message.jobs = object.jobs?.map((e) => JobRecord.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? "";
     return message;
   },
 };
@@ -2834,7 +3222,7 @@ export const JobLogList: MessageFns<JobLogList> = {
 };
 
 function createBaseJobEvent(): JobEvent {
-  return { jobId: "", status: "", exitCode: 0, hasExitCode: false, logCount: "0", logsTruncated: false };
+  return { jobId: "", status: 0, exitCode: undefined, logCount: "0", logsTruncated: false };
 }
 
 export const JobEvent: MessageFns<JobEvent> = {
@@ -2842,14 +3230,11 @@ export const JobEvent: MessageFns<JobEvent> = {
     if (message.jobId !== "") {
       writer.uint32(10).string(message.jobId);
     }
-    if (message.status !== "") {
-      writer.uint32(18).string(message.status);
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
     }
-    if (message.exitCode !== 0) {
+    if (message.exitCode !== undefined) {
       writer.uint32(24).int32(message.exitCode);
-    }
-    if (message.hasExitCode !== false) {
-      writer.uint32(32).bool(message.hasExitCode);
     }
     if (message.logCount !== "0") {
       writer.uint32(40).uint64(message.logCount);
@@ -2876,11 +3261,11 @@ export const JobEvent: MessageFns<JobEvent> = {
           continue;
         }
         case 2: {
-          if (tag !== 18) {
+          if (tag !== 16) {
             break;
           }
 
-          message.status = reader.string();
+          message.status = reader.int32() as any;
           continue;
         }
         case 3: {
@@ -2889,14 +3274,6 @@ export const JobEvent: MessageFns<JobEvent> = {
           }
 
           message.exitCode = reader.int32();
-          continue;
-        }
-        case 4: {
-          if (tag !== 32) {
-            break;
-          }
-
-          message.hasExitCode = reader.bool();
           continue;
         }
         case 5: {
@@ -2931,17 +3308,12 @@ export const JobEvent: MessageFns<JobEvent> = {
         : isSet(object.job_id)
         ? globalThis.String(object.job_id)
         : "",
-      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      status: isSet(object.status) ? jobStatusFromJSON(object.status) : 0,
       exitCode: isSet(object.exitCode)
         ? globalThis.Number(object.exitCode)
         : isSet(object.exit_code)
         ? globalThis.Number(object.exit_code)
-        : 0,
-      hasExitCode: isSet(object.hasExitCode)
-        ? globalThis.Boolean(object.hasExitCode)
-        : isSet(object.has_exit_code)
-        ? globalThis.Boolean(object.has_exit_code)
-        : false,
+        : undefined,
       logCount: isSet(object.logCount)
         ? globalThis.String(object.logCount)
         : isSet(object.log_count)
@@ -2960,14 +3332,11 @@ export const JobEvent: MessageFns<JobEvent> = {
     if (message.jobId !== "") {
       obj.jobId = message.jobId;
     }
-    if (message.status !== "") {
-      obj.status = message.status;
+    if (message.status !== 0) {
+      obj.status = jobStatusToJSON(message.status);
     }
-    if (message.exitCode !== 0) {
+    if (message.exitCode !== undefined) {
       obj.exitCode = Math.round(message.exitCode);
-    }
-    if (message.hasExitCode !== false) {
-      obj.hasExitCode = message.hasExitCode;
     }
     if (message.logCount !== "0") {
       obj.logCount = message.logCount;
@@ -2984,9 +3353,8 @@ export const JobEvent: MessageFns<JobEvent> = {
   fromPartial(object: DeepPartial<JobEvent>): JobEvent {
     const message = createBaseJobEvent();
     message.jobId = object.jobId ?? "";
-    message.status = object.status ?? "";
-    message.exitCode = object.exitCode ?? 0;
-    message.hasExitCode = object.hasExitCode ?? false;
+    message.status = object.status ?? 0;
+    message.exitCode = object.exitCode ?? undefined;
     message.logCount = object.logCount ?? "0";
     message.logsTruncated = object.logsTruncated ?? false;
     return message;
@@ -2994,16 +3362,16 @@ export const JobEvent: MessageFns<JobEvent> = {
 };
 
 function createBaseJobStdinRequest(): JobStdinRequest {
-  return { jobId: "", data: new Uint8Array(0) };
+  return { target: undefined, chunk: undefined };
 }
 
 export const JobStdinRequest: MessageFns<JobStdinRequest> = {
   encode(message: JobStdinRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+    if (message.target !== undefined) {
+      JobStdinTarget.encode(message.target, writer.uint32(10).fork()).join();
     }
-    if (message.data.length !== 0) {
-      writer.uint32(18).bytes(message.data);
+    if (message.chunk !== undefined) {
+      FileChunk.encode(message.chunk, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -3020,7 +3388,7 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.target = JobStdinTarget.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -3028,7 +3396,7 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
             break;
           }
 
-          message.data = reader.bytes();
+          message.chunk = FileChunk.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -3042,22 +3410,18 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
 
   fromJSON(object: any): JobStdinRequest {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
-        : "",
-      data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
+      target: isSet(object.target) ? JobStdinTarget.fromJSON(object.target) : undefined,
+      chunk: isSet(object.chunk) ? FileChunk.fromJSON(object.chunk) : undefined,
     };
   },
 
   toJSON(message: JobStdinRequest): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.target !== undefined) {
+      obj.target = JobStdinTarget.toJSON(message.target);
     }
-    if (message.data.length !== 0) {
-      obj.data = base64FromBytes(message.data);
+    if (message.chunk !== undefined) {
+      obj.chunk = FileChunk.toJSON(message.chunk);
     }
     return obj;
   },
@@ -3067,8 +3431,76 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
   },
   fromPartial(object: DeepPartial<JobStdinRequest>): JobStdinRequest {
     const message = createBaseJobStdinRequest();
+    message.target = (object.target !== undefined && object.target !== null)
+      ? JobStdinTarget.fromPartial(object.target)
+      : undefined;
+    message.chunk = (object.chunk !== undefined && object.chunk !== null)
+      ? FileChunk.fromPartial(object.chunk)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseJobStdinTarget(): JobStdinTarget {
+  return { jobId: "" };
+}
+
+export const JobStdinTarget: MessageFns<JobStdinTarget> = {
+  encode(message: JobStdinTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.jobId !== "") {
+      writer.uint32(10).string(message.jobId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): JobStdinTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseJobStdinTarget();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.jobId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): JobStdinTarget {
+    return {
+      jobId: isSet(object.jobId)
+        ? globalThis.String(object.jobId)
+        : isSet(object.job_id)
+        ? globalThis.String(object.job_id)
+        : "",
+    };
+  },
+
+  toJSON(message: JobStdinTarget): unknown {
+    const obj: any = {};
+    if (message.jobId !== "") {
+      obj.jobId = message.jobId;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<JobStdinTarget>): JobStdinTarget {
+    return JobStdinTarget.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<JobStdinTarget>): JobStdinTarget {
+    const message = createBaseJobStdinTarget();
     message.jobId = object.jobId ?? "";
-    message.data = object.data ?? new Uint8Array(0);
     return message;
   },
 };
@@ -3302,7 +3734,7 @@ export const ServiceIdRequest: MessageFns<ServiceIdRequest> = {
 };
 
 function createBaseServiceDefinition(): ServiceDefinition {
-  return { id: "", name: "", host: "", port: 0, protocol: "", description: "" };
+  return { id: "", name: "", host: "", port: 0, protocol: 0, description: "" };
 }
 
 export const ServiceDefinition: MessageFns<ServiceDefinition> = {
@@ -3319,8 +3751,8 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
     if (message.port !== 0) {
       writer.uint32(32).uint32(message.port);
     }
-    if (message.protocol !== "") {
-      writer.uint32(42).string(message.protocol);
+    if (message.protocol !== 0) {
+      writer.uint32(40).int32(message.protocol);
     }
     if (message.description !== "") {
       writer.uint32(50).string(message.description);
@@ -3368,11 +3800,11 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
           continue;
         }
         case 5: {
-          if (tag !== 42) {
+          if (tag !== 40) {
             break;
           }
 
-          message.protocol = reader.string();
+          message.protocol = reader.int32() as any;
           continue;
         }
         case 6: {
@@ -3398,7 +3830,7 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
       name: isSet(object.name) ? globalThis.String(object.name) : "",
       host: isSet(object.host) ? globalThis.String(object.host) : "",
       port: isSet(object.port) ? globalThis.Number(object.port) : 0,
-      protocol: isSet(object.protocol) ? globalThis.String(object.protocol) : "",
+      protocol: isSet(object.protocol) ? serviceProtocolFromJSON(object.protocol) : 0,
       description: isSet(object.description) ? globalThis.String(object.description) : "",
     };
   },
@@ -3417,8 +3849,8 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
     if (message.port !== 0) {
       obj.port = Math.round(message.port);
     }
-    if (message.protocol !== "") {
-      obj.protocol = message.protocol;
+    if (message.protocol !== 0) {
+      obj.protocol = serviceProtocolToJSON(message.protocol);
     }
     if (message.description !== "") {
       obj.description = message.description;
@@ -3435,20 +3867,23 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
     message.name = object.name ?? "";
     message.host = object.host ?? "";
     message.port = object.port ?? 0;
-    message.protocol = object.protocol ?? "";
+    message.protocol = object.protocol ?? 0;
     message.description = object.description ?? "";
     return message;
   },
 };
 
 function createBaseServiceList(): ServiceList {
-  return { services: [] };
+  return { services: [], nextPageToken: "" };
 }
 
 export const ServiceList: MessageFns<ServiceList> = {
   encode(message: ServiceList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     for (const v of message.services) {
       ServiceDefinition.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== "") {
+      writer.uint32(18).string(message.nextPageToken);
     }
     return writer;
   },
@@ -3468,6 +3903,14 @@ export const ServiceList: MessageFns<ServiceList> = {
           message.services.push(ServiceDefinition.decode(reader, reader.uint32()));
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3482,6 +3925,11 @@ export const ServiceList: MessageFns<ServiceList> = {
       services: globalThis.Array.isArray(object?.services)
         ? object.services.map((e: any) => ServiceDefinition.fromJSON(e))
         : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : "",
     };
   },
 
@@ -3489,6 +3937,9 @@ export const ServiceList: MessageFns<ServiceList> = {
     const obj: any = {};
     if (message.services?.length) {
       obj.services = message.services.map((e) => ServiceDefinition.toJSON(e));
+    }
+    if (message.nextPageToken !== "") {
+      obj.nextPageToken = message.nextPageToken;
     }
     return obj;
   },
@@ -3499,12 +3950,13 @@ export const ServiceList: MessageFns<ServiceList> = {
   fromPartial(object: DeepPartial<ServiceList>): ServiceList {
     const message = createBaseServiceList();
     message.services = object.services?.map((e) => ServiceDefinition.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? "";
     return message;
   },
 };
 
 function createBaseServiceCheck(): ServiceCheck {
-  return { id: "", ok: false, latencyMs: "0", reason: "", hasReason: false };
+  return { id: "", ok: false, latencyMs: "0", reason: undefined };
 }
 
 export const ServiceCheck: MessageFns<ServiceCheck> = {
@@ -3518,11 +3970,8 @@ export const ServiceCheck: MessageFns<ServiceCheck> = {
     if (message.latencyMs !== "0") {
       writer.uint32(24).uint64(message.latencyMs);
     }
-    if (message.reason !== "") {
+    if (message.reason !== undefined) {
       writer.uint32(34).string(message.reason);
-    }
-    if (message.hasReason !== false) {
-      writer.uint32(40).bool(message.hasReason);
     }
     return writer;
   },
@@ -3566,14 +4015,6 @@ export const ServiceCheck: MessageFns<ServiceCheck> = {
           message.reason = reader.string();
           continue;
         }
-        case 5: {
-          if (tag !== 40) {
-            break;
-          }
-
-          message.hasReason = reader.bool();
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3592,12 +4033,7 @@ export const ServiceCheck: MessageFns<ServiceCheck> = {
         : isSet(object.latency_ms)
         ? globalThis.String(object.latency_ms)
         : "0",
-      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
-      hasReason: isSet(object.hasReason)
-        ? globalThis.Boolean(object.hasReason)
-        : isSet(object.has_reason)
-        ? globalThis.Boolean(object.has_reason)
-        : false,
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : undefined,
     };
   },
 
@@ -3612,11 +4048,8 @@ export const ServiceCheck: MessageFns<ServiceCheck> = {
     if (message.latencyMs !== "0") {
       obj.latencyMs = message.latencyMs;
     }
-    if (message.reason !== "") {
+    if (message.reason !== undefined) {
       obj.reason = message.reason;
-    }
-    if (message.hasReason !== false) {
-      obj.hasReason = message.hasReason;
     }
     return obj;
   },
@@ -3629,8 +4062,7 @@ export const ServiceCheck: MessageFns<ServiceCheck> = {
     message.id = object.id ?? "";
     message.ok = object.ok ?? false;
     message.latencyMs = object.latencyMs ?? "0";
-    message.reason = object.reason ?? "";
-    message.hasReason = object.hasReason ?? false;
+    message.reason = object.reason ?? undefined;
     return message;
   },
 };
@@ -3645,10 +4077,8 @@ function createBaseAuditEvent(): AuditEvent {
     resource: "",
     allowed: false,
     reason: "",
-    runId: "",
-    stepId: "",
-    hasRunId: false,
-    hasStepId: false,
+    runId: undefined,
+    stepId: undefined,
   };
 }
 
@@ -3678,17 +4108,11 @@ export const AuditEvent: MessageFns<AuditEvent> = {
     if (message.reason !== "") {
       writer.uint32(66).string(message.reason);
     }
-    if (message.runId !== "") {
+    if (message.runId !== undefined) {
       writer.uint32(74).string(message.runId);
     }
-    if (message.stepId !== "") {
+    if (message.stepId !== undefined) {
       writer.uint32(82).string(message.stepId);
-    }
-    if (message.hasRunId !== false) {
-      writer.uint32(88).bool(message.hasRunId);
-    }
-    if (message.hasStepId !== false) {
-      writer.uint32(96).bool(message.hasStepId);
     }
     return writer;
   },
@@ -3780,22 +4204,6 @@ export const AuditEvent: MessageFns<AuditEvent> = {
           message.stepId = reader.string();
           continue;
         }
-        case 11: {
-          if (tag !== 88) {
-            break;
-          }
-
-          message.hasRunId = reader.bool();
-          continue;
-        }
-        case 12: {
-          if (tag !== 96) {
-            break;
-          }
-
-          message.hasStepId = reader.bool();
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3827,22 +4235,12 @@ export const AuditEvent: MessageFns<AuditEvent> = {
         ? globalThis.String(object.runId)
         : isSet(object.run_id)
         ? globalThis.String(object.run_id)
-        : "",
+        : undefined,
       stepId: isSet(object.stepId)
         ? globalThis.String(object.stepId)
         : isSet(object.step_id)
         ? globalThis.String(object.step_id)
-        : "",
-      hasRunId: isSet(object.hasRunId)
-        ? globalThis.Boolean(object.hasRunId)
-        : isSet(object.has_run_id)
-        ? globalThis.Boolean(object.has_run_id)
-        : false,
-      hasStepId: isSet(object.hasStepId)
-        ? globalThis.Boolean(object.hasStepId)
-        : isSet(object.has_step_id)
-        ? globalThis.Boolean(object.has_step_id)
-        : false,
+        : undefined,
     };
   },
 
@@ -3872,17 +4270,11 @@ export const AuditEvent: MessageFns<AuditEvent> = {
     if (message.reason !== "") {
       obj.reason = message.reason;
     }
-    if (message.runId !== "") {
+    if (message.runId !== undefined) {
       obj.runId = message.runId;
     }
-    if (message.stepId !== "") {
+    if (message.stepId !== undefined) {
       obj.stepId = message.stepId;
-    }
-    if (message.hasRunId !== false) {
-      obj.hasRunId = message.hasRunId;
-    }
-    if (message.hasStepId !== false) {
-      obj.hasStepId = message.hasStepId;
     }
     return obj;
   },
@@ -3900,22 +4292,23 @@ export const AuditEvent: MessageFns<AuditEvent> = {
     message.resource = object.resource ?? "";
     message.allowed = object.allowed ?? false;
     message.reason = object.reason ?? "";
-    message.runId = object.runId ?? "";
-    message.stepId = object.stepId ?? "";
-    message.hasRunId = object.hasRunId ?? false;
-    message.hasStepId = object.hasStepId ?? false;
+    message.runId = object.runId ?? undefined;
+    message.stepId = object.stepId ?? undefined;
     return message;
   },
 };
 
 function createBaseAuditLog(): AuditLog {
-  return { events: [] };
+  return { events: [], nextPageToken: "" };
 }
 
 export const AuditLog: MessageFns<AuditLog> = {
   encode(message: AuditLog, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     for (const v of message.events) {
       AuditEvent.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== "") {
+      writer.uint32(18).string(message.nextPageToken);
     }
     return writer;
   },
@@ -3935,6 +4328,14 @@ export const AuditLog: MessageFns<AuditLog> = {
           message.events.push(AuditEvent.decode(reader, reader.uint32()));
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3947,6 +4348,11 @@ export const AuditLog: MessageFns<AuditLog> = {
   fromJSON(object: any): AuditLog {
     return {
       events: globalThis.Array.isArray(object?.events) ? object.events.map((e: any) => AuditEvent.fromJSON(e)) : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : "",
     };
   },
 
@@ -3954,6 +4360,9 @@ export const AuditLog: MessageFns<AuditLog> = {
     const obj: any = {};
     if (message.events?.length) {
       obj.events = message.events.map((e) => AuditEvent.toJSON(e));
+    }
+    if (message.nextPageToken !== "") {
+      obj.nextPageToken = message.nextPageToken;
     }
     return obj;
   },
@@ -3964,6 +4373,7 @@ export const AuditLog: MessageFns<AuditLog> = {
   fromPartial(object: DeepPartial<AuditLog>): AuditLog {
     const message = createBaseAuditLog();
     message.events = object.events?.map((e) => AuditEvent.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? "";
     return message;
   },
 };

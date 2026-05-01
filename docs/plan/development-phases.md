@@ -2277,6 +2277,204 @@ Done when:
 - `pnpm --filter @operon/sdk typecheck` passes.
 - Docker-backed runtime validation covers the changed job and log behavior.
 
+## v0.6.8 Goal
+
+Operon v0.6.8 should stabilize the gRPC schema before building more operator
+interfaces on top of it.
+
+```text
+v0.6.8 = schema-level protocol constraints and cleanup.
+```
+
+This milestone should remove avoidable ambiguity from `runtime.proto`. It should
+prefer schema-enforced contracts over stringly typed fields and prose-only
+rules, while preserving the product boundary that Operon exposes one runtime
+control plane over gRPC.
+
+## Phase 32.23: Typed Runtime Enums
+
+Status: Completed.
+
+Goal: replace wire-level string enum fields with protobuf enum types.
+
+Planned:
+
+- add protobuf enums for capability kind, job status, and service protocol.
+- change `Capability.kind`, `JobRecord.status`, and `JobEvent.status` to use
+  typed enum fields.
+- update Rust core/protocol conversions and TypeScript generated bindings.
+- preserve stable human-facing names in CLI/JSON output through explicit
+  formatting rather than wire strings.
+
+Done when:
+
+- invalid capability kind and job status values cannot be represented by normal
+  generated clients.
+- Rust and TS tests cover enum conversion.
+- PROTOCOL.md documents the typed enum values.
+
+Completed:
+
+- Added protobuf enums for capability kind, job status, and service protocol.
+- Updated Rust and TypeScript conversions to map protobuf enums to stable
+  human-facing CLI/JSON names.
+- Documented enum values in PROTOCOL.md.
+
+## Phase 32.24: Proto3 Optional Presence
+
+Status: Completed.
+
+Goal: replace manual `has_*` presence flags with protobuf presence semantics.
+
+Planned:
+
+- use proto3 `optional` for timeout, exit code, reason, run id, and step id
+  fields where absence is meaningful.
+- remove `has_timeout_secs`, `has_exit_code`, `has_reason`, `has_run_id`, and
+  `has_step_id` from active message schemas.
+- update Rust and TS conversions to use generated option fields.
+- reserve removed field numbers where needed to prevent accidental reuse.
+
+Done when:
+
+- generated clients expose absence through optional fields instead of paired
+  boolean flags.
+- runtime behavior for omitted timeout, exit code, reason, run id, and step id
+  is unchanged.
+
+Completed:
+
+- Replaced manual `has_*` fields with proto3 optional presence for timeout,
+  exit code, reason, run id, and step id.
+- Reserved removed field numbers and names in `runtime.proto`.
+- Updated Rust and TypeScript client/server conversions to use optional fields.
+
+## Phase 32.25: Proto Surface Pruning
+
+Status: Completed.
+
+Goal: remove or quarantine legacy proto files that are not part of the active
+runtime surface.
+
+Planned:
+
+- decide whether `proto/operon/node.proto`, `execution.proto`, `policy.proto`,
+  and `capability.proto` are archive-only or should be deleted.
+- if kept, move them under an archive path or add explicit comments that they
+  are non-compiled design leftovers.
+- ensure build scripts and docs point only to the active runtime proto.
+
+Done when:
+
+- contributors cannot reasonably mistake legacy proto files for live services.
+- `crates/operon-protocol/build.rs` remains focused on the active runtime API.
+
+Completed:
+
+- Moved inactive proto files to `proto/archive/operon/`.
+- Kept `crates/operon-protocol/build.rs` focused on
+  `proto/operon/runtime.proto`.
+- Updated architecture docs to identify `runtime.proto` as the only active
+  runtime protocol.
+
+## Phase 32.26: Streaming Request Envelopes
+
+Status: Completed.
+
+Goal: make client-streaming file and stdin contracts explicit in the protobuf
+schema rather than relying only on first-message conventions.
+
+Planned:
+
+- redesign `WriteFile` streaming messages so target metadata and data chunks are
+  represented as distinct message variants.
+- redesign `WriteJobStdin` streaming messages so job identity and data chunks
+  are represented as distinct message variants.
+- keep daemon-side validation for ordering and duplicate metadata.
+- update CLI and SDK chunk producers to use the new envelope shape.
+- document the streaming contract in PROTOCOL.md.
+
+Done when:
+
+- generated clients can distinguish target metadata messages from data chunk
+  messages.
+- server validation rejects missing metadata, duplicate metadata, and target
+  switches with clear errors.
+- existing CLI and SDK write paths continue to work through the new schema.
+
+Completed:
+
+- Replaced path/job-id-in-first-chunk stream messages with explicit
+  `target`/`chunk` oneof envelopes for `WriteFile` and `WriteJobStdin`.
+- Updated daemon validation and CLI/SDK chunk producers for the new envelope
+  shape.
+- Documented the target-first streaming contract in PROTOCOL.md.
+
+## Phase 32.27: List Pagination Contract
+
+Status: Completed.
+
+Goal: add explicit pagination fields to list APIs before list results become
+large or UI-driven.
+
+Planned:
+
+- add `page_size` and `page_token` to list request messages for capabilities,
+  jobs, services, and audit.
+- add `next_page_token` to list responses where pagination is meaningful.
+- define default and maximum page sizes.
+- update daemon handlers to apply pagination deterministically.
+- update CLI and SDK list helpers to request all pages by default unless a
+  lower-level paginated method is explicitly used.
+
+Done when:
+
+- large audit/job/capability/service lists can be paged through the protocol.
+- current CLI behavior still shows complete lists by default.
+- PROTOCOL.md documents pagination semantics.
+
+Completed:
+
+- Added `page_size`, `page_token`, and `next_page_token` to capability, job,
+  service, and audit list APIs.
+- Implemented deterministic daemon pagination and high-level CLI/SDK page
+  walking.
+- Added Rust and TypeScript tests for pagination behavior.
+
+## Phase 32.28: v0.6.8 Acceptance
+
+Status: Completed.
+
+Goal: make the protocol schema cleanup reproducible.
+
+Planned:
+
+- create `docs/plan/v0.6.8-acceptance.md`.
+- regenerate Rust and TypeScript protocol bindings.
+- update PROTOCOL.md for typed enums, optional presence, streaming envelopes,
+  and pagination.
+- update AGENTS.md after completion so the next planned milestone returns to
+  v0.7 CLI TUI console.
+
+Done when:
+
+- `cargo fmt --check` passes.
+- `cargo clippy --workspace --locked -- -D warnings` passes.
+- `cargo test --workspace --locked` passes.
+- `pnpm --filter @operon/sdk typecheck` passes.
+- `pnpm --filter @operon/sdk test` passes.
+- runtime smoke validation still passes for fs write, job stdin, job logs, and
+  list APIs.
+
+Completed:
+
+- Added `docs/plan/v0.6.8-acceptance.md`.
+- Regenerated Rust and TypeScript protocol bindings from the stabilized schema.
+- Updated PROTOCOL.md, README-adjacent architecture docs, and AGENTS.md for the
+  completed milestone.
+- Verified format, clippy, Rust tests, SDK typecheck/tests, Docker runtime
+  smoke, and v0.6.7 runtime validation.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

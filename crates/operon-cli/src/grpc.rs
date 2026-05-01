@@ -13,12 +13,15 @@ use operon_core::{
 };
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    operon_runtime_client::OperonRuntimeClient, FsCopyRequest, FsPathRequest, FsRenameRequest,
-    FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest,
-    JobStdinRequest, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
-    ListServicesRequest, ServiceIdRequest, WriteFileRequest,
+    job_stdin_request, operon_runtime_client::OperonRuntimeClient, write_file_request, FileChunk,
+    FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest, GetNodeRequest,
+    HealthRequest, JobCancelRequest, JobIdRequest, JobStdinRequest, JobStdinTarget,
+    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
+    ServiceIdRequest, WriteFileRequest, WriteFileTarget,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
+
+const DEFAULT_LIST_PAGE_SIZE: u32 = 1000;
 
 tokio::task_local! {
     static REQUEST_CONTEXT: RequestContext;
@@ -52,15 +55,39 @@ pub async fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthS
 }
 
 pub async fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<CapabilityList> {
-    call(endpoint, |mut client, endpoint| async move {
-        client
-            .list_capabilities(with_auth(&endpoint, ListCapabilitiesRequest {})?)
-            .await?
-            .into_inner()
-            .try_into()
-            .map_err(anyhow::Error::msg)
-    })
-    .await
+    let mut capabilities = Vec::new();
+    let mut page_token = String::new();
+    loop {
+        let response = call(endpoint, |mut client, endpoint| {
+            let page_token = page_token.clone();
+            async move {
+                Ok(client
+                    .list_capabilities(with_auth(
+                        &endpoint,
+                        ListCapabilitiesRequest {
+                            page_size: DEFAULT_LIST_PAGE_SIZE,
+                            page_token,
+                        },
+                    )?)
+                    .await?
+                    .into_inner())
+            }
+        })
+        .await?;
+        capabilities.extend(
+            response
+                .capabilities
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(anyhow::Error::msg)?,
+        );
+        if response.next_page_token.is_empty() {
+            break;
+        }
+        page_token = response.next_page_token;
+    }
+    Ok(CapabilityList { capabilities })
 }
 
 pub async fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
@@ -238,15 +265,39 @@ pub async fn get_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<Jo
 }
 
 pub async fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
-    call(endpoint, |mut client, endpoint| async move {
-        client
-            .list_jobs(with_auth(&endpoint, ListJobsRequest {})?)
-            .await?
-            .into_inner()
-            .try_into()
-            .map_err(anyhow::Error::msg)
-    })
-    .await
+    let mut jobs = Vec::new();
+    let mut page_token = String::new();
+    loop {
+        let response = call(endpoint, |mut client, endpoint| {
+            let page_token = page_token.clone();
+            async move {
+                Ok(client
+                    .list_jobs(with_auth(
+                        &endpoint,
+                        ListJobsRequest {
+                            page_size: DEFAULT_LIST_PAGE_SIZE,
+                            page_token,
+                        },
+                    )?)
+                    .await?
+                    .into_inner())
+            }
+        })
+        .await?;
+        jobs.extend(
+            response
+                .jobs
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(anyhow::Error::msg)?,
+        );
+        if response.next_page_token.is_empty() {
+            break;
+        }
+        page_token = response.next_page_token;
+    }
+    Ok(JobList { jobs })
 }
 
 pub async fn watch_job_to_terminal(
@@ -361,15 +412,39 @@ pub async fn cancel_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result
 }
 
 pub async fn list_services(endpoint: &NodeEndpoint) -> anyhow::Result<ServiceList> {
-    call(endpoint, |mut client, endpoint| async move {
-        client
-            .list_services(with_auth(&endpoint, ListServicesRequest {})?)
-            .await?
-            .into_inner()
-            .try_into()
-            .map_err(anyhow::Error::msg)
-    })
-    .await
+    let mut services = Vec::new();
+    let mut page_token = String::new();
+    loop {
+        let response = call(endpoint, |mut client, endpoint| {
+            let page_token = page_token.clone();
+            async move {
+                Ok(client
+                    .list_services(with_auth(
+                        &endpoint,
+                        ListServicesRequest {
+                            page_size: DEFAULT_LIST_PAGE_SIZE,
+                            page_token,
+                        },
+                    )?)
+                    .await?
+                    .into_inner())
+            }
+        })
+        .await?;
+        services.extend(
+            response
+                .services
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(anyhow::Error::msg)?,
+        );
+        if response.next_page_token.is_empty() {
+            break;
+        }
+        page_token = response.next_page_token;
+    }
+    Ok(ServiceList { services })
 }
 
 pub async fn check_service(
@@ -388,14 +463,32 @@ pub async fn check_service(
 }
 
 pub async fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {
-    call(endpoint, |mut client, endpoint| async move {
-        Ok(client
-            .list_audit(with_auth(&endpoint, ListAuditRequest {})?)
-            .await?
-            .into_inner()
-            .into())
-    })
-    .await
+    let mut events = Vec::new();
+    let mut page_token = String::new();
+    loop {
+        let response = call(endpoint, |mut client, endpoint| {
+            let page_token = page_token.clone();
+            async move {
+                Ok(client
+                    .list_audit(with_auth(
+                        &endpoint,
+                        ListAuditRequest {
+                            page_size: DEFAULT_LIST_PAGE_SIZE,
+                            page_token,
+                        },
+                    )?)
+                    .await?
+                    .into_inner())
+            }
+        })
+        .await?;
+        events.extend(response.events.into_iter().map(Into::into));
+        if response.next_page_token.is_empty() {
+            break;
+        }
+        page_token = response.next_page_token;
+    }
+    Ok(AuditLog { events })
 }
 
 async fn call<T, Fut>(
@@ -447,53 +540,55 @@ fn grpc_channel_uri(endpoint: &str) -> anyhow::Result<String> {
 }
 
 fn chunk_write_requests(path: String, body: &[u8]) -> Vec<WriteFileRequest> {
-    if body.is_empty() {
-        return vec![WriteFileRequest {
+    let mut chunks = vec![WriteFileRequest {
+        payload: Some(write_file_request::Payload::Target(WriteFileTarget {
             path,
-            data: Vec::new(),
-        }];
+        })),
+    }];
+    if body.is_empty() {
+        chunks.push(WriteFileRequest {
+            payload: Some(write_file_request::Payload::Chunk(FileChunk {
+                data: Vec::new(),
+            })),
+        });
+        return chunks;
     }
-    body.chunks(64 * 1024)
-        .enumerate()
-        .map(|(index, chunk)| WriteFileRequest {
-            path: if index == 0 {
-                path.clone()
-            } else {
-                String::new()
-            },
+    chunks.extend(body.chunks(64 * 1024).map(|chunk| WriteFileRequest {
+        payload: Some(write_file_request::Payload::Chunk(FileChunk {
             data: chunk.to_vec(),
-        })
-        .collect()
+        })),
+    }));
+    chunks
 }
 
 fn chunk_stdin_requests(job_id: String, body: &[u8]) -> Vec<JobStdinRequest> {
-    if body.is_empty() {
-        return vec![JobStdinRequest {
+    let mut chunks = vec![JobStdinRequest {
+        payload: Some(job_stdin_request::Payload::Target(JobStdinTarget {
             job_id,
-            data: Vec::new(),
-        }];
+        })),
+    }];
+    if body.is_empty() {
+        chunks.push(JobStdinRequest {
+            payload: Some(job_stdin_request::Payload::Chunk(FileChunk {
+                data: Vec::new(),
+            })),
+        });
+        return chunks;
     }
-    body.chunks(64 * 1024)
-        .enumerate()
-        .map(|(index, chunk)| JobStdinRequest {
-            job_id: if index == 0 {
-                job_id.clone()
-            } else {
-                String::new()
-            },
+    chunks.extend(body.chunks(64 * 1024).map(|chunk| JobStdinRequest {
+        payload: Some(job_stdin_request::Payload::Chunk(FileChunk {
             data: chunk.to_vec(),
-        })
-        .collect()
+        })),
+    }));
+    chunks
 }
 
 fn grpc_job_run_request(value: JobRunRequest) -> operon_protocol::runtime::v1::JobRunRequest {
-    let has_timeout_secs = value.timeout_secs.is_some();
     operon_protocol::runtime::v1::JobRunRequest {
         command: value.command,
         cwd: value.cwd.unwrap_or_default(),
-        timeout_secs: value.timeout_secs.unwrap_or_default(),
+        timeout_secs: value.timeout_secs,
         secrets: value.secrets,
-        has_timeout_secs,
     }
 }
 
@@ -510,12 +605,22 @@ mod tests {
     }
 
     #[test]
-    fn chunks_write_requests_with_path_only_on_first_chunk() {
+    fn chunks_write_requests_use_target_then_data_chunks() {
         let chunks = chunk_write_requests("file.txt".to_string(), &[1_u8; 70 * 1024]);
 
-        assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].path, "file.txt");
-        assert!(chunks[1].path.is_empty());
+        assert_eq!(chunks.len(), 3);
+        assert!(matches!(
+            chunks[0].payload.as_ref(),
+            Some(write_file_request::Payload::Target(target)) if target.path == "file.txt"
+        ));
+        assert!(matches!(
+            chunks[1].payload.as_ref(),
+            Some(write_file_request::Payload::Chunk(chunk)) if chunk.data.len() == 64 * 1024
+        ));
+        assert!(matches!(
+            chunks[2].payload.as_ref(),
+            Some(write_file_request::Payload::Chunk(chunk)) if chunk.data.len() == 6 * 1024
+        ));
     }
 
     #[tokio::test]

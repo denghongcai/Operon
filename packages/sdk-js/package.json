@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
-    "proto:gen": "mkdir -p src/generated && protoc --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/generated --ts_proto_opt=outputServices=nice-grpc,outputServices=generic-definitions,useExactTypes=false,esModuleInterop=true,forceLong=string --proto_path=../../proto ../../proto/operon/runtime.proto",
+    "proto:gen": "mkdir -p src/generated && protoc --experimental_allow_proto3_optional --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/generated --ts_proto_opt=outputServices=nice-grpc,outputServices=generic-definitions,useExactTypes=false,esModuleInterop=true,forceLong=string --proto_path=../../proto ../../proto/operon/runtime.proto",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

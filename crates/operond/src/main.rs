@@ -29,11 +29,12 @@ use operon_fs::{
 };
 use operon_process::{authorize_job, job_environment, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
+    job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest,
-    FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest, ListAuditRequest,
-    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceIdRequest,
-    WriteFileRequest,
+    write_file_request, FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest,
+    FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest,
+    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
+    ServiceIdRequest, WriteFileRequest,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -263,7 +264,16 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<ListCapabilitiesRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::CapabilityList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        Ok(GrpcResponse::new(self.state.capabilities.clone().into()))
+        let request = request.into_inner();
+        let (capabilities, next_page_token) = paginate_items(
+            &self.state.capabilities.capabilities,
+            request.page_size,
+            &request.page_token,
+        )?;
+        let mut response: operon_protocol::runtime::v1::CapabilityList =
+            CapabilityList { capabilities }.into();
+        response.next_page_token = next_page_token;
+        Ok(GrpcResponse::new(response))
     }
 
     async fn stat_fs(
@@ -344,61 +354,82 @@ impl OperonRuntime for GrpcRuntime {
                 let mut file = None;
                 let mut bytes_written = 0_u64;
 
-                while let Some(chunk) = stream.next().await {
-                    let chunk = chunk?;
-                    if path.is_none() {
-                        if chunk.path.is_empty() {
-                            return Err(Status::invalid_argument(
-                                "first write chunk must include a path",
-                            ));
-                        }
-                        if let Err(error) = authorize_fs(&self.state.policy, "write", &chunk.path) {
-                            record_audit(&self.state, "write-stream", &chunk.path, false, &error.1);
-                            return Err(status_from_error(error));
-                        }
-                        let full_path = match resolve_write_workspace_path(
-                            &self.state.workspace,
-                            &chunk.path,
-                        ) {
-                            Ok(path) => path,
-                            Err(error) => {
+                while let Some(message) = stream.next().await {
+                    let message = message?;
+                    match message.payload {
+                        Some(write_file_request::Payload::Target(target)) => {
+                            if path.is_some() {
+                                return Err(Status::invalid_argument(
+                                    "write stream target metadata was sent more than once",
+                                ));
+                            }
+                            if target.path.is_empty() {
+                                return Err(Status::invalid_argument(
+                                    "write stream target path is required",
+                                ));
+                            }
+                            if let Err(error) =
+                                authorize_fs(&self.state.policy, "write", &target.path)
+                            {
                                 record_audit(
                                     &self.state,
                                     "write-stream",
-                                    &chunk.path,
+                                    &target.path,
                                     false,
                                     &error.1,
                                 );
                                 return Err(status_from_error(error));
                             }
-                        };
-                        if let Some(parent) = full_path.parent() {
-                            tokio::fs::create_dir_all(parent)
+                            let full_path = match resolve_write_workspace_path(
+                                &self.state.workspace,
+                                &target.path,
+                            ) {
+                                Ok(path) => path,
+                                Err(error) => {
+                                    record_audit(
+                                        &self.state,
+                                        "write-stream",
+                                        &target.path,
+                                        false,
+                                        &error.1,
+                                    );
+                                    return Err(status_from_error(error));
+                                }
+                            };
+                            if let Some(parent) = full_path.parent() {
+                                tokio::fs::create_dir_all(parent)
+                                    .await
+                                    .map_err(|error| Status::internal(error.to_string()))?;
+                            }
+                            file = Some(
+                                tokio::fs::File::create(&full_path)
+                                    .await
+                                    .map_err(|error| Status::internal(error.to_string()))?,
+                            );
+                            path = Some(target.path);
+                        }
+                        Some(write_file_request::Payload::Chunk(chunk)) => {
+                            let Some(file) = &mut file else {
+                                return Err(Status::invalid_argument(
+                                    "write stream chunk arrived before target metadata",
+                                ));
+                            };
+                            file.write_all(&chunk.data)
                                 .await
                                 .map_err(|error| Status::internal(error.to_string()))?;
+                            bytes_written += chunk.data.len() as u64;
                         }
-                        file = Some(
-                            tokio::fs::File::create(&full_path)
-                                .await
-                                .map_err(|error| Status::internal(error.to_string()))?,
-                        );
-                        path = Some(chunk.path.clone());
-                    } else if !chunk.path.is_empty() && Some(&chunk.path) != path.as_ref() {
-                        return Err(Status::invalid_argument(
-                            "write stream cannot change path after the first chunk",
-                        ));
-                    }
-                    if let Some(file) = &mut file {
-                        file.write_all(&chunk.data)
-                            .await
-                            .map_err(|error| Status::internal(error.to_string()))?;
-                        bytes_written += chunk.data.len() as u64;
+                        None => {
+                            return Err(Status::invalid_argument(
+                                "write stream message is missing payload",
+                            ));
+                        }
                     }
                 }
 
                 let Some(path) = path else {
                     return Err(Status::invalid_argument(
-                        "write stream did not include a path",
+                        "write stream did not include target metadata",
                     ));
                 };
                 record_audit(&self.state, "write-stream", &path, true, "allowed");
@@ -522,7 +553,7 @@ impl OperonRuntime for GrpcRuntime {
                     JobRunRequest {
                         command: request.command,
                         cwd: (!request.cwd.is_empty()).then_some(request.cwd),
-                        timeout_secs: request.has_timeout_secs.then_some(request.timeout_secs),
+                        timeout_secs: request.timeout_secs,
                         secrets: request.secrets,
                     },
                 )?;
@@ -546,6 +577,7 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<ListJobsRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
+        let request = request.into_inner();
         let jobs = self
             .state
             .jobs
@@ -553,8 +585,12 @@ impl OperonRuntime for GrpcRuntime {
             .expect("job map mutex poisoned")
             .values()
             .cloned()
-            .collect();
-        Ok(GrpcResponse::new(JobList { jobs }.into()))
+            .collect::<Vec<_>>();
+        let (jobs, next_page_token) =
+            paginate_items(&jobs, request.page_size, &request.page_token)?;
+        let mut response: operon_protocol::runtime::v1::JobList = JobList { jobs }.into();
+        response.next_page_token = next_page_token;
+        Ok(GrpcResponse::new(response))
     }
 
     type WatchJobStream = GrpcJobEventStream;
@@ -716,41 +752,57 @@ impl OperonRuntime for GrpcRuntime {
         let mut job_id = None;
         let mut sender = None;
         let mut bytes_written = 0_u64;
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            if job_id.is_none() {
-                if chunk.job_id.is_empty() {
+        while let Some(message) = stream.next().await {
+            let message = message?;
+            match message.payload {
+                Some(job_stdin_request::Payload::Target(target)) => {
+                    if job_id.is_some() {
+                        return Err(Status::invalid_argument(
+                            "stdin stream target metadata was sent more than once",
+                        ));
+                    }
+                    if target.job_id.is_empty() {
+                        return Err(Status::invalid_argument(
+                            "stdin stream target job_id is required",
+                        ));
+                    }
+                    sender = Some(
+                        self.state
+                            .job_stdin
+                            .lock()
+                            .expect("job stdin mutex poisoned")
+                            .get(&target.job_id)
+                            .cloned()
+                            .ok_or_else(|| {
+                                Status::not_found(format!(
+                                    "job `{}` has no open stdin",
+                                    target.job_id
+                                ))
+                            })?,
+                    );
+                    job_id = Some(target.job_id);
+                }
+                Some(job_stdin_request::Payload::Chunk(chunk)) => {
+                    let Some(sender) = &sender else {
+                        return Err(Status::invalid_argument(
+                            "stdin stream chunk arrived before target metadata",
+                        ));
+                    };
+                    bytes_written += chunk.data.len() as u64;
+                    sender
+                        .send(chunk.data)
+                        .map_err(|_| Status::failed_precondition("job stdin is closed"))?;
+                }
+                None => {
                     return Err(Status::invalid_argument(
-                        "first stdin chunk must include a job_id",
+                        "stdin stream message is missing payload",
                     ));
                 }
-                sender = Some(
-                    self.state
-                        .job_stdin
-                        .lock()
-                        .expect("job stdin mutex poisoned")
-                        .get(&chunk.job_id)
-                        .cloned()
-                        .ok_or_else(|| {
-                            Status::not_found(format!("job `{}` has no open stdin", chunk.job_id))
-                        })?,
-                );
-                job_id = Some(chunk.job_id.clone());
-            } else if !chunk.job_id.is_empty() && Some(&chunk.job_id) != job_id.as_ref() {
-                return Err(Status::invalid_argument(
-                    "stdin stream cannot change job_id after the first chunk",
-                ));
-            }
-            if let Some(sender) = &sender {
-                bytes_written += chunk.data.len() as u64;
-                sender
-                    .send(chunk.data)
-                    .map_err(|_| Status::failed_precondition("job stdin is closed"))?;
             }
         }
         let Some(job_id) = job_id else {
             return Err(Status::invalid_argument(
-                "stdin stream did not include a job_id",
+                "stdin stream did not include target metadata",
             ));
         };
         Ok(GrpcResponse::new(
@@ -814,12 +866,16 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<ListServicesRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ServiceList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        Ok(GrpcResponse::new(
-            ServiceList {
-                services: self.state.policy.service.services.clone(),
-            }
-            .into(),
-        ))
+        let request = request.into_inner();
+        let (services, next_page_token) = paginate_items(
+            &self.state.policy.service.services,
+            request.page_size,
+            &request.page_token,
+        )?;
+        let mut response: operon_protocol::runtime::v1::ServiceList =
+            ServiceList { services }.into();
+        response.next_page_token = next_page_token;
+        Ok(GrpcResponse::new(response))
     }
 
     async fn check_service(
@@ -841,6 +897,7 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<ListAuditRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::AuditLog>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
+        let request = request.into_inner();
         let events = self
             .state
             .audit
@@ -848,9 +905,39 @@ impl OperonRuntime for GrpcRuntime {
             .expect("audit log mutex poisoned")
             .iter()
             .cloned()
-            .collect();
-        Ok(GrpcResponse::new(AuditLog { events }.into()))
+            .collect::<Vec<_>>();
+        let (events, next_page_token) =
+            paginate_items(&events, request.page_size, &request.page_token)?;
+        let mut response: operon_protocol::runtime::v1::AuditLog = AuditLog { events }.into();
+        response.next_page_token = next_page_token;
+        Ok(GrpcResponse::new(response))
     }
+}
+
+fn paginate_items<T: Clone>(
+    items: &[T],
+    page_size: u32,
+    page_token: &str,
+) -> Result<(Vec<T>, String), Status> {
+    let start = if page_token.is_empty() {
+        0
+    } else {
+        page_token
+            .parse::<usize>()
+            .map_err(|_| Status::invalid_argument("invalid page_token"))?
+    };
+    if start > items.len() {
+        return Err(Status::invalid_argument("page_token is out of range"));
+    }
+    if page_size == 0 {
+        return Ok((items[start..].to_vec(), String::new()));
+    }
+    let size = usize::min(page_size as usize, 1000);
+    let end = usize::min(start.saturating_add(size), items.len());
+    let next = (end < items.len())
+        .then(|| end.to_string())
+        .unwrap_or_default();
+    Ok((items[start..end].to_vec(), next))
 }
 
 fn authorize_grpc(state: &AppState, metadata: &MetadataMap) -> Result<RequestContext, Status> {
@@ -1956,6 +2043,41 @@ mod tests {
             job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_job_id: Arc::new(AtomicU64::new(1)),
         }
+    }
+
+    #[test]
+    fn pagination_returns_deterministic_pages() {
+        let items = vec![1, 2, 3, 4, 5];
+
+        let (first, first_token) = paginate_items(&items, 2, "").expect("first page");
+        assert_eq!(first, vec![1, 2]);
+        assert_eq!(first_token, "2");
+
+        let (second, second_token) = paginate_items(&items, 2, &first_token).expect("second page");
+        assert_eq!(second, vec![3, 4]);
+        assert_eq!(second_token, "4");
+
+        let (last, last_token) = paginate_items(&items, 2, &second_token).expect("last page");
+        assert_eq!(last, vec![5]);
+        assert!(last_token.is_empty());
+    }
+
+    #[test]
+    fn pagination_rejects_invalid_tokens() {
+        let items = vec![1, 2, 3];
+
+        assert_eq!(
+            paginate_items(&items, 2, "not-a-number")
+                .expect_err("invalid token")
+                .code(),
+            tonic::Code::InvalidArgument
+        );
+        assert_eq!(
+            paginate_items(&items, 2, "4")
+                .expect_err("out of range token")
+                .code(),
+            tonic::Code::InvalidArgument
+        );
     }
 
     #[test]

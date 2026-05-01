@@ -41,6 +41,12 @@ Unary calls:
 - `ListCapabilities`
 - `StatFs`
 - `ListFs`
+- `WriteFileRange`
+- `TruncateFs`
+- `MkdirFs`
+- `DeleteFs`
+- `RenameFs`
+- `CopyFs`
 - `RunJob`
 - `GetJob`
 - `ListJobs`
@@ -61,6 +67,16 @@ Client-streaming calls:
 
 - `WriteFile`
 - `WriteJobStdin`
+
+Runtime schema constraints:
+
+- enum-like fields are protobuf enums, not arbitrary strings.
+- optional timeout, exit code, reason, run id, and step id use proto3 optional
+  presence rather than paired `has_*` booleans.
+- `WriteFile` and `WriteJobStdin` use explicit target and chunk envelope
+  variants.
+- list calls accept `page_size` and `page_token`; responses expose
+  `next_page_token`.
 
 ## Service / Port Capability
 

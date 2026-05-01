@@ -34,13 +34,48 @@ message HealthRequest {}
 
 message GetNodeRequest {}
 
-message ListCapabilitiesRequest {}
+message ListCapabilitiesRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
 
-message ListJobsRequest {}
+message ListJobsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
 
-message ListServicesRequest {}
+message ListServicesRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
 
-message ListAuditRequest {}
+message ListAuditRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+enum CapabilityKind {
+  CAPABILITY_KIND_UNSPECIFIED = 0;
+  CAPABILITY_KIND_FS = 1;
+  CAPABILITY_KIND_PROCESS = 2;
+  CAPABILITY_KIND_JOB = 3;
+  CAPABILITY_KIND_DEVICE_INFO = 4;
+  CAPABILITY_KIND_SERVICE = 5;
+}
+
+enum JobStatus {
+  JOB_STATUS_UNSPECIFIED = 0;
+  JOB_STATUS_RUNNING = 1;
+  JOB_STATUS_SUCCEEDED = 2;
+  JOB_STATUS_FAILED = 3;
+  JOB_STATUS_CANCELLED = 4;
+  JOB_STATUS_TIMED_OUT = 5;
+}
+
+enum ServiceProtocol {
+  SERVICE_PROTOCOL_UNSPECIFIED = 0;
+  SERVICE_PROTOCOL_TCP = 1;
+}
 
 message HealthStatus {
   bool ok = 1;
@@ -57,7 +92,7 @@ message NodeInfo {
 
 message Capability {
   string id = 1;
-  string kind = 2;
+  CapabilityKind kind = 2;
   string node_id = 3;
   string name = 4;
   repeated string permissions = 5;
@@ -66,6 +101,7 @@ message Capability {
 
 message CapabilityList {
   repeated Capability capabilities = 1;
+  string next_page_token = 2;
 }
 
 message FsPathRequest {
@@ -97,8 +133,14 @@ message FileChunk {
 }
 
 message WriteFileRequest {
+  oneof payload {
+    WriteFileTarget target = 1;
+    FileChunk chunk = 2;
+  }
+}
+
+message WriteFileTarget {
   string path = 1;
-  bytes data = 2;
 }
 
 message FsWrite {
@@ -145,9 +187,10 @@ message FsCopy {
 message JobRunRequest {
   string command = 1;
   string cwd = 2;
-  uint64 timeout_secs = 3;
+  optional uint64 timeout_secs = 3;
   repeated string secrets = 4;
-  bool has_timeout_secs = 5;
+  reserved 5;
+  reserved "has_timeout_secs";
 }
 
 message JobIdRequest {
@@ -169,16 +212,18 @@ message JobRecord {
   string node_id = 2;
   string command = 3;
   string cwd = 4;
-  string status = 5;
-  int32 exit_code = 6;
+  JobStatus status = 5;
+  optional int32 exit_code = 6;
   reserved 7;
-  bool has_exit_code = 8;
+  reserved 8;
+  reserved "has_exit_code";
   uint64 log_count = 9;
   bool logs_truncated = 10;
 }
 
 message JobList {
   repeated JobRecord jobs = 1;
+  string next_page_token = 2;
 }
 
 message JobLogList {
@@ -190,16 +235,23 @@ message JobLogList {
 
 message JobEvent {
   string job_id = 1;
-  string status = 2;
-  int32 exit_code = 3;
-  bool has_exit_code = 4;
+  JobStatus status = 2;
+  optional int32 exit_code = 3;
+  reserved 4;
+  reserved "has_exit_code";
   uint64 log_count = 5;
   bool logs_truncated = 6;
 }
 
 message JobStdinRequest {
+  oneof payload {
+    JobStdinTarget target = 1;
+    FileChunk chunk = 2;
+  }
+}
+
+message JobStdinTarget {
   string job_id = 1;
-  bytes data = 2;
 }
 
 message JobStdin {
@@ -221,20 +273,22 @@ message ServiceDefinition {
   string name = 2;
   string host = 3;
   uint32 port = 4;
-  string protocol = 5;
+  ServiceProtocol protocol = 5;
   string description = 6;
 }
 
 message ServiceList {
   repeated ServiceDefinition services = 1;
+  string next_page_token = 2;
 }
 
 message ServiceCheck {
   string id = 1;
   bool ok = 2;
   uint64 latency_ms = 3;
-  string reason = 4;
-  bool has_reason = 5;
+  optional string reason = 4;
+  reserved 5;
+  reserved "has_reason";
 }
 
 message AuditEvent {
@@ -246,12 +300,13 @@ message AuditEvent {
   string resource = 6;
   bool allowed = 7;
   string reason = 8;
-  string run_id = 9;
-  string step_id = 10;
-  bool has_run_id = 11;
-  bool has_step_id = 12;
+  optional string run_id = 9;
+  optional string step_id = 10;
+  reserved 11, 12;
+  reserved "has_run_id", "has_step_id";
 }
 
 message AuditLog {
   repeated AuditEvent events = 1;
+  string next_page_token = 2;
 }

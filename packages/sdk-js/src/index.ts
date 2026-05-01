@@ -1,6 +1,8 @@
 import { createChannel, createClient, Metadata, type Channel, type CallOptions } from "nice-grpc";
 import {
+  JobStatus as GrpcJobStatus,
   OperonRuntimeDefinition,
+  ServiceProtocol as GrpcServiceProtocol,
   type FsList as GrpcFsList,
   type FsStat as GrpcFsStat,
   type FsWrite as GrpcFsWrite,
@@ -15,6 +17,8 @@ import {
   type ServiceCheck as GrpcServiceCheck,
   type ServiceList as GrpcServiceList,
 } from "./generated/operon/runtime";
+
+const DEFAULT_LIST_PAGE_SIZE = 1000;
 
 export type NetworkProvider =
   | "manual"
@@ -218,7 +222,17 @@ export class OperonClient {
 
   async listJobs(nodeId: string): Promise<JobList> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcJobList(await this.grpcClient(endpoint).listJobs({}, this.grpcOptions(endpoint)));
+    const jobs: JobRecord[] = [];
+    let pageToken = "";
+    do {
+      const page = await this.grpcClient(endpoint).listJobs(
+        { pageSize: DEFAULT_LIST_PAGE_SIZE, pageToken },
+        this.grpcOptions(endpoint),
+      );
+      jobs.push(...page.jobs.map(fromGrpcJobRecord));
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return { jobs };
   }
 
   async listJobLogs(nodeId: string, jobId: string): Promise<JobLogList> {
@@ -269,7 +283,17 @@ export class OperonClient {
 
   async listServices(nodeId: string): Promise<ServiceList> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcServiceList(await this.grpcClient(endpoint).listServices({}, this.grpcOptions(endpoint)));
+    const services: ServiceDefinition[] = [];
+    let pageToken = "";
+    do {
+      const page = await this.grpcClient(endpoint).listServices(
+        { pageSize: DEFAULT_LIST_PAGE_SIZE, pageToken },
+        this.grpcOptions(endpoint),
+      );
+      services.push(...page.services.map(fromGrpcServiceDefinition));
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return { services };
   }
 
   async checkService(nodeId: string, serviceId: string): Promise<ServiceCheck> {
@@ -400,8 +424,7 @@ export class OperonClient {
         {
           command: required(step.command, "command"),
           cwd: step.cwd ?? "",
-          timeoutSecs: String(step.timeoutSecs ?? 0),
-          hasTimeoutSecs: step.timeoutSecs !== undefined,
+          timeoutSecs: step.timeoutSecs === undefined ? undefined : String(step.timeoutSecs),
           secrets: step.secrets ?? [],
         },
         options,
@@ -524,28 +547,28 @@ async function streamToBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8A
   return concatChunks(chunks);
 }
 
-async function* grpcFileChunks(path: string, bytes: Uint8Array): AsyncIterable<{ path: string; data: Uint8Array }> {
+async function* grpcFileChunks(path: string, bytes: Uint8Array): AsyncIterable<{ target?: { path: string }; chunk?: { data: Uint8Array } }> {
+  yield { target: { path } };
   if (bytes.byteLength === 0) {
-    yield { path, data: new Uint8Array() };
+    yield { chunk: { data: new Uint8Array() } };
     return;
   }
   for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
     yield {
-      path: offset === 0 ? path : "",
-      data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)),
+      chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
     };
   }
 }
 
-async function* grpcStdinChunks(jobId: string, bytes: Uint8Array): AsyncIterable<{ jobId: string; data: Uint8Array }> {
+async function* grpcStdinChunks(jobId: string, bytes: Uint8Array): AsyncIterable<{ target?: { jobId: string }; chunk?: { data: Uint8Array } }> {
+  yield { target: { jobId } };
   if (bytes.byteLength === 0) {
-    yield { jobId, data: new Uint8Array() };
+    yield { chunk: { data: new Uint8Array() } };
     return;
   }
   for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
     yield {
-      jobId: offset === 0 ? jobId : "",
-      data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)),
+      chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
     };
   }
 }
@@ -585,8 +608,8 @@ function fromGrpcJobRecord(record: GrpcJobRecord): JobRecord {
     node_id: record.nodeId,
     command: record.command,
     cwd: record.cwd,
-    status: record.status as JobRecord["status"],
-    exit_code: record.hasExitCode ? record.exitCode : null,
+    status: fromGrpcJobStatus(record.status),
+    exit_code: record.exitCode ?? null,
     log_count: Number(record.logCount),
     logs_truncated: record.logsTruncated,
   };
@@ -612,8 +635,8 @@ function fromGrpcJobLogList(list: GrpcJobLogList): JobLogList {
 function fromGrpcJobEvent(event: GrpcJobEvent): JobEvent {
   return {
     job_id: event.jobId,
-    status: event.status as JobEvent["status"],
-    exit_code: event.hasExitCode ? event.exitCode : null,
+    status: fromGrpcJobStatus(event.status),
+    exit_code: event.exitCode ?? null,
     log_count: Number(event.logCount),
     logs_truncated: event.logsTruncated,
   };
@@ -647,14 +670,18 @@ function fromGrpcJobStdinClose(result: GrpcJobStdinClose): JobStdinCloseResult {
 
 function fromGrpcServiceList(list: GrpcServiceList): ServiceList {
   return {
-    services: list.services.map((service) => ({
-      id: service.id,
-      name: service.name,
-      host: service.host,
-      port: service.port,
-      protocol: service.protocol as "tcp",
-      description: service.description,
-    })),
+    services: list.services.map(fromGrpcServiceDefinition),
+  };
+}
+
+function fromGrpcServiceDefinition(service: GrpcServiceList["services"][number]): ServiceDefinition {
+  return {
+    id: service.id,
+    name: service.name,
+    host: service.host,
+    port: service.port,
+    protocol: fromGrpcServiceProtocol(service.protocol),
+    description: service.description,
   };
 }
 
@@ -663,8 +690,34 @@ function fromGrpcServiceCheck(check: GrpcServiceCheck): ServiceCheck {
     id: check.id,
     ok: check.ok,
     latency_ms: Number(check.latencyMs),
-    reason: check.hasReason ? check.reason : null,
+    reason: check.reason ?? null,
   };
+}
+
+function fromGrpcJobStatus(status: GrpcJobStatus): JobRecord["status"] {
+  switch (status) {
+    case GrpcJobStatus.JOB_STATUS_RUNNING:
+      return "running";
+    case GrpcJobStatus.JOB_STATUS_SUCCEEDED:
+      return "succeeded";
+    case GrpcJobStatus.JOB_STATUS_FAILED:
+      return "failed";
+    case GrpcJobStatus.JOB_STATUS_CANCELLED:
+      return "cancelled";
+    case GrpcJobStatus.JOB_STATUS_TIMED_OUT:
+      return "timed-out";
+    default:
+      throw new Error(`unknown job status ${status}`);
+  }
+}
+
+function fromGrpcServiceProtocol(protocol: GrpcServiceProtocol): ServiceDefinition["protocol"] {
+  switch (protocol) {
+    case GrpcServiceProtocol.SERVICE_PROTOCOL_TCP:
+      return "tcp";
+    default:
+      throw new Error(`unknown service protocol ${protocol}`);
+  }
 }
 
 export type { OperonRuntimeClient };
