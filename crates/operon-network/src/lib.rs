@@ -56,6 +56,7 @@ pub struct NodeConfig {
     pub endpoint: String,
     #[serde(default = "default_provider")]
     pub provider: NetworkProviderKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
 }
 
@@ -171,5 +172,22 @@ nodes:
 
         let endpoint = config.endpoint("local").expect("local endpoint");
         assert_eq!(endpoint.token.as_deref(), Some("test-token"));
+    }
+
+    #[test]
+    fn omits_empty_token_when_serializing() {
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
+            "local".to_string(),
+            NodeConfig {
+                endpoint: "grpc://127.0.0.1:7789".to_string(),
+                provider: NetworkProviderKind::Manual,
+                token: None,
+            },
+        );
+
+        let yaml = serde_yaml::to_string(&NodesConfig { nodes }).expect("config should serialize");
+
+        assert!(!yaml.contains("token:"));
     }
 }

@@ -78,6 +78,7 @@ scripts/verify-v0.6-linux-mount.sh
 scripts/verify-v0.6.1-linux-write-mount.sh
 scripts/verify-v0.6.2-cli-fs-cleanup.sh
 scripts/verify-v0.6.3-fs-copy.sh
+scripts/verify-v0.6.4-onboard.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -87,6 +88,8 @@ The v0.6.2 CLI fs cleanup validation checks direct CLI mutation commands for
 mkdir, truncate, rename, rm, denied mutations, and audit.
 The v0.6.3 fs copy validation checks same-node daemon-side copy, denied copy,
 and audit.
+The v0.6.4 onboard validation checks generated config, generated policy, token
+auth, daemon startup, CLI ping, capability inspection, fs operation, and audit.
 
 ## Draft Releases
 
@@ -124,6 +127,42 @@ After installing built binaries, the same commands are:
 operond start --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
 operon --config examples/nodes.yaml node list
 ```
+
+### Onboarding
+
+`operon onboard` is a guided first-run setup helper. It does not replace the
+command-style configuration commands; it writes ordinary files that can be
+edited, committed, or regenerated through `operon init config`, `operon init
+policy`, and `operon node discover --provider lan`.
+
+```bash
+operon onboard
+```
+
+For reproducible setup, use non-interactive mode:
+
+```bash
+operon onboard \
+  --yes \
+  --role both \
+  --output-dir .operon \
+  --node-id local \
+  --workspace /workspace \
+  --listen 0.0.0.0:7789
+```
+
+This writes:
+
+```text
+.operon/nodes.yaml
+.operon/policy.yaml
+.operon/token
+.operon/daemon-command.txt
+```
+
+The generated files are normal Operon config files. `onboard` also prints the
+equivalent CLI setup commands so automation can keep using the explicit command
+surface.
 
 ### Node Config
 
@@ -350,6 +389,7 @@ scripts/verify-v0.6-linux-mount.sh
 scripts/verify-v0.6.1-linux-write-mount.sh
 scripts/verify-v0.6.2-cli-fs-cleanup.sh
 scripts/verify-v0.6.3-fs-copy.sh
+scripts/verify-v0.6.4-onboard.sh
 ```
 
 Example workflow:

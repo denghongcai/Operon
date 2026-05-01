@@ -17,6 +17,7 @@ use operon_network::{NetworkProviderKind, NodesConfig};
 
 mod graph;
 mod grpc;
+mod onboard;
 
 const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
@@ -46,6 +47,7 @@ enum Command {
         #[command(subcommand)]
         command: InitCommand,
     },
+    Onboard(onboard::OnboardArgs),
     Provider {
         #[command(subcommand)]
         command: ProviderCommand,
@@ -246,7 +248,7 @@ enum TraceCommand {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct OutputMode {
+pub(crate) struct OutputMode {
     json: bool,
     quiet: bool,
 }
@@ -298,6 +300,7 @@ fn main() -> anyhow::Result<()> {
             InitCommand::Config { path } => init_config(path, output),
             InitCommand::Policy { path } => init_policy(path, output),
         },
+        Command::Onboard(args) => onboard::run(args, output),
         Command::Provider { command } => match command {
             ProviderCommand::List => list_providers(output),
         },
@@ -1334,7 +1337,7 @@ fn format_service_protocol(protocol: &ServiceProtocol) -> &'static str {
     }
 }
 
-fn print_json(value: &impl serde::Serialize) -> anyhow::Result<()> {
+pub(crate) fn print_json(value: &impl serde::Serialize) -> anyhow::Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
 }

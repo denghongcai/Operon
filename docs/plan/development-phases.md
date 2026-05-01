@@ -1803,6 +1803,80 @@ Remaining:
 
 - None for v0.6.3.
 
+## v0.6.4 Cleanup Goal
+
+Operon v0.6.4 should make first-run configuration faster without replacing the
+scriptable CLI setup commands.
+
+```text
+v0.6.4 = onboard as a guided wrapper over existing setup primitives.
+```
+
+`operon onboard` must generate normal Operon files and show the equivalent CLI
+commands. `init config`, `init policy`, `node discover --provider lan`, and
+other command-style configuration paths remain the stable automation surface.
+
+## Phase 32.8: Onboard Command
+
+Status: Completed.
+
+Goal: add a guided setup entrypoint for daemon/client first-run configuration.
+
+Planned:
+
+- add `operon onboard`.
+- support daemon, client, and combined setup roles.
+- generate `nodes.yaml`, `policy.yaml`, `token`, and daemon start command
+  files under a chosen output directory.
+- support optional LAN discovery as an onboarding input.
+- support coarse capability preauthorization for generated policy files.
+- print equivalent command-style CLI operations.
+- do not add onboard-only config formats or remote policy mutation.
+
+Done when:
+
+- onboard output can be inspected and edited as ordinary Operon config.
+- command-style setup remains available for scripts and CI.
+- generated daemon/client config can run a local validation flow.
+
+Completed:
+
+- Added `operon onboard` with daemon, client, and combined roles.
+- Added non-interactive `--yes` mode for reproducible setup generation.
+- Generated ordinary `nodes.yaml`, `policy.yaml`, `token`, and
+  `daemon-command.txt` files.
+- Added optional LAN discovery input for client node config generation.
+- Added coarse capability grant selection for generated policy files.
+- Printed equivalent CLI setup commands after onboarding.
+
+## Phase 32.9: v0.6.4 Acceptance
+
+Status: Completed.
+
+Goal: make onboarding reproducible before starting v0.7.
+
+Planned:
+
+- `docs/plan/v0.6.4-onboard-acceptance.md`.
+- validation script for generated config, daemon startup, CLI ping,
+  capability inspection, fs operation, and audit inspection.
+- README, AGENTS, and CI updates.
+
+Done when:
+
+- validation covers generated config files and a live daemon flow.
+- docs state that onboard is a convenience wrapper, not a second config system.
+
+Completed:
+
+- Added `docs/plan/v0.6.4-onboard-acceptance.md`.
+- Added `scripts/verify-v0.6.4-onboard.sh`.
+- Updated README, AGENTS, and CI for v0.6.4.
+
+Remaining:
+
+- None for v0.6.4.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.
