@@ -355,6 +355,28 @@ pub async fn stream_job_logs_to_writer(
     .await
 }
 
+pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobLogList> {
+    let job_id = job_id.to_string();
+    call(endpoint, |mut client, endpoint| async move {
+        let response_job_id = job_id.clone();
+        let mut stream = client
+            .stream_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .await?
+            .into_inner();
+        let mut logs = Vec::new();
+        while let Some(log) = stream.message().await? {
+            logs.push(log.into());
+        }
+        Ok(JobLogList {
+            job_id: response_job_id,
+            logs,
+            truncated: false,
+            dropped_log_count: 0,
+        })
+    })
+    .await
+}
+
 pub async fn write_job_stdin_bytes(
     endpoint: &NodeEndpoint,
     job_id: &str,

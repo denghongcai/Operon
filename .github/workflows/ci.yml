@@ -88,6 +88,8 @@ jobs:
             script: scripts/verify-v0.6.4-onboard.sh
           - name: v0.6.7/v0.6.8 Runtime and Protocol Validation
             script: scripts/verify-v0.6.7-runtime.sh
+          - name: v0.6.9 CLI Contract Validation
+            script: scripts/verify-v0.6.9-cli-contract.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

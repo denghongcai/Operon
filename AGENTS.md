@@ -80,6 +80,10 @@ Operon should not own:
   - v0.6.8 final release cleanup scope for runtime retention, CI validation,
     config docs, and protocol version alignment.
 
+- `docs/plan/v0.6.9-cli-contract-cleanup.md`
+  - v0.6.9 cleanup scope for CLI script contracts, job failure exits, JSON and
+    quiet output behavior, health version reporting, and starter config files.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 

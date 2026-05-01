@@ -2509,6 +2509,47 @@ Completed:
   `docs/plan/v0.6.8-release-cleanup.md`.
 - Updated `PROTOCOL_VERSION` to `v0.6.8`.
 
+## Phase 32.30: v0.6.9 CLI Contract Cleanup
+
+Status: Completed.
+
+Goal: make the CLI reliable as the supported human, ops, and script interface.
+
+Planned:
+
+- make non-detached `operon --json job run` emit one valid JSON document.
+- make non-detached `operon job run` return non-zero for failed, cancelled, or
+  timed-out remote jobs.
+- make `operon job logs` honor global `--json` and `--quiet`.
+- apply `audit show` filters consistently in JSON and text output.
+- align daemon health version reporting with the public protocol/release line.
+- make `operon init config` generate the referenced starter token and secrets
+  files.
+- add CLI contract smoke validation to CI.
+
+Done when:
+
+- CLI script output is valid JSON where `--json` is requested.
+- quiet mode suppresses log output without bypassing command errors.
+- job failures are visible to shell scripts through process exit status.
+- starter config files can launch `operond start` without missing-file errors.
+- CI runs `scripts/verify-v0.6.9-cli-contract.sh`.
+
+Completed:
+
+- Added `docs/plan/v0.6.9-cli-contract-cleanup.md`.
+- Changed non-detached `operon --json job run` to emit only the terminal job
+  record.
+- Made non-detached `operon job run` return a non-zero CLI error when the
+  remote job fails, is cancelled, or times out.
+- Made `operon job logs` honor `--json` and `--quiet`.
+- Applied `audit show` filters before both JSON and text rendering.
+- Updated daemon health to report `PROTOCOL_VERSION`.
+- Made `operon init config` generate referenced starter `token` and
+  `secrets.yaml` files.
+- Added unit tests and `scripts/verify-v0.6.9-cli-contract.sh`, and wired the
+  script into CI.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

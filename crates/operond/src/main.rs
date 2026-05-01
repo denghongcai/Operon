@@ -248,7 +248,7 @@ impl OperonRuntime for GrpcRuntime {
             HealthStatus {
                 ok: true,
                 node_id: self.state.node.id.clone(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
+                version: operon_protocol::PROTOCOL_VERSION.to_string(),
             }
             .into(),
         ))

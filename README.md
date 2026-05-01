@@ -125,6 +125,7 @@ scripts/verify-v0.6.2-cli-fs-cleanup.sh
 scripts/verify-v0.6.3-fs-copy.sh
 scripts/verify-v0.6.4-onboard.sh
 scripts/verify-v0.6.7-runtime.sh
+scripts/verify-v0.6.9-cli-contract.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -133,7 +134,10 @@ truncate, delete, rename, denied write/delete/rename audit, and cleanup.
 The v0.6.2 CLI fs cleanup validation checks direct CLI mutation commands for
 mkdir, truncate, rename, rm, denied mutations, and audit.
 The v0.6.3 fs copy validation checks same-node daemon-side copy, denied copy,
-and audit.
+and CLI/SDK/protocol copy behavior.
+The v0.6.9 CLI contract validation checks script-facing JSON output, quiet
+output, job failure exit status, audit JSON filters, health version reporting,
+and starter config file generation.
 The v0.6.4 onboard validation checks generated unified config, token auth,
 daemon startup, CLI ping, capability inspection, fs operation, and audit.
 The v0.6.7/v0.6.8 runtime validation checks process-group cancellation,

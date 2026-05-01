@@ -1,16 +1,21 @@
 use std::{
     collections::BTreeMap,
-    fs,
+    fmt::Write as _,
+    fs::{self, OpenOptions},
+    io::Write as _,
     path::{Path, PathBuf},
     time::Duration,
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use clap::{Parser, Subcommand};
 use operon_config::{NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
     AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, FsList, FsRead, FsWrite, HealthStatus,
-    JobList, JobRecord, JobRunRequest, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
-    ServiceList, ServiceProtocol, TraceFile, TraceFileList,
+    JobList, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo,
+    ServiceCheck, ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
 
 mod graph;
@@ -268,6 +273,13 @@ struct AuditFilter {
     resource: Option<String>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct InitConfigSummary {
+    config: String,
+    token: String,
+    secrets: String,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -382,7 +394,7 @@ async fn main() -> anyhow::Result<()> {
                 job_id,
                 follow,
                 stream,
-            } => job_logs(config_path, &node_id, &job_id, follow, stream).await,
+            } => job_logs(config_path, &node_id, &job_id, follow, stream, output).await,
             JobCommand::Stdin {
                 node_id,
                 job_id,
@@ -761,7 +773,7 @@ async fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> 
         print_json(&audit)?;
         return Ok(());
     }
-    print_audit(audit, AuditFilter::default(), output)
+    print_audit(audit, output)
 }
 
 async fn audit_show(
@@ -772,17 +784,15 @@ async fn audit_show(
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     let audit: AuditLog = grpc::list_audit(&endpoint).await?;
+    let audit = filter_audit(audit, &filter);
     if output.json {
         print_json(&audit)?;
         return Ok(());
     }
-    print_audit(audit, filter, output)
+    print_audit(audit, output)
 }
 
-fn print_audit(audit: AuditLog, filter: AuditFilter, output: OutputMode) -> anyhow::Result<()> {
-    if output.quiet {
-        return Ok(());
-    }
+fn filter_audit(audit: AuditLog, filter: &AuditFilter) -> AuditLog {
     let mut events = audit
         .events
         .into_iter()
@@ -807,7 +817,14 @@ fn print_audit(audit: AuditLog, filter: AuditFilter, output: OutputMode) -> anyh
     if let Some(limit) = filter.limit {
         events = events.into_iter().rev().take(limit).collect::<Vec<_>>();
     }
-    for event in events {
+    AuditLog { events }
+}
+
+fn print_audit(audit: AuditLog, output: OutputMode) -> anyhow::Result<()> {
+    if output.quiet {
+        return Ok(());
+    }
+    for event in audit.events {
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             event.subject,
@@ -887,17 +904,26 @@ async fn job_run(input: JobRunInput) -> anyhow::Result<()> {
         secrets: input.secrets,
     };
     let record: JobRecord = grpc::run_job(&endpoint, request).await?;
-    if input.output.json {
-        print_json(&record)?;
-    } else if !input.output.quiet {
-        println!(
-            "{} {} {:?} {}",
-            record.node_id, record.id, record.status, record.command
-        );
+    if input.detach {
+        if input.output.json {
+            print_json(&record)?;
+        } else if !input.output.quiet {
+            println!(
+                "{} {} {:?} {}",
+                record.node_id, record.id, record.status, record.command
+            );
+        }
     }
 
     if !input.detach {
-        wait_for_job(input.config_path, &input.node_id, &record.id, input.output).await?;
+        let record = wait_for_job(&endpoint, &record.id).await?;
+        if input.output.json {
+            print_json(&record)?;
+        } else if !input.output.quiet {
+            print_job_status(&record);
+            print_job_logs(&endpoint, &record.id).await?;
+        }
+        ensure_job_succeeded(&record)?;
     }
 
     Ok(())
@@ -992,15 +1018,30 @@ async fn job_logs(
     job_id: &str,
     follow: bool,
     stream: bool,
+    output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
+    if output.json {
+        let logs: JobLogList = if stream || follow {
+            grpc::stream_job_logs(&endpoint, job_id).await?
+        } else {
+            grpc::list_job_logs(&endpoint, job_id).await?
+        };
+        print_json(&logs)?;
+        return Ok(());
+    }
     if stream || follow {
+        if output.quiet {
+            return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::sink()).await;
+        }
         return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::stdout()).await;
     }
     let logs = grpc::list_job_logs(&endpoint, job_id).await?;
+    if output.quiet {
+        return Ok(());
+    }
     let mut stdout = std::io::stdout();
     for log in logs.logs {
-        use std::io::Write;
         stdout.write_all(&log.data)?;
     }
     Ok(())
@@ -1064,25 +1105,41 @@ async fn job_cancel(
 }
 
 async fn wait_for_job(
-    config_path: PathBuf,
-    node_id: &str,
+    endpoint: &operon_network::NodeEndpoint,
     job_id: &str,
-    output: OutputMode,
+) -> anyhow::Result<JobRecord> {
+    let _ = grpc::watch_job_to_terminal(endpoint, job_id).await?;
+    grpc::get_job(endpoint, job_id).await
+}
+
+async fn print_job_logs(
+    endpoint: &operon_network::NodeEndpoint,
+    job_id: &str,
 ) -> anyhow::Result<()> {
-    let endpoint = load_endpoint(config_path, node_id)?;
-    let _ = grpc::watch_job_to_terminal(&endpoint, job_id).await?;
-    let record = grpc::get_job(&endpoint, job_id).await?;
-    if output.json {
-        print_json(&record)?;
-    } else if !output.quiet {
-        print_job_status(&record);
-        let mut stdout = std::io::stdout();
-        for log in grpc::list_job_logs(&endpoint, job_id).await?.logs {
-            use std::io::Write;
-            stdout.write_all(&log.data)?;
-        }
+    let mut stdout = std::io::stdout();
+    for log in grpc::list_job_logs(endpoint, job_id).await?.logs {
+        stdout.write_all(&log.data)?;
     }
     Ok(())
+}
+
+fn ensure_job_succeeded(record: &JobRecord) -> anyhow::Result<()> {
+    match record.status {
+        JobStatus::Succeeded => Ok(()),
+        JobStatus::Running => anyhow::bail!("job {} is still running", record.id),
+        JobStatus::Failed | JobStatus::Cancelled | JobStatus::TimedOut => {
+            let exit_code = record
+                .exit_code
+                .map(|code| code.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            anyhow::bail!(
+                "job {} ended with status {:?} exit_code={}",
+                record.id,
+                record.status,
+                exit_code
+            )
+        }
+    }
 }
 
 fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
@@ -1140,6 +1197,10 @@ fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
 }
 
 fn init_config(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
+    let config_dir = OperonConfig::config_dir(&path);
+    fs::create_dir_all(&config_dir)?;
+    let token_path = config_dir.join("token");
+    let secrets_path = config_dir.join("secrets.yaml");
     let content = r#"version: 1
 
 daemon:
@@ -1190,10 +1251,64 @@ secrets:
   file: secrets.yaml
 "#;
     fs::write(&path, content)?;
+    write_private_file(&token_path, &format!("{}\n", generate_token()?))?;
+    write_private_file(&secrets_path, "{}\n")?;
+    if output.json {
+        print_json(&InitConfigSummary {
+            config: path.display().to_string(),
+            token: token_path.display().to_string(),
+            secrets: secrets_path.display().to_string(),
+        })?;
+        return Ok(());
+    }
     if !output.quiet {
         println!("{}", path.display());
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn write_private_file(path: &Path, content: &str) -> anyhow::Result<()> {
+    if path.exists() {
+        let metadata = fs::symlink_metadata(path)?;
+        anyhow::ensure!(
+            !metadata.file_type().is_symlink(),
+            "refusing to write private file {} because it is a symlink",
+            path.display()
+        );
+        let mode = metadata.permissions().mode() & 0o777;
+        anyhow::ensure!(
+            mode & 0o077 == 0,
+            "refusing to write private file {} with permissions {:03o}; set permissions to 600 first",
+            path.display(),
+            mode
+        );
+    }
+    let mut handle = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .open(path)?;
+    handle.write_all(content.as_bytes())?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_private_file(path: &Path, content: &str) -> anyhow::Result<()> {
+    fs::write(path, content)?;
+    Ok(())
+}
+
+fn generate_token() -> anyhow::Result<String> {
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes)?;
+    let mut token = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut token, "{byte:02x}").expect("writing to String should not fail");
+    }
+    Ok(token)
 }
 
 fn discover_nodes(
@@ -1377,5 +1492,126 @@ mod tests {
         ]);
 
         assert_eq!(command, "printf 'hello world' 'it'\\''s ok'");
+    }
+
+    #[test]
+    fn failed_terminal_job_returns_cli_error() {
+        let record = test_job_record(JobStatus::Failed, Some(1));
+
+        let error = ensure_job_succeeded(&record).expect_err("failed job should error");
+
+        assert!(error.to_string().contains("ended with status Failed"));
+    }
+
+    #[test]
+    fn succeeded_terminal_job_is_ok() {
+        let record = test_job_record(JobStatus::Succeeded, Some(0));
+
+        ensure_job_succeeded(&record).expect("succeeded job should be ok");
+    }
+
+    #[test]
+    fn audit_filter_applies_to_json_and_text_inputs() {
+        let audit = AuditLog {
+            events: vec![
+                test_audit_event("fs:workspace", "stat", true, "/a"),
+                test_audit_event("job:default", "run", true, "/"),
+                test_audit_event("fs:workspace", "read", false, "/secret"),
+            ],
+        };
+        let filter = AuditFilter {
+            limit: Some(1),
+            capability: Some("fs:workspace".to_string()),
+            action: None,
+            allowed: Some(false),
+            resource: Some("secret".to_string()),
+        };
+
+        let filtered = filter_audit(audit, &filter);
+
+        assert_eq!(filtered.events.len(), 1);
+        assert_eq!(filtered.events[0].action, "read");
+    }
+
+    #[test]
+    fn init_config_writes_referenced_starter_files() {
+        let base = unique_temp_dir("operon-init-config-test");
+        let config_path = base.join("config.yaml");
+
+        init_config(
+            config_path.clone(),
+            OutputMode {
+                json: false,
+                quiet: true,
+            },
+        )
+        .expect("init config");
+
+        let config = OperonConfig::load(&config_path).expect("config should load");
+        let config_dir = OperonConfig::config_dir(&config_path);
+        let token = config
+            .daemon
+            .as_ref()
+            .expect("daemon")
+            .auth
+            .resolve(&config_dir)
+            .expect("daemon token")
+            .expect("daemon token value");
+        let endpoint = config
+            .endpoint("local", &config_dir)
+            .expect("client endpoint");
+        let secrets: BTreeMap<String, String> =
+            serde_yaml::from_str(&fs::read_to_string(base.join("secrets.yaml")).expect("secrets"))
+                .expect("secrets yaml");
+
+        assert_eq!(token.len(), 64);
+        assert_eq!(endpoint.token.as_deref(), Some(token.as_str()));
+        assert!(secrets.is_empty());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    fn test_job_record(status: JobStatus, exit_code: Option<i32>) -> JobRecord {
+        JobRecord {
+            id: "job-1".to_string(),
+            node_id: "local".to_string(),
+            command: "false".to_string(),
+            cwd: "/".to_string(),
+            status,
+            exit_code,
+            log_count: 0,
+            logs_truncated: false,
+        }
+    }
+
+    fn test_audit_event(
+        capability: &str,
+        action: &str,
+        allowed: bool,
+        resource: &str,
+    ) -> operon_core::AuditEvent {
+        operon_core::AuditEvent {
+            subject: "local-cli".to_string(),
+            timestamp_ms: 1,
+            node_id: "local".to_string(),
+            capability: capability.to_string(),
+            action: action.to_string(),
+            resource: resource.to_string(),
+            allowed,
+            reason: "-".to_string(),
+            run_id: None,
+            step_id: None,
+        }
+    }
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "{}-{}-{}",
+            name,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ))
     }
 }
