@@ -80,8 +80,9 @@ enum Command {
         command: TraceCommand,
     },
     Mount {
-        #[command(subcommand)]
-        command: MountCommand,
+        target: String,
+        #[arg(long)]
+        to: PathBuf,
     },
 }
 
@@ -222,15 +223,6 @@ enum TraceCommand {
     List {
         #[arg(default_value = ".")]
         dir: PathBuf,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum MountCommand {
-    ReadOnly {
-        target: String,
-        #[arg(long)]
-        to: PathBuf,
     },
 }
 
@@ -380,11 +372,7 @@ fn main() -> anyhow::Result<()> {
             TraceCommand::Show { path } => trace_show(path, output),
             TraceCommand::List { dir } => trace_list(dir, output),
         },
-        Command::Mount { command } => match command {
-            MountCommand::ReadOnly { target, to } => {
-                mount_read_only(args.config, &target, to, output)
-            }
-        },
+        Command::Mount { target, to } => mount_read_only(args.config, &target, to, output),
     }
 }
 
@@ -647,18 +635,18 @@ fn print_audit(audit: AuditLog, filter: AuditFilter, output: OutputMode) -> anyh
             filter
                 .capability
                 .as_ref()
-                .map_or(true, |capability| &event.capability == capability)
+                .is_none_or(|capability| &event.capability == capability)
                 && filter
                     .action
                     .as_ref()
-                    .map_or(true, |action| &event.action == action)
+                    .is_none_or(|action| &event.action == action)
                 && filter
                     .allowed
-                    .map_or(true, |allowed| event.allowed == allowed)
+                    .is_none_or(|allowed| event.allowed == allowed)
                 && filter
                     .resource
                     .as_ref()
-                    .map_or(true, |resource| event.resource.contains(resource))
+                    .is_none_or(|resource| event.resource.contains(resource))
         })
         .collect::<Vec<_>>();
     if let Some(limit) = filter.limit {
@@ -1140,55 +1128,33 @@ fn mount_read_only(
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
-    fs::create_dir_all(&destination)?;
-    materialize_read_only(config_path, &target.node_id, &target.path, &destination)?;
+    let endpoint = load_endpoint(config_path, &target.node_id)?;
+    let mount = operon_mount::spawn_read_only_mount(operon_mount::ReadOnlyMountOptions {
+        endpoint,
+        remote_path: target.path.clone(),
+        mount_point: destination.clone(),
+    })?;
     let manifest = serde_json::json!({
-        "mode": "read-only-poc",
+        "mode": "read-only-live-fuse",
         "node_id": target.node_id,
         "path": target.path,
         "destination": destination,
-        "cache": "one-shot materialized copy",
-        "consistency": "no live sync",
+        "cache": "kernel page cache only",
+        "consistency": "live reads through Operon fs gRPC; metadata cached for one second",
+        "write": "unsupported in v0.6",
     });
-    fs::write(
-        destination.join(".operon-mount.json"),
-        serde_json::to_string_pretty(&manifest)?,
-    )?;
     if output.json {
         print_json(&manifest)?;
     } else if !output.quiet {
-        println!("{}", destination.display());
+        println!(
+            "mounted {}:{} at {}",
+            manifest["node_id"].as_str().unwrap_or_default(),
+            manifest["path"].as_str().unwrap_or_default(),
+            manifest["destination"].as_str().unwrap_or_default()
+        );
+        println!("press Ctrl-C to unmount");
     }
-    Ok(())
-}
-
-fn materialize_read_only(
-    config_path: PathBuf,
-    node_id: &str,
-    remote_path: &str,
-    local_path: &Path,
-) -> anyhow::Result<()> {
-    let endpoint = load_endpoint(config_path.clone(), node_id)?;
-    let list: FsList = grpc::fs_list(&endpoint, remote_path)?;
-    for entry in list.entries {
-        let child_path = local_path.join(entry.name);
-        if entry.is_dir {
-            fs::create_dir_all(&child_path)?;
-            materialize_read_only(config_path.clone(), node_id, &entry.path, &child_path)?;
-        } else {
-            let mut file = fs::File::create(&child_path)?;
-            grpc::read_file_to_writer(&endpoint, &entry.path, &mut file)?;
-            set_readonly(&child_path)?;
-        }
-    }
-    Ok(())
-}
-
-fn set_readonly(path: &Path) -> anyhow::Result<()> {
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_readonly(true);
-    fs::set_permissions(path, permissions)?;
-    Ok(())
+    mount.wait_for_shutdown()
 }
 
 pub(crate) fn load_job(

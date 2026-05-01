@@ -52,6 +52,7 @@ This is a change from the initial TypeScript-first prototype idea. TypeScript re
 Recommended Rust crates:
 
 ```text
+minimum Rust: 1.85
 async runtime: tokio
 gRPC: tonic
 protobuf: prost
@@ -62,6 +63,7 @@ logging/tracing: tracing
 TLS: rustls
 identity: ed25519-dalek
 filesystem watch: notify
+Linux FUSE mount: fuser
 process: tokio::process, portable-pty later
 storage: rusqlite or sqlx sqlite
 ```
@@ -331,22 +333,26 @@ QUIC, NAT traversal, and relay work should not be part of Operon's core roadmap 
 Recommended progression:
 
 ```text
-v0.1:
+v0.5:
   gRPC core protocol
   operon CLI control surface
   filesystem and process capability streams
   manual node endpoint config
 
-v0.2:
-  network provider adapters
-  stronger auth metadata
-  signed node identity
-  execution trace persistence
+v0.6:
+  Linux read-only FUSE mount adapter
 
-v0.3:
-  provider API discovery
-  service / port access capability
-  Linux FUSE mount adapter
+v0.6.1:
+  Linux write FUSE mount adapter
+
+v0.7:
+  CLI TUI console
+
+v0.8:
+  agent tool integration
+
+v0.9:
+  non-LAN provider API discovery
 ```
 
 ## Non-goals for v0.1

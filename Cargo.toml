@@ -16,12 +16,14 @@ resolver = "2"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/operon/operon"
-rust-version = "1.80"
+rust-version = "1.85"
 
 [workspace.dependencies]
 anyhow = "1"
 async-stream = "0.3"
 clap = { version = "4", features = ["derive"] }
+ctrlc = { version = "3.5.2", features = ["termination"] }
+fuser = "0.17.0"
 futures-util = "0.3"
 mdns-sd = "0.19.1"
 prost = "0.14.3"

@@ -1413,18 +1413,19 @@ Remaining:
 ## v0.6 Goal
 
 Operon v0.6 should turn the read-only mount proof of concept into a real Linux
-mount adapter.
+read-only mount adapter.
 
 ```text
-v0.6 = Linux FUSE mount over the Operon fs protocol.
+v0.6 = Linux read-only FUSE mount over the Operon fs protocol.
 ```
 
-v0.6 only targets Linux. WinFsp, macOS mount support, offline sync, distributed
-cache invalidation, and multi-writer conflict resolution remain out of scope.
+v0.6 only targets Linux and read-only behavior. WinFsp, macOS mount support,
+write support, offline sync, distributed cache invalidation, and multi-writer
+conflict resolution remain out of scope.
 
 ## Phase 29: Linux Mount Contract
 
-Status: Planned.
+Status: Completed.
 
 Goal: define the mount semantics before implementing FUSE behavior.
 
@@ -1437,6 +1438,15 @@ Planned:
 - keep FUSE as an adapter over the fs protocol, not as a separate capability
   model.
 
+Completed:
+
+- Decided v0.6 is read-only live FUSE mount.
+- Documented absolute remote path normalization, `..` rejection, child-name
+  validation, one-second metadata TTL, and read-only permission exposure in
+  `docs/plan/v0.6-acceptance.md`.
+- Kept write mount behavior out of v0.6 and added v0.6.1 as the dedicated write
+  mount phase.
+
 Done when:
 
 - mount behavior is documented in `docs/plan/v0.6-acceptance.md`.
@@ -1445,17 +1455,27 @@ Done when:
 
 ## Phase 30: Linux FUSE Adapter
 
-Status: Planned.
+Status: Completed.
 
 Goal: implement a real Linux mount path in `operon-mount`.
 
 Planned:
 
-- add Linux-only FUSE dependencies behind a feature or target gate.
+- add Linux-only FUSE dependencies.
 - implement lookup, getattr, readdir, open, read, and release.
-- add write operations only if Phase 29 explicitly keeps write support in scope.
+- keep write operations out of v0.6.
 - route all remote fs operations through existing policy-enforced daemon APIs.
 - record audit events through the remote node for mounted operations.
+
+Completed:
+
+- Added `fuser` and implemented a read-only FUSE adapter in `operon-mount`.
+- Implemented inode mapping, lookup, getattr, readdir, read-only open, ranged
+  reads over the gRPC `ReadFile` stream, and release.
+- Routed stat/list/read through the existing gRPC runtime API so policy and audit
+  remain daemon-owned.
+- Moved the workspace Rust baseline to 1.85 to use the current pure-Rust fuser
+  release.
 
 Done when:
 
@@ -1466,7 +1486,7 @@ Done when:
 
 ## Phase 31: Mount CLI UX and Validation
 
-Status: Planned.
+Status: Completed.
 
 Goal: make Linux mount usable and testable from the CLI.
 
@@ -1477,6 +1497,14 @@ Planned:
 - add a Docker or Linux-only validation path for mount behavior.
 - document host requirements such as `/dev/fuse` and privileges.
 
+Completed:
+
+- Replaced the v0.3 `mount read-only` one-shot materialization CLI with
+  `operon mount <node:/path> --to <dir>`.
+- The command starts a foreground FUSE session and unmounts on Ctrl-C.
+- Added `scripts/verify-v0.6-linux-mount.sh` with host requirement checks.
+- Updated README with the live mount command and read-only limitations.
+
 Done when:
 
 - mount validation runs on Linux developer machines.
@@ -1485,7 +1513,7 @@ Done when:
 
 ## Phase 32: v0.6 Acceptance
 
-Status: Planned.
+Status: Completed.
 
 Goal: make the Linux mount milestone reproducible.
 
@@ -1495,10 +1523,94 @@ Planned:
 - Linux mount validation script.
 - README and AGENTS updates for mount scope.
 
+Completed:
+
+- Updated `docs/plan/v0.6-acceptance.md` with the read-only live mount
+  contract.
+- Added v0.6.1 write mount planning before v0.7.
+- Updated README and AGENTS for the current mount milestone.
+- Validated with `cargo fmt --check`, `cargo check --workspace --locked`,
+  `cargo test --workspace --locked`, `cargo clippy --workspace --locked -- -D warnings`,
+  `pnpm typecheck`, `pnpm -r test`, `scripts/verify-v0.5-docker.sh`,
+  `scripts/verify-v0.6-linux-mount.sh`, and `git diff --check`.
+
 Done when:
 
 - real Linux mount behavior replaces the mount PoC in the roadmap.
 - validation covers mount, read, policy denial, audit, and cleanup.
+
+## v0.6.1 Goal
+
+Operon v0.6.1 should add Linux write mount support after the read-only FUSE path
+is stable.
+
+```text
+v0.6.1 = Linux write-through FUSE mount over the Operon fs protocol.
+```
+
+v0.6.1 remains Linux-only and should use single-writer, write-through semantics.
+It should not introduce offline sync, distributed cache invalidation,
+multi-writer conflict resolution, append atomicity guarantees beyond the remote
+filesystem, or cross-platform mount adapters.
+
+## Phase 32.1: Linux Write Mount Contract
+
+Status: Planned.
+
+Goal: define write semantics before adding write-capable FUSE operations.
+
+Planned:
+
+- define create, write, flush, fsync, truncate, unlink, mkdir, rmdir, and rename
+  semantics.
+- define close-to-open versus write-through behavior.
+- define how write failures map to FUSE errors.
+- keep daemon policy and audit authoritative for all write operations.
+
+Done when:
+
+- write mount behavior is documented.
+- consistency and unsupported semantics are explicit.
+- validation expectations for write, delete, rename, and denied writes are
+  recorded.
+
+## Phase 32.2: Linux Write FUSE Adapter
+
+Status: Planned.
+
+Goal: add write-capable FUSE operations to the Linux mount adapter.
+
+Planned:
+
+- implement create, write, flush, fsync, setattr/truncate, unlink, mkdir, rmdir,
+  and rename where supported by the daemon fs protocol.
+- add or extend daemon fs protocol operations if the current write-file API is
+  insufficient.
+- route write operations through existing policy and audit paths.
+
+Done when:
+
+- write-through file creation and updates work through the mount.
+- denied write/delete/rename operations are audited.
+- cleanup remains reliable after write failures.
+
+## Phase 32.3: v0.6.1 Acceptance
+
+Status: Planned.
+
+Goal: make write mount behavior reproducible and separately releasable.
+
+Planned:
+
+- v0.6.1 acceptance document.
+- Linux write mount validation script.
+- README and AGENTS updates for write mount scope.
+
+Done when:
+
+- v0.6.1 has documented acceptance criteria.
+- validation covers create, write, read-after-write, truncate, delete, rename,
+  denied writes, audit, and cleanup.
 
 ## v0.7 Goal
 

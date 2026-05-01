@@ -50,6 +50,9 @@ Operon should not own:
 - `docs/plan/v0.6-acceptance.md`
   - v0.6 acceptance scope for Linux-only real FUSE mount support.
 
+- `docs/plan/v0.6.1-acceptance.md`
+  - v0.6.1 acceptance scope for Linux-only write FUSE mount support.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -92,7 +95,8 @@ Operon should not own:
 - HTTP runtime facade was removed in v0.5.1; do not reintroduce direct HTTP runtime APIs.
 - Completed protocol milestone: v0.5 gRPC runtime protocol migration.
 - Completed cleanup milestone: v0.5.1 removed the HTTP runtime facade and added `PROTOCOL.md`.
-- Next mount milestone: v0.6 Linux-only real FUSE mount.
+- Completed mount milestone: v0.6 Linux-only read-only real FUSE mount.
+- Next mount milestone: v0.6.1 Linux-only write FUSE mount.
 - Later planned milestones: v0.7 CLI TUI console, v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.

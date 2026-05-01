@@ -58,11 +58,12 @@ Operon is not a VPN. It runs on top of Cloudflare Mesh, Tailscale, WireGuard, SS
 
 Prerequisites:
 
-- Rust stable toolchain
+- Rust stable toolchain, 1.85 or newer
 - Node.js and pnpm
 - Docker with Docker Compose
+- `/dev/fuse` and `fusermount3` for Linux mount validation
 
-Run the full v0.5 validation:
+Run the full v0.6 validation:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -73,9 +74,10 @@ cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
 pnpm test
 scripts/verify-v0.5-docker.sh
+scripts/verify-v0.6-linux-mount.sh
 ```
 
-The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph over gRPC endpoints.
+The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real read-only FUSE mount check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
 
 ---
 
@@ -249,10 +251,15 @@ operon --config ./operon.nodes.yaml run --trace-output ./trace.json examples/tra
 operon trace list .
 operon trace show ./trace.json
 operon --json trace show ./trace.json
-operon --config ./operon.nodes.yaml mount read-only cloud-a:/ --to ./cloud-a-readonly
+operon --config ./operon.nodes.yaml mount cloud-a:/ --to ./cloud-a
 ```
 
 Add `--json` for structured command output or `--quiet` to suppress non-essential output.
+
+`operon mount` is a Linux-only foreground FUSE mount in v0.6. It is read-only:
+directories are exposed as `0555`, files as `0444`, and write mount support is
+deferred to v0.6.1. The host needs `/dev/fuse` and a working `fusermount3` or
+equivalent FUSE setup. Press Ctrl-C in the mounting process to unmount.
 
 ---
 
@@ -297,6 +304,12 @@ This starts two `operond` containers with gRPC listeners, validates capability d
 
 ```bash
 operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-grpc-trace.json examples/docker-copy-and-run.yaml
+```
+
+Run the Linux read-only FUSE mount validation:
+
+```bash
+scripts/verify-v0.6-linux-mount.sh
 ```
 
 Example workflow:
@@ -472,7 +485,8 @@ Roadmap:
 - [x] Filtered audit and human-readable trace CLI UX
 - [x] gRPC runtime protocol
 - [x] Remove HTTP runtime facade
-- [ ] Linux FUSE mount
+- [x] Linux read-only FUSE mount
+- [ ] Linux write FUSE mount
 - [ ] CLI TUI console
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters
