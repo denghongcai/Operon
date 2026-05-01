@@ -618,6 +618,7 @@ Completed:
 - CI now includes an `MVP Docker Validation` job that runs `scripts/verify-mvp-docker.sh` after Rust and TypeScript checks.
 - Old `verify-phase1-docker.sh` references were updated to the MVP script name.
 - Unit test baseline added across core Rust modules and the TypeScript SDK.
+- CI Node setup updated to `actions/setup-node@v6`.
 
 Remaining:
 
