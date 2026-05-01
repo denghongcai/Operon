@@ -88,7 +88,7 @@ fi
 cat "$TMP_DIR/bad-mount.log"
 
 kill -INT "$MOUNT_PID"
-wait "$MOUNT_PID"
+wait "$MOUNT_PID" || true
 MOUNT_PID=""
 if mountpoint -q "$MOUNT_DIR"; then
   echo "expected mount to be unmounted after Ctrl-C" >&2
