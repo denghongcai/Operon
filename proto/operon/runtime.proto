@@ -10,6 +10,11 @@ service OperonRuntime {
   rpc ListFs(FsPathRequest) returns (FsList);
   rpc ReadFile(FsPathRequest) returns (stream FileChunk);
   rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
+  rpc WriteFileRange(FsWriteRangeRequest) returns (FsWrite);
+  rpc TruncateFs(FsTruncateRequest) returns (FsStat);
+  rpc MkdirFs(FsPathRequest) returns (FsStat);
+  rpc DeleteFs(FsPathRequest) returns (FsDelete);
+  rpc RenameFs(FsRenameRequest) returns (FsRename);
   rpc RunJob(JobRunRequest) returns (JobRecord);
   rpc GetJob(JobIdRequest) returns (JobRecord);
   rpc ListJobs(ListJobsRequest) returns (JobList);
@@ -96,6 +101,31 @@ message WriteFileRequest {
 message FsWrite {
   string path = 1;
   uint64 bytes_written = 2;
+}
+
+message FsWriteRangeRequest {
+  string path = 1;
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+message FsTruncateRequest {
+  string path = 1;
+  uint64 size = 2;
+}
+
+message FsDelete {
+  string path = 1;
+}
+
+message FsRenameRequest {
+  string from_path = 1;
+  string to_path = 2;
+}
+
+message FsRename {
+  string from_path = 1;
+  string to_path = 2;
 }
 
 message JobRunRequest {

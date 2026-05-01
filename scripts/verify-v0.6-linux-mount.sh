@@ -82,12 +82,6 @@ grep -q "hello from v0.6 mount" "$MOUNT_DIR/mount-v06.txt"
 cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml fs write node-a:/mount-v06-live.txt --content "live update from remote"
 grep -q "live update from remote" "$MOUNT_DIR/mount-v06-live.txt"
 
-if sh -c "echo denied > '$MOUNT_DIR/mount-v06-denied.txt'" >"$TMP_DIR/write-deny.log" 2>&1; then
-  echo "expected read-only FUSE mount write to fail" >&2
-  exit 1
-fi
-cat "$TMP_DIR/write-deny.log"
-
 if cargo run -q -p operon-cli -- --config examples/docker-nodes.yaml mount node-a:/../secret --to "$TMP_DIR/bad-mount" >"$TMP_DIR/bad-mount.log" 2>&1; then
   echo "expected path escape mount to fail" >&2
   exit 1
@@ -161,4 +155,4 @@ cargo run -q -p operon-cli -- --config "$DENY_NODES" audit show deny --capabilit
 cat "$TMP_DIR/deny-audit.log"
 grep -Eq "fs:workspace[[:space:]]+stat[[:space:]]+/[[:space:]]+false" "$TMP_DIR/deny-audit.log"
 
-echo "v0.6 Linux mount validation passed"
+echo "v0.6 Linux mount read validation passed"

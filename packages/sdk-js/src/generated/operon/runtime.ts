@@ -92,6 +92,31 @@ export interface FsWrite {
   bytesWritten: string;
 }
 
+export interface FsWriteRangeRequest {
+  path: string;
+  offset: string;
+  data: Uint8Array;
+}
+
+export interface FsTruncateRequest {
+  path: string;
+  size: string;
+}
+
+export interface FsDelete {
+  path: string;
+}
+
+export interface FsRenameRequest {
+  fromPath: string;
+  toPath: string;
+}
+
+export interface FsRename {
+  fromPath: string;
+  toPath: string;
+}
+
 export interface JobRunRequest {
   command: string;
   cwd: string;
@@ -1449,6 +1474,400 @@ export const FsWrite: MessageFns<FsWrite> = {
     const message = createBaseFsWrite();
     message.path = object.path ?? "";
     message.bytesWritten = object.bytesWritten ?? "0";
+    return message;
+  },
+};
+
+function createBaseFsWriteRangeRequest(): FsWriteRangeRequest {
+  return { path: "", offset: "0", data: new Uint8Array(0) };
+}
+
+export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
+  encode(message: FsWriteRangeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    if (message.offset !== "0") {
+      writer.uint32(16).uint64(message.offset);
+    }
+    if (message.data.length !== 0) {
+      writer.uint32(26).bytes(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsWriteRangeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsWriteRangeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.offset = reader.uint64().toString();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.data = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsWriteRangeRequest {
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      offset: isSet(object.offset) ? globalThis.String(object.offset) : "0",
+      data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: FsWriteRangeRequest): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    if (message.offset !== "0") {
+      obj.offset = message.offset;
+    }
+    if (message.data.length !== 0) {
+      obj.data = base64FromBytes(message.data);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsWriteRangeRequest>): FsWriteRangeRequest {
+    return FsWriteRangeRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsWriteRangeRequest>): FsWriteRangeRequest {
+    const message = createBaseFsWriteRangeRequest();
+    message.path = object.path ?? "";
+    message.offset = object.offset ?? "0";
+    message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseFsTruncateRequest(): FsTruncateRequest {
+  return { path: "", size: "0" };
+}
+
+export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
+  encode(message: FsTruncateRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    if (message.size !== "0") {
+      writer.uint32(16).uint64(message.size);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsTruncateRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsTruncateRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.size = reader.uint64().toString();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsTruncateRequest {
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      size: isSet(object.size) ? globalThis.String(object.size) : "0",
+    };
+  },
+
+  toJSON(message: FsTruncateRequest): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    if (message.size !== "0") {
+      obj.size = message.size;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsTruncateRequest>): FsTruncateRequest {
+    return FsTruncateRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsTruncateRequest>): FsTruncateRequest {
+    const message = createBaseFsTruncateRequest();
+    message.path = object.path ?? "";
+    message.size = object.size ?? "0";
+    return message;
+  },
+};
+
+function createBaseFsDelete(): FsDelete {
+  return { path: "" };
+}
+
+export const FsDelete: MessageFns<FsDelete> = {
+  encode(message: FsDelete, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsDelete {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsDelete();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsDelete {
+    return { path: isSet(object.path) ? globalThis.String(object.path) : "" };
+  },
+
+  toJSON(message: FsDelete): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsDelete>): FsDelete {
+    return FsDelete.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsDelete>): FsDelete {
+    const message = createBaseFsDelete();
+    message.path = object.path ?? "";
+    return message;
+  },
+};
+
+function createBaseFsRenameRequest(): FsRenameRequest {
+  return { fromPath: "", toPath: "" };
+}
+
+export const FsRenameRequest: MessageFns<FsRenameRequest> = {
+  encode(message: FsRenameRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fromPath !== "") {
+      writer.uint32(10).string(message.fromPath);
+    }
+    if (message.toPath !== "") {
+      writer.uint32(18).string(message.toPath);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsRenameRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsRenameRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.fromPath = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.toPath = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsRenameRequest {
+    return {
+      fromPath: isSet(object.fromPath)
+        ? globalThis.String(object.fromPath)
+        : isSet(object.from_path)
+        ? globalThis.String(object.from_path)
+        : "",
+      toPath: isSet(object.toPath)
+        ? globalThis.String(object.toPath)
+        : isSet(object.to_path)
+        ? globalThis.String(object.to_path)
+        : "",
+    };
+  },
+
+  toJSON(message: FsRenameRequest): unknown {
+    const obj: any = {};
+    if (message.fromPath !== "") {
+      obj.fromPath = message.fromPath;
+    }
+    if (message.toPath !== "") {
+      obj.toPath = message.toPath;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsRenameRequest>): FsRenameRequest {
+    return FsRenameRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsRenameRequest>): FsRenameRequest {
+    const message = createBaseFsRenameRequest();
+    message.fromPath = object.fromPath ?? "";
+    message.toPath = object.toPath ?? "";
+    return message;
+  },
+};
+
+function createBaseFsRename(): FsRename {
+  return { fromPath: "", toPath: "" };
+}
+
+export const FsRename: MessageFns<FsRename> = {
+  encode(message: FsRename, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fromPath !== "") {
+      writer.uint32(10).string(message.fromPath);
+    }
+    if (message.toPath !== "") {
+      writer.uint32(18).string(message.toPath);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsRename {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsRename();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.fromPath = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.toPath = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsRename {
+    return {
+      fromPath: isSet(object.fromPath)
+        ? globalThis.String(object.fromPath)
+        : isSet(object.from_path)
+        ? globalThis.String(object.from_path)
+        : "",
+      toPath: isSet(object.toPath)
+        ? globalThis.String(object.toPath)
+        : isSet(object.to_path)
+        ? globalThis.String(object.to_path)
+        : "",
+    };
+  },
+
+  toJSON(message: FsRename): unknown {
+    const obj: any = {};
+    if (message.fromPath !== "") {
+      obj.fromPath = message.fromPath;
+    }
+    if (message.toPath !== "") {
+      obj.toPath = message.toPath;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsRename>): FsRename {
+    return FsRename.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsRename>): FsRename {
+    const message = createBaseFsRename();
+    message.fromPath = object.fromPath ?? "";
+    message.toPath = object.toPath ?? "";
     return message;
   },
 };
@@ -3069,6 +3488,46 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
+    writeFileRange: {
+      name: "WriteFileRange",
+      requestType: FsWriteRangeRequest as typeof FsWriteRangeRequest,
+      requestStream: false,
+      responseType: FsWrite as typeof FsWrite,
+      responseStream: false,
+      options: {},
+    },
+    truncateFs: {
+      name: "TruncateFs",
+      requestType: FsTruncateRequest as typeof FsTruncateRequest,
+      requestStream: false,
+      responseType: FsStat as typeof FsStat,
+      responseStream: false,
+      options: {},
+    },
+    mkdirFs: {
+      name: "MkdirFs",
+      requestType: FsPathRequest as typeof FsPathRequest,
+      requestStream: false,
+      responseType: FsStat as typeof FsStat,
+      responseStream: false,
+      options: {},
+    },
+    deleteFs: {
+      name: "DeleteFs",
+      requestType: FsPathRequest as typeof FsPathRequest,
+      requestStream: false,
+      responseType: FsDelete as typeof FsDelete,
+      responseStream: false,
+      options: {},
+    },
+    renameFs: {
+      name: "RenameFs",
+      requestType: FsRenameRequest as typeof FsRenameRequest,
+      requestStream: false,
+      responseType: FsRename as typeof FsRename,
+      responseStream: false,
+      options: {},
+    },
     runJob: {
       name: "RunJob",
       requestType: JobRunRequest as typeof JobRunRequest,
@@ -3169,6 +3628,11 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
     request: AsyncIterable<WriteFileRequest>,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<FsWrite>>;
+  writeFileRange(request: FsWriteRangeRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsWrite>>;
+  truncateFs(request: FsTruncateRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsStat>>;
+  mkdirFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsStat>>;
+  deleteFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsDelete>>;
+  renameFs(request: FsRenameRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsRename>>;
   runJob(request: JobRunRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   getJob(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   listJobs(request: ListJobsRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobList>>;
@@ -3201,6 +3665,11 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
     request: AsyncIterable<DeepPartial<WriteFileRequest>>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<FsWrite>;
+  writeFileRange(request: DeepPartial<FsWriteRangeRequest>, options?: CallOptions & CallOptionsExt): Promise<FsWrite>;
+  truncateFs(request: DeepPartial<FsTruncateRequest>, options?: CallOptions & CallOptionsExt): Promise<FsStat>;
+  mkdirFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsStat>;
+  deleteFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsDelete>;
+  renameFs(request: DeepPartial<FsRenameRequest>, options?: CallOptions & CallOptionsExt): Promise<FsRename>;
   runJob(request: DeepPartial<JobRunRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   getJob(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   listJobs(request: DeepPartial<ListJobsRequest>, options?: CallOptions & CallOptionsExt): Promise<JobList>;

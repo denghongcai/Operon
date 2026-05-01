@@ -372,7 +372,7 @@ fn main() -> anyhow::Result<()> {
             TraceCommand::Show { path } => trace_show(path, output),
             TraceCommand::List { dir } => trace_list(dir, output),
         },
-        Command::Mount { target, to } => mount_read_only(args.config, &target, to, output),
+        Command::Mount { target, to } => mount_fs(args.config, &target, to, output),
     }
 }
 
@@ -1121,7 +1121,7 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
     Ok(())
 }
 
-fn mount_read_only(
+fn mount_fs(
     config_path: PathBuf,
     target: &str,
     destination: PathBuf,
@@ -1129,19 +1129,19 @@ fn mount_read_only(
 ) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let mount = operon_mount::spawn_read_only_mount(operon_mount::ReadOnlyMountOptions {
+    let mount = operon_mount::spawn_mount(operon_mount::MountOptions {
         endpoint,
         remote_path: target.path.clone(),
         mount_point: destination.clone(),
     })?;
     let manifest = serde_json::json!({
-        "mode": "read-only-live-fuse",
+        "mode": "write-through-live-fuse",
         "node_id": target.node_id,
         "path": target.path,
         "destination": destination,
         "cache": "kernel page cache only",
-        "consistency": "live reads through Operon fs gRPC; metadata cached for one second",
-        "write": "unsupported in v0.6",
+        "consistency": "live reads and write-through mutations through Operon fs gRPC; metadata cached for one second",
+        "write": "single-writer write-through in v0.6.1",
     });
     if output.json {
         print_json(&manifest)?;

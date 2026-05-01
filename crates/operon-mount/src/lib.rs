@@ -12,7 +12,10 @@ use std::{
 use anyhow::Context;
 use operon_core::{FsList, FsStat};
 use operon_network::NodeEndpoint;
-use operon_protocol::runtime::v1::{operon_runtime_client::OperonRuntimeClient, FsPathRequest};
+use operon_protocol::runtime::v1::{
+    operon_runtime_client::OperonRuntimeClient, FsPathRequest, FsRenameRequest, FsTruncateRequest,
+    FsWriteRangeRequest,
+};
 use tonic::{metadata::MetadataValue, transport::Channel, Code, Request, Status};
 
 pub const MOUNT_CAPABILITY: &str = "mount";
@@ -21,17 +24,17 @@ const TTL: Duration = Duration::from_secs(1);
 const BLOCK_SIZE: u32 = 4096;
 
 #[derive(Debug, Clone)]
-pub struct ReadOnlyMountOptions {
+pub struct MountOptions {
     pub endpoint: NodeEndpoint,
     pub remote_path: String,
     pub mount_point: PathBuf,
 }
 
-pub struct ReadOnlyMountSession {
+pub struct MountSession {
     session: fuser::BackgroundSession,
 }
 
-impl ReadOnlyMountSession {
+impl MountSession {
     pub fn wait_for_shutdown(self) -> anyhow::Result<()> {
         let (tx, rx) = mpsc::channel();
         ctrlc::set_handler(move || {
@@ -54,9 +57,7 @@ impl ReadOnlyMountSession {
     }
 }
 
-pub fn spawn_read_only_mount(
-    options: ReadOnlyMountOptions,
-) -> anyhow::Result<ReadOnlyMountSession> {
+pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     let remote_root = normalize_remote_path(&options.remote_path)?;
     let mount_point = options.mount_point;
     ensure_mount_point(&mount_point)?;
@@ -67,10 +68,9 @@ pub fn spawn_read_only_mount(
         anyhow::bail!("mount root `{remote_root}` is not a directory");
     }
 
-    let fs = OperonReadOnlyFs::new(remote_fs, root);
+    let fs = OperonFuseFs::new(remote_fs, root);
     let mut config = fuser::Config::default();
     config.mount_options = vec![
-        fuser::MountOption::RO,
         fuser::MountOption::FSName("operon".to_string()),
         fuser::MountOption::Subtype("operon".to_string()),
         fuser::MountOption::NoDev,
@@ -81,7 +81,7 @@ pub fn spawn_read_only_mount(
     let session = fuser::spawn_mount2(fs, &mount_point, &config)
         .with_context(|| format!("failed to mount {}", mount_point.display()))?;
 
-    Ok(ReadOnlyMountSession { session })
+    Ok(MountSession { session })
 }
 
 fn ensure_mount_point(path: &Path) -> anyhow::Result<()> {
@@ -99,6 +99,11 @@ pub trait RemoteFs: Send + Sync {
     fn stat(&self, path: &str) -> anyhow::Result<FsStat>;
     fn list(&self, path: &str) -> anyhow::Result<FsList>;
     fn read_range(&self, path: &str, offset: u64, size: u32) -> anyhow::Result<Vec<u8>>;
+    fn write_range(&self, path: &str, offset: u64, data: &[u8]) -> anyhow::Result<u64>;
+    fn truncate(&self, path: &str, size: u64) -> anyhow::Result<FsStat>;
+    fn mkdir(&self, path: &str) -> anyhow::Result<FsStat>;
+    fn delete(&self, path: &str) -> anyhow::Result<()>;
+    fn rename(&self, from_path: &str, to_path: &str) -> anyhow::Result<()>;
 }
 
 struct GrpcRemoteFs {
@@ -179,6 +184,78 @@ impl RemoteFs for GrpcRemoteFs {
             Ok(data)
         })
     }
+
+    fn write_range(&self, path: &str, offset: u64, data: &[u8]) -> anyhow::Result<u64> {
+        let request = FsWriteRangeRequest {
+            path: path.to_string(),
+            offset,
+            data: data.to_vec(),
+        };
+        self.runtime.block_on(async {
+            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            Ok(client
+                .write_file_range(with_auth(&self.endpoint, request)?)
+                .await?
+                .into_inner()
+                .bytes_written)
+        })
+    }
+
+    fn truncate(&self, path: &str, size: u64) -> anyhow::Result<FsStat> {
+        let request = FsTruncateRequest {
+            path: path.to_string(),
+            size,
+        };
+        self.runtime.block_on(async {
+            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            Ok(client
+                .truncate_fs(with_auth(&self.endpoint, request)?)
+                .await?
+                .into_inner()
+                .into())
+        })
+    }
+
+    fn mkdir(&self, path: &str) -> anyhow::Result<FsStat> {
+        let request = FsPathRequest {
+            path: path.to_string(),
+        };
+        self.runtime.block_on(async {
+            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            Ok(client
+                .mkdir_fs(with_auth(&self.endpoint, request)?)
+                .await?
+                .into_inner()
+                .into())
+        })
+    }
+
+    fn delete(&self, path: &str) -> anyhow::Result<()> {
+        let request = FsPathRequest {
+            path: path.to_string(),
+        };
+        self.runtime.block_on(async {
+            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            client
+                .delete_fs(with_auth(&self.endpoint, request)?)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn rename(&self, from_path: &str, to_path: &str) -> anyhow::Result<()> {
+        let request = FsRenameRequest {
+            from_path: from_path.to_string(),
+            to_path: to_path.to_string(),
+        };
+        self.runtime.block_on(async {
+            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            client
+                .rename_fs(with_auth(&self.endpoint, request)?)
+                .await?;
+            Ok(())
+        })
+    }
 }
 
 fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T>> {
@@ -244,6 +321,26 @@ impl InodeTable {
         self.by_ino.get(&u64::from(ino)).cloned()
     }
 
+    fn remove_subtree(&mut self, path: &str) {
+        let prefix = if path == "/" {
+            "/".to_string()
+        } else {
+            format!("{path}/")
+        };
+        let removed: Vec<u64> = self
+            .by_path
+            .iter()
+            .filter_map(|(entry_path, ino)| {
+                (entry_path == path || entry_path.starts_with(&prefix)).then_some(*ino)
+            })
+            .collect();
+        for ino in removed {
+            if let Some(entry) = self.by_ino.remove(&ino) {
+                self.by_path.remove(&entry.path);
+            }
+        }
+    }
+
     fn upsert(
         &mut self,
         parent: fuser::INodeNo,
@@ -272,12 +369,12 @@ impl InodeTable {
     }
 }
 
-struct OperonReadOnlyFs {
+struct OperonFuseFs {
     remote_fs: Arc<dyn RemoteFs>,
     inodes: RwLock<InodeTable>,
 }
 
-impl OperonReadOnlyFs {
+impl OperonFuseFs {
     fn new(remote_fs: Arc<dyn RemoteFs>, root: FsStat) -> Self {
         Self {
             remote_fs,
@@ -305,6 +402,30 @@ impl OperonReadOnlyFs {
             .upsert(parent, name.to_string(), stat)
     }
 
+    fn child_path(&self, parent: fuser::INodeNo, name: &OsStr) -> anyhow::Result<String> {
+        let parent_entry = self
+            .inode(parent)
+            .ok_or_else(|| anyhow::anyhow!("parent inode not found"))?;
+        if !parent_entry.is_dir {
+            anyhow::bail!("parent is not a directory");
+        }
+        let name = validate_child_name(name)?;
+        join_remote_child(&parent_entry.path, name)
+    }
+
+    fn upsert_child(
+        &self,
+        parent: fuser::INodeNo,
+        name: &OsStr,
+        stat: FsStat,
+    ) -> anyhow::Result<InodeEntry> {
+        let name = validate_child_name(name)?;
+        self.inodes
+            .write()
+            .expect("inode table poisoned")
+            .upsert(parent, name.to_string(), stat)
+    }
+
     fn file_attr(&self, entry: &InodeEntry) -> fuser::FileAttr {
         fuser::FileAttr {
             ino: entry.ino,
@@ -319,7 +440,7 @@ impl OperonReadOnlyFs {
             } else {
                 fuser::FileType::RegularFile
             },
-            perm: if entry.is_dir { 0o555 } else { 0o444 },
+            perm: if entry.is_dir { 0o755 } else { 0o644 },
             nlink: if entry.is_dir { 2 } else { 1 },
             uid: 0,
             gid: 0,
@@ -330,7 +451,7 @@ impl OperonReadOnlyFs {
     }
 }
 
-impl fuser::Filesystem for OperonReadOnlyFs {
+impl fuser::Filesystem for OperonFuseFs {
     fn lookup(
         &self,
         _req: &fuser::Request,
@@ -376,13 +497,9 @@ impl fuser::Filesystem for OperonReadOnlyFs {
         &self,
         _req: &fuser::Request,
         ino: fuser::INodeNo,
-        flags: fuser::OpenFlags,
+        _flags: fuser::OpenFlags,
         reply: fuser::ReplyOpen,
     ) {
-        if !matches!(flags.acc_mode(), fuser::OpenAccMode::O_RDONLY) {
-            reply.error(fuser::Errno::EROFS);
-            return;
-        }
         let Some(entry) = self.inode(ino) else {
             reply.error(fuser::Errno::ENOENT);
             return;
@@ -400,11 +517,11 @@ impl fuser::Filesystem for OperonReadOnlyFs {
     fn setattr(
         &self,
         _req: &fuser::Request,
-        _ino: fuser::INodeNo,
+        ino: fuser::INodeNo,
         _mode: Option<u32>,
         _uid: Option<u32>,
         _gid: Option<u32>,
-        _size: Option<u64>,
+        size: Option<u64>,
         _atime: Option<fuser::TimeOrNow>,
         _mtime: Option<fuser::TimeOrNow>,
         _ctime: Option<std::time::SystemTime>,
@@ -415,7 +532,26 @@ impl fuser::Filesystem for OperonReadOnlyFs {
         _flags: Option<fuser::BsdFileFlags>,
         reply: fuser::ReplyAttr,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        let Some(entry) = self.inode(ino) else {
+            reply.error(fuser::Errno::ENOENT);
+            return;
+        };
+
+        if let Some(size) = size {
+            match self.remote_fs.truncate(&entry.path, size).and_then(|stat| {
+                self.inodes.write().expect("inode table poisoned").upsert(
+                    entry.parent,
+                    entry.name.clone(),
+                    stat,
+                )
+            }) {
+                Ok(entry) => reply.attr(&TTL, &self.file_attr(&entry)),
+                Err(error) => reply.error(errno_for_error(&error)),
+            }
+            return;
+        }
+
+        reply.attr(&TTL, &self.file_attr(&entry));
     }
 
     fn mknod(
@@ -428,39 +564,85 @@ impl fuser::Filesystem for OperonReadOnlyFs {
         _rdev: u32,
         reply: fuser::ReplyEntry,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        reply.error(fuser::Errno::ENOSYS);
     }
 
     fn mkdir(
         &self,
         _req: &fuser::Request,
-        _parent: fuser::INodeNo,
-        _name: &OsStr,
+        parent: fuser::INodeNo,
+        name: &OsStr,
         _mode: u32,
         _umask: u32,
         reply: fuser::ReplyEntry,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        let path = match self.child_path(parent, name) {
+            Ok(path) => path,
+            Err(error) => {
+                reply.error(errno_for_error(&error));
+                return;
+            }
+        };
+        match self
+            .remote_fs
+            .mkdir(&path)
+            .and_then(|stat| self.upsert_child(parent, name, stat))
+        {
+            Ok(entry) => reply.entry(&TTL, &self.file_attr(&entry), fuser::Generation(0)),
+            Err(error) => reply.error(errno_for_error(&error)),
+        }
     }
 
     fn unlink(
         &self,
         _req: &fuser::Request,
-        _parent: fuser::INodeNo,
-        _name: &OsStr,
+        parent: fuser::INodeNo,
+        name: &OsStr,
         reply: fuser::ReplyEmpty,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        let path = match self.child_path(parent, name) {
+            Ok(path) => path,
+            Err(error) => {
+                reply.error(errno_for_error(&error));
+                return;
+            }
+        };
+        match self.remote_fs.delete(&path) {
+            Ok(()) => {
+                self.inodes
+                    .write()
+                    .expect("inode table poisoned")
+                    .remove_subtree(&path);
+                reply.ok();
+            }
+            Err(error) => reply.error(errno_for_error(&error)),
+        }
     }
 
     fn rmdir(
         &self,
         _req: &fuser::Request,
-        _parent: fuser::INodeNo,
-        _name: &OsStr,
+        parent: fuser::INodeNo,
+        name: &OsStr,
         reply: fuser::ReplyEmpty,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        let path = match self.child_path(parent, name) {
+            Ok(path) => path,
+            Err(error) => {
+                reply.error(errno_for_error(&error));
+                return;
+            }
+        };
+        match self.remote_fs.delete(&path) {
+            Ok(()) => {
+                self.inodes
+                    .write()
+                    .expect("inode table poisoned")
+                    .remove_subtree(&path);
+                reply.ok();
+            }
+            Err(error) => reply.error(errno_for_error(&error)),
+        }
     }
 
     fn symlink(
@@ -471,20 +653,46 @@ impl fuser::Filesystem for OperonReadOnlyFs {
         _target: &Path,
         reply: fuser::ReplyEntry,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        reply.error(fuser::Errno::ENOSYS);
     }
 
     fn rename(
         &self,
         _req: &fuser::Request,
-        _parent: fuser::INodeNo,
-        _name: &OsStr,
-        _newparent: fuser::INodeNo,
-        _newname: &OsStr,
-        _flags: fuser::RenameFlags,
+        parent: fuser::INodeNo,
+        name: &OsStr,
+        newparent: fuser::INodeNo,
+        newname: &OsStr,
+        flags: fuser::RenameFlags,
         reply: fuser::ReplyEmpty,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        if !flags.is_empty() {
+            reply.error(fuser::Errno::ENOSYS);
+            return;
+        }
+        let from_path = match self.child_path(parent, name) {
+            Ok(path) => path,
+            Err(error) => {
+                reply.error(errno_for_error(&error));
+                return;
+            }
+        };
+        let to_path = match self.child_path(newparent, newname) {
+            Ok(path) => path,
+            Err(error) => {
+                reply.error(errno_for_error(&error));
+                return;
+            }
+        };
+        match self.remote_fs.rename(&from_path, &to_path) {
+            Ok(()) => {
+                let mut table = self.inodes.write().expect("inode table poisoned");
+                table.remove_subtree(&from_path);
+                table.remove_subtree(&to_path);
+                reply.ok();
+            }
+            Err(error) => reply.error(errno_for_error(&error)),
+        }
     }
 
     fn link(
@@ -495,7 +703,7 @@ impl fuser::Filesystem for OperonReadOnlyFs {
         _newname: &OsStr,
         reply: fuser::ReplyEntry,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        reply.error(fuser::Errno::ENOSYS);
     }
 
     fn read(
@@ -526,16 +734,36 @@ impl fuser::Filesystem for OperonReadOnlyFs {
     fn write(
         &self,
         _req: &fuser::Request,
-        _ino: fuser::INodeNo,
+        ino: fuser::INodeNo,
         _fh: fuser::FileHandle,
-        _offset: u64,
-        _data: &[u8],
+        offset: u64,
+        data: &[u8],
         _write_flags: fuser::WriteFlags,
         _flags: fuser::OpenFlags,
         _lock_owner: Option<fuser::LockOwner>,
         reply: fuser::ReplyWrite,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        let Some(entry) = self.inode(ino) else {
+            reply.error(fuser::Errno::ENOENT);
+            return;
+        };
+        if entry.is_dir {
+            reply.error(fuser::Errno::EISDIR);
+            return;
+        }
+        match self.remote_fs.write_range(&entry.path, offset, data) {
+            Ok(bytes_written) => {
+                if let Ok(stat) = self.remote_fs.stat(&entry.path) {
+                    let _ = self.inodes.write().expect("inode table poisoned").upsert(
+                        entry.parent,
+                        entry.name,
+                        stat,
+                    );
+                }
+                reply.written(bytes_written.min(u32::MAX as u64) as u32);
+            }
+            Err(error) => reply.error(errno_for_error(&error)),
+        }
     }
 
     fn readdir(
@@ -613,17 +841,60 @@ impl fuser::Filesystem for OperonReadOnlyFs {
         reply.ok();
     }
 
+    fn flush(
+        &self,
+        _req: &fuser::Request,
+        _ino: fuser::INodeNo,
+        _fh: fuser::FileHandle,
+        _lock_owner: fuser::LockOwner,
+        reply: fuser::ReplyEmpty,
+    ) {
+        reply.ok();
+    }
+
+    fn fsync(
+        &self,
+        _req: &fuser::Request,
+        _ino: fuser::INodeNo,
+        _fh: fuser::FileHandle,
+        _datasync: bool,
+        reply: fuser::ReplyEmpty,
+    ) {
+        reply.ok();
+    }
+
     fn create(
         &self,
         _req: &fuser::Request,
-        _parent: fuser::INodeNo,
-        _name: &OsStr,
+        parent: fuser::INodeNo,
+        name: &OsStr,
         _mode: u32,
         _umask: u32,
         _flags: i32,
         reply: fuser::ReplyCreate,
     ) {
-        reply.error(fuser::Errno::EROFS);
+        let path = match self.child_path(parent, name) {
+            Ok(path) => path,
+            Err(error) => {
+                reply.error(errno_for_error(&error));
+                return;
+            }
+        };
+        match self
+            .remote_fs
+            .write_range(&path, 0, &[])
+            .and_then(|_| self.remote_fs.stat(&path))
+            .and_then(|stat| self.upsert_child(parent, name, stat))
+        {
+            Ok(entry) => reply.created(
+                &TTL,
+                &self.file_attr(&entry),
+                fuser::Generation(0),
+                fuser::FileHandle(u64::from(entry.ino)),
+                fuser::FopenFlags::empty(),
+            ),
+            Err(error) => reply.error(errno_for_error(&error)),
+        }
     }
 }
 
@@ -632,6 +903,7 @@ fn errno_for_error(error: &anyhow::Error) -> fuser::Errno {
         return match status.code() {
             Code::NotFound => fuser::Errno::ENOENT,
             Code::PermissionDenied | Code::Unauthenticated => fuser::Errno::EACCES,
+            Code::AlreadyExists => fuser::Errno::EEXIST,
             Code::InvalidArgument | Code::FailedPrecondition => fuser::Errno::EINVAL,
             Code::Unimplemented => fuser::Errno::ENOSYS,
             _ => fuser::Errno::EIO,
@@ -777,6 +1049,47 @@ mod tests {
 
         assert_eq!(first.ino, second.ino);
         assert_eq!(second.size, 12);
+    }
+
+    #[test]
+    fn inode_table_removes_subtrees() {
+        let root = FsStat {
+            path: "/".to_string(),
+            is_file: false,
+            is_dir: true,
+            size: 0,
+        };
+        let mut table = InodeTable::new(root);
+        let dir = table
+            .upsert(
+                fuser::INodeNo::ROOT,
+                "dir".to_string(),
+                FsStat {
+                    path: "/dir".to_string(),
+                    is_file: false,
+                    is_dir: true,
+                    size: 0,
+                },
+            )
+            .expect("dir");
+        let file = table
+            .upsert(
+                dir.ino,
+                "file.txt".to_string(),
+                FsStat {
+                    path: "/dir/file.txt".to_string(),
+                    is_file: true,
+                    is_dir: false,
+                    size: 4,
+                },
+            )
+            .expect("file");
+
+        table.remove_subtree("/dir");
+
+        assert!(table.get(dir.ino).is_none());
+        assert!(table.get(file.ino).is_none());
+        assert!(table.get(fuser::INodeNo::ROOT).is_some());
     }
 
     #[test]

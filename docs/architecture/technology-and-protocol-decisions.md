@@ -208,7 +208,7 @@ Mount support is an adapter over the Core FS Protocol. FUSE, macFUSE, and WinFsp
 should adapt OS filesystem calls into Operon filesystem operations; they should
 not become the core VFS model.
 
-Current v0.6 shape:
+Current v0.6.1 shape:
 
 ```text
 OS Mount Adapter
@@ -225,6 +225,7 @@ Runtime transport implementation
       ▼
 operond fs capability
   StatFs / ListFs / ReadFile / WriteFile
+  WriteFileRange / TruncateFs / MkdirFs / DeleteFs / RenameFs
   policy / audit owned by daemon
 ```
 
@@ -239,7 +240,7 @@ Non-goals for the mount adapter layer:
 - independent policy or audit decisions.
 - VPN, mesh, or routing behavior.
 - durable metadata store in the adapter.
-- offline sync or conflict resolution in v0.6.
+- offline sync or conflict resolution in v0.6.1.
 
 The FUSE adapter may keep transient inode mappings and rely on the kernel page
 cache, but persistent metadata, sync, and richer write semantics belong in later

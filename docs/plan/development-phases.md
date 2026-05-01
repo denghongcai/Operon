@@ -1558,7 +1558,7 @@ filesystem, or cross-platform mount adapters.
 
 ## Phase 32.1: Linux Write Mount Contract
 
-Status: Planned.
+Status: Completed.
 
 Goal: define write semantics before adding write-capable FUSE operations.
 
@@ -1577,9 +1577,17 @@ Done when:
 - validation expectations for write, delete, rename, and denied writes are
   recorded.
 
+Completed:
+
+- Documented Linux-only, single-writer, write-through semantics in
+  `docs/plan/v0.6.1-acceptance.md`.
+- Defined FUSE operation mapping to Core FS Protocol RPCs:
+  `WriteFileRange`, `TruncateFs`, `MkdirFs`, `DeleteFs`, and `RenameFs`.
+- Kept policy, audit, and path containment in `operond`.
+
 ## Phase 32.2: Linux Write FUSE Adapter
 
-Status: Planned.
+Status: Completed.
 
 Goal: add write-capable FUSE operations to the Linux mount adapter.
 
@@ -1597,9 +1605,21 @@ Done when:
 - denied write/delete/rename operations are audited.
 - cleanup remains reliable after write failures.
 
+Completed:
+
+- Extended `proto/operon/runtime.proto` with write-range, truncate, mkdir,
+  delete, and rename fs RPCs.
+- Implemented the new daemon gRPC handlers through the existing fs policy and
+  audit path.
+- Extended `RemoteFs` and `GrpcRemoteFs` with write-capable operations.
+- Updated the Linux FUSE adapter to support create, write, flush, fsync,
+  truncate, unlink, mkdir, rmdir, and rename.
+- Left symlink, hardlink, special node creation, offline sync, and cross-platform
+  adapters out of scope.
+
 ## Phase 32.3: v0.6.1 Acceptance
 
-Status: Planned.
+Status: Completed.
 
 Goal: make write mount behavior reproducible and separately releasable.
 
@@ -1614,6 +1634,19 @@ Done when:
 - v0.6.1 has documented acceptance criteria.
 - validation covers create, write, read-after-write, truncate, delete, rename,
   denied writes, audit, and cleanup.
+
+Completed:
+
+- Updated `docs/plan/v0.6.1-acceptance.md` with final contract and completion
+  notes.
+- Added `scripts/verify-v0.6.1-linux-write-mount.sh`.
+- Updated CI with a v0.6.1 Linux write mount validation job.
+- Updated README, AGENTS, and architecture docs for the write-through mount
+  milestone.
+
+Remaining:
+
+- None for v0.6.1.
 
 ## v0.7 Goal
 

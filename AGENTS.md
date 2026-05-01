@@ -96,8 +96,9 @@ Operon should not own:
 - Completed protocol milestone: v0.5 gRPC runtime protocol migration.
 - Completed cleanup milestone: v0.5.1 removed the HTTP runtime facade and added `PROTOCOL.md`.
 - Completed mount milestone: v0.6 Linux-only read-only real FUSE mount.
-- Next mount milestone: v0.6.1 Linux-only write FUSE mount.
-- Later planned milestones: v0.7 CLI TUI console, v0.8 Agent Integration, v0.9 non-LAN provider discovery.
+- Completed mount milestone: v0.6.1 Linux-only write-through FUSE mount.
+- Next planned milestone: v0.7 CLI TUI console.
+- Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
 - v0.1 should assume nodes are already reachable over TCP.
