@@ -1952,6 +1952,8 @@ Completed:
 - Added `docs/plan/v0.6.5-unified-config-acceptance.md`.
 - Updated onboard, Docker config, and validation scripts for unified config.
 - Updated README, AGENTS, and CI references for v0.6.5.
+- Split README user Quickstart from developer validation, with release-download
+  install commands and onboard-based setup.
 
 Remaining:
 

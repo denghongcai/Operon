@@ -56,7 +56,52 @@ Operon is not a VPN. It runs on top of Cloudflare Mesh, Tailscale, WireGuard, SS
 
 ## Quickstart
 
-Prerequisites:
+Install the latest Linux release binary:
+
+```bash
+VERSION=v0.6.5
+case "$(uname -m)" in
+  x86_64) ARCH=linux-x86_64 ;;
+  aarch64|arm64) ARCH=linux-arm64 ;;
+  armv7l|armv7*) ARCH=linux-armv7 ;;
+  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+curl -fL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/operon-${VERSION}-${ARCH}.tar.gz" -o /tmp/operon.tar.gz
+tar -xzf /tmp/operon.tar.gz -C /tmp
+sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
+sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
+```
+
+Create a local workspace and guided config:
+
+```bash
+mkdir -p "$HOME/operon-workspace" "$HOME/.operon"
+operon onboard \
+  --yes \
+  --role both \
+  --output-dir "$HOME/.operon" \
+  --node-id local \
+  --workspace "$HOME/operon-workspace" \
+  --listen 127.0.0.1:7789
+```
+
+Start the daemon and verify the local node:
+
+```bash
+operond start
+operon node ping local
+operon capability list local
+```
+
+`operond` and `operon` read `$HOME/.operon/config.yaml` by default. Put that
+daemon endpoint on an existing private network such as Cloudflare Mesh,
+Tailscale, WireGuard, SSH, LAN, or Kubernetes networking before exposing it to
+other machines.
+
+## Developer Validation
+
+Development prerequisites:
 
 - Rust stable toolchain, 1.85 or newer
 - Node.js and pnpm
@@ -88,17 +133,17 @@ The v0.6.2 CLI fs cleanup validation checks direct CLI mutation commands for
 mkdir, truncate, rename, rm, denied mutations, and audit.
 The v0.6.3 fs copy validation checks same-node daemon-side copy, denied copy,
 and audit.
-The v0.6.4 onboard validation checks generated config, generated policy, token
-auth, daemon startup, CLI ping, capability inspection, fs operation, and audit.
+The v0.6.4 onboard validation checks generated unified config, token auth,
+daemon startup, CLI ping, capability inspection, fs operation, and audit.
 
-## Draft Releases
+## Release Automation
 
 Pushing a tag that matches `v*` starts the `Draft Release` GitHub Actions
 workflow:
 
 ```bash
-git tag v0.6.3
-git push origin v0.6.3
+git tag v0.6.5
+git push origin v0.6.5
 ```
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
@@ -367,11 +412,16 @@ Use:
 Then point Operon at reachable daemon endpoints:
 
 ```yaml
-nodes:
-  cloud-a:
-    endpoint: grpc://100.96.12.34:7789
-  gpu-node:
-    endpoint: grpc://100.96.18.20:7789
+version: 1
+
+client:
+  nodes:
+    cloud-a:
+      endpoint: grpc://100.96.12.34:7789
+      provider: tailscale
+    gpu-node:
+      endpoint: grpc://100.96.18.20:7789
+      provider: cloudflare-mesh
 ```
 
 The current CLI speaks gRPC to `grpc://` daemon endpoints. There is no direct HTTP runtime API; humans and scripts should use `operon`, including `operon --json`, and programs should use SDKs or generated clients from `proto/operon/runtime.proto`. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
