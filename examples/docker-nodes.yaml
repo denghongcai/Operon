@@ -1,7 +1,7 @@
 nodes:
   node-a:
-    endpoint: http://127.0.0.1:17788
+    endpoint: grpc://127.0.0.1:17790
     token: docker-token
   node-b:
-    endpoint: http://127.0.0.1:17789
+    endpoint: grpc://127.0.0.1:17791
     token: docker-token

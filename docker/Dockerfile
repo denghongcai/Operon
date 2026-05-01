@@ -26,6 +26,6 @@ COPY examples/docker-secrets.yaml /etc/operon/secrets.yaml
 
 USER operon
 
-EXPOSE 7788 7789
+EXPOSE 7789
 
 ENTRYPOINT ["operond"]

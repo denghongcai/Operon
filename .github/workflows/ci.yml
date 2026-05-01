@@ -59,27 +59,8 @@ jobs:
       - name: Test
         run: pnpm -r test
 
-  v04-docker:
-    name: v0.4 Docker Validation
-    runs-on: ubuntu-latest
-    needs:
-      - rust
-      - typescript
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Validate v0.4 Docker demo
-        run: scripts/verify-v0.4-docker.sh
-
   v05-docker:
-    name: v0.5 gRPC Docker Validation
+    name: v0.5 Docker Validation
     runs-on: ubuntu-latest
     needs:
       - rust
@@ -94,5 +75,5 @@ jobs:
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
-      - name: Validate v0.5 gRPC Docker demo
+      - name: Validate v0.5 Docker demo
         run: scripts/verify-v0.5-docker.sh

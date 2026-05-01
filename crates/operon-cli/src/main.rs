@@ -1,8 +1,7 @@
 use std::{
     collections::BTreeMap,
     fs,
-    io::{Read, Write},
-    net::TcpStream,
+    io::Write,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -10,12 +9,11 @@ use std::{
 use clap::{Parser, Subcommand};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use operon_core::{
-    AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ErrorResponse, ExecutionTrace,
-    FsList, FsRead, FsStat, FsWrite, FsWriteRequest, HealthStatus, JobCancelRequest, JobList,
-    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
-    ServiceList, ServiceProtocol, TraceFile, TraceFileList,
+    AuditLog, CapabilityList, DiscoveryList, DiscoveryRecord, ExecutionTrace, FsList, FsRead,
+    FsWrite, HealthStatus, JobList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
+    NodeInfo, ServiceCheck, ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
-use operon_network::{NetworkProviderKind, NodeEndpoint, NodesConfig};
+use operon_network::{NetworkProviderKind, NodesConfig};
 
 mod graph;
 mod grpc;
@@ -454,14 +452,7 @@ fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow:
         .endpoint(node_id)
         .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))?;
 
-    let (health, node): (HealthStatus, NodeInfo) = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::health_and_node(&endpoint)?
-    } else {
-        (
-            http_get_json_endpoint(&endpoint, "/health")?,
-            http_get_json_endpoint(&endpoint, "/node")?,
-        )
-    };
+    let (health, node): (HealthStatus, NodeInfo) = grpc::health_and_node(&endpoint)?;
     if output.json {
         print_json(&serde_json::json!({ "health": health, "node": node }))?;
         return Ok(());
@@ -488,11 +479,7 @@ fn list_capabilities(
         .endpoint(node_id)
         .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))?;
 
-    let list: CapabilityList = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::list_capabilities(&endpoint)?
-    } else {
-        http_get_json_endpoint(&endpoint, "/capabilities")?
-    };
+    let list: CapabilityList = grpc::list_capabilities(&endpoint)?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -517,14 +504,7 @@ fn list_capabilities(
 fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat: FsStat = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::fs_stat(&endpoint, &target.path)?
-    } else {
-        http_get_json_endpoint(
-            &endpoint,
-            &format!("/fs/stat?path={}", encode_path(&target.path)),
-        )?
-    };
+    let stat = grpc::fs_stat(&endpoint, &target.path)?;
     if output.json {
         print_json(&stat)?;
         return Ok(());
@@ -544,14 +524,7 @@ fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Re
 fn fs_list(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
     let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let list: FsList = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::fs_list(&endpoint, &target.path)?
-    } else {
-        http_get_json_endpoint(
-            &endpoint,
-            &format!("/fs/list?path={}", encode_path(&target.path)),
-        )?
-    };
+    let list: FsList = grpc::fs_list(&endpoint, &target.path)?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -582,29 +555,14 @@ fn fs_read(
     let endpoint = load_endpoint(config_path, &target.node_id)?;
 
     if let Some(file_output) = file_output {
-        if grpc::is_grpc_endpoint(&endpoint) {
-            let mut file = fs::File::create(&file_output)?;
-            grpc::read_file_to_writer(&endpoint, &target.path, &mut file)?;
-        } else {
-            http_get_bytes_to_file_endpoint(
-                &endpoint,
-                &format!("/fs/read-stream?path={}", encode_path(&target.path)),
-                &file_output,
-            )?;
-        }
+        let mut file = fs::File::create(&file_output)?;
+        grpc::read_file_to_writer(&endpoint, &target.path, &mut file)?;
     } else {
-        let read: FsRead = if grpc::is_grpc_endpoint(&endpoint) {
-            let mut content = Vec::new();
-            grpc::read_file_to_writer(&endpoint, &target.path, &mut content)?;
-            FsRead {
-                path: target.path.clone(),
-                content: String::from_utf8(content)?,
-            }
-        } else {
-            http_get_json_endpoint(
-                &endpoint,
-                &format!("/fs/read?path={}", encode_path(&target.path)),
-            )?
+        let mut content = Vec::new();
+        grpc::read_file_to_writer(&endpoint, &target.path, &mut content)?;
+        let read = FsRead {
+            path: target.path.clone(),
+            content: String::from_utf8(content)?,
         };
         if output.json {
             print_json(&read)?;
@@ -630,24 +588,10 @@ fn fs_write(
     let endpoint = load_endpoint(config_path, &target.node_id)?;
 
     let write: FsWrite = match (content, file) {
-        (Some(content), None) if grpc::is_grpc_endpoint(&endpoint) => {
+        (Some(content), None) => {
             grpc::write_file_bytes(&endpoint, &target.path, content.as_bytes())?
         }
-        (Some(content), None) => {
-            let request = FsWriteRequest {
-                path: target.path.clone(),
-                content,
-            };
-            http_post_json_endpoint(&endpoint, "/fs/write", &request)?
-        }
-        (None, Some(file)) if grpc::is_grpc_endpoint(&endpoint) => {
-            grpc::write_file(&endpoint, &target.path, &file)?
-        }
-        (None, Some(file)) => http_post_file_endpoint(
-            &endpoint,
-            &format!("/fs/write-stream?path={}", encode_path(&target.path)),
-            &file,
-        )?,
+        (None, Some(file)) => grpc::write_file(&endpoint, &target.path, &file)?,
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
         (None, None) => anyhow::bail!("fs write requires --content or --file"),
     };
@@ -669,11 +613,7 @@ fn fs_write(
 
 fn list_audit(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let audit: AuditLog = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::list_audit(&endpoint)?
-    } else {
-        http_get_json_endpoint(&endpoint, "/audit")?
-    };
+    let audit: AuditLog = grpc::list_audit(&endpoint)?;
     if output.json {
         print_json(&audit)?;
         return Ok(());
@@ -688,11 +628,7 @@ fn audit_show(
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let audit: AuditLog = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::list_audit(&endpoint)?
-    } else {
-        http_get_json_endpoint(&endpoint, "/audit")?
-    };
+    let audit: AuditLog = grpc::list_audit(&endpoint)?;
     if output.json {
         print_json(&audit)?;
         return Ok(());
@@ -749,11 +685,7 @@ fn print_audit(audit: AuditLog, filter: AuditFilter, output: OutputMode) -> anyh
 
 fn service_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let list: ServiceList = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::list_services(&endpoint)?
-    } else {
-        http_get_json_endpoint(&endpoint, "/service/list")?
-    };
+    let list: ServiceList = grpc::list_services(&endpoint)?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -781,14 +713,7 @@ fn service_check(
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let check: ServiceCheck = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::check_service(&endpoint, service_id)?
-    } else {
-        http_get_json_endpoint(
-            &endpoint,
-            &format!("/service/check?id={}", encode_path(service_id)),
-        )?
-    };
+    let check: ServiceCheck = grpc::check_service(&endpoint, service_id)?;
     if output.json {
         print_json(&check)?;
         return Ok(());
@@ -814,11 +739,7 @@ fn job_run(input: JobRunInput) -> anyhow::Result<()> {
         timeout_secs: Some(input.timeout_secs),
         secrets: input.secrets,
     };
-    let record: JobRecord = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::run_job(&endpoint, request)?
-    } else {
-        http_post_json_endpoint(&endpoint, "/job/run", &request)?
-    };
+    let record: JobRecord = grpc::run_job(&endpoint, request)?;
     if input.output.json {
         print_json(&record)?;
     } else if !input.output.quiet {
@@ -863,11 +784,7 @@ fn trace_show(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
 
 fn job_list(config_path: PathBuf, node_id: &str, output: OutputMode) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let list: JobList = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::list_jobs(&endpoint)?
-    } else {
-        http_get_json_endpoint(&endpoint, "/job/list")?
-    };
+    let list: JobList = grpc::list_jobs(&endpoint)?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -908,14 +825,7 @@ fn job_logs(
 ) -> anyhow::Result<()> {
     if stream {
         let endpoint = load_endpoint(config_path, node_id)?;
-        if grpc::is_grpc_endpoint(&endpoint) {
-            return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::stdout());
-        }
-        return http_get_bytes_to_writer_endpoint(
-            &endpoint,
-            &format!("/job/logs-stream?id={job_id}"),
-            &mut std::io::stdout(),
-        );
+        return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut std::io::stdout());
     }
     if !follow {
         let record = load_job_from_path(config_path, node_id, &format!("/job/logs?id={job_id}"))?;
@@ -956,15 +866,7 @@ fn job_stdin(
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     if close {
-        let closed: JobStdinClose = if grpc::is_grpc_endpoint(&endpoint) {
-            grpc::close_job_stdin(&endpoint, job_id)?
-        } else {
-            http_post_json_endpoint(
-                &endpoint,
-                &format!("/job/stdin/close?id={job_id}"),
-                &serde_json::json!({}),
-            )?
-        };
+        let closed: JobStdinClose = grpc::close_job_stdin(&endpoint, job_id)?;
         if output.json {
             print_json(&closed)?;
         } else if !output.quiet {
@@ -973,20 +875,10 @@ fn job_stdin(
         return Ok(());
     }
     let written: JobStdin = match (content, file) {
-        (Some(content), None) if grpc::is_grpc_endpoint(&endpoint) => {
+        (Some(content), None) => {
             grpc::write_job_stdin_bytes(&endpoint, job_id, content.as_bytes())?
         }
-        (Some(content), None) => http_post_bytes_endpoint(
-            &endpoint,
-            &format!("/job/stdin?id={job_id}"),
-            content.as_bytes(),
-        )?,
-        (None, Some(file)) if grpc::is_grpc_endpoint(&endpoint) => {
-            grpc::write_job_stdin_file(&endpoint, job_id, &file)?
-        }
-        (None, Some(file)) => {
-            http_post_file_endpoint(&endpoint, &format!("/job/stdin?id={job_id}"), &file)?
-        }
+        (None, Some(file)) => grpc::write_job_stdin_file(&endpoint, job_id, &file)?,
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
         (None, None) => anyhow::bail!("job stdin requires --content, --file, or --close"),
     };
@@ -1008,14 +900,7 @@ fn job_cancel(
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let record: JobRecord = if grpc::is_grpc_endpoint(&endpoint) {
-        grpc::cancel_job(&endpoint, job_id)?
-    } else {
-        let request = JobCancelRequest {
-            job_id: job_id.to_string(),
-        };
-        http_post_json_endpoint(&endpoint, "/job/cancel", &request)?
-    };
+    let record: JobRecord = grpc::cancel_job(&endpoint, job_id)?;
     if output.json {
         print_json(&record)?;
         return Ok(());
@@ -1109,7 +994,7 @@ fn trace_list(dir: PathBuf, output: OutputMode) -> anyhow::Result<()> {
 fn init_config(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
     let content = r#"nodes:
   local:
-    endpoint: http://127.0.0.1:7788
+    endpoint: grpc://127.0.0.1:7789
     provider: manual
     token: change-me
 "#;
@@ -1145,9 +1030,9 @@ service:
     - id: local-daemon
       name: local-daemon
       host: 127.0.0.1
-      port: 7788
+      port: 7789
       protocol: tcp
-      description: Operon daemon TCP health surface
+      description: Operon gRPC daemon listener
 "#;
     fs::write(&path, content)?;
     if !output.quiet {
@@ -1183,9 +1068,9 @@ fn discover_nodes(
                     .get_addresses_v4()
                     .into_iter()
                     .next()
-                    .map(|addr| format!("http://{}:{}", addr, info.get_port()))
+                    .map(|addr| format!("grpc://{}:{}", addr, info.get_port()))
                     .unwrap_or_else(|| {
-                        format!("http://{}:{}", info.get_hostname(), info.get_port())
+                        format!("grpc://{}:{}", info.get_hostname(), info.get_port())
                     });
                 let endpoint = info
                     .get_property_val_str("endpoint")
@@ -1284,21 +1169,15 @@ fn materialize_read_only(
     local_path: &Path,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path.clone(), node_id)?;
-    let list: FsList = http_get_json_endpoint(
-        &endpoint,
-        &format!("/fs/list?path={}", encode_path(remote_path)),
-    )?;
+    let list: FsList = grpc::fs_list(&endpoint, remote_path)?;
     for entry in list.entries {
         let child_path = local_path.join(entry.name);
         if entry.is_dir {
             fs::create_dir_all(&child_path)?;
             materialize_read_only(config_path.clone(), node_id, &entry.path, &child_path)?;
         } else {
-            http_get_bytes_to_file_endpoint(
-                &endpoint,
-                &format!("/fs/read-stream?path={}", encode_path(&entry.path)),
-                &child_path,
-            )?;
+            let mut file = fs::File::create(&child_path)?;
+            grpc::read_file_to_writer(&endpoint, &entry.path, &mut file)?;
             set_readonly(&child_path)?;
         }
     }
@@ -1317,7 +1196,8 @@ pub(crate) fn load_job(
     node_id: &str,
     job_id: &str,
 ) -> anyhow::Result<JobRecord> {
-    load_job_from_path(config_path, node_id, &format!("/job/status?id={job_id}"))
+    let endpoint = load_endpoint(config_path, node_id)?;
+    grpc::get_job(&endpoint, job_id)
 }
 
 fn load_job_from_path(
@@ -1325,16 +1205,11 @@ fn load_job_from_path(
     node_id: &str,
     path: &str,
 ) -> anyhow::Result<JobRecord> {
-    let endpoint = load_endpoint(config_path, node_id)?;
-    if grpc::is_grpc_endpoint(&endpoint) {
-        let job_id = path
-            .split_once("id=")
-            .map(|(_, id)| id)
-            .ok_or_else(|| anyhow::anyhow!("gRPC job path must include id query"))?;
-        grpc::get_job(&endpoint, job_id)
-    } else {
-        http_get_json_endpoint(&endpoint, path)
-    }
+    let job_id = path
+        .split_once("id=")
+        .map(|(_, id)| id)
+        .ok_or_else(|| anyhow::anyhow!("job path must include id query"))?;
+    load_job(config_path, node_id, job_id)
 }
 
 fn print_job_status(record: &JobRecord) {
@@ -1342,282 +1217,6 @@ fn print_job_status(record: &JobRecord) {
         "{} {} {:?} exit_code={:?}",
         record.node_id, record.id, record.status, record.exit_code
     );
-}
-
-pub(crate) fn http_get_json_endpoint<T: serde::de::DeserializeOwned>(
-    endpoint: &NodeEndpoint,
-    path: &str,
-) -> anyhow::Result<T> {
-    http_json_request(
-        &endpoint.endpoint,
-        "GET",
-        path,
-        None,
-        endpoint.token.as_deref(),
-    )
-}
-
-fn http_get_bytes_to_file_endpoint(
-    endpoint: &NodeEndpoint,
-    path: &str,
-    output: &Path,
-) -> anyhow::Result<()> {
-    let mut file = fs::File::create(output)?;
-    http_get_bytes_to_writer_endpoint(endpoint, path, &mut file)
-}
-
-fn http_get_bytes_to_writer_endpoint(
-    endpoint: &NodeEndpoint,
-    path: &str,
-    writer: &mut impl Write,
-) -> anyhow::Result<()> {
-    let target = parse_http_endpoint(&endpoint.endpoint)?;
-    let mut stream = TcpStream::connect((&*target.host, target.port))?;
-    let auth = endpoint
-        .token
-        .as_deref()
-        .map(|token| format!("Authorization: Bearer {token}\r\n"))
-        .unwrap_or_default();
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: */*\r\n{auth}Content-Length: 0\r\n\r\n",
-        target.host,
-    );
-    stream.write_all(request.as_bytes())?;
-    copy_http_body_to_writer(&endpoint.endpoint, path, stream, writer)
-}
-
-pub(crate) fn http_post_json_endpoint<T: serde::de::DeserializeOwned, B: serde::Serialize>(
-    endpoint: &NodeEndpoint,
-    path: &str,
-    body: &B,
-) -> anyhow::Result<T> {
-    http_json_request(
-        &endpoint.endpoint,
-        "POST",
-        path,
-        Some(serde_json::to_string(body)?),
-        endpoint.token.as_deref(),
-    )
-}
-
-fn http_post_bytes_endpoint<T: serde::de::DeserializeOwned>(
-    endpoint: &NodeEndpoint,
-    path: &str,
-    body: &[u8],
-) -> anyhow::Result<T> {
-    let response = http_bytes_request(
-        &endpoint.endpoint,
-        "POST",
-        path,
-        Some(body),
-        "application/octet-stream",
-        endpoint.token.as_deref(),
-    )?;
-    Ok(serde_json::from_slice(&response)?)
-}
-
-fn http_post_file_endpoint<T: serde::de::DeserializeOwned>(
-    endpoint: &NodeEndpoint,
-    path: &str,
-    file: &Path,
-) -> anyhow::Result<T> {
-    let target = parse_http_endpoint(&endpoint.endpoint)?;
-    let mut stream = TcpStream::connect((&*target.host, target.port))?;
-    let mut file = fs::File::open(file)?;
-    let body_len = file.metadata()?.len();
-    let auth = endpoint
-        .token
-        .as_deref()
-        .map(|token| format!("Authorization: Bearer {token}\r\n"))
-        .unwrap_or_default();
-    let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n{auth}Content-Type: application/octet-stream\r\nContent-Length: {body_len}\r\n\r\n",
-        target.host,
-    );
-    stream.write_all(request.as_bytes())?;
-    std::io::copy(&mut file, &mut stream)?;
-    let body = read_http_body(&endpoint.endpoint, path, stream)?;
-    Ok(serde_json::from_slice(&body)?)
-}
-
-fn copy_http_body_to_writer(
-    endpoint: &str,
-    path: &str,
-    mut stream: TcpStream,
-    writer: &mut impl Write,
-) -> anyhow::Result<()> {
-    let mut response = Vec::new();
-    let mut buffer = [0_u8; 8192];
-    let split = loop {
-        let count = stream.read(&mut buffer)?;
-        if count == 0 {
-            anyhow::bail!("invalid HTTP response from {endpoint}");
-        }
-        response.extend_from_slice(&buffer[..count]);
-        if let Some(split) = response.windows(4).position(|window| window == b"\r\n\r\n") {
-            break split;
-        }
-    };
-    let head = std::str::from_utf8(&response[..split])?;
-    let status = head
-        .lines()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("missing HTTP status from {endpoint}"))?;
-    let body_start = split + 4;
-    let chunked = head
-        .lines()
-        .any(|line| line.eq_ignore_ascii_case("transfer-encoding: chunked"));
-    if !status.contains(" 200 ") {
-        let mut body = response[body_start..].to_vec();
-        stream.read_to_end(&mut body)?;
-        anyhow::bail!(
-            "request to {endpoint}{path} failed: {status}: {}",
-            format_error_body(&String::from_utf8_lossy(&body))
-        );
-    }
-    if chunked {
-        return copy_chunked_http_body(&response[body_start..], stream, writer);
-    }
-    writer.write_all(&response[body_start..])?;
-    loop {
-        let count = stream.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        writer.write_all(&buffer[..count])?;
-    }
-    Ok(())
-}
-
-fn copy_chunked_http_body(
-    initial: &[u8],
-    mut stream: TcpStream,
-    writer: &mut impl Write,
-) -> anyhow::Result<()> {
-    let mut data = initial.to_vec();
-    stream.read_to_end(&mut data)?;
-    let mut cursor = 0;
-    loop {
-        let Some(line_end) = find_crlf(&data[cursor..]) else {
-            anyhow::bail!("invalid chunked HTTP response");
-        };
-        let size_line = std::str::from_utf8(&data[cursor..cursor + line_end])?;
-        let size_hex = size_line.split(';').next().unwrap_or(size_line).trim();
-        let size = usize::from_str_radix(size_hex, 16)?;
-        cursor += line_end + 2;
-        if size == 0 {
-            break;
-        }
-        if data.len() < cursor + size + 2 {
-            anyhow::bail!("truncated chunked HTTP response");
-        }
-        writer.write_all(&data[cursor..cursor + size])?;
-        cursor += size + 2;
-    }
-    Ok(())
-}
-
-fn find_crlf(data: &[u8]) -> Option<usize> {
-    data.windows(2).position(|window| window == b"\r\n")
-}
-
-fn read_http_body(endpoint: &str, path: &str, stream: TcpStream) -> anyhow::Result<Vec<u8>> {
-    let mut body = Vec::new();
-    copy_http_body_to_writer(endpoint, path, stream, &mut body)?;
-    Ok(body)
-}
-
-fn http_json_request<T: serde::de::DeserializeOwned>(
-    endpoint: &str,
-    method: &str,
-    path: &str,
-    body: Option<String>,
-    token: Option<&str>,
-) -> anyhow::Result<T> {
-    let target = parse_http_endpoint(endpoint)?;
-    let mut stream = TcpStream::connect((&*target.host, target.port))?;
-    let body = body.unwrap_or_default();
-    let auth = token
-        .map(|token| format!("Authorization: Bearer {token}\r\n"))
-        .unwrap_or_default();
-    let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n{auth}Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        target.host,
-        body.len(),
-        body
-    );
-    stream.write_all(request.as_bytes())?;
-
-    let mut response = String::new();
-    stream.read_to_string(&mut response)?;
-
-    let (head, body) = response
-        .split_once("\r\n\r\n")
-        .ok_or_else(|| anyhow::anyhow!("invalid HTTP response from {endpoint}"))?;
-    let status = head
-        .lines()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("missing HTTP status from {endpoint}"))?;
-
-    if !status.contains(" 200 ") {
-        anyhow::bail!(
-            "request to {endpoint}{path} failed: {status}: {}",
-            format_error_body(body)
-        );
-    }
-
-    Ok(serde_json::from_str(body)?)
-}
-
-fn http_bytes_request(
-    endpoint: &str,
-    method: &str,
-    path: &str,
-    body: Option<&[u8]>,
-    content_type: &str,
-    token: Option<&str>,
-) -> anyhow::Result<Vec<u8>> {
-    let target = parse_http_endpoint(endpoint)?;
-    let mut stream = TcpStream::connect((&*target.host, target.port))?;
-    let body = body.unwrap_or_default();
-    let auth = token
-        .map(|token| format!("Authorization: Bearer {token}\r\n"))
-        .unwrap_or_default();
-    let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: */*\r\n{auth}Content-Type: {content_type}\r\nContent-Length: {}\r\n\r\n",
-        target.host,
-        body.len(),
-    );
-    stream.write_all(request.as_bytes())?;
-    stream.write_all(body)?;
-
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response)?;
-    let split = response
-        .windows(4)
-        .position(|window| window == b"\r\n\r\n")
-        .ok_or_else(|| anyhow::anyhow!("invalid HTTP response from {endpoint}"))?;
-    let head = std::str::from_utf8(&response[..split])?;
-    let body = response[split + 4..].to_vec();
-    let status = head
-        .lines()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("missing HTTP status from {endpoint}"))?;
-
-    if !status.contains(" 200 ") {
-        anyhow::bail!(
-            "request to {endpoint}{path} failed: {status}: {}",
-            format_error_body(&String::from_utf8_lossy(&body))
-        );
-    }
-
-    Ok(body)
-}
-
-fn format_error_body(body: &str) -> String {
-    serde_json::from_str::<ErrorResponse>(body)
-        .map(|error| format!("{}: {}", error.code, error.message))
-        .unwrap_or_else(|_| body.trim().to_string())
 }
 
 fn format_service_protocol(protocol: &ServiceProtocol) -> &'static str {
@@ -1658,35 +1257,6 @@ pub(crate) fn load_endpoint(
     config.resolve(node_id)
 }
 
-pub(crate) fn encode_path(path: &str) -> String {
-    path.replace('%', "%25")
-        .replace(' ', "%20")
-        .replace('#', "%23")
-        .replace('&', "%26")
-        .replace('?', "%3F")
-}
-
-#[derive(Debug)]
-struct HttpEndpoint {
-    host: String,
-    port: u16,
-}
-
-fn parse_http_endpoint(endpoint: &str) -> anyhow::Result<HttpEndpoint> {
-    let rest = endpoint
-        .strip_prefix("http://")
-        .ok_or_else(|| anyhow::anyhow!("this command path requires an http:// endpoint"))?;
-    let authority = rest.split('/').next().unwrap_or(rest);
-    let (host, port) = authority
-        .rsplit_once(':')
-        .ok_or_else(|| anyhow::anyhow!("endpoint must include a port: {endpoint}"))?;
-
-    Ok(HttpEndpoint {
-        host: host.to_string(),
-        port: port.parse()?,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1703,37 +1273,5 @@ mod tests {
     fn rejects_node_path_without_separator() {
         let error = parse_node_path("node-a/workspace").expect_err("target should fail");
         assert!(error.to_string().contains("node:/path"));
-    }
-
-    #[test]
-    fn encodes_query_path_reserved_characters() {
-        assert_eq!(
-            encode_path("/a b/%file?x=1&y=2#frag"),
-            "/a%20b/%25file%3Fx=1%26y=2%23frag"
-        );
-    }
-
-    #[test]
-    fn parses_http_endpoint_with_port() {
-        let endpoint =
-            parse_http_endpoint("http://127.0.0.1:17788").expect("endpoint should parse");
-
-        assert_eq!(endpoint.host, "127.0.0.1");
-        assert_eq!(endpoint.port, 17788);
-    }
-
-    #[test]
-    fn rejects_non_http_endpoint_for_current_client() {
-        let error = parse_http_endpoint("https://127.0.0.1:7788").expect_err("https unsupported");
-        assert!(error.to_string().contains("requires an http:// endpoint"));
-    }
-
-    #[test]
-    fn formats_structured_daemon_error_body() {
-        let body = r#"{"code":"forbidden","message":"fs read denied by policy"}"#;
-        assert_eq!(
-            format_error_body(body),
-            "forbidden: fs read denied by policy"
-        );
     }
 }

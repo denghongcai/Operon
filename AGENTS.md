@@ -44,6 +44,9 @@ Operon should not own:
 - `docs/plan/v0.5-acceptance.md`
   - v0.5 acceptance scope for the gRPC runtime protocol migration.
 
+- `docs/plan/v0.5.1-cleanup-acceptance.md`
+  - v0.5.1 cleanup scope for removing the HTTP runtime facade after gRPC.
+
 - `docs/plan/v0.6-acceptance.md`
   - v0.6 acceptance scope for Linux-only real FUSE mount support.
 
@@ -57,7 +60,10 @@ Operon should not own:
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
 - `docs/architecture/runtime-api.md`
-  - Current HTTP daemon API shape, structured error response, service capability boundary, and future gRPC candidates.
+  - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
+
+- `PROTOCOL.md`
+  - Direct gRPC protocol integration guide for clients that do not use an Operon SDK.
 
 - `README.md`
   - Public-facing project positioning and high-level architecture.
@@ -69,7 +75,7 @@ Operon should not own:
 
 - `docs/architecture/technology-and-protocol-decisions.md`
   - Technical architecture decisions.
-  - Covers Rust daemon core, TypeScript SDK, CLI TUI console direction, gRPC streaming protocol, HTTP/JSON facade, provider adapters, distribution targets, and non-goals.
+  - Covers Rust daemon core, TypeScript SDK, CLI TUI console direction, gRPC streaming protocol, CLI/SDK interfaces, provider adapters, distribution targets, and non-goals.
 
 - `docs/dicussions/computer-mesh-operon.md`
   - Raw archived discussion that led to the current direction.
@@ -80,10 +86,12 @@ Operon should not own:
 - Core daemon: Rust.
 - SDK: TypeScript.
 - CLI and CLI TUI console: Rust.
-- Current core daemon protocol: gRPC with streaming for `grpc://` endpoints.
-- Local control/API facade: HTTP + JSON, SSE, or WebSocket.
-- Current compatibility API surface: HTTP + JSON with structured daemon errors.
+- Current core daemon protocol: gRPC with streaming.
+- Human, ops, and script interface: `operon` CLI, including `--json`.
+- TypeScript SDK interface: `nice-grpc`.
+- HTTP runtime facade was removed in v0.5.1; do not reintroduce direct HTTP runtime APIs.
 - Completed protocol milestone: v0.5 gRPC runtime protocol migration.
+- Completed cleanup milestone: v0.5.1 removed the HTTP runtime facade and added `PROTOCOL.md`.
 - Next mount milestone: v0.6 Linux-only real FUSE mount.
 - Later planned milestones: v0.7 CLI TUI console, v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.

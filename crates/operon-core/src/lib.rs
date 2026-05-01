@@ -113,18 +113,6 @@ pub struct AuditLog {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ErrorResponse {
-    pub code: String,
-    pub message: String,
-    #[serde(default)]
-    pub status: u16,
-    #[serde(default)]
-    pub capability: Option<String>,
-    #[serde(default)]
-    pub resource: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PolicyConfig {
     pub subject: String,
     pub fs: FsPolicy,

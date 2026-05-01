@@ -107,14 +107,14 @@ mod tests {
             r#"
 nodes:
   local:
-    endpoint: http://127.0.0.1:7788
+    endpoint: grpc://127.0.0.1:7789
 "#,
         )
         .expect("config should parse");
 
         let endpoint = config.endpoint("local").expect("local endpoint");
         assert_eq!(endpoint.node_id, "local");
-        assert_eq!(endpoint.endpoint, "http://127.0.0.1:7788");
+        assert_eq!(endpoint.endpoint, "grpc://127.0.0.1:7789");
         assert!(matches!(endpoint.provider, NetworkProviderKind::Manual));
         assert_eq!(endpoint.token, None);
     }
@@ -125,7 +125,7 @@ nodes:
             r#"
 nodes:
   gpu:
-    endpoint: http://100.96.18.20:7788
+    endpoint: grpc://100.96.18.20:7789
     provider: tailscale
 "#,
         )
@@ -141,9 +141,9 @@ nodes:
             r#"
 nodes:
   node-b:
-    endpoint: http://127.0.0.1:17789
+    endpoint: grpc://127.0.0.1:17791
   node-a:
-    endpoint: http://127.0.0.1:17788
+    endpoint: grpc://127.0.0.1:17790
 "#,
         )
         .expect("config should parse");
@@ -163,7 +163,7 @@ nodes:
             r#"
 nodes:
   local:
-    endpoint: http://127.0.0.1:7788
+    endpoint: grpc://127.0.0.1:7789
     token: test-token
 "#,
         )

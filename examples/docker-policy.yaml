@@ -23,6 +23,6 @@ service:
     - id: daemon
       name: daemon
       host: 127.0.0.1
-      port: 7788
+      port: 7789
       protocol: tcp
-      description: Operon daemon TCP listener
+      description: Operon gRPC daemon listener

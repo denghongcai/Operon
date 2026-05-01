@@ -72,11 +72,10 @@ cargo test --workspace --locked
 cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
 pnpm test
-scripts/verify-v0.4-docker.sh
 scripts/verify-v0.5-docker.sh
 ```
 
-The Docker validations start two reachable `operond` nodes, exercise capabilities through the CLI, check auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and run the example execution graph. The v0.5 validation runs the same core runtime path over gRPC endpoints.
+The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph over gRPC endpoints.
 
 ---
 
@@ -90,14 +89,14 @@ The v0.5 runtime has two binaries:
 From the repo, run them through Cargo:
 
 ```bash
-cargo run -p operond -- start --listen 0.0.0.0:7788 --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
+cargo run -p operond -- start --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
 cargo run -p operon-cli -- --config examples/nodes.yaml node list
 ```
 
 After installing built binaries, the same commands are:
 
 ```bash
-operond start --listen 0.0.0.0:7788 --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
+operond start --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
 operon --config examples/nodes.yaml node list
 ```
 
@@ -122,7 +121,7 @@ Config shape:
 ```yaml
 nodes:
   local:
-    endpoint: http://127.0.0.1:7788
+    endpoint: grpc://127.0.0.1:7789
     token: local-dev-token
   cloud-a:
     endpoint: grpc://100.96.12.34:7789
@@ -132,7 +131,7 @@ nodes:
     provider: cloudflare-mesh
 ```
 
-`endpoint` may be `grpc://`, `grpcs://`, or `http://`. The CLI uses gRPC for `grpc://` and `grpcs://` endpoints and keeps `http://` as the scriptable compatibility facade. `provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
+`endpoint` may be `grpc://` or `grpcs://`. The CLI uses gRPC for runtime operations. Use `operon --json` for scripts, and use `PROTOCOL.md` if you need to integrate without an SDK. `provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
 
 Provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
 
@@ -154,7 +153,7 @@ kubernetes
 
 ```bash
 operond start \
-  --listen 0.0.0.0:7788 \
+  --grpc-listen 0.0.0.0:7789 \
   --node-id cloud-a \
   --workspace /home/ubuntu/workspace \
   --policy ./operon.policy.yaml \
@@ -194,9 +193,9 @@ service:
     - id: daemon
       name: daemon
       host: 127.0.0.1
-      port: 7788
+      port: 7789
       protocol: tcp
-      description: Operon daemon TCP listener
+      description: Operon gRPC daemon listener
 ```
 
 Policy paths are virtual paths inside the daemon workspace. If the daemon starts with `--workspace /home/ubuntu/workspace`, policy path `/` means that workspace root, not the host root.
@@ -280,7 +279,7 @@ nodes:
     endpoint: grpc://100.96.18.20:7789
 ```
 
-The current CLI speaks gRPC to `grpc://` daemon endpoints and keeps HTTP/JSON available for scripts, debugging, and compatibility. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
+The current CLI speaks gRPC to `grpc://` daemon endpoints. There is no direct HTTP runtime API; humans and scripts should use `operon`, including `operon --json`, and programs should use SDKs or generated clients from `proto/operon/runtime.proto`. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another device. Operon decides whether that device can read a directory, run a job, use a secret, or inspect an execution trace.
 
@@ -294,10 +293,10 @@ Run the local Docker v0.5 gRPC demo:
 scripts/verify-v0.5-docker.sh
 ```
 
-This starts two `operond` containers with HTTP and gRPC listeners, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, policy denial, scoped secrets, audit output, trace summaries, and runs:
+This starts two `operond` containers with gRPC listeners, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, policy denial, scoped secrets, audit output, trace summaries, and runs:
 
 ```bash
-operon --config examples/docker-nodes-grpc.yaml run --trace-output /tmp/operon-docker-grpc-trace.json examples/docker-copy-and-run.yaml
+operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-grpc-trace.json examples/docker-copy-and-run.yaml
 ```
 
 Example workflow:
@@ -437,7 +436,7 @@ Capability Layer
 Policy / Secret / Audit
         ↓
 Agent API
-  - HTTP / WebSocket / gRPC
+  - gRPC
         ↓
 Network Provider Adapter
   - Cloudflare Mesh / Tailscale / WireGuard / SSH / LAN
@@ -472,6 +471,7 @@ Roadmap:
 - [x] Service / port metadata and health checks
 - [x] Filtered audit and human-readable trace CLI UX
 - [x] gRPC runtime protocol
+- [x] Remove HTTP runtime facade
 - [ ] Linux FUSE mount
 - [ ] CLI TUI console
 - [ ] Agent integration

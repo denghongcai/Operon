@@ -55,7 +55,6 @@ Recommended Rust crates:
 async runtime: tokio
 gRPC: tonic
 protobuf: prost
-HTTP API: axum
 CLI: clap
 serialization: serde
 config: figment or config
@@ -141,36 +140,34 @@ service OperonNode {
 }
 ```
 
-## Decision 4: HTTP/JSON Facade for AI and Scripts
+## Decision 4: CLI and SDK Instead of HTTP Runtime Facade
 
-Operon should not force all consumers to speak gRPC directly.
+Operon should not keep a parallel HTTP runtime API once gRPC is available.
 
-The local daemon should expose an HTTP facade for human scripts, AI agents, and debugging:
+The supported interfaces should be:
 
 ```text
-AI SDK / Scripts
-          |
-HTTP JSON / SSE / WebSocket
-          |
-      local operond
-          |
-   gRPC streaming protocol
-          |
-remote operond / worker
+Humans / ops / scripts -> operon CLI, including --json
+Programs / agents      -> SDKs generated from the gRPC protocol
+Daemon runtime         -> gRPC streaming protocol
 ```
 
-This keeps daemon internals strongly typed while preserving easy integration for:
+This keeps the daemon surface smaller and avoids maintaining two runtime API
+contracts. Direct HTTP runtime calls would duplicate:
 
-- curl-based debugging
-- LLM tool calls
-- lightweight automation scripts
+- auth behavior
+- structured error semantics
+- streaming file transfer
+- job stdin/log streaming
+- documentation and validation matrices
 
 Recommended split:
 
 ```text
 daemon core: gRPC
-local control API: HTTP + JSON
-event streaming to SDK/tools: SSE or WebSocket where useful
+script/control interface: operon CLI with --json
+programmatic interface: TypeScript SDK with nice-grpc
+direct protocol interface: generated gRPC clients from proto/operon/runtime.proto
 operator console: Rust CLI TUI over the runtime clients
 ```
 
@@ -234,9 +231,9 @@ Example:
 ```yaml
 nodes:
   cloud-a:
-    endpoint: https://100.96.12.34:7788
+    endpoint: grpc://100.96.12.34:7789
   gpu-node:
-    endpoint: https://100.96.18.20:7788
+    endpoint: grpc://100.96.18.20:7789
 ```
 
 The provider abstraction should stay small:
@@ -305,7 +302,7 @@ To keep distribution practical, Operon should support multiple daemon profiles:
 
 ```text
 operond-full
-  Full node daemon with storage, fs, process, gRPC, HTTP facade, and later mount support.
+  Full node daemon with storage, fs, process, gRPC, and later mount support.
 
 operond-lite
   Small edge daemon with core capabilities and basic RPC. No mount layer and fewer optional dependencies.
@@ -326,7 +323,7 @@ For v0.1, Operon should prioritize correctness and debuggability:
 
 ```text
 gRPC over HTTP/2 with rustls
-local HTTP control API through axum
+operon CLI with --json for local control and scripts
 ```
 
 QUIC, NAT traversal, and relay work should not be part of Operon's core roadmap unless the project later proves a capability-specific need that existing network providers cannot satisfy.
@@ -336,7 +333,7 @@ Recommended progression:
 ```text
 v0.1:
   gRPC core protocol
-  local HTTP/JSON facade
+  operon CLI control surface
   filesystem and process capability streams
   manual node endpoint config
 
@@ -389,7 +386,6 @@ Operon should be built as:
 ```text
 Rust daemon core
 + gRPC streaming node protocol
-+ HTTP/JSON local facade
 + TypeScript SDK and Rust CLI TUI console
 + network provider adapters over existing private networks
 + protobuf contracts as protocol source of truth

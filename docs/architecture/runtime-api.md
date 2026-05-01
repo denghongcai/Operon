@@ -1,91 +1,69 @@
 # Runtime API
 
-Operon v0.5 uses gRPC as the core runtime protocol and keeps HTTP/JSON as a
-scriptable compatibility facade. The API is meant for local CLI, SDK, and agent
-tooling on an already trusted private network. HTTPS, mTLS, and signed node
-identity remain later hardening work.
+Operon exposes daemon runtime operations through gRPC only. The API is meant for
+the `operon` CLI, SDKs, generated protocol clients, and agent tooling on an
+already trusted private network. HTTPS, mTLS, and signed node identity remain
+later hardening work.
 
 ## Current Boundary
 
-- The daemon listens on HTTP when `--listen` is set.
-- The daemon listens on gRPC when `--grpc-listen` is set.
+- The daemon starts one runtime listener with `operond start --grpc-listen`.
+- Runtime configs use `grpc://` or `grpcs://` node endpoints.
+- Scripts should use `operon --json`, not direct daemon calls.
+- Programs should use an SDK or generate a gRPC client from
+  `proto/operon/runtime.proto`.
+- Clients that do not use an SDK should follow `PROTOCOL.md`.
 - Authentication is bearer-token based when `operond` starts with
   `--auth-token` or `--auth-token-file`.
 - Policy is enforced by the daemon for every capability operation.
-- HTTP errors use one structured JSON response shape.
-- gRPC errors use status codes that map to the same authz and policy outcomes.
-- Long-running execution remains job-based with explicit polling or streaming
-  log/stdin endpoints.
+- gRPC errors use status codes for auth, policy, validation, missing resources,
+  precondition failures, and internal failures.
+- Long-running execution remains job-based with explicit status calls or
+  streaming log/stdin methods.
 
-The HTTP API is not a VPN, proxy, relay, or port forwarder. Network encryption,
-routing, and private addressing should come from Cloudflare Mesh, Tailscale,
-WireGuard, SSH tunnels, LAN, Kubernetes networking, or another existing secure
-network layer.
+There is no HTTP runtime facade. A gRPC client library may internally use an
+`http://` h2c channel target for `grpc://` endpoints, but that is transport
+configuration, not an Operon HTTP API.
 
-## Error Response
+The runtime API is not a VPN, proxy, relay, or port forwarder. Network
+encryption, routing, and private addressing should come from Cloudflare Mesh,
+Tailscale, WireGuard, SSH tunnels, LAN, Kubernetes networking, or another
+existing secure network layer.
 
-All daemon handlers should return this JSON shape on structured errors:
+## gRPC Runtime Surface
 
-```json
-{
-  "code": "forbidden",
-  "message": "fs read denied by policy",
-  "status": 403,
-  "capability": "fs:workspace",
-  "resource": "/secret.txt"
-}
-```
+The source of truth is `proto/operon/runtime.proto`.
 
-Fields:
+Unary calls:
 
-- `code`: stable machine-readable class such as `unauthorized`, `forbidden`,
-  `not-found`, `bad-request`, `timeout`, or `internal-error`.
-- `message`: human-readable detail.
-- `status`: HTTP status code.
-- `capability`: optional capability id involved in the failure.
-- `resource`: optional path, service id, job id, or other target resource.
+- `Health`
+- `GetNode`
+- `ListCapabilities`
+- `StatFs`
+- `ListFs`
+- `RunJob`
+- `GetJob`
+- `ListJobs`
+- `CloseJobStdin`
+- `CancelJob`
+- `ListServices`
+- `CheckService`
+- `ListAudit`
 
-## Stable HTTP Facade Surfaces
+Server-streaming calls:
 
-Node and capability:
+- `ReadFile`
+- `StreamJobLogs`
 
-- `GET /health`
-- `GET /node`
-- `GET /capabilities`
+Client-streaming calls:
 
-Filesystem:
-
-- `GET /fs/stat?path=...`
-- `GET /fs/list?path=...`
-- `GET /fs/read?path=...`
-- `POST /fs/write`
-- `GET /fs/read-stream?path=...`
-- `POST /fs/write-stream?path=...`
-
-Jobs:
-
-- `POST /job/run`
-- `POST /job/cancel`
-- `GET /job/status?id=...`
-- `GET /job/list`
-- `GET /job/logs?id=...`
-- `GET /job/logs-stream?id=...`
-- `POST /job/stdin?id=...`
-- `POST /job/stdin/close?id=...`
-
-Audit:
-
-- `GET /audit`
-
-Services:
-
-- `GET /service/list`
-- `GET /service/check?id=...`
+- `WriteFile`
+- `WriteJobStdin`
 
 ## Service / Port Capability
 
-The service capability describes local TCP services that the daemon policy
-allows callers to inspect.
+The service capability describes local TCP services that daemon policy allows
+callers to inspect.
 
 Policy example:
 
@@ -95,26 +73,23 @@ service:
     - id: daemon
       name: daemon
       host: 127.0.0.1
-      port: 7788
+      port: 7789
       protocol: tcp
-      description: Operon daemon TCP listener
+      description: Operon gRPC daemon listener
 ```
 
-`/service/list` returns configured services. `/service/check` attempts a TCP
+`ListServices` returns configured services. `CheckService` attempts a TCP
 connection to one configured service and records an audit event. Unknown service
 ids fail through policy.
 
 This capability does not forward traffic, proxy bytes, allocate ports, or create
 network reachability. It only exposes configured metadata and health checks.
 
-## Stable gRPC Runtime Surface
+## Interface Policy
 
-The source of truth is `proto/operon/runtime.proto`. v0.5 exposes:
+`operon` is the supported human, ops, and script interface. Use `--json` when a
+script needs stable machine-readable output.
 
-- unary calls for health, node metadata, capabilities, fs stat/list, job
-  run/status/list/cancel, services, and audit.
-- server-streaming calls for file reads and job logs.
-- client-streaming calls for file writes and job stdin.
-
-The HTTP API remains the compatibility and local-control surface for scripts and
-debugging.
+SDKs and generated clients are the supported programmatic interface. A new
+daemon runtime surface must be added to `proto/operon/runtime.proto` first, then
+exposed through CLI/SDK as needed.

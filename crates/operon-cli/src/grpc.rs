@@ -342,10 +342,6 @@ fn grpc_job_run_request(value: JobRunRequest) -> operon_protocol::runtime::v1::J
     }
 }
 
-pub fn is_grpc_endpoint(endpoint: &NodeEndpoint) -> bool {
-    endpoint.endpoint.starts_with("grpc://") || endpoint.endpoint.starts_with("grpcs://")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

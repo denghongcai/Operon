@@ -21,7 +21,6 @@ rust-version = "1.80"
 [workspace.dependencies]
 anyhow = "1"
 async-stream = "0.3"
-axum = "0.8"
 clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
 mdns-sd = "0.19.1"

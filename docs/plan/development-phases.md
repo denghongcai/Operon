@@ -106,14 +106,14 @@ Current status: completed on 2026-04-30 with Docker two-node validation.
 
 Completed:
 
-- `operond start --listen <addr> --node-id <id>` implemented.
+- `operond start --grpc-listen <addr> --node-id <id>` implemented.
 - daemon exposes `GET /health`.
 - daemon exposes `GET /node`.
 - manual YAML endpoint config is loadable.
 - `operon node list` implemented.
-- `operon node ping <node-id>` implemented for Phase 1 `http://` endpoints.
+- `operon node ping <node-id>` implemented for Phase 1 configured endpoints.
 - `examples/nodes.yaml` includes a local endpoint.
-- local validation passed with `operond` on `127.0.0.1:7788` and `operon node ping local`.
+- local validation passed with `operond` on `127.0.0.1:7789` and `operon node ping local`.
 - Docker two-node validation added through `docker-compose.yml`, `docker/Dockerfile`, `examples/docker-nodes.yaml`, and `scripts/verify-mvp-docker.sh`.
 - Docker two-node validation passed with `node-a` and `node-b`.
 
@@ -124,7 +124,7 @@ Remaining:
 Commands:
 
 ```bash
-operond start --listen 0.0.0.0:7788
+operond start --grpc-listen 0.0.0.0:7789
 operon node list
 operon node ping cloud-a
 ```
@@ -134,9 +134,9 @@ Configuration:
 ```yaml
 nodes:
   local:
-    endpoint: http://127.0.0.1:7788
+    endpoint: grpc://127.0.0.1:7789
   cloud-a:
-    endpoint: http://100.96.12.34:7788
+    endpoint: grpc://100.96.12.34:7789
 ```
 
 Modules:
@@ -558,8 +558,8 @@ TypeScript SDK shape:
 import { OperonClient } from "@operon/sdk";
 
 const operon = new OperonClient([
-  { nodeId: "cloud-a", endpoint: "http://100.96.12.34:7788" },
-  { nodeId: "gpu-node", endpoint: "http://100.96.18.20:7788" }
+  { nodeId: "cloud-a", endpoint: "grpc://100.96.12.34:7789" },
+  { nodeId: "gpu-node", endpoint: "grpc://100.96.18.20:7789" }
 ]);
 
 const trace = await operon.run({
@@ -571,7 +571,8 @@ const trace = await operon.run({
 });
 ```
 
-SDK should call the local daemon HTTP facade, not require consumers to speak gRPC directly.
+Superseded by v0.5 and v0.5.1: SDKs should use the shared gRPC protocol, while
+scripts and humans should use `operon --json`.
 
 Required demo:
 
@@ -1063,9 +1064,9 @@ Completed:
 
 - Added `docs/plan/v0.3-acceptance.md`.
 - Updated README for v0.3 commands and limits.
-- Added `scripts/verify-v0.3-docker.sh`.
+- Added `scripts/verify-v0.5-docker.sh`.
 - Updated CI to run v0.3 Docker validation.
-- Verified `scripts/verify-v0.3-docker.sh` locally against the two-node Docker environment.
+- Verified `scripts/verify-v0.5-docker.sh` locally against the two-node Docker environment.
 - Updated this phase tracker after completing v0.3 implementation.
 
 Remaining:
@@ -1184,7 +1185,7 @@ Completed:
 - Updated `trace list` to only include trace-like JSON files.
 - Updated `trace show` to default to a human-readable summary while preserving
   `--json` output.
-- Covered audit filter and trace UX paths in `scripts/verify-v0.4-docker.sh`.
+- Covered audit filter and trace UX paths in `scripts/verify-v0.5-docker.sh`.
 
 ## Phase 24: v0.4 Acceptance
 
@@ -1209,18 +1210,18 @@ Completed:
 - Added `docs/plan/v0.4-acceptance.md`.
 - Updated README with v0.4 validation, service commands, policy config, audit
   filters, and trace JSON/human usage.
-- Added `scripts/verify-v0.4-docker.sh` and made it repeatable around the
+- Added `scripts/verify-v0.5-docker.sh` and made it repeatable around the
   read-only mount PoC temp directory.
 - Updated CI to run on pull requests and pushes to every branch.
 - Updated CI Docker validation from v0.3 to v0.4.
-- Verified `scripts/verify-v0.4-docker.sh` locally against the two-node Docker
+- Verified `scripts/verify-v0.5-docker.sh` locally against the two-node Docker
   environment.
 
 ## v0.5 Goal
 
 Operon v0.5 should replace the temporary HTTP-only runtime path with a real
-gRPC core protocol while keeping the HTTP/JSON facade for scripts, SDKs, and
-debugging.
+gRPC core protocol. v0.5 temporarily kept the HTTP/JSON facade during migration;
+v0.5.1 should remove it and make CLI/SDK the supported interfaces.
 
 ```text
 v0.5 = protobuf source of truth + tonic gRPC server + gRPC-capable CLI paths.
@@ -1244,7 +1245,8 @@ Planned:
   and execution events explicitly.
 - define auth metadata conventions for bearer tokens.
 - add generated Rust types through `operon-protocol`.
-- document compatibility between HTTP facade errors and gRPC status details.
+- document compatibility between migration-era HTTP facade errors and gRPC
+  status details.
 
 Done when:
 
@@ -1269,51 +1271,48 @@ Goal: expose the current daemon capability runtime through tonic.
 Planned:
 
 - add a gRPC listener to `operond`.
-- keep HTTP/JSON enabled as a facade during migration.
+- keep HTTP/JSON enabled as a v0.5-only migration facade.
 - route gRPC calls through the same policy, auth, audit, store, and execution
-  code paths as HTTP.
+  code paths.
 - support streaming fs read/write and job log/stdin paths through gRPC.
 - preserve structured audit and trace output.
 
 Done when:
 
 - Docker can start two daemons with gRPC endpoints.
-- gRPC calls enforce the same authorization behavior as HTTP calls.
+- gRPC calls enforce the same authorization behavior as the existing runtime.
 - streaming gRPC paths are covered by tests or Docker validation.
 
 Completed:
 
-- Added optional `operond start --grpc-listen` alongside the existing HTTP
-  listener.
+- Added optional `operond start --grpc-listen` during the migration window.
 - Routed gRPC calls through the same fs, job, service, secret, policy, and audit
-  state used by the HTTP facade.
+  state used by the existing runtime.
 - Added two-node Docker gRPC exposure on `7789`.
 
 ## Phase 27: gRPC CLI and SDK Bridge
 
 Status: Completed.
 
-Goal: let the CLI use gRPC for runtime operations without removing scriptable
-HTTP/JSON access.
+Goal: let the CLI use gRPC for runtime operations during the migration window.
 
 Planned:
 
 - add CLI transport selection, defaulting to gRPC for supported operations.
-- preserve HTTP fallback for debugging and transitional compatibility.
-- expose clear endpoint config for `grpc://` and `http://` node URLs.
-- update the TypeScript SDK contract to match protobuf schemas even if the SDK
-  initially keeps using HTTP facade calls.
+- preserve temporary fallback for debugging and transitional compatibility.
+- expose clear endpoint config for `grpc://` node URLs.
+- update the TypeScript SDK contract to match protobuf schemas.
 
 Done when:
 
 - core CLI commands can run against gRPC endpoints.
 - existing examples still work.
-- docs clearly explain when HTTP and gRPC are used.
+- docs clearly explain the migration from HTTP to gRPC.
 
 Completed:
 
-- Added Rust CLI support for `grpc://` and `grpcs://` endpoints while keeping
-  `http://` fallback.
+- Added Rust CLI support for `grpc://` and `grpcs://` endpoints during the
+  migration window.
 - Updated graph execution to use gRPC when node endpoints are gRPC endpoints.
 - Updated the TypeScript SDK to generate protobuf bindings and use
   `nice-grpc` for gRPC endpoints.
@@ -1341,11 +1340,75 @@ Completed:
 
 - Added `scripts/verify-v0.5-docker.sh` as the canonical two-node gRPC
   validation.
-- Added `examples/docker-nodes-grpc.yaml`.
+- Added `examples/docker-nodes.yaml`.
 - Updated CI with v0.5 Docker validation and `protoc` installation for Rust
   protocol generation.
 - Verified locally with `cargo test --workspace`, `pnpm typecheck`,
   `pnpm test`, and `scripts/verify-v0.5-docker.sh`.
+
+## v0.5.1 Cleanup Goal
+
+Operon v0.5.1 should remove the HTTP runtime facade now that the canonical
+runtime protocol is gRPC.
+
+```text
+v0.5.1 = gRPC daemon runtime + CLI/SDK interfaces, no parallel HTTP runtime API.
+```
+
+The reason is product and maintenance clarity: Operon already has `operon CLI`
+for humans, ops, and scripts, including `--json` for machine-readable output.
+Keeping direct HTTP runtime access creates a second public API surface, doubles
+auth/error/streaming semantics, expands daemon exposure, and makes users choose
+between CLI, SDK, HTTP, and gRPC.
+
+v0.5.1 does not introduce HTTPS/mTLS, signed node identity, Linux mount support,
+TUI console work, agent integration, or non-LAN discovery.
+
+## Phase 28.1: HTTP Runtime Facade Removal
+
+Status: Completed.
+
+Goal: make gRPC the only daemon runtime API.
+
+Planned:
+
+- remove axum runtime routes and HTTP handler code from `operond`.
+- remove the hand-written HTTP client path from `operon-cli`.
+- remove `http://` node endpoint support from runtime configs and examples.
+- keep CLI `--json` as the supported script interface.
+- keep TypeScript SDK on `nice-grpc`.
+- update Docker and CI validation to use gRPC endpoints only.
+- update runtime architecture docs to describe HTTP as removed, not retained as
+  a facade.
+- add `PROTOCOL.md` for direct generated-client integration without an SDK.
+
+Done when:
+
+- `operond` exposes runtime operations through gRPC only.
+- core CLI commands still work against `grpc://` endpoints.
+- `operon --json` covers scriptable output for node, fs, job, service, audit,
+  and graph workflows.
+- no docs describe direct HTTP runtime calls as a supported product surface.
+- `docs/plan/v0.5.1-cleanup-acceptance.md` records the validation.
+
+Completed:
+
+- `operond` now exposes runtime operations through gRPC only.
+- `operon-cli` runtime commands use the gRPC client path only.
+- TypeScript SDK calls `nice-grpc` directly and no longer has fetch/HTTP
+  fallback behavior.
+- Docker, CI, and example node configs use `grpc://` endpoints.
+- Root `PROTOCOL.md` documents direct protocol integration without an SDK.
+- Validation passed with `cargo fmt --check`, `cargo check --workspace
+  --locked`, `cargo test --workspace --locked`, `cargo clippy --workspace
+  --locked -- -D warnings`, `pnpm typecheck`, `pnpm -r test`,
+  `pnpm --filter @operon/sdk build`, `scripts/verify-v0.5-docker.sh`, and
+  `git diff --check`.
+
+Remaining:
+
+- HTTPS/mTLS and signed node identity remain later hardening work.
+- Linux real mount work starts in v0.6.
 
 ## v0.6 Goal
 
@@ -1476,7 +1539,7 @@ Goal: implement the first terminal console inside the CLI.
 Planned:
 
 - add `operon console`.
-- reuse existing CLI config, auth, endpoint resolution, and gRPC/HTTP clients.
+- reuse existing CLI config, auth, endpoint resolution, and gRPC clients.
 - provide node list, capability view, job status/log view, audit filters, trace
   summaries, and service health view.
 - keep rendering separate from runtime client code.
