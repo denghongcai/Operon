@@ -2596,6 +2596,53 @@ Remaining:
 
 - No open v0.6.10 items.
 
+## Phase 32.32: v0.6.11 Maintainability Governance
+
+Status: Completed.
+
+Goal: reduce the highest-risk maintenance issues before starting larger v0.7
+TUI work.
+
+Planned:
+
+- `docs/plan/v0.6.11-maintainability-governance.md`.
+- split daemon defaults, LAN advertise, store-path validation, status mapping,
+  and lock handling out of `operond/src/main.rs`.
+- make gRPC-facing daemon lock acquisition return `Status::internal` instead of
+  panicking on poisoned mutexes.
+- make Linux-only mount support explicit through target-specific dependencies
+  and a non-Linux CLI error path.
+- add focused validation coverage for the governance checks.
+
+Done when:
+
+- the high-risk daemon helper areas have module boundaries.
+- gRPC request paths no longer use direct poisoned-lock `expect` handling for
+  shared runtime state.
+- non-Linux builds are not forced to compile `operon-mount`.
+- CI runs `scripts/verify-v0.6.11-governance.sh`.
+- workspace validation passes.
+
+Completed:
+
+- Added `docs/plan/v0.6.11-maintainability-governance.md`.
+- Split `operond` support code into `defaults`, `grpc_status`,
+  `lan_advertise`, `locks`, and `store_config` modules.
+- Removed direct poisoned-lock `expect` calls from `operond/src/main.rs`.
+- Added a gRPC lock helper that maps poisoned shared-state locks to
+  `Status::internal`.
+- Changed background job/audit cleanup paths to log poisoned locks and return
+  instead of panicking.
+- Made `operon-cli` depend on `operon-mount` only on Linux targets.
+- Added a non-Linux `operon mount` unsupported-platform error path.
+- Added `scripts/verify-v0.6.11-governance.sh` and wired it into CI.
+
+Remaining:
+
+- Larger domain splits remain future work: `operond` server/fs/job/audit
+  modules, `operon-cli` command modules, and `operon-mount` remote/inode/FUSE
+  modules.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

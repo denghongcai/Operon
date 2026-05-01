@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, VecDeque},
     env, fs,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
@@ -11,18 +10,17 @@ use std::{
     },
 };
 
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
-use mdns_sd::{ServiceDaemon, ServiceInfo};
 use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
-    AuditEvent, AuditLog, Capability, CapabilityKind, CapabilityList, FsEntry, FsList,
-    FsMountPolicy, FsPermissions, FsPolicy, FsStat, FsWrite, HealthStatus, JobEvent, JobList,
-    JobLog, JobLogList, JobPolicy, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
+    AuditEvent, AuditLog, CapabilityList, FsEntry, FsList, FsStat, FsWrite, HealthStatus, JobEvent,
+    JobList, JobLog, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
     NodeInfo, PolicyConfig, RequestContext, RuntimeErrorKind, ServiceCheck, ServiceDefinition,
-    ServiceList, ServicePolicy,
+    ServiceList,
 };
+#[cfg(test)]
+use operon_core::{FsMountPolicy, FsPermissions, FsPolicy, JobPolicy, ServicePolicy};
 use operon_fs::{
     authorize_fs, join_virtual_path, resolve_create_workspace_path,
     resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
@@ -47,7 +45,18 @@ use tokio::{
 use tokio_util::io::ReaderStream;
 use tonic::{metadata::MetadataMap, transport::Server, Request, Response as GrpcResponse, Status};
 
-const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
+mod defaults;
+mod grpc_status;
+mod lan_advertise;
+mod locks;
+mod store_config;
+
+use defaults::{default_capabilities, default_policy};
+use grpc_status::{status_from_error, status_from_io_error};
+use lan_advertise::advertise_lan;
+use locks::lock;
+use store_config::resolve_store_path;
+
 const RUN_ID_METADATA: &str = "x-operon-run-id";
 const STEP_ID_METADATA: &str = "x-operon-step-id";
 const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
@@ -221,53 +230,6 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
 
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
-}
-
-fn resolve_store_path(
-    config_dir: &Path,
-    configured: Option<&Path>,
-) -> anyhow::Result<Option<PathBuf>> {
-    let Some(configured) = configured else {
-        return Ok(None);
-    };
-    let path = resolve_path(config_dir, configured);
-    validate_store_path(config_dir, &path)?;
-    Ok(Some(path))
-}
-
-fn validate_store_path(config_dir: &Path, path: &Path) -> anyhow::Result<()> {
-    let config_root = config_dir
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize config dir {}", config_dir.display()))?;
-    let mut ancestor = path.parent().unwrap_or(config_dir);
-    while !ancestor.exists() {
-        ancestor = ancestor
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("store path has no existing parent"))?;
-    }
-    let ancestor = ancestor
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize store parent {}", ancestor.display()))?;
-    if !ancestor.starts_with(&config_root) {
-        anyhow::bail!(
-            "daemon store path {} must stay under config directory {}",
-            path.display(),
-            config_root.display()
-        );
-    }
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        let file_type = metadata.file_type();
-        if file_type.is_symlink() {
-            anyhow::bail!("daemon store path {} must not be a symlink", path.display());
-        }
-        if !file_type.is_file() {
-            anyhow::bail!(
-                "daemon store path {} must be a regular file",
-                path.display()
-            );
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -641,11 +603,7 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let jobs = self
-            .state
-            .jobs
-            .lock()
-            .expect("job map mutex poisoned")
+        let jobs = lock(&self.state.jobs, "job map")?
             .values()
             .cloned()
             .collect::<Vec<_>>();
@@ -668,11 +626,7 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<Self::WatchJobStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let job_id = request.into_inner().job_id;
-        let mut receiver = self
-            .state
-            .job_events
-            .lock()
-            .expect("job event mutex poisoned")
+        let mut receiver = lock(&self.state.job_events, "job event")?
             .get(&job_id)
             .map(JobEventSender::subscribe);
         let initial = job_event_from_record(&get_job_record(&self.state, &job_id)?);
@@ -723,7 +677,9 @@ impl OperonRuntime for GrpcRuntime {
         authorize_grpc(&self.state, request.metadata())?;
         let job_id = request.into_inner().job_id;
         get_job_record(&self.state, &job_id)?;
-        Ok(GrpcResponse::new(job_log_list(&self.state, &job_id).into()))
+        Ok(GrpcResponse::new(
+            job_log_list(&self.state, &job_id)?.into(),
+        ))
     }
 
     type StreamJobLogsStream = GrpcJobLogStream;
@@ -734,22 +690,14 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<Self::StreamJobLogsStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let job_id = request.into_inner().job_id;
-        let mut log_receiver = self
-            .state
-            .job_log_events
-            .lock()
-            .expect("job log event mutex poisoned")
+        let mut log_receiver = lock(&self.state.job_log_events, "job log event")?
             .get(&job_id)
             .map(JobLogSender::subscribe);
-        let mut event_receiver = self
-            .state
-            .job_events
-            .lock()
-            .expect("job event mutex poisoned")
+        let mut event_receiver = lock(&self.state.job_events, "job event")?
             .get(&job_id)
             .map(JobEventSender::subscribe);
         let initial_record = get_job_record(&self.state, &job_id)?;
-        let initial_logs = job_log_list(&self.state, &job_id);
+        let initial_logs = job_log_list(&self.state, &job_id)?;
         let state = self.state.clone();
         let stream = async_stream::stream! {
             let mut next_sequence = 0;
@@ -774,11 +722,18 @@ impl OperonRuntime for GrpcRuntime {
                                     }
                                 }
                                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                                    let snapshot = job_log_list(&state, &job_id);
-                                    for log in snapshot.logs {
-                                        if log.sequence >= next_sequence {
-                                            next_sequence = log.sequence.saturating_add(1);
-                                            yield Ok::<_, Status>(log.into());
+                                    match job_log_list(&state, &job_id) {
+                                        Ok(snapshot) => {
+                                            for log in snapshot.logs {
+                                                if log.sequence >= next_sequence {
+                                                    next_sequence = log.sequence.saturating_add(1);
+                                                    yield Ok::<_, Status>(log.into());
+                                                }
+                                            }
+                                        }
+                                        Err(status) => {
+                                            yield Err(status);
+                                            break;
                                         }
                                     }
                                 }
@@ -789,11 +744,17 @@ impl OperonRuntime for GrpcRuntime {
                             match event {
                                 Ok(event) => {
                                     if !matches!(event.status, JobStatus::Running) {
-                                        let snapshot = job_log_list(&state, &job_id);
-                                        for log in snapshot.logs {
-                                            if log.sequence >= next_sequence {
-                                                next_sequence = log.sequence.saturating_add(1);
-                                                yield Ok::<_, Status>(log.into());
+                                        match job_log_list(&state, &job_id) {
+                                            Ok(snapshot) => {
+                                                for log in snapshot.logs {
+                                                    if log.sequence >= next_sequence {
+                                                        next_sequence = log.sequence.saturating_add(1);
+                                                        yield Ok::<_, Status>(log.into());
+                                                    }
+                                                }
+                                            }
+                                            Err(status) => {
+                                                yield Err(status);
                                             }
                                         }
                                         break;
@@ -834,10 +795,7 @@ impl OperonRuntime for GrpcRuntime {
                         ));
                     }
                     sender = Some(
-                        self.state
-                            .job_stdin
-                            .lock()
-                            .expect("job stdin mutex poisoned")
+                        lock(&self.state.job_stdin, "job stdin")?
                             .get(&target.job_id)
                             .cloned()
                             .ok_or_else(|| {
@@ -887,11 +845,7 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobStdinClose>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let job_id = request.into_inner().job_id;
-        let closed = self
-            .state
-            .job_stdin
-            .lock()
-            .expect("job stdin mutex poisoned")
+        let closed = lock(&self.state.job_stdin, "job stdin")?
             .remove(&job_id)
             .is_some();
         Ok(GrpcResponse::new(JobStdinClose { job_id, closed }.into()))
@@ -905,13 +859,7 @@ impl OperonRuntime for GrpcRuntime {
         let job_id = request.into_inner().job_id;
         AUDIT_CONTEXT
             .scope(context, async {
-                if let Some(sender) = self
-                    .state
-                    .job_cancel
-                    .lock()
-                    .expect("job cancel mutex poisoned")
-                    .remove(&job_id)
-                {
+                if let Some(sender) = lock(&self.state.job_cancel, "job cancel")?.remove(&job_id) {
                     let _ = sender.send(());
                     record_audit_capability(
                         &self.state,
@@ -968,11 +916,7 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::AuditLog>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let events = self
-            .state
-            .audit
-            .lock()
-            .expect("audit log mutex poisoned")
+        let events = lock(&self.state.audit, "audit log")?
             .iter()
             .cloned()
             .collect::<Vec<_>>();
@@ -1376,26 +1320,10 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
     };
     let (event_tx, _) = broadcast::channel(32);
     let (log_tx, _) = broadcast::channel(1024);
-    state
-        .jobs
-        .lock()
-        .expect("job map mutex poisoned")
-        .insert(job_id.clone(), record.clone());
-    state
-        .job_logs
-        .lock()
-        .expect("job log mutex poisoned")
-        .insert(job_id.clone(), JobLogBuffer::default());
-    state
-        .job_events
-        .lock()
-        .expect("job event mutex poisoned")
-        .insert(job_id.clone(), event_tx);
-    state
-        .job_log_events
-        .lock()
-        .expect("job log event mutex poisoned")
-        .insert(job_id.clone(), log_tx);
+    lock(&state.jobs, "job map")?.insert(job_id.clone(), record.clone());
+    lock(&state.job_logs, "job log")?.insert(job_id.clone(), JobLogBuffer::default());
+    lock(&state.job_events, "job event")?.insert(job_id.clone(), event_tx);
+    lock(&state.job_log_events, "job log event")?.insert(job_id.clone(), log_tx);
     record_audit_capability(state, "job:default", "run", &job_id, true, "allowed");
     for secret in &request.secrets {
         record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
@@ -1403,16 +1331,8 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
 
     let (cancel_tx, cancel_rx) = oneshot::channel();
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
-    state
-        .job_cancel
-        .lock()
-        .expect("job cancel mutex poisoned")
-        .insert(job_id.clone(), cancel_tx);
-    state
-        .job_stdin
-        .lock()
-        .expect("job stdin mutex poisoned")
-        .insert(job_id.clone(), stdin_tx);
+    lock(&state.job_cancel, "job cancel")?.insert(job_id.clone(), cancel_tx);
+    lock(&state.job_stdin, "job stdin")?.insert(job_id.clone(), stdin_tx);
 
     let audit = state.audit.clone();
     let jobs = state.jobs.clone();
@@ -1463,10 +1383,7 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
 }
 
 fn get_job_record(state: &AppState, job_id: &str) -> Result<JobRecord, Status> {
-    state
-        .jobs
-        .lock()
-        .expect("job map mutex poisoned")
+    lock(&state.jobs, "job map")?
         .get(job_id)
         .cloned()
         .ok_or_else(|| Status::not_found(format!("job `{job_id}` not found")))
@@ -1502,26 +1419,6 @@ async fn grpc_service_check(state: &AppState, service_id: String) -> Result<Serv
     Ok(check)
 }
 
-fn status_from_error(error: (RuntimeErrorKind, String)) -> Status {
-    match error.0 {
-        RuntimeErrorKind::Forbidden => Status::permission_denied(error.1),
-        RuntimeErrorKind::NotFound => Status::not_found(error.1),
-        RuntimeErrorKind::AlreadyExists => Status::already_exists(error.1),
-        RuntimeErrorKind::InvalidArgument => Status::invalid_argument(error.1),
-        RuntimeErrorKind::Internal => Status::internal(error.1),
-    }
-}
-
-fn status_from_io_error(error: std::io::Error) -> Status {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => Status::not_found(error.to_string()),
-        std::io::ErrorKind::PermissionDenied => Status::permission_denied(error.to_string()),
-        std::io::ErrorKind::AlreadyExists => Status::already_exists(error.to_string()),
-        std::io::ErrorKind::InvalidInput => Status::invalid_argument(error.to_string()),
-        _ => Status::internal(error.to_string()),
-    }
-}
-
 fn hostname() -> String {
     env::var("HOSTNAME")
         .or_else(|_| env::var("COMPUTERNAME"))
@@ -1546,124 +1443,6 @@ fn next_job_sequence(jobs: &BTreeMap<String, JobRecord>) -> u64 {
 
 fn job_sequence_number(job_id: &str) -> Option<u64> {
     job_id.strip_prefix("job-")?.parse::<u64>().ok()
-}
-
-fn advertise_lan(
-    node_id: &str,
-    listen: SocketAddr,
-    capabilities: &CapabilityList,
-) -> anyhow::Result<ServiceDaemon> {
-    let mdns = ServiceDaemon::new()?;
-    let capability_summary = capabilities
-        .capabilities
-        .iter()
-        .map(|capability| capability.id.as_str())
-        .collect::<Vec<_>>()
-        .join(",");
-    let endpoint = if listen.ip().is_unspecified() {
-        String::new()
-    } else {
-        format!("grpc://{}:{}", advertised_host(listen.ip()), listen.port())
-    };
-    let properties = [
-        ("node_id", node_id),
-        ("provider", "lan"),
-        ("endpoint", endpoint.as_str()),
-        ("capabilities", capability_summary.as_str()),
-    ];
-    let service = ServiceInfo::new(
-        OPERON_MDNS_SERVICE,
-        node_id,
-        &format!("{}.local.", node_id),
-        "",
-        listen.port(),
-        &properties[..],
-    )?
-    .enable_addr_auto();
-    mdns.register(service)?;
-    Ok(mdns)
-}
-
-fn advertised_host(ip: IpAddr) -> String {
-    match ip {
-        IpAddr::V4(ip) if ip == Ipv4Addr::UNSPECIFIED => "127.0.0.1".to_string(),
-        IpAddr::V6(ip) if ip.is_unspecified() => "127.0.0.1".to_string(),
-        ip => ip.to_string(),
-    }
-}
-
-fn default_policy() -> PolicyConfig {
-    PolicyConfig {
-        subject: "local-cli".to_string(),
-        fs: FsPolicy {
-            mounts: vec![FsMountPolicy {
-                name: "workspace".to_string(),
-                path: "/".to_string(),
-                permissions: FsPermissions {
-                    read: true,
-                    write: true,
-                    delete: false,
-                },
-            }],
-        },
-        job: JobPolicy {
-            allowed_cwds: vec!["/".to_string()],
-            default_timeout_secs: 30,
-            max_timeout_secs: 300,
-            preserve_env: false,
-            env_allowlist: Vec::new(),
-            allowed_secrets: Vec::new(),
-        },
-        service: ServicePolicy::default(),
-    }
-}
-
-fn default_capabilities(node_id: &str) -> CapabilityList {
-    CapabilityList {
-        capabilities: vec![
-            Capability {
-                id: "fs:workspace".to_string(),
-                kind: CapabilityKind::Fs,
-                node_id: node_id.to_string(),
-                name: "workspace".to_string(),
-                permissions: vec!["read".to_string(), "write".to_string()],
-                description: "Workspace filesystem access".to_string(),
-            },
-            Capability {
-                id: "process:default".to_string(),
-                kind: CapabilityKind::Process,
-                node_id: node_id.to_string(),
-                name: "default".to_string(),
-                permissions: vec!["run".to_string()],
-                description: "Controlled process execution".to_string(),
-            },
-            Capability {
-                id: "job:default".to_string(),
-                kind: CapabilityKind::Job,
-                node_id: node_id.to_string(),
-                name: "default".to_string(),
-                permissions: vec!["run".to_string(), "cancel".to_string(), "logs".to_string()],
-                description: "Long-running job execution".to_string(),
-            },
-            Capability {
-                id: "device-info:default".to_string(),
-                kind: CapabilityKind::DeviceInfo,
-                node_id: node_id.to_string(),
-                name: "default".to_string(),
-                permissions: vec!["read".to_string()],
-                description: "Node OS, architecture, and host metadata".to_string(),
-            },
-            Capability {
-                id: "service:default".to_string(),
-                kind: CapabilityKind::Service,
-                node_id: node_id.to_string(),
-                name: "default".to_string(),
-                permissions: vec!["connect".to_string()],
-                description: "Service access over an existing private network".to_string(),
-            },
-        ],
-        next_page_token: String::new(),
-    }
 }
 
 fn authorize_service(
@@ -1717,7 +1496,10 @@ fn push_audit_event(
     store: Option<&Path>,
     event: AuditEvent,
 ) {
-    let mut audit = audit.lock().expect("audit log mutex poisoned");
+    let Ok(mut audit) = audit.lock() else {
+        eprintln!("audit log mutex poisoned");
+        return;
+    };
     audit.push_back(event.clone());
     while audit.len() > MAX_IN_MEMORY_AUDIT_EVENTS {
         audit.pop_front();
@@ -2017,22 +1799,22 @@ fn job_event_from_record(record: &JobRecord) -> JobEvent {
     }
 }
 
-fn job_log_list(state: &AppState, job_id: &str) -> JobLogList {
-    let logs = state.job_logs.lock().expect("job log mutex poisoned");
+fn job_log_list(state: &AppState, job_id: &str) -> Result<JobLogList, Status> {
+    let logs = lock(&state.job_logs, "job log")?;
     let Some(buffer) = logs.get(job_id) else {
-        return JobLogList {
+        return Ok(JobLogList {
             job_id: job_id.to_string(),
             logs: Vec::new(),
             truncated: false,
             dropped_log_count: 0,
-        };
+        });
     };
-    JobLogList {
+    Ok(JobLogList {
         job_id: job_id.to_string(),
         logs: buffer.logs.iter().cloned().collect(),
         truncated: buffer.dropped_log_count > 0,
         dropped_log_count: buffer.dropped_log_count,
-    }
+    })
 }
 
 fn append_job_log(
@@ -2044,7 +1826,10 @@ fn append_job_log(
     mut log: JobLog,
 ) {
     let (log_count, logs_truncated, dropped_log_count, log) = {
-        let mut buffers = logs.lock().expect("job log mutex poisoned");
+        let Ok(mut buffers) = logs.lock() else {
+            eprintln!("job log mutex poisoned");
+            return;
+        };
         let buffer = buffers.entry(job_id.to_string()).or_default();
         log.sequence = buffer.next_sequence;
         buffer.next_sequence = buffer.next_sequence.saturating_add(1);
@@ -2061,16 +1846,21 @@ fn append_job_log(
         )
     };
 
-    if let Some(record) = jobs.lock().expect("job map mutex poisoned").get_mut(job_id) {
-        record.log_count = log_count;
-        record.logs_truncated = logs_truncated;
+    if let Ok(mut jobs) = jobs.lock() {
+        if let Some(record) = jobs.get_mut(job_id) {
+            record.log_count = log_count;
+            record.logs_truncated = logs_truncated;
+        }
+    } else {
+        eprintln!("job map mutex poisoned");
     }
-    if let Some(sender) = log_events
-        .lock()
-        .expect("job log event mutex poisoned")
-        .get(job_id)
-    {
-        let _ = sender.send(log.clone());
+    match log_events.lock() {
+        Ok(log_events) => {
+            if let Some(sender) = log_events.get(job_id) {
+                let _ = sender.send(log.clone());
+            }
+        }
+        Err(_) => eprintln!("job log event mutex poisoned"),
     }
     append_store_record(
         store,
@@ -2084,19 +1874,23 @@ fn append_job_log(
 }
 
 fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i32>) {
-    completion
-        .cancels
-        .lock()
-        .expect("job cancel mutex poisoned")
-        .remove(&completion.job_id);
-    completion
-        .stdin
-        .lock()
-        .expect("job stdin mutex poisoned")
-        .remove(&completion.job_id);
+    if let Ok(mut cancels) = completion.cancels.lock() {
+        cancels.remove(&completion.job_id);
+    } else {
+        eprintln!("job cancel mutex poisoned");
+    }
+    if let Ok(mut stdin) = completion.stdin.lock() {
+        stdin.remove(&completion.job_id);
+    } else {
+        eprintln!("job stdin mutex poisoned");
+    }
 
     let terminal = {
-        let mut jobs = completion.jobs.lock().expect("job map mutex poisoned");
+        let Ok(mut jobs) = completion.jobs.lock() else {
+            eprintln!("job map mutex poisoned");
+            cleanup_finished_job_runtime(completion);
+            return;
+        };
         if let Some(record) = jobs.get_mut(&completion.job_id) {
             record.status = status;
             record.exit_code = exit_code;
@@ -2115,13 +1909,13 @@ fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i
             }),
         );
         record_job_completion_audit(completion, &record);
-        if let Some(sender) = completion
-            .events
-            .lock()
-            .expect("job event mutex poisoned")
-            .get(&completion.job_id)
-        {
-            let _ = sender.send(event);
+        match completion.events.lock() {
+            Ok(events) => {
+                if let Some(sender) = events.get(&completion.job_id) {
+                    let _ = sender.send(event);
+                }
+            }
+            Err(_) => eprintln!("job event mutex poisoned"),
         }
     }
     cleanup_finished_job_runtime(completion);
@@ -2157,16 +1951,16 @@ fn record_job_completion_audit(completion: &JobCompletion, record: &JobRecord) {
 }
 
 fn cleanup_finished_job_runtime(completion: &JobCompletion) {
-    completion
-        .events
-        .lock()
-        .expect("job event mutex poisoned")
-        .remove(&completion.job_id);
-    completion
-        .log_events
-        .lock()
-        .expect("job log event mutex poisoned")
-        .remove(&completion.job_id);
+    if let Ok(mut events) = completion.events.lock() {
+        events.remove(&completion.job_id);
+    } else {
+        eprintln!("job event mutex poisoned");
+    }
+    if let Ok(mut log_events) = completion.log_events.lock() {
+        log_events.remove(&completion.job_id);
+    } else {
+        eprintln!("job log event mutex poisoned");
+    }
     prune_completed_job_log_buffers(&completion.jobs, &completion.logs);
 }
 
@@ -2174,10 +1968,15 @@ fn prune_completed_job_log_buffers(
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
     logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
 ) {
-    let jobs = jobs.lock().expect("job map mutex poisoned");
-    let mut completed_log_job_ids = logs
-        .lock()
-        .expect("job log mutex poisoned")
+    let Ok(jobs) = jobs.lock() else {
+        eprintln!("job map mutex poisoned");
+        return;
+    };
+    let Ok(logs_guard) = logs.lock() else {
+        eprintln!("job log mutex poisoned");
+        return;
+    };
+    let mut completed_log_job_ids = logs_guard
         .keys()
         .filter(|job_id| {
             jobs.get(*job_id)
@@ -2186,6 +1985,7 @@ fn prune_completed_job_log_buffers(
         })
         .cloned()
         .collect::<Vec<_>>();
+    drop(logs_guard);
 
     if completed_log_job_ids.len() <= MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS {
         return;
@@ -2195,9 +1995,13 @@ fn prune_completed_job_log_buffers(
     let remove_count = completed_log_job_ids.len() - MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS;
     drop(jobs);
 
-    let mut logs = logs.lock().expect("job log mutex poisoned");
-    for job_id in completed_log_job_ids.into_iter().take(remove_count) {
-        logs.remove(&job_id);
+    match logs.lock() {
+        Ok(mut logs) => {
+            for job_id in completed_log_job_ids.into_iter().take(remove_count) {
+                logs.remove(&job_id);
+            }
+        }
+        Err(_) => eprintln!("job log mutex poisoned"),
     }
 }
 
@@ -2267,42 +2071,6 @@ mod tests {
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("{name}-{}-{}", std::process::id(), now_ms()))
-    }
-
-    #[test]
-    fn store_path_must_stay_under_config_dir() {
-        let base = unique_temp_dir("operond-store-path-test");
-        let config_dir = base.join("config");
-        let outside = base.join("outside");
-        fs::create_dir_all(&config_dir).expect("config dir");
-        fs::create_dir_all(&outside).expect("outside dir");
-
-        let allowed = resolve_store_path(&config_dir, Some(Path::new("store.jsonl")))
-            .expect("relative store path");
-        assert_eq!(allowed, Some(config_dir.join("store.jsonl")));
-
-        let denied = resolve_store_path(&config_dir, Some(&outside.join("store.jsonl")))
-            .expect_err("absolute outside store path should be denied");
-        assert!(denied
-            .to_string()
-            .contains("must stay under config directory"));
-        let _ = fs::remove_dir_all(base);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn store_path_rejects_symlink() {
-        let base = unique_temp_dir("operond-store-symlink-test");
-        let config_dir = base.join("config");
-        fs::create_dir_all(&config_dir).expect("config dir");
-        let target = config_dir.join("target.jsonl");
-        let link = config_dir.join("store.jsonl");
-        std::os::unix::fs::symlink(&target, &link).expect("symlink");
-
-        let denied = resolve_store_path(&config_dir, Some(Path::new("store.jsonl")))
-            .expect_err("symlink store path should be denied");
-        assert!(denied.to_string().contains("must not be a symlink"));
-        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
