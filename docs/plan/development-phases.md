@@ -661,34 +661,568 @@ v0.1 is complete when:
 - audit records capture allowed and denied actions
 - README demo can be reproduced
 
-## Post-MVP Phases
+## v0.2 Goal
 
-### v0.2: Provider Adapters and Secrets
+Operon v0.2 should turn the v0.1 functional MVP into a more usable runtime:
 
-- Cloudflare Mesh endpoint adapter
-- Tailscale endpoint adapter
-- SSH endpoint adapter
-- SecretCapability MVP
-- stronger node identity and trust establishment
-- better error model
+```text
+Remote filesystem and job IO can be consumed incrementally, daemon calls have
+predictable errors and minimal authentication, provider resolution is explicit,
+audit/job/trace state can survive daemon restarts, and jobs can use scoped
+secrets without exposing secret values directly.
+```
 
-### v0.3: Mounts and Developer Experience
+v0.2 still does not build network connectivity. Provider adapters resolve endpoints only.
 
-- FUSE / WinFsp mount adapter
-- richer CLI output
-- local caching strategy
-- LAN mDNS discovery
-- Kubernetes service discovery
-- improved examples
+## Phase 9: Streaming IO Semantics
 
-### v0.4: Web Console and Advanced Capabilities
+Status: Completed.
+
+Goal: make fs/job IO usable for larger files and long-running commands.
+
+Planned:
+
+- fs read streaming endpoint.
+- fs write streaming endpoint.
+- job stdout/stderr follow endpoint.
+- CLI `fs read --output <file>`.
+- CLI `fs write --file <file>`.
+- CLI `job logs --follow`.
+- SDK streaming-friendly helpers.
+
+Completed:
+
+- Added daemon raw-body fs read/write endpoints at `/fs/read-stream` and `/fs/write-stream`.
+- Added CLI `fs read --output <file>` and `fs write --file <file>` paths.
+- Added CLI `job logs --follow` for long-running job output.
+- Added SDK raw fs byte helpers.
+- Extended Docker validation to cover raw fs transfer and followed logs.
+
+Remaining:
+
+- True chunked daemon-side fs streaming and job stdin streaming are deferred beyond v0.2.
+
+Done when:
+
+- large fs reads/writes avoid JSON string payloads.
+- job logs can be followed while a job is still running.
+- Docker validation covers streamed fs read/write and followed job output.
+
+## Phase 10: Structured Errors and Minimal Auth
+
+Status: Completed.
+
+Goal: make daemon failures predictable and prevent unauthenticated daemon access.
+
+Planned:
+
+- shared structured error response type.
+- daemon handlers return `{ code, message, capability, resource }`.
+- CLI preserves meaningful daemon error messages.
+- daemon `--auth-token` and `--auth-token-file`.
+- CLI node config supports `token`.
+- SDK supports bearer token.
+- audit subject comes from request identity when provided.
+
+Completed:
+
+- Added shared structured error response type and daemon JSON error responses.
+- Added daemon `--auth-token` and `--auth-token-file`.
+- Added per-node CLI config `token` support.
+- Added per-node SDK token support.
+- Updated CLI HTTP helpers to send bearer tokens and preserve daemon error messages.
+- Updated SDK error parsing for structured daemon error bodies.
+- Added CLI unit coverage for structured daemon error formatting.
+- Extended Docker validation to cover unauthorized and authorized calls.
+
+Remaining:
+
+- Request-derived audit identity remains future work.
+
+Done when:
+
+- unauthorized requests are rejected.
+- authorized CLI/SDK calls continue to work.
+- denied operations return structured JSON errors.
+- Docker validation covers unauthorized and authorized requests.
+
+## Phase 11: Provider Resolver Adapters
+
+Status: Completed.
+
+Goal: make network providers explicit without implementing connectivity.
+
+Planned:
+
+- provider resolver trait in `operon-network`.
+- manual resolver implementation.
+- provider metadata validation for Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, and Kubernetes.
+- CLI `node resolve <node-id>`.
+- CLI `provider list`.
+
+Completed:
+
+- Added explicit provider kinds in `operon-network`.
+- Added endpoint resolution through `NodesConfig::resolve`.
+- Added CLI `node resolve <node-id>` and `provider list`.
+- Extended Docker validation to cover manual provider resolution.
+
+Remaining:
+
+- Provider API discovery for Cloudflare Mesh, Tailscale, LAN mDNS, and Kubernetes is deferred.
+
+Done when:
+
+- config endpoints resolve through provider abstraction.
+- unsupported provider values fail clearly.
+- Docker validation covers manual provider resolution.
+
+## Phase 12: Persistent Store for Jobs, Audit, and Traces
+
+Status: Completed.
+
+Goal: keep runtime records useful after process-local operations complete.
+
+Planned:
+
+- local JSONL store path.
+- daemon `--store <path>`.
+- persist audit events.
+- persist job records on completion/update.
+- CLI `trace show <run-id>` for CLI-generated trace files.
+- graph execution can write trace JSON to disk.
+
+Completed:
+
+- Added daemon `--store <path>` JSONL append path.
+- Persisted audit events and final job records to the store.
+- Added graph `--trace-output <path>`.
+- Added CLI `trace show <path>`.
+- Extended Docker validation to assert store file creation and trace display.
+
+Remaining:
+
+- The store is append-only JSONL, not a queryable database.
+- Daemon-persisted graph traces are deferred.
+
+Done when:
+
+- audit/job records are appended to a local store.
+- graph traces can be written and shown.
+- Docker validation covers store file creation and trace show.
+
+## Phase 13: Secrets MVP
+
+Status: Completed.
+
+Goal: allow jobs to use scoped secrets without direct secret reads.
+
+Planned:
+
+- local secrets YAML.
+- daemon `--secrets <path>`.
+- policy secret allowlist.
+- `job.run` supports `secrets`.
+- daemon injects allowed secrets into job env.
+- audit records secret usage by name only.
+
+Completed:
+
+- Added daemon `--secrets <path>` local YAML loading.
+- Added policy `job.allowed_secrets`.
+- Added `job.run` secret requests and CLI `--secret <NAME>`.
+- Injected allowed secrets into job environment only for that job.
+- Audited secret usage by name.
+- Added daemon unit coverage for allowed and denied secret resolution.
+- Extended Docker validation to cover allowed and denied secret requests.
+
+Remaining:
+
+- Full secret manager integration and secret rotation are deferred.
+
+Done when:
+
+- jobs can use allowed secrets as env vars.
+- denied secrets are blocked.
+- secret values are never returned by API or audit output.
+
+## Phase 14: v0.2 Acceptance
+
+Status: Completed.
+
+Goal: make v0.2 reproducible and documented.
+
+Planned:
+
+- README updates for streaming, auth, providers, store, and secrets.
+- `docs/plan/v0.2-acceptance.md`.
+- Docker validation covers all v0.2 additions.
+- CI remains green.
+
+Completed:
+
+- Updated README for v0.2 CLI, node config, daemon policy, auth, store, provider resolution, secrets, trace, and Docker validation.
+- Added `docs/plan/v0.2-acceptance.md`.
+- Renamed Docker validation script to `scripts/verify-v0.2-docker.sh`.
+- Updated CI to run the v0.2 Docker validation job.
+
+Remaining:
+
+- Final CI status depends on the pushed branch run.
+
+Done when:
+
+- v0.2 has a canonical validation path.
+- docs accurately describe the runtime limits and commands.
+
+## v0.3 Goal
+
+Operon v0.3 should turn the v0.2 runtime into a more usable local-network tool:
+
+```text
+Core IO is streaming-friendly, CLI output is predictable for humans and agents,
+runtime records are queryable, LAN nodes can be discovered through mDNS, and
+mount semantics are validated through a narrow proof of concept.
+```
+
+v0.3 discovery is LAN mDNS only. Cloudflare, Tailscale, WireGuard, SSH, and Kubernetes remain manually configured endpoint providers unless a later phase explicitly adds API discovery.
+
+## Phase 15: Streaming Protocol Hardening
+
+Status: Completed.
+
+Goal: remove v0.2's most important IO limits.
+
+Planned:
+
+- daemon fs read endpoint streams file bytes without loading the whole file into memory.
+- daemon fs write endpoint consumes request bodies incrementally.
+- job stdout/stderr streaming endpoint for live consumers.
+- job stdin write endpoint for interactive or pipe-like jobs.
+- CLI and SDK helpers for streaming fs and job IO.
+
+Completed:
+
+- Daemon `/fs/read-stream` now streams file bytes through `ReaderStream`.
+- Daemon `/fs/write-stream` consumes request body chunks incrementally.
+- Added `/job/logs-stream`, `/job/stdin`, and `/job/stdin/close`.
+- CLI writes file uploads from disk without preloading the whole file and can stream downloads to a writer.
+- CLI supports `job logs --stream` and `job stdin`.
+- SDK exposes raw fs helpers, job log stream, job stdin write/close, and job listing.
+
+Remaining:
+
+- gRPC streaming and full TTY-style job sessions remain post-v0.3.
+
+Done when:
+
+- large fs transfers are streamed server-side.
+- job output can be consumed from a streaming endpoint.
+- stdin can be written to a running job.
+- Docker validation covers fs streaming and job stdin/stdout streaming.
+
+## Phase 16: CLI UX and Output Modes
+
+Status: Completed.
+
+Goal: make CLI output predictable for both humans and automation.
+
+Planned:
+
+- global `--json`.
+- global `--quiet`.
+- clearer structured error display.
+- `operon init config`.
+- `operon init policy`.
+
+Completed:
+
+- Added global `--json`.
+- Added global `--quiet`.
+- Added structured JSON output for core node, provider, capability, fs, audit, and job commands.
+- Added `operon init config <path>`.
+- Added `operon init policy <path>`.
+
+Remaining:
+
+- Rich table formatting and shell completions remain future work.
+
+Done when:
+
+- core commands can produce JSON output.
+- quiet mode suppresses non-essential output.
+- init commands generate usable starter files.
+- README documents output modes and init commands.
+
+## Phase 17: Queryable Runtime Store
+
+Status: Completed.
+
+Goal: make audit, job, and trace records inspectable after execution.
+
+Planned:
+
+- daemon reloads job records from the JSONL store on startup.
+- daemon exposes job list query.
+- CLI `job list`.
+- CLI `audit show`.
+- CLI `trace list`.
+- keep JSONL for v0.3 unless implementation proves it insufficient.
+
+Completed:
+
+- Daemon reloads completed jobs from the JSONL store on startup.
+- Added `/job/list`.
+- Added CLI `job list`.
+- Added CLI `audit show --limit`.
+- Added CLI `trace list`.
+- Kept JSONL as the v0.3 store format.
+
+Remaining:
+
+- Indexed store queries and SQLite remain future decisions.
+
+Done when:
+
+- completed jobs can be listed through the daemon.
+- audit records have a clearer show path.
+- local trace files can be listed and shown.
+- Docker validation covers store-backed job listing.
+
+## Phase 18: LAN mDNS Discovery
+
+Status: Completed.
+
+Goal: discover Operon daemons on the local network without owning connectivity.
+
+Planned:
+
+- daemon can advertise node id, provider, endpoint, and capability summary through LAN mDNS.
+- CLI `node discover --provider lan`.
+- discovered records are displayed and can optionally be written into a node config file.
+
+Completed:
+
+- Added daemon `--advertise-lan` mDNS advertisement.
+- Added CLI `node discover --provider lan`.
+- Added optional `--output-config` for discovered node config generation.
+- Docker validation runs LAN discovery inside the compose network.
+
+Remaining:
+
+- Discovery for Cloudflare, Tailscale, WireGuard, SSH, and Kubernetes is intentionally not implemented in v0.3.
+
+Done when:
+
+- LAN mDNS discovery works between local Docker nodes or host processes.
+- discovery results are endpoints only.
+- docs explicitly state that discovery does not grant capability access.
+
+## Phase 19: Mount PoC
+
+Status: Completed.
+
+Goal: validate mount semantics before committing to a full FUSE / WinFsp layer.
+
+Planned:
+
+- read-only mount proof of concept.
+- document path mapping, cache, permission, and error semantics.
+- keep WinFsp implementation deferred.
+
+Completed:
+
+- Added CLI `mount read-only <node:/path> --to <dir>` as a one-shot read-only materialization PoC.
+- The PoC writes `.operon-mount.json` documenting source, mode, cache, and consistency semantics.
+- Files are marked read-only after materialization.
+
+Remaining:
+
+- FUSE / WinFsp live mounts and sync are deferred.
+
+Done when:
+
+- a narrow read-only mount or mount-like PoC exists.
+- known semantic risks are documented.
+- v0.4 can decide whether to implement a full mount layer.
+
+## Phase 20: v0.3 Acceptance
+
+Status: Completed.
+
+Goal: make v0.3 reproducible and documented.
+
+Planned:
+
+- `docs/plan/v0.3-acceptance.md`.
+- README updates for streaming, CLI output modes, store queries, LAN mDNS discovery, and mount PoC.
+- Docker or local validation covers v0.3 additions.
+- CI remains green.
+
+Completed:
+
+- Added `docs/plan/v0.3-acceptance.md`.
+- Updated README for v0.3 commands and limits.
+- Added `scripts/verify-v0.3-docker.sh`.
+- Updated CI to run v0.3 Docker validation.
+- Verified `scripts/verify-v0.3-docker.sh` locally against the two-node Docker environment.
+- Updated this phase tracker after completing v0.3 implementation.
+
+Remaining:
+
+- Final CI status depends on the pushed branch run.
+
+Done when:
+
+- v0.3 has a canonical validation path.
+- docs accurately describe runtime limits and commands.
+
+## v0.4 Goal
+
+Operon v0.4 should stabilize the runtime API, add a focused service/port
+capability, and make trace/audit inspection more useful without expanding into
+Web Console, clipboard, or screen/input work.
+
+```text
+v0.4 = stable runtime API + service/port capability + trace/audit UX.
+```
+
+v0.4 still does not implement port forwarding, proxying, VPN behavior, remote
+desktop, clipboard, or Web Console.
+
+## Phase 21: Runtime API Stabilization
+
+Status: Completed.
+
+Goal: make the daemon API predictable before adding more capability types.
+
+Planned:
+
+- shared API envelope types for success and error responses.
+- stable error code naming.
+- request/response schema documentation.
+- SDK types aligned with daemon schemas.
+- API-level tests for auth, policy denial, not found, and validation errors.
+- notes on which interfaces may move to gRPC later.
+
+Done when:
+
+- API errors are consistent across core handlers.
+- SDK and CLI parse the same structured error shape.
+- docs describe current HTTP API boundaries and future gRPC candidates.
+
+Completed:
+
+- Added structured daemon errors with `code`, `message`, `status`, optional
+  `capability`, and optional `resource`.
+- Kept error parsing compatible for existing clients that only consume
+  `code` and `message`.
+- Aligned Rust core types and TypeScript SDK types with the daemon schema.
+- Documented current HTTP API boundaries, structured errors, and future gRPC
+  candidates in `docs/architecture/runtime-api.md`.
+- Verified with Rust unit tests, SDK tests, and v0.4 Docker validation.
+
+## Phase 22: Service / Port Capability
+
+Status: Completed.
+
+Goal: let nodes describe and health-check local services without becoming a proxy.
+
+Planned:
+
+- policy service allowlist.
+- daemon service capability metadata.
+- `/service/list` endpoint.
+- `/service/check` endpoint.
+- CLI `service list`.
+- CLI `service check`.
+- SDK service helpers.
+
+Done when:
+
+- configured services can be listed.
+- allowed services can be health checked.
+- denied services fail through policy.
+- docs explicitly say this does not forward ports or proxy traffic.
+
+Completed:
+
+- Added service allowlist policy under `service.services`.
+- Added daemon `/service/list` and `/service/check` endpoints.
+- Added service capability metadata and audit events for allowed and denied
+  service checks.
+- Added CLI `service list` and `service check`.
+- Added SDK `listServices` and `checkService`.
+- Updated Docker policy fixtures and validation for listed, reachable, and
+  denied services.
+- Documented that service capability is metadata and TCP health checking only,
+  not forwarding, proxying, relay, VPN, or reachability creation.
+
+## Phase 23: Trace and Audit UX
+
+Status: Completed.
+
+Goal: make runtime observability useful from the CLI.
+
+Planned:
+
+- audit filters for capability, action, allowed, and resource/job id.
+- trace list should target trace-like JSON files instead of every JSON file.
+- trace show should have a human-readable summary mode and JSON mode.
+- store query behavior documented.
+
+Done when:
+
+- audit output can be narrowed without shell filtering.
+- trace list avoids unrelated JSON files.
+- trace show is useful for humans and still scriptable.
+
+Completed:
+
+- Added CLI audit filters for `--capability`, `--action`, `--allowed`,
+  `--resource`, and `--limit`.
+- Updated `trace list` to only include trace-like JSON files.
+- Updated `trace show` to default to a human-readable summary while preserving
+  `--json` output.
+- Covered audit filter and trace UX paths in `scripts/verify-v0.4-docker.sh`.
+
+## Phase 24: v0.4 Acceptance
+
+Status: Completed.
+
+Goal: make v0.4 reproducible and documented.
+
+Planned:
+
+- `docs/plan/v0.4-acceptance.md`.
+- README updates for API stability, service capability, and trace/audit UX.
+- Docker validation covers service list/check, service policy denial, audit filters, and trace UX.
+- CI runs v0.4 validation on every branch.
+
+Done when:
+
+- v0.4 has a canonical validation path.
+- docs accurately describe runtime limits and commands.
+
+Completed:
+
+- Added `docs/plan/v0.4-acceptance.md`.
+- Updated README with v0.4 validation, service commands, policy config, audit
+  filters, and trace JSON/human usage.
+- Added `scripts/verify-v0.4-docker.sh` and made it repeatable around the
+  read-only mount PoC temp directory.
+- Updated CI to run on pull requests and pushes to every branch.
+- Updated CI Docker validation from v0.3 to v0.4.
+- Verified `scripts/verify-v0.4-docker.sh` locally against the two-node Docker
+  environment.
+
+### v0.5: Web Console and Advanced Capabilities
 
 - Web Console
-- screen/input capability
 - clipboard capability
-- service/port access capability
+- screen/input feasibility spike
 - richer policy language
-- trace visualization
+- trace visualization UI
 
 ## Planning Principle
 

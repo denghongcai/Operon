@@ -5,6 +5,7 @@ pub struct NodeEndpoint {
     pub node_id: String,
     pub endpoint: String,
     pub provider: NetworkProviderKind,
+    pub token: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -19,6 +20,32 @@ pub enum NetworkProviderKind {
     Kubernetes,
 }
 
+impl NetworkProviderKind {
+    pub fn all() -> &'static [NetworkProviderKind] {
+        &[
+            NetworkProviderKind::Manual,
+            NetworkProviderKind::CloudflareMesh,
+            NetworkProviderKind::Tailscale,
+            NetworkProviderKind::Wireguard,
+            NetworkProviderKind::Ssh,
+            NetworkProviderKind::Lan,
+            NetworkProviderKind::Kubernetes,
+        ]
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NetworkProviderKind::Manual => "manual",
+            NetworkProviderKind::CloudflareMesh => "cloudflare-mesh",
+            NetworkProviderKind::Tailscale => "tailscale",
+            NetworkProviderKind::Wireguard => "wireguard",
+            NetworkProviderKind::Ssh => "ssh",
+            NetworkProviderKind::Lan => "lan",
+            NetworkProviderKind::Kubernetes => "kubernetes",
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodesConfig {
     pub nodes: BTreeMap<String, NodeConfig>,
@@ -29,6 +56,7 @@ pub struct NodeConfig {
     pub endpoint: String,
     #[serde(default = "default_provider")]
     pub provider: NetworkProviderKind,
+    pub token: Option<String>,
 }
 
 impl NodesConfig {
@@ -45,6 +73,7 @@ impl NodesConfig {
                 node_id: node_id.clone(),
                 endpoint: node.endpoint.clone(),
                 provider: node.provider.clone(),
+                token: node.token.clone(),
             })
             .collect()
     }
@@ -54,7 +83,13 @@ impl NodesConfig {
             node_id: node_id.to_string(),
             endpoint: node.endpoint.clone(),
             provider: node.provider.clone(),
+            token: node.token.clone(),
         })
+    }
+
+    pub fn resolve(&self, node_id: &str) -> anyhow::Result<NodeEndpoint> {
+        self.endpoint(node_id)
+            .ok_or_else(|| anyhow::anyhow!("node `{node_id}` not found in config"))
     }
 }
 
@@ -81,6 +116,7 @@ nodes:
         assert_eq!(endpoint.node_id, "local");
         assert_eq!(endpoint.endpoint, "http://127.0.0.1:7788");
         assert!(matches!(endpoint.provider, NetworkProviderKind::Manual));
+        assert_eq!(endpoint.token, None);
     }
 
     #[test]
@@ -119,5 +155,21 @@ nodes:
             .collect();
 
         assert_eq!(ids, vec!["node-a", "node-b"]);
+    }
+
+    #[test]
+    fn loads_optional_node_token() {
+        let config: NodesConfig = serde_yaml::from_str(
+            r#"
+nodes:
+  local:
+    endpoint: http://127.0.0.1:7788
+    token: test-token
+"#,
+        )
+        .expect("config should parse");
+
+        let endpoint = config.endpoint("local").expect("local endpoint");
+        assert_eq!(endpoint.token.as_deref(), Some("test-token"));
     }
 }

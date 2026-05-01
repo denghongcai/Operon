@@ -26,12 +26,12 @@ describe("OperonClient", () => {
       .mockResolvedValueOnce(jsonResponse({ path: "/output.txt", content: "hello" }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OperonClient([{ nodeId: "node-a", endpoint: "http://127.0.0.1:7788" }]);
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "http://127.0.0.1:7788", token: "test-token" }]);
     const trace = await client.run({
       name: "copy-and-run",
       steps: [
         { id: "write", node: "node-a", action: "fs.write", path: "/input.txt", content: "hello" },
-        { id: "run", node: "node-a", action: "job.run", command: "cat input.txt" },
+        { id: "run", node: "node-a", action: "job.run", command: "cat input.txt", secrets: ["GITHUB_TOKEN"] },
         { id: "read", node: "node-a", action: "fs.read", path: "/output.txt" },
       ],
     });
@@ -41,10 +41,17 @@ describe("OperonClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[0][0])).toBe("http://127.0.0.1:7788/fs/write");
     expect(String(fetchMock.mock.calls[2][0])).toBe("http://127.0.0.1:7788/job/status?id=job-1");
+    expect((fetchMock.mock.calls[0][1]?.headers as Headers).get("authorization")).toBe("Bearer test-token");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).secrets).toEqual(["GITHUB_TOKEN"]);
   });
 
   it("stops on the first failed step and returns a failed trace", async () => {
-    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ ok: true }, 403, "Forbidden")));
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(jsonResponse({ code: "forbidden", message: "fs read denied by policy" }, 403, "Forbidden")),
+    );
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "http://127.0.0.1:7788" }]);
     const trace = await client.run({
@@ -58,7 +65,7 @@ describe("OperonClient", () => {
     expect(trace.status).toBe("failed");
     expect(trace.steps).toHaveLength(1);
     expect(trace.steps[0].id).toBe("denied");
-    expect(trace.steps[0].error).toContain("403 Forbidden");
+    expect(trace.steps[0].error).toContain("forbidden: fs read denied by policy");
   });
 
   it("fails a step when a referenced node is missing", async () => {
@@ -72,13 +79,48 @@ describe("OperonClient", () => {
     expect(trace.steps[0].id).toBe("step-1");
     expect(trace.steps[0].error).toBe("node node-a not found");
   });
+
+  it("lists and checks configured services", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          services: [
+            {
+              id: "daemon",
+              name: "daemon",
+              host: "127.0.0.1",
+              port: 7788,
+              protocol: "tcp",
+              description: "Operon daemon",
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: "daemon", ok: true, latency_ms: 2, reason: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "http://127.0.0.1:7788", token: "test-token" }]);
+    const services = await client.listServices("node-a");
+    const check = await client.checkService("node-a", "daemon");
+
+    expect(services.services[0].id).toBe("daemon");
+    expect(check.ok).toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).toBe("http://127.0.0.1:7788/service/list");
+    expect(String(fetchMock.mock.calls[1][0])).toBe("http://127.0.0.1:7788/service/check?id=daemon");
+    expect((fetchMock.mock.calls[1][1]?.headers as Headers).get("authorization")).toBe("Bearer test-token");
+  });
 });
 
 function jsonResponse(body: unknown, status = 200, statusText = "OK"): Response {
+  const text = JSON.stringify(body);
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText,
+    headers: new Headers({ "content-type": "application/json" }),
     json: async () => body,
+    text: async () => text,
+    arrayBuffer: async () => new TextEncoder().encode(text).buffer,
   } as Response;
 }

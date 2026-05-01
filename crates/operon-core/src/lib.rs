@@ -113,10 +113,24 @@ pub struct AuditLog {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ErrorResponse {
+    pub code: String,
+    pub message: String,
+    #[serde(default)]
+    pub status: u16,
+    #[serde(default)]
+    pub capability: Option<String>,
+    #[serde(default)]
+    pub resource: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PolicyConfig {
     pub subject: String,
     pub fs: FsPolicy,
     pub job: JobPolicy,
+    #[serde(default)]
+    pub service: ServicePolicy,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -144,6 +158,8 @@ pub struct JobPolicy {
     pub default_timeout_secs: u64,
     pub max_timeout_secs: u64,
     pub env_allowlist: Vec<String>,
+    #[serde(default)]
+    pub allowed_secrets: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -151,6 +167,42 @@ pub struct JobRunRequest {
     pub command: String,
     pub cwd: Option<String>,
     pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct ServicePolicy {
+    pub services: Vec<ServiceDefinition>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ServiceDefinition {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub protocol: ServiceProtocol,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ServiceProtocol {
+    Tcp,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ServiceList {
+    pub services: Vec<ServiceDefinition>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ServiceCheck {
+    pub id: String,
+    pub ok: bool,
+    pub latency_ms: u128,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -186,6 +238,49 @@ pub struct JobRecord {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobList {
+    pub jobs: Vec<JobRecord>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobStdin {
+    pub job_id: String,
+    pub bytes_written: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct JobStdinClose {
+    pub job_id: String,
+    pub closed: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DiscoveryRecord {
+    pub node_id: NodeId,
+    pub endpoint: String,
+    pub provider: String,
+    pub capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DiscoveryList {
+    pub nodes: Vec<DiscoveryRecord>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TraceFile {
+    pub path: String,
+    pub run_id: Option<String>,
+    pub name: Option<String>,
+    pub status: Option<ExecutionStatus>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TraceFileList {
+    pub traces: Vec<TraceFile>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExecutionGraph {
     pub name: String,
     pub steps: Vec<ExecutionStep>,
@@ -201,6 +296,8 @@ pub struct ExecutionStep {
     pub command: Option<String>,
     pub cwd: Option<String>,
     pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -273,6 +370,39 @@ job:
         assert!(!policy.fs.mounts[0].permissions.delete);
         assert_eq!(policy.job.max_timeout_secs, 300);
         assert_eq!(policy.job.env_allowlist, vec!["GITHUB_TOKEN"]);
+        assert!(policy.service.services.is_empty());
+    }
+
+    #[test]
+    fn service_policy_parses_allowed_services() {
+        let policy: PolicyConfig = serde_yaml::from_str(
+            r#"
+subject: local-cli
+fs:
+  mounts: []
+job:
+  allowed_cwds:
+    - /
+  default_timeout_secs: 30
+  max_timeout_secs: 300
+  env_allowlist: []
+service:
+  services:
+    - id: app
+      name: app
+      host: 127.0.0.1
+      port: 8080
+      protocol: tcp
+      description: local app
+"#,
+        )
+        .expect("policy should parse");
+
+        assert_eq!(policy.service.services[0].id, "app");
+        assert!(matches!(
+            policy.service.services[0].protocol,
+            ServiceProtocol::Tcp
+        ));
     }
 
     #[test]

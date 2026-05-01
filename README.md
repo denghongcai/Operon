@@ -62,7 +62,7 @@ Prerequisites:
 - Node.js and pnpm
 - Docker with Docker Compose
 
-Run the full MVP validation:
+Run the full v0.4 validation:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -70,16 +70,16 @@ cargo fmt --check
 cargo check --workspace --locked
 cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
-scripts/verify-mvp-docker.sh
+scripts/verify-v0.4-docker.sh
 ```
 
-The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks policy and audit behavior, and runs the example execution graph.
+The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph.
 
 ---
 
 ## CLI and Configuration
 
-The MVP has two binaries:
+The v0.4 runtime has two binaries:
 
 - `operond`: the daemon that runs on each reachable machine.
 - `operon`: the CLI that talks to daemon endpoints.
@@ -100,7 +100,7 @@ operon --config examples/nodes.yaml node list
 
 ### Node Config
 
-The CLI reads node endpoints from a YAML file. In the current MVP, the default path is:
+The CLI reads node endpoints from a YAML file. In v0.4, the default path is:
 
 ```text
 examples/nodes.yaml
@@ -120,6 +120,7 @@ Config shape:
 nodes:
   local:
     endpoint: http://127.0.0.1:7788
+    token: local-dev-token
   cloud-a:
     endpoint: http://100.96.12.34:7788
     provider: tailscale
@@ -128,7 +129,9 @@ nodes:
     provider: cloudflare-mesh
 ```
 
-`provider` is optional and defaults to `manual`. In v0.1 it is metadata only; Operon does not create VPNs, assign mesh IPs, or discover nodes automatically.
+`provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
+
+In v0.4, provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
 
 Supported provider values:
 
@@ -151,7 +154,11 @@ operond start \
   --listen 0.0.0.0:7788 \
   --node-id cloud-a \
   --workspace /home/ubuntu/workspace \
-  --policy ./operon.policy.yaml
+  --policy ./operon.policy.yaml \
+  --auth-token-file ./operon.token \
+  --store ./operon-store.jsonl \
+  --secrets ./operon.secrets.yaml \
+  --advertise-lan
 ```
 
 If `--policy` is omitted, the daemon uses a permissive MVP default for the configured workspace. For any real machine, pass an explicit policy file.
@@ -176,31 +183,74 @@ job:
   default_timeout_secs: 30
   max_timeout_secs: 300
   env_allowlist: []
+  allowed_secrets:
+    - GITHUB_TOKEN
+
+service:
+  services:
+    - id: daemon
+      name: daemon
+      host: 127.0.0.1
+      port: 7788
+      protocol: tcp
+      description: Operon daemon TCP listener
 ```
 
 Policy paths are virtual paths inside the daemon workspace. If the daemon starts with `--workspace /home/ubuntu/workspace`, policy path `/` means that workspace root, not the host root.
+
+Secret file shape:
+
+```yaml
+GITHUB_TOKEN: ghp_example
+```
+
+Secrets are only injected into jobs that request them and are allowed by policy. The daemon does not expose a secret read API; audit output records secret names, not values.
 
 ### Common Commands
 
 ```bash
 operon --config ./operon.nodes.yaml node list
+operon --config ./operon.nodes.yaml node resolve cloud-a
+operon node discover --provider lan --timeout-secs 3
 operon --config ./operon.nodes.yaml node ping cloud-a
+operon provider list
 operon --config ./operon.nodes.yaml capability list cloud-a
+operon --config ./operon.nodes.yaml service list cloud-a
+operon --config ./operon.nodes.yaml service check cloud-a daemon
+
+operon init config ./operon.nodes.yaml
+operon init policy ./operon.policy.yaml
 
 operon --config ./operon.nodes.yaml fs stat cloud-a:/README.md
 operon --config ./operon.nodes.yaml fs list cloud-a:/
 operon --config ./operon.nodes.yaml fs read cloud-a:/input.txt
+operon --config ./operon.nodes.yaml fs read cloud-a:/large.bin --output ./large.bin
 operon --config ./operon.nodes.yaml fs write cloud-a:/input.txt --content "hello"
+operon --config ./operon.nodes.yaml fs write cloud-a:/large.bin --file ./large.bin
 
 operon --config ./operon.nodes.yaml job run cloud-a -- echo hello
+operon --config ./operon.nodes.yaml job run cloud-a --secret GITHUB_TOKEN -- test x'$GITHUB_TOKEN' = xexpected
 operon --config ./operon.nodes.yaml job run cloud-a --detach -- sleep 10
 operon --config ./operon.nodes.yaml job status cloud-a job-1
+operon --config ./operon.nodes.yaml job list cloud-a
 operon --config ./operon.nodes.yaml job logs cloud-a job-1
+operon --config ./operon.nodes.yaml job logs cloud-a job-1 --follow
+operon --config ./operon.nodes.yaml job logs cloud-a job-1 --stream
+operon --config ./operon.nodes.yaml job stdin cloud-a job-1 --content "input"
+operon --config ./operon.nodes.yaml job stdin cloud-a job-1 --close
 operon --config ./operon.nodes.yaml job cancel cloud-a job-1
 
 operon --config ./operon.nodes.yaml audit list cloud-a
-operon --config ./operon.nodes.yaml run examples/train-model.yaml
+operon --config ./operon.nodes.yaml audit show cloud-a --limit 20
+operon --config ./operon.nodes.yaml audit show cloud-a --capability service:daemon --action check --allowed true --resource daemon --limit 5
+operon --config ./operon.nodes.yaml run --trace-output ./trace.json examples/train-model.yaml
+operon trace list .
+operon trace show ./trace.json
+operon --json trace show ./trace.json
+operon --config ./operon.nodes.yaml mount read-only cloud-a:/ --to ./cloud-a-readonly
 ```
+
+Add `--json` for structured command output or `--quiet` to suppress non-essential output.
 
 ---
 
@@ -222,10 +272,12 @@ Then point Operon at reachable daemon endpoints:
 ```yaml
 nodes:
   cloud-a:
-    endpoint: https://100.96.12.34:7788
+    endpoint: http://100.96.12.34:7788
   gpu-node:
-    endpoint: https://100.96.18.20:7788
+    endpoint: http://100.96.18.20:7788
 ```
+
+The current CLI speaks HTTP to daemon endpoints. In production-style deployments, run that HTTP service only on an existing encrypted private network or behind a trusted local tunnel. HTTPS and gRPC clients remain post-v0.4 protocol decisions.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another device. Operon decides whether that device can read a directory, run a job, use a secret, or inspect an execution trace.
 
@@ -233,16 +285,16 @@ Cloudflare Mesh or Tailscale can decide whether one device can reach another dev
 
 ## ⚡ Example
 
-Run the local Docker MVP demo:
+Run the local Docker v0.4 demo:
 
 ```bash
-scripts/verify-mvp-docker.sh
+scripts/verify-v0.4-docker.sh
 ```
 
-This starts two `operond` containers, validates capability discovery, fs operations, job execution, policy denial, audit output, and runs:
+This starts two `operond` containers, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, LAN mDNS discovery, policy denial, scoped secrets, persisted store output, filtered audit output, trace summaries, mount PoC output, and runs:
 
 ```bash
-operon --config examples/docker-nodes.yaml run examples/docker-copy-and-run.yaml
+operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-trace.json examples/docker-copy-and-run.yaml
 ```
 
 Example workflow:
@@ -313,7 +365,7 @@ Supported (initial):
 - filesystem (read / write / list)
 - job execution
 - process control
-- service / port access over an existing private network
+- service / port metadata and TCP health checks over an existing private network
 
 Planned:
 
@@ -351,15 +403,15 @@ Agents can:
 import { OperonClient } from "@operon/sdk";
 
 const operon = new OperonClient([
-  { nodeId: "cloud-a", endpoint: "http://100.96.12.34:7788" },
-  { nodeId: "gpu-node", endpoint: "http://100.96.18.20:7788" }
+  { nodeId: "cloud-a", endpoint: "http://100.96.12.34:7788", token: "cloud-token" },
+  { nodeId: "gpu-node", endpoint: "http://100.96.18.20:7788", token: "gpu-token" }
 ]);
 
 const trace = await operon.run({
   name: "train-model",
   steps: [
     { node: "cloud-a", action: "fs.read", path: "/data" },
-    { node: "gpu-node", action: "job.run", command: "train.py" }
+    { node: "gpu-node", action: "job.run", command: "train.py", secrets: ["WANDB_API_KEY"] }
   ]
 });
 ```
@@ -405,9 +457,20 @@ Roadmap:
 - [x] Execution graph
 - [x] Minimal policy and audit
 - [x] Minimal TypeScript SDK
-- [ ] FUSE mount
+- [x] Token-authenticated daemon calls
+- [x] Streaming-friendly fs transfer
+- [x] Followed job logs
+- [x] Provider endpoint resolution
+- [x] JSONL audit/job store
+- [x] Scoped job secrets
+- [x] LAN mDNS discovery
+- [x] Queryable job/audit/trace commands
+- [x] Read-only mount PoC
+- [x] Service / port metadata and health checks
+- [x] Filtered audit and human-readable trace CLI UX
+- [ ] FUSE / WinFsp mount
 - [ ] Agent integration
-- [ ] Network provider adapters
+- [ ] Non-LAN provider discovery adapters
 
 ---
 

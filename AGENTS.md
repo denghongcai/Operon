@@ -32,6 +32,18 @@ Operon should not own:
   - Authoritative phase plan and phase status tracker.
   - Every completed task must update this document with what changed and which phase advanced.
 
+- `docs/plan/v0.2-acceptance.md`
+  - v0.2 acceptance scope, validation commands, and known limits.
+
+- `docs/plan/v0.3-acceptance.md`
+  - v0.3 acceptance scope, validation commands, and known limits.
+
+- `docs/plan/v0.4-acceptance.md`
+  - v0.4 acceptance scope, validation commands, service capability limits, and trace/audit UX expectations.
+
+- `docs/architecture/runtime-api.md`
+  - Current HTTP daemon API shape, structured error response, service capability boundary, and future gRPC candidates.
+
 - `README.md`
   - Public-facing project positioning and high-level architecture.
   - Current framing: "AI-native capability runtime over existing private networks."
@@ -54,10 +66,12 @@ Operon should not own:
 - SDK and web console: TypeScript.
 - Core daemon protocol: gRPC with streaming.
 - Local control/API facade: HTTP + JSON, SSE, or WebSocket.
+- Current v0.4 API surface: HTTP + JSON with structured daemon errors.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
 - v0.1 should assume nodes are already reachable over TCP.
 - Provider adapters should resolve/discover endpoints, not implement connectivity.
 - Capability authorization must remain inside Operon even when network access is already allowed.
+- Service / port capability is metadata and TCP health checking only; it must not become port forwarding, proxying, VPN, or relay behavior.
 
 ## First MVP Boundary
 
@@ -73,6 +87,8 @@ Prioritize:
 - permission policy
 - CLI
 - minimal SDK
+- service metadata and health checks
+- trace/audit CLI inspection
 
 Defer:
 
@@ -85,6 +101,7 @@ Defer:
 - complex secret manager
 - plugin marketplace
 - NAT traversal
+- port forwarding and proxying
 - relay network
 - VPN/device mesh IP assignment
 
