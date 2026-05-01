@@ -43,3 +43,6 @@ operon.db
 # Generated protocol output
 generated/
 **/generated/
+!packages/sdk-js/src/generated/
+!packages/sdk-js/src/generated/operon/
+!packages/sdk-js/src/generated/operon/runtime.ts

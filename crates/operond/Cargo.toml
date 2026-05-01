@@ -15,10 +15,12 @@ futures-util.workspace = true
 mdns-sd.workspace = true
 operon-core = { path = "../operon-core" }
 operon-network = { path = "../operon-network" }
+operon-protocol = { path = "../operon-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

@@ -29,7 +29,7 @@ The MVP does not include:
 - durable job, trace, or audit storage
 - FUSE/WinFsp mount support
 - screen, clipboard, audio, or remote desktop capabilities
-- Web Console
+- graphical management UI
 - secret injection
 - complex policy language
 

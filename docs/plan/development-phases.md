@@ -36,7 +36,7 @@ Do not build these in v0.1:
 - audio
 - clipboard sync
 - full file synchronization engine
-- Web Console
+- graphical management UI
 - plugin system
 - complex policy language
 - full secret manager
@@ -1081,14 +1081,14 @@ Done when:
 
 Operon v0.4 should stabilize the runtime API, add a focused service/port
 capability, and make trace/audit inspection more useful without expanding into
-Web Console, clipboard, or screen/input work.
+CLI TUI console, clipboard, or screen/input work.
 
 ```text
 v0.4 = stable runtime API + service/port capability + trace/audit UX.
 ```
 
 v0.4 still does not implement port forwarding, proxying, VPN behavior, remote
-desktop, clipboard, or Web Console.
+desktop, clipboard, or CLI TUI console.
 
 ## Phase 21: Runtime API Stabilization
 
@@ -1216,13 +1216,457 @@ Completed:
 - Verified `scripts/verify-v0.4-docker.sh` locally against the two-node Docker
   environment.
 
-### v0.5: Web Console and Advanced Capabilities
+## v0.5 Goal
 
-- Web Console
-- clipboard capability
-- screen/input feasibility spike
-- richer policy language
-- trace visualization UI
+Operon v0.5 should replace the temporary HTTP-only runtime path with a real
+gRPC core protocol while keeping the HTTP/JSON facade for scripts, SDKs, and
+debugging.
+
+```text
+v0.5 = protobuf source of truth + tonic gRPC server + gRPC-capable CLI paths.
+```
+
+v0.5 does not introduce a new network layer, HTTPS/mTLS, graphical UI, port
+forwarding, or mount behavior changes.
+
+## Phase 25: Protocol Contract Finalization
+
+Status: Completed.
+
+Goal: make protobuf the authoritative runtime contract before wiring the server.
+
+Planned:
+
+- align `proto/operon/*.proto` with the current HTTP API surface.
+- cover node metadata, health, capability list, fs, jobs, audit, scoped secret
+  use through jobs, and service checks.
+- model streaming file reads, streaming file writes, followed job logs, stdin,
+  and execution events explicitly.
+- define auth metadata conventions for bearer tokens.
+- add generated Rust types through `operon-protocol`.
+- document compatibility between HTTP facade errors and gRPC status details.
+
+Done when:
+
+- protobuf schemas cover the current v0.4 runtime capabilities.
+- `operon-protocol` builds generated Rust bindings.
+- protocol docs describe which methods are unary, server-streaming,
+  client-streaming, or bidirectional.
+
+Completed:
+
+- Added `proto/operon/runtime.proto` as the v0.5 runtime contract.
+- Generated Rust bindings from `operon-protocol` with tonic/prost.
+- Modeled bearer auth metadata, unary runtime methods, server-streaming file
+  reads/job logs, and client-streaming file writes/job stdin.
+
+## Phase 26: gRPC Daemon Server
+
+Status: Completed.
+
+Goal: expose the current daemon capability runtime through tonic.
+
+Planned:
+
+- add a gRPC listener to `operond`.
+- keep HTTP/JSON enabled as a facade during migration.
+- route gRPC calls through the same policy, auth, audit, store, and execution
+  code paths as HTTP.
+- support streaming fs read/write and job log/stdin paths through gRPC.
+- preserve structured audit and trace output.
+
+Done when:
+
+- Docker can start two daemons with gRPC endpoints.
+- gRPC calls enforce the same authorization behavior as HTTP calls.
+- streaming gRPC paths are covered by tests or Docker validation.
+
+Completed:
+
+- Added optional `operond start --grpc-listen` alongside the existing HTTP
+  listener.
+- Routed gRPC calls through the same fs, job, service, secret, policy, and audit
+  state used by the HTTP facade.
+- Added two-node Docker gRPC exposure on `7789`.
+
+## Phase 27: gRPC CLI and SDK Bridge
+
+Status: Completed.
+
+Goal: let the CLI use gRPC for runtime operations without removing scriptable
+HTTP/JSON access.
+
+Planned:
+
+- add CLI transport selection, defaulting to gRPC for supported operations.
+- preserve HTTP fallback for debugging and transitional compatibility.
+- expose clear endpoint config for `grpc://` and `http://` node URLs.
+- update the TypeScript SDK contract to match protobuf schemas even if the SDK
+  initially keeps using HTTP facade calls.
+
+Done when:
+
+- core CLI commands can run against gRPC endpoints.
+- existing examples still work.
+- docs clearly explain when HTTP and gRPC are used.
+
+Completed:
+
+- Added Rust CLI support for `grpc://` and `grpcs://` endpoints while keeping
+  `http://` fallback.
+- Updated graph execution to use gRPC when node endpoints are gRPC endpoints.
+- Updated the TypeScript SDK to generate protobuf bindings and use
+  `nice-grpc` for gRPC endpoints.
+
+## Phase 28: v0.5 Acceptance
+
+Status: Completed.
+
+Goal: make the gRPC migration reproducible.
+
+Planned:
+
+- `docs/plan/v0.5-acceptance.md`.
+- Docker validation for two gRPC-connected nodes.
+- CI updates to run the v0.5 validation path.
+- README updates for gRPC endpoint config and protocol status.
+
+Done when:
+
+- v0.5 has one canonical validation command.
+- HTTP facade and gRPC runtime behavior are both covered.
+- `docs/plan/development-phases.md` records completed v0.5 work.
+
+Completed:
+
+- Added `scripts/verify-v0.5-docker.sh` as the canonical two-node gRPC
+  validation.
+- Added `examples/docker-nodes-grpc.yaml`.
+- Updated CI with v0.5 Docker validation and `protoc` installation for Rust
+  protocol generation.
+- Verified locally with `cargo test --workspace`, `pnpm typecheck`,
+  `pnpm test`, and `scripts/verify-v0.5-docker.sh`.
+
+## v0.6 Goal
+
+Operon v0.6 should turn the read-only mount proof of concept into a real Linux
+mount adapter.
+
+```text
+v0.6 = Linux FUSE mount over the Operon fs protocol.
+```
+
+v0.6 only targets Linux. WinFsp, macOS mount support, offline sync, distributed
+cache invalidation, and multi-writer conflict resolution remain out of scope.
+
+## Phase 29: Linux Mount Contract
+
+Status: Planned.
+
+Goal: define the mount semantics before implementing FUSE behavior.
+
+Planned:
+
+- decide read-only versus read-write scope for the first Linux mount.
+- define path normalization, mount-root mapping, cache behavior, and error
+  mapping.
+- document consistency limits and operations that are intentionally unsupported.
+- keep FUSE as an adapter over the fs protocol, not as a separate capability
+  model.
+
+Done when:
+
+- mount behavior is documented in `docs/plan/v0.6-acceptance.md`.
+- policy and audit requirements are explicit.
+- unsupported semantics are listed before implementation.
+
+## Phase 30: Linux FUSE Adapter
+
+Status: Planned.
+
+Goal: implement a real Linux mount path in `operon-mount`.
+
+Planned:
+
+- add Linux-only FUSE dependencies behind a feature or target gate.
+- implement lookup, getattr, readdir, open, read, and release.
+- add write operations only if Phase 29 explicitly keeps write support in scope.
+- route all remote fs operations through existing policy-enforced daemon APIs.
+- record audit events through the remote node for mounted operations.
+
+Done when:
+
+- `operon mount` creates a live Linux mount.
+- reads through the mount reflect remote node content.
+- path escapes remain impossible.
+- unmount cleanup is reliable.
+
+## Phase 31: Mount CLI UX and Validation
+
+Status: Planned.
+
+Goal: make Linux mount usable and testable from the CLI.
+
+Planned:
+
+- add `operon mount <node:/path> --to <dir>` for Linux.
+- add foreground mode and clean signal handling.
+- add a Docker or Linux-only validation path for mount behavior.
+- document host requirements such as `/dev/fuse` and privileges.
+
+Done when:
+
+- mount validation runs on Linux developer machines.
+- CI either validates FUSE where available or clearly gates the test.
+- README includes the Linux mount command and limitations.
+
+## Phase 32: v0.6 Acceptance
+
+Status: Planned.
+
+Goal: make the Linux mount milestone reproducible.
+
+Planned:
+
+- `docs/plan/v0.6-acceptance.md`.
+- Linux mount validation script.
+- README and AGENTS updates for mount scope.
+
+Done when:
+
+- real Linux mount behavior replaces the mount PoC in the roadmap.
+- validation covers mount, read, policy denial, audit, and cleanup.
+
+## v0.7 Goal
+
+Operon v0.7 should add an operator-focused CLI TUI console.
+
+```text
+v0.7 = terminal console for nodes, capabilities, jobs, traces, audit, and services.
+```
+
+The TUI console should be an extension of the CLI workflow. It should not add a
+separate graphical server, frontend app, or runtime API surface.
+
+## Phase 33: TUI Console Design
+
+Status: Planned.
+
+Goal: define a terminal-first console that fits repeated operator workflows.
+
+Planned:
+
+- choose the Rust TUI stack.
+- define views for nodes, capabilities, jobs, traces, audit, services, and
+  policies.
+- define keyboard navigation, refresh behavior, and JSON drill-down.
+- document which actions are read-only and which can mutate runtime state.
+
+Done when:
+
+- TUI interaction model is documented.
+- no separate graphical UI dependency is introduced.
+
+## Phase 34: TUI Console Implementation
+
+Status: Planned.
+
+Goal: implement the first terminal console inside the CLI.
+
+Planned:
+
+- add `operon console`.
+- reuse existing CLI config, auth, endpoint resolution, and gRPC/HTTP clients.
+- provide node list, capability view, job status/log view, audit filters, trace
+  summaries, and service health view.
+- keep rendering separate from runtime client code.
+
+Done when:
+
+- `operon console` works against the Docker two-node environment.
+- common inspection workflows no longer require multiple shell commands.
+
+## Phase 35: TUI Console Validation
+
+Status: Planned.
+
+Goal: make console behavior testable enough for continued development.
+
+Planned:
+
+- add unit tests for view models and filtering logic.
+- add smoke validation for startup against example node config.
+- document unsupported terminal capabilities.
+
+Done when:
+
+- TUI code has focused tests for state transitions.
+- README documents `operon console`.
+
+## Phase 36: v0.7 Acceptance
+
+Status: Planned.
+
+Goal: make the terminal console milestone reproducible.
+
+Planned:
+
+- `docs/plan/v0.7-acceptance.md`.
+- README roadmap update.
+- Docker-backed console smoke path where practical.
+
+Done when:
+
+- v0.7 has documented acceptance criteria.
+- the roadmap no longer contains separate graphical UI work.
+
+## v0.8 Goal
+
+Operon v0.8 should expose the runtime as an AI-native tool interface after the
+gRPC runtime, Linux mount, and CLI TUI console are stable.
+
+```text
+v0.8 = agent-facing tool interface over the established runtime API.
+```
+
+v0.8 should not invent a separate agent runtime. Agents should call the same
+capability, policy, audit, and trace surfaces that the CLI and SDK use.
+
+## Phase 37: Agent Tool Contract
+
+Status: Planned.
+
+Goal: define the stable tool contract agents will call.
+
+Planned:
+
+- choose the first supported agent tool surface, such as MCP or a simple
+  OpenAPI-compatible tool schema.
+- define tool schemas for node discovery, capability inspection, fs, jobs,
+  services, audit, traces, and execution graphs.
+- map tool errors to existing structured runtime errors.
+- document safety rules for destructive or policy-sensitive tools.
+
+Done when:
+
+- agent tool schemas are documented.
+- tools map cleanly to existing runtime APIs without bypassing policy.
+- audit and trace semantics remain unchanged.
+
+## Phase 38: Agent Integration Implementation
+
+Status: Planned.
+
+Goal: make Operon callable by an AI agent through the selected tool interface.
+
+Planned:
+
+- add the agent integration package or binary.
+- reuse existing CLI/SDK endpoint resolution and auth configuration.
+- implement read-only inspection tools first.
+- add controlled fs/job/service tools with policy-aware error reporting.
+- include an example agent workflow.
+
+Done when:
+
+- an agent can inspect nodes and capabilities.
+- an agent can run a constrained workflow through Operon.
+- all agent actions are visible in audit and trace output.
+
+## Phase 39: v0.8 Acceptance
+
+Status: Planned.
+
+Goal: make agent integration reproducible.
+
+Planned:
+
+- `docs/plan/v0.8-acceptance.md`.
+- Docker-backed agent workflow validation.
+- README updates for agent tool usage.
+
+Done when:
+
+- v0.8 has documented acceptance criteria.
+- the agent integration uses existing runtime contracts instead of introducing
+  a parallel control plane.
+
+## v0.9 Goal
+
+Operon v0.9 should add non-LAN provider discovery adapters while preserving the
+network boundary.
+
+```text
+v0.9 = provider API discovery for existing private-network endpoints.
+```
+
+v0.9 should discover or resolve endpoints only. It must not implement NAT
+traversal, relays, VPN behavior, mesh IP assignment, subnet routing, or global
+routing.
+
+## Phase 40: Provider Discovery Contract
+
+Status: Planned.
+
+Goal: define a common discovery result model for non-LAN providers.
+
+Planned:
+
+- define provider discovery result fields.
+- define cache, refresh, and failure behavior.
+- define how discovered endpoints merge with manual node config.
+- keep capability access separate from provider network access.
+
+Done when:
+
+- provider discovery semantics are documented.
+- manual endpoint config remains the fallback and source of override.
+- discovered nodes do not automatically receive capability authorization.
+
+## Phase 41: Non-LAN Provider Adapters
+
+Status: Planned.
+
+Goal: implement the first non-LAN discovery adapters.
+
+Planned:
+
+- add Tailscale discovery if API credentials are configured.
+- add Cloudflare discovery if API credentials are configured.
+- consider Kubernetes service discovery after the first two adapters.
+- keep SSH and WireGuard as manual endpoint providers unless a clear discovery
+  path is defined.
+
+Done when:
+
+- at least one non-LAN provider can discover reachable Operon endpoints.
+- discovered endpoints can be inspected before being used.
+- provider errors are clear and do not affect manual endpoints.
+
+## Phase 42: v0.9 Acceptance
+
+Status: Planned.
+
+Goal: make provider discovery reproducible without owning connectivity.
+
+Planned:
+
+- `docs/plan/v0.9-acceptance.md`.
+- mocked provider API tests.
+- optional live-provider validation notes.
+- README updates for provider discovery setup and limits.
+
+Done when:
+
+- v0.9 has documented acceptance criteria.
+- non-LAN discovery is tested without requiring live third-party accounts in CI.
+- docs explicitly preserve the "Operon is not a VPN" boundary.
+
+## Later Candidate Work
+
+- richer policy language.
+- clipboard capability.
+- screen/input feasibility spike.
 
 ## Planning Principle
 

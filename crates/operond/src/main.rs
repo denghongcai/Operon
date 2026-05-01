@@ -4,6 +4,7 @@ use std::{
     env, fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Component, Path, PathBuf},
+    pin::Pin,
     process::Stdio,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -29,6 +30,12 @@ use operon_core::{
     JobStatus, JobStdin, JobStdinClose, NodeInfo, PolicyConfig, ServiceCheck, ServiceDefinition,
     ServiceList, ServicePolicy,
 };
+use operon_protocol::runtime::v1::{
+    operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
+    FileChunk, FsPathRequest, GetNodeRequest, HealthRequest, JobIdRequest, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceIdRequest,
+    WriteFileRequest,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command as TokioCommand,
@@ -36,6 +43,7 @@ use tokio::{
     time,
 };
 use tokio_util::io::ReaderStream;
+use tonic::{metadata::MetadataMap, transport::Server, Request, Response as GrpcResponse, Status};
 
 const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
@@ -55,6 +63,9 @@ enum Command {
 struct StartArgs {
     #[arg(long, default_value = "127.0.0.1:7788")]
     listen: SocketAddr,
+
+    #[arg(long)]
+    grpc_listen: Option<SocketAddr>,
 
     #[arg(long, default_value = "local")]
     node_id: String,
@@ -232,20 +243,665 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .route("/service/list", get(service_list))
         .route("/service/check", get(service_check))
         .route("/audit", get(audit_log))
-        .with_state(state);
+        .with_state(state.clone());
 
+    let grpc_listen = args.grpc_listen;
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     tracing::info!("operond listening on {}", args.listen);
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
+    if let Some(grpc_listen) = grpc_listen {
+        let grpc_state = state.clone();
+        tracing::info!("operond gRPC listening on {}", grpc_listen);
+        tokio::select! {
+            result = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()) => {
+                result?;
+            }
+            result = Server::builder()
+                .add_service(OperonRuntimeServer::new(GrpcRuntime { state: grpc_state }))
+                .serve_with_shutdown(grpc_listen, shutdown_signal()) => {
+                result?;
+            }
+        }
+    } else {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(shutdown_signal())
+            .await?;
+    }
 
     drop(mdns);
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+#[derive(Debug, Clone)]
+struct GrpcRuntime {
+    state: AppState,
+}
+
+type GrpcFileStream =
+    Pin<Box<dyn futures_util::Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
+type GrpcJobLogStream = Pin<
+    Box<
+        dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::JobLog, Status>>
+            + Send
+            + 'static,
+    >,
+>;
+
+#[tonic::async_trait]
+impl OperonRuntime for GrpcRuntime {
+    async fn health(
+        &self,
+        request: Request<HealthRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::HealthStatus>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        Ok(GrpcResponse::new(
+            HealthStatus {
+                ok: true,
+                node_id: self.state.node.id.clone(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            }
+            .into(),
+        ))
+    }
+
+    async fn get_node(
+        &self,
+        request: Request<GetNodeRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::NodeInfo>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        Ok(GrpcResponse::new(self.state.node.clone().into()))
+    }
+
+    async fn list_capabilities(
+        &self,
+        request: Request<ListCapabilitiesRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::CapabilityList>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        Ok(GrpcResponse::new(self.state.capabilities.clone().into()))
+    }
+
+    async fn stat_fs(
+        &self,
+        request: Request<FsPathRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsStat>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let path = request.into_inner().path;
+        let stat = grpc_fs_stat(&self.state, path).await?;
+        Ok(GrpcResponse::new(stat.into()))
+    }
+
+    async fn list_fs(
+        &self,
+        request: Request<FsPathRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsList>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let path = request.into_inner().path;
+        let list = grpc_fs_list(&self.state, path).await?;
+        Ok(GrpcResponse::new(list.into()))
+    }
+
+    type ReadFileStream = GrpcFileStream;
+
+    async fn read_file(
+        &self,
+        request: Request<FsPathRequest>,
+    ) -> Result<GrpcResponse<Self::ReadFileStream>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let path = request.into_inner().path;
+        if let Err(error) = authorize_fs(&self.state.policy, "read", &path) {
+            record_audit(&self.state, "read-stream", &path, false, &error.1);
+            return Err(status_from_error(error));
+        }
+        let full_path = match resolve_workspace_path(&self.state.workspace, &path) {
+            Ok(path) => path,
+            Err(error) => {
+                record_audit(&self.state, "read-stream", &path, false, &error.1);
+                return Err(status_from_error(error));
+            }
+        };
+        let file = tokio::fs::File::open(&full_path)
+            .await
+            .map_err(|error| Status::internal(error.to_string()))?;
+        record_audit(&self.state, "read-stream", &path, true, "allowed");
+        let stream = ReaderStream::new(file).map(|chunk| {
+            chunk
+                .map(|data| FileChunk {
+                    data: data.to_vec(),
+                })
+                .map_err(|error| Status::internal(error.to_string()))
+        });
+        Ok(GrpcResponse::new(Box::pin(stream)))
+    }
+
+    async fn write_file(
+        &self,
+        request: Request<tonic::Streaming<WriteFileRequest>>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsWrite>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let mut stream = request.into_inner();
+        let mut path = None;
+        let mut file = None;
+        let mut bytes_written = 0_u64;
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            if path.is_none() {
+                if chunk.path.is_empty() {
+                    return Err(Status::invalid_argument(
+                        "first write chunk must include a path",
+                    ));
+                }
+                if let Err(error) = authorize_fs(&self.state.policy, "write", &chunk.path) {
+                    record_audit(&self.state, "write-stream", &chunk.path, false, &error.1);
+                    return Err(status_from_error(error));
+                }
+                let full_path = match resolve_workspace_path(&self.state.workspace, &chunk.path) {
+                    Ok(path) => path,
+                    Err(error) => {
+                        record_audit(&self.state, "write-stream", &chunk.path, false, &error.1);
+                        return Err(status_from_error(error));
+                    }
+                };
+                if let Some(parent) = full_path.parent() {
+                    tokio::fs::create_dir_all(parent)
+                        .await
+                        .map_err(|error| Status::internal(error.to_string()))?;
+                }
+                file = Some(
+                    tokio::fs::File::create(&full_path)
+                        .await
+                        .map_err(|error| Status::internal(error.to_string()))?,
+                );
+                path = Some(chunk.path.clone());
+            } else if !chunk.path.is_empty() && Some(&chunk.path) != path.as_ref() {
+                return Err(Status::invalid_argument(
+                    "write stream cannot change path after the first chunk",
+                ));
+            }
+            if let Some(file) = &mut file {
+                file.write_all(&chunk.data)
+                    .await
+                    .map_err(|error| Status::internal(error.to_string()))?;
+                bytes_written += chunk.data.len() as u64;
+            }
+        }
+
+        let Some(path) = path else {
+            return Err(Status::invalid_argument(
+                "write stream did not include a path",
+            ));
+        };
+        record_audit(&self.state, "write-stream", &path, true, "allowed");
+        Ok(GrpcResponse::new(
+            FsWrite {
+                path,
+                bytes_written,
+            }
+            .into(),
+        ))
+    }
+
+    async fn run_job(
+        &self,
+        request: Request<operon_protocol::runtime::v1::JobRunRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let request = request.into_inner();
+        let record = start_job(
+            &self.state,
+            JobRunRequest {
+                command: request.command,
+                cwd: (!request.cwd.is_empty()).then_some(request.cwd),
+                timeout_secs: request.has_timeout_secs.then_some(request.timeout_secs),
+                secrets: request.secrets,
+            },
+        )?;
+        Ok(GrpcResponse::new(record.into()))
+    }
+
+    async fn get_job(
+        &self,
+        request: Request<JobIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let job_id = request.into_inner().job_id;
+        let record = get_job_record(&self.state, &job_id)?;
+        Ok(GrpcResponse::new(record.into()))
+    }
+
+    async fn list_jobs(
+        &self,
+        request: Request<ListJobsRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobList>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let jobs = self
+            .state
+            .jobs
+            .lock()
+            .expect("job map mutex poisoned")
+            .values()
+            .cloned()
+            .collect();
+        Ok(GrpcResponse::new(JobList { jobs }.into()))
+    }
+
+    type StreamJobLogsStream = GrpcJobLogStream;
+
+    async fn stream_job_logs(
+        &self,
+        request: Request<JobIdRequest>,
+    ) -> Result<GrpcResponse<Self::StreamJobLogsStream>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let job_id = request.into_inner().job_id;
+        if !self
+            .state
+            .jobs
+            .lock()
+            .expect("job map mutex poisoned")
+            .contains_key(&job_id)
+        {
+            return Err(Status::not_found(format!("job `{job_id}` not found")));
+        }
+        let jobs = self.state.jobs.clone();
+        let stream = async_stream::stream! {
+            let mut printed = 0;
+            loop {
+                let snapshot = jobs
+                    .lock()
+                    .expect("job map mutex poisoned")
+                    .get(&job_id)
+                    .cloned();
+                let Some(record) = snapshot else {
+                    break;
+                };
+                for log in record.logs.iter().skip(printed) {
+                    yield Ok::<_, Status>(log.clone().into());
+                }
+                printed = record.logs.len();
+                if !matches!(record.status, JobStatus::Running) {
+                    break;
+                }
+                time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        };
+        Ok(GrpcResponse::new(Box::pin(stream)))
+    }
+
+    async fn write_job_stdin(
+        &self,
+        request: Request<tonic::Streaming<operon_protocol::runtime::v1::JobStdinRequest>>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobStdin>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let mut stream = request.into_inner();
+        let mut job_id = None;
+        let mut sender = None;
+        let mut bytes_written = 0_u64;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            if job_id.is_none() {
+                if chunk.job_id.is_empty() {
+                    return Err(Status::invalid_argument(
+                        "first stdin chunk must include a job_id",
+                    ));
+                }
+                sender = Some(
+                    self.state
+                        .job_stdin
+                        .lock()
+                        .expect("job stdin mutex poisoned")
+                        .get(&chunk.job_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            Status::not_found(format!("job `{}` has no open stdin", chunk.job_id))
+                        })?,
+                );
+                job_id = Some(chunk.job_id.clone());
+            } else if !chunk.job_id.is_empty() && Some(&chunk.job_id) != job_id.as_ref() {
+                return Err(Status::invalid_argument(
+                    "stdin stream cannot change job_id after the first chunk",
+                ));
+            }
+            if let Some(sender) = &sender {
+                bytes_written += chunk.data.len() as u64;
+                sender
+                    .send(Bytes::from(chunk.data))
+                    .map_err(|_| Status::failed_precondition("job stdin is closed"))?;
+            }
+        }
+        let Some(job_id) = job_id else {
+            return Err(Status::invalid_argument(
+                "stdin stream did not include a job_id",
+            ));
+        };
+        Ok(GrpcResponse::new(
+            JobStdin {
+                job_id,
+                bytes_written,
+            }
+            .into(),
+        ))
+    }
+
+    async fn close_job_stdin(
+        &self,
+        request: Request<JobIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobStdinClose>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let job_id = request.into_inner().job_id;
+        let closed = self
+            .state
+            .job_stdin
+            .lock()
+            .expect("job stdin mutex poisoned")
+            .remove(&job_id)
+            .is_some();
+        Ok(GrpcResponse::new(JobStdinClose { job_id, closed }.into()))
+    }
+
+    async fn cancel_job(
+        &self,
+        request: Request<operon_protocol::runtime::v1::JobCancelRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let job_id = request.into_inner().job_id;
+        if let Some(sender) = self
+            .state
+            .job_cancel
+            .lock()
+            .expect("job cancel mutex poisoned")
+            .remove(&job_id)
+        {
+            let _ = sender.send(());
+            record_audit_capability(
+                &self.state,
+                "job:default",
+                "cancel",
+                &job_id,
+                true,
+                "cancel requested",
+            );
+        }
+        let record = get_job_record(&self.state, &job_id)?;
+        Ok(GrpcResponse::new(record.into()))
+    }
+
+    async fn list_services(
+        &self,
+        request: Request<ListServicesRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ServiceList>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        Ok(GrpcResponse::new(
+            ServiceList {
+                services: self.state.policy.service.services.clone(),
+            }
+            .into(),
+        ))
+    }
+
+    async fn check_service(
+        &self,
+        request: Request<ServiceIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ServiceCheck>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let service_id = request.into_inner().service_id;
+        let check = grpc_service_check(&self.state, service_id).await?;
+        Ok(GrpcResponse::new(check.into()))
+    }
+
+    async fn list_audit(
+        &self,
+        request: Request<ListAuditRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::AuditLog>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let events = self
+            .state
+            .audit
+            .lock()
+            .expect("audit log mutex poisoned")
+            .clone();
+        Ok(GrpcResponse::new(AuditLog { events }.into()))
+    }
+}
+
+fn authorize_grpc(state: &AppState, metadata: &MetadataMap) -> Result<(), Status> {
+    let Some(expected) = &state.auth_token else {
+        return Ok(());
+    };
+    let Some(header) = metadata.get("authorization") else {
+        return Err(Status::unauthenticated("missing bearer token"));
+    };
+    let Ok(header) = header.to_str() else {
+        return Err(Status::unauthenticated("invalid bearer token"));
+    };
+    let Some(actual) = header.strip_prefix("Bearer ") else {
+        return Err(Status::unauthenticated("invalid bearer token"));
+    };
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(Status::unauthenticated("invalid bearer token"))
+    }
+}
+
+async fn grpc_fs_stat(state: &AppState, path: String) -> Result<FsStat, Status> {
+    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
+        record_audit(state, "stat", &path, false, &error.1);
+        return Err(status_from_error(error));
+    }
+    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit(state, "stat", &path, false, &error.1);
+            return Err(status_from_error(error));
+        }
+    };
+    let metadata = tokio::fs::metadata(&full_path)
+        .await
+        .map_err(|error| Status::internal(error.to_string()))?;
+    record_audit(state, "stat", &path, true, "allowed");
+    Ok(FsStat {
+        path,
+        is_file: metadata.is_file(),
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+    })
+}
+
+async fn grpc_fs_list(state: &AppState, path: String) -> Result<FsList, Status> {
+    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
+        record_audit(state, "list", &path, false, &error.1);
+        return Err(status_from_error(error));
+    }
+    let full_path = match resolve_workspace_path(&state.workspace, &path) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit(state, "list", &path, false, &error.1);
+            return Err(status_from_error(error));
+        }
+    };
+    let mut entries = Vec::new();
+    let mut reader = tokio::fs::read_dir(&full_path)
+        .await
+        .map_err(|error| Status::internal(error.to_string()))?;
+    while let Some(entry) = reader
+        .next_entry()
+        .await
+        .map_err(|error| Status::internal(error.to_string()))?
+    {
+        let metadata = entry
+            .metadata()
+            .await
+            .map_err(|error| Status::internal(error.to_string()))?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        let child_path = join_virtual_path(&path, &name);
+        entries.push(FsEntry {
+            name,
+            path: child_path,
+            is_file: metadata.is_file(),
+            is_dir: metadata.is_dir(),
+            size: metadata.len(),
+        });
+    }
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    record_audit(state, "list", &path, true, "allowed");
+    Ok(FsList { path, entries })
+}
+
+fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Status> {
+    let cwd_virtual = request.cwd.clone().unwrap_or_else(|| "/".to_string());
+    if let Err(error) = authorize_job(&state.policy, &cwd_virtual, request.timeout_secs) {
+        record_audit_capability(state, "job:default", "run", &cwd_virtual, false, &error.1);
+        return Err(status_from_error(error));
+    }
+    let secret_env = match resolve_job_secrets(state, &request.secrets) {
+        Ok(secret_env) => secret_env,
+        Err(error) => {
+            record_audit_capability(state, "secret:default", "use", "*", false, &error.1);
+            return Err(status_from_error(error));
+        }
+    };
+    let cwd = match resolve_workspace_path(&state.workspace, &cwd_virtual) {
+        Ok(path) => path,
+        Err(error) => {
+            record_audit_capability(state, "job:default", "run", &cwd_virtual, false, &error.1);
+            return Err(status_from_error(error));
+        }
+    };
+    if !cwd.exists() {
+        fs::create_dir_all(&cwd).map_err(|error| Status::internal(error.to_string()))?;
+    }
+
+    let job_id = format!("job-{}", state.next_job_id.fetch_add(1, Ordering::SeqCst));
+    let record = JobRecord {
+        id: job_id.clone(),
+        node_id: state.node.id.clone(),
+        command: request.command.clone(),
+        cwd: cwd_virtual,
+        status: JobStatus::Running,
+        exit_code: None,
+        logs: Vec::new(),
+    };
+    state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .insert(job_id.clone(), record.clone());
+    record_audit_capability(state, "job:default", "run", &job_id, true, "allowed");
+    for secret in &request.secrets {
+        record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
+    }
+
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
+    state
+        .job_cancel
+        .lock()
+        .expect("job cancel mutex poisoned")
+        .insert(job_id.clone(), cancel_tx);
+    state
+        .job_stdin
+        .lock()
+        .expect("job stdin mutex poisoned")
+        .insert(job_id.clone(), stdin_tx);
+
+    let jobs = state.jobs.clone();
+    let cancels = state.job_cancel.clone();
+    let stdin = state.job_stdin.clone();
+    let store = state.store.clone();
+    let command = request.command;
+    let timeout_secs = request
+        .timeout_secs
+        .unwrap_or(state.policy.job.default_timeout_secs);
+
+    tokio::spawn(async move {
+        run_job_task(JobTask {
+            jobs,
+            cancels,
+            stdin,
+            store,
+            job_id,
+            command,
+            cwd,
+            timeout_secs,
+            env: secret_env,
+            cancel_rx,
+            stdin_rx,
+        })
+        .await;
+    });
+
+    Ok(record)
+}
+
+fn get_job_record(state: &AppState, job_id: &str) -> Result<JobRecord, Status> {
+    state
+        .jobs
+        .lock()
+        .expect("job map mutex poisoned")
+        .get(job_id)
+        .cloned()
+        .ok_or_else(|| Status::not_found(format!("job `{job_id}` not found")))
+}
+
+async fn grpc_service_check(state: &AppState, service_id: String) -> Result<ServiceCheck, Status> {
+    let service = match authorize_service(&state.policy, &service_id) {
+        Ok(service) => service,
+        Err(error) => {
+            record_audit_capability(
+                state,
+                "service:default",
+                "check",
+                &service_id,
+                false,
+                &error.1,
+            );
+            return Err(status_from_error(error));
+        }
+    };
+
+    let started = std::time::Instant::now();
+    let result = time::timeout(
+        std::time::Duration::from_secs(2),
+        tokio::net::TcpStream::connect((service.host.as_str(), service.port)),
+    )
+    .await;
+    let latency_ms = started.elapsed().as_millis();
+    let (ok, reason) = match result {
+        Ok(Ok(_)) => (true, None),
+        Ok(Err(error)) => (false, Some(error.to_string())),
+        Err(_) => (false, Some("service check timed out".to_string())),
+    };
+    record_audit_capability(
+        state,
+        &format!("service:{}", service.id),
+        "check",
+        &service.id,
+        ok,
+        reason.as_deref().unwrap_or("reachable"),
+    );
+
+    Ok(ServiceCheck {
+        id: service.id,
+        ok,
+        latency_ms,
+        reason,
+    })
+}
+
+fn status_from_error(error: (StatusCode, String)) -> Status {
+    match error.0 {
+        StatusCode::UNAUTHORIZED => Status::unauthenticated(error.1),
+        StatusCode::FORBIDDEN => Status::permission_denied(error.1),
+        StatusCode::NOT_FOUND => Status::not_found(error.1),
+        StatusCode::BAD_REQUEST => Status::invalid_argument(error.1),
+        StatusCode::REQUEST_TIMEOUT => Status::deadline_exceeded(error.1),
+        _ => Status::internal(error.1),
+    }
 }
 
 async fn health(

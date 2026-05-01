@@ -1,0 +1,194 @@
+syntax = "proto3";
+
+package operon.runtime.v1;
+
+service OperonRuntime {
+  rpc Health(HealthRequest) returns (HealthStatus);
+  rpc GetNode(GetNodeRequest) returns (NodeInfo);
+  rpc ListCapabilities(ListCapabilitiesRequest) returns (CapabilityList);
+  rpc StatFs(FsPathRequest) returns (FsStat);
+  rpc ListFs(FsPathRequest) returns (FsList);
+  rpc ReadFile(FsPathRequest) returns (stream FileChunk);
+  rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
+  rpc RunJob(JobRunRequest) returns (JobRecord);
+  rpc GetJob(JobIdRequest) returns (JobRecord);
+  rpc ListJobs(ListJobsRequest) returns (JobList);
+  rpc StreamJobLogs(JobIdRequest) returns (stream JobLog);
+  rpc WriteJobStdin(stream JobStdinRequest) returns (JobStdin);
+  rpc CloseJobStdin(JobIdRequest) returns (JobStdinClose);
+  rpc CancelJob(JobCancelRequest) returns (JobRecord);
+  rpc ListServices(ListServicesRequest) returns (ServiceList);
+  rpc CheckService(ServiceIdRequest) returns (ServiceCheck);
+  rpc ListAudit(ListAuditRequest) returns (AuditLog);
+}
+
+message HealthRequest {}
+
+message GetNodeRequest {}
+
+message ListCapabilitiesRequest {}
+
+message ListJobsRequest {}
+
+message ListServicesRequest {}
+
+message ListAuditRequest {}
+
+message HealthStatus {
+  bool ok = 1;
+  string node_id = 2;
+  string version = 3;
+}
+
+message NodeInfo {
+  string id = 1;
+  string hostname = 2;
+  string os = 3;
+  string arch = 4;
+}
+
+message Capability {
+  string id = 1;
+  string kind = 2;
+  string node_id = 3;
+  string name = 4;
+  repeated string permissions = 5;
+  string description = 6;
+}
+
+message CapabilityList {
+  repeated Capability capabilities = 1;
+}
+
+message FsPathRequest {
+  string path = 1;
+}
+
+message FsStat {
+  string path = 1;
+  bool is_file = 2;
+  bool is_dir = 3;
+  uint64 size = 4;
+}
+
+message FsEntry {
+  string name = 1;
+  string path = 2;
+  bool is_file = 3;
+  bool is_dir = 4;
+  uint64 size = 5;
+}
+
+message FsList {
+  string path = 1;
+  repeated FsEntry entries = 2;
+}
+
+message FileChunk {
+  bytes data = 1;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  bytes data = 2;
+}
+
+message FsWrite {
+  string path = 1;
+  uint64 bytes_written = 2;
+}
+
+message JobRunRequest {
+  string command = 1;
+  string cwd = 2;
+  uint64 timeout_secs = 3;
+  repeated string secrets = 4;
+  bool has_timeout_secs = 5;
+}
+
+message JobIdRequest {
+  string job_id = 1;
+}
+
+message JobCancelRequest {
+  string job_id = 1;
+}
+
+message JobLog {
+  string stream = 1;
+  string data = 2;
+}
+
+message JobRecord {
+  string id = 1;
+  string node_id = 2;
+  string command = 3;
+  string cwd = 4;
+  string status = 5;
+  int32 exit_code = 6;
+  repeated JobLog logs = 7;
+  bool has_exit_code = 8;
+}
+
+message JobList {
+  repeated JobRecord jobs = 1;
+}
+
+message JobStdinRequest {
+  string job_id = 1;
+  bytes data = 2;
+}
+
+message JobStdin {
+  string job_id = 1;
+  uint64 bytes_written = 2;
+}
+
+message JobStdinClose {
+  string job_id = 1;
+  bool closed = 2;
+}
+
+message ServiceIdRequest {
+  string service_id = 1;
+}
+
+message ServiceDefinition {
+  string id = 1;
+  string name = 2;
+  string host = 3;
+  uint32 port = 4;
+  string protocol = 5;
+  string description = 6;
+}
+
+message ServiceList {
+  repeated ServiceDefinition services = 1;
+}
+
+message ServiceCheck {
+  string id = 1;
+  bool ok = 2;
+  uint64 latency_ms = 3;
+  string reason = 4;
+  bool has_reason = 5;
+}
+
+message AuditEvent {
+  string subject = 1;
+  uint64 timestamp_ms = 2;
+  string node_id = 3;
+  string capability = 4;
+  string action = 5;
+  string resource = 6;
+  bool allowed = 7;
+  string reason = 8;
+  string run_id = 9;
+  string step_id = 10;
+  bool has_run_id = 11;
+  bool has_step_id = 12;
+}
+
+message AuditLog {
+  repeated AuditEvent events = 1;
+}

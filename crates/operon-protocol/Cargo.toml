@@ -8,3 +8,9 @@ rust-version.workspace = true
 
 [dependencies]
 operon-core = { path = "../operon-core" }
+prost = "0.14.3"
+tonic = { version = "0.14.5", features = ["transport"] }
+tonic-prost = "0.14.5"
+
+[build-dependencies]
+tonic-prost-build = "0.14.5"

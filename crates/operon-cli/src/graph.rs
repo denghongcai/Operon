@@ -6,7 +6,7 @@ use operon_core::{
 };
 
 use crate::{
-    encode_path, http_get_json_endpoint, http_post_json_endpoint, load_endpoint, load_job,
+    encode_path, grpc, http_get_json_endpoint, http_post_json_endpoint, load_endpoint, load_job,
 };
 
 pub(crate) fn run_graph(
@@ -80,32 +80,51 @@ fn execute_step_action(
         "fs.stat" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let stat: FsStat =
-                http_get_json_endpoint(&endpoint, &format!("/fs/stat?path={}", encode_path(path)))?;
+            let stat: FsStat = if grpc::is_grpc_endpoint(&endpoint) {
+                grpc::fs_stat(&endpoint, path)?
+            } else {
+                http_get_json_endpoint(&endpoint, &format!("/fs/stat?path={}", encode_path(path)))?
+            };
             Ok(serde_json::to_value(stat)?)
         }
         "fs.list" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let list: FsList =
-                http_get_json_endpoint(&endpoint, &format!("/fs/list?path={}", encode_path(path)))?;
+            let list: FsList = if grpc::is_grpc_endpoint(&endpoint) {
+                grpc::fs_list(&endpoint, path)?
+            } else {
+                http_get_json_endpoint(&endpoint, &format!("/fs/list?path={}", encode_path(path)))?
+            };
             Ok(serde_json::to_value(list)?)
         }
         "fs.read" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let read: FsRead =
-                http_get_json_endpoint(&endpoint, &format!("/fs/read?path={}", encode_path(path)))?;
+            let read: FsRead = if grpc::is_grpc_endpoint(&endpoint) {
+                let mut content = Vec::new();
+                grpc::read_file_to_writer(&endpoint, path, &mut content)?;
+                FsRead {
+                    path: path.to_string(),
+                    content: String::from_utf8(content)?,
+                }
+            } else {
+                http_get_json_endpoint(&endpoint, &format!("/fs/read?path={}", encode_path(path)))?
+            };
             Ok(serde_json::to_value(read)?)
         }
         "fs.write" => {
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
-            let request = FsWriteRequest {
-                path: path.to_string(),
-                content: step.content.clone().unwrap_or_default(),
+            let content = step.content.clone().unwrap_or_default();
+            let write: FsWrite = if grpc::is_grpc_endpoint(&endpoint) {
+                grpc::write_file_bytes(&endpoint, path, content.as_bytes())?
+            } else {
+                let request = FsWriteRequest {
+                    path: path.to_string(),
+                    content,
+                };
+                http_post_json_endpoint(&endpoint, "/fs/write", &request)?
             };
-            let write: FsWrite = http_post_json_endpoint(&endpoint, "/fs/write", &request)?;
             Ok(serde_json::to_value(write)?)
         }
         "job.run" => run_job_step(config_path, step),
@@ -121,7 +140,11 @@ fn run_job_step(config_path: PathBuf, step: &ExecutionStep) -> anyhow::Result<se
         timeout_secs: step.timeout_secs,
         secrets: step.secrets.clone(),
     };
-    let record: JobRecord = http_post_json_endpoint(&endpoint, "/job/run", &request)?;
+    let record: JobRecord = if grpc::is_grpc_endpoint(&endpoint) {
+        grpc::run_job(&endpoint, request)?
+    } else {
+        http_post_json_endpoint(&endpoint, "/job/run", &request)?
+    };
 
     loop {
         let record = load_job(config_path.clone(), &step.node, &record.id)?;

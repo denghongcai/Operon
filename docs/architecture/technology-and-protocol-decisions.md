@@ -67,26 +67,36 @@ process: tokio::process, portable-pty later
 storage: rusqlite or sqlx sqlite
 ```
 
-## Decision 2: TypeScript for SDK and Web
+## Decision 2: TypeScript for SDK and Rust for Console UX
 
 TypeScript should be used for surfaces that benefit from fast iteration and AI ecosystem integration:
 
 - JavaScript/TypeScript SDK
 - examples
 - agent integration helpers
-- web console
 - documentation tooling
 
 The TypeScript SDK should not define the core protocol independently. It should be generated from, or validated against, the shared protocol schema.
+
+Operator console UX should be terminal-first and live inside the Rust CLI. A
+separate graphical management UI is not part of the current product roadmap.
 
 Recommended TypeScript stack:
 
 ```text
 package manager: pnpm workspace
-SDK validation: zod or generated protobuf types
-web console: React + Vite
+SDK gRPC client: nice-grpc
+SDK protocol types: ts-proto generated protobuf types
 tests: vitest
 build: tsup
+```
+
+Recommended console stack:
+
+```text
+CLI: clap
+TUI: ratatui or another Rust terminal UI crate
+terminal events: crossterm
 ```
 
 ## Decision 3: gRPC for Daemon Core Protocol
@@ -114,7 +124,7 @@ gRPC handles these better than ad hoc JSON-RPC:
 - backpressure through HTTP/2 streaming
 - standard metadata for auth/session context
 
-The protobuf schema should be treated as the source of truth for node protocol contracts.
+The protobuf schema should be treated as the source of truth for node protocol contracts. In v0.5, that contract lives at `proto/operon/runtime.proto`, Rust bindings are generated through tonic/prost, and the TypeScript SDK uses `nice-grpc` with generated `ts-proto` types for `grpc://` endpoints.
 
 Example shape:
 
@@ -131,14 +141,14 @@ service OperonNode {
 }
 ```
 
-## Decision 4: HTTP/JSON Facade for AI and Web
+## Decision 4: HTTP/JSON Facade for AI and Scripts
 
 Operon should not force all consumers to speak gRPC directly.
 
-The local daemon should expose an HTTP facade for human scripts, AI agents, and the web console:
+The local daemon should expose an HTTP facade for human scripts, AI agents, and debugging:
 
 ```text
-AI SDK / Web Console / Scripts
+AI SDK / Scripts
           |
 HTTP JSON / SSE / WebSocket
           |
@@ -151,7 +161,6 @@ remote operond / worker
 
 This keeps daemon internals strongly typed while preserving easy integration for:
 
-- browser clients
 - curl-based debugging
 - LLM tool calls
 - lightweight automation scripts
@@ -161,8 +170,8 @@ Recommended split:
 ```text
 daemon core: gRPC
 local control API: HTTP + JSON
-event streaming to web/SDK: SSE or WebSocket
-browser UI: HTTP + WebSocket
+event streaming to SDK/tools: SSE or WebSocket where useful
+operator console: Rust CLI TUI over the runtime clients
 ```
 
 ## Decision 5: Workspace Layout
@@ -181,11 +190,10 @@ crates/
   operon-process   # process/job capability
   operon-store     # SQLite registry, audit, sessions
   operon-network   # endpoint resolution and provider adapters
-  operon-mount     # FUSE/WinFsp adapter later
+  operon-mount     # Linux FUSE adapter
 
 packages/
   sdk-js           # TypeScript SDK
-  web              # web console
 
 proto/
   operon/
@@ -341,7 +349,7 @@ v0.2:
 v0.3:
   provider API discovery
   service / port access capability
-  mount adapters
+  Linux FUSE mount adapter
 ```
 
 ## Non-goals for v0.1
@@ -382,7 +390,7 @@ Operon should be built as:
 Rust daemon core
 + gRPC streaming node protocol
 + HTTP/JSON local facade
-+ TypeScript SDK and web console
++ TypeScript SDK and Rust CLI TUI console
 + network provider adapters over existing private networks
 + protobuf contracts as protocol source of truth
 + staged binary distribution across architectures

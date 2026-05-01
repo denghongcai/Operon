@@ -62,24 +62,27 @@ Prerequisites:
 - Node.js and pnpm
 - Docker with Docker Compose
 
-Run the full v0.4 validation:
+Run the full v0.5 validation:
 
 ```bash
 pnpm install --frozen-lockfile
 cargo fmt --check
 cargo check --workspace --locked
+cargo test --workspace --locked
 cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
+pnpm test
 scripts/verify-v0.4-docker.sh
+scripts/verify-v0.5-docker.sh
 ```
 
-The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and runs the example execution graph.
+The Docker validations start two reachable `operond` nodes, exercise capabilities through the CLI, check auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, the mount PoC, and run the example execution graph. The v0.5 validation runs the same core runtime path over gRPC endpoints.
 
 ---
 
 ## CLI and Configuration
 
-The v0.4 runtime has two binaries:
+The v0.5 runtime has two binaries:
 
 - `operond`: the daemon that runs on each reachable machine.
 - `operon`: the CLI that talks to daemon endpoints.
@@ -87,20 +90,20 @@ The v0.4 runtime has two binaries:
 From the repo, run them through Cargo:
 
 ```bash
-cargo run -p operond -- start --listen 0.0.0.0:7788 --node-id local --workspace /workspace
+cargo run -p operond -- start --listen 0.0.0.0:7788 --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
 cargo run -p operon-cli -- --config examples/nodes.yaml node list
 ```
 
 After installing built binaries, the same commands are:
 
 ```bash
-operond start --listen 0.0.0.0:7788 --node-id local --workspace /workspace
+operond start --listen 0.0.0.0:7788 --grpc-listen 0.0.0.0:7789 --node-id local --workspace /workspace
 operon --config examples/nodes.yaml node list
 ```
 
 ### Node Config
 
-The CLI reads node endpoints from a YAML file. In v0.4, the default path is:
+The CLI reads node endpoints from a YAML file. In v0.5, the default path is:
 
 ```text
 examples/nodes.yaml
@@ -122,16 +125,16 @@ nodes:
     endpoint: http://127.0.0.1:7788
     token: local-dev-token
   cloud-a:
-    endpoint: http://100.96.12.34:7788
+    endpoint: grpc://100.96.12.34:7789
     provider: tailscale
   gpu-node:
-    endpoint: http://100.96.18.20:7788
+    endpoint: grpc://100.96.18.20:7789
     provider: cloudflare-mesh
 ```
 
-`provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
+`endpoint` may be `grpc://`, `grpcs://`, or `http://`. The CLI uses gRPC for `grpc://` and `grpcs://` endpoints and keeps `http://` as the scriptable compatibility facade. `provider` is optional and defaults to `manual`. `token` is optional and is sent as a bearer token when the target daemon is started with `--auth-token` or `--auth-token-file`.
 
-In v0.4, provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
+Provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
 
 Supported provider values:
 
@@ -272,12 +275,12 @@ Then point Operon at reachable daemon endpoints:
 ```yaml
 nodes:
   cloud-a:
-    endpoint: http://100.96.12.34:7788
+    endpoint: grpc://100.96.12.34:7789
   gpu-node:
-    endpoint: http://100.96.18.20:7788
+    endpoint: grpc://100.96.18.20:7789
 ```
 
-The current CLI speaks HTTP to daemon endpoints. In production-style deployments, run that HTTP service only on an existing encrypted private network or behind a trusted local tunnel. HTTPS and gRPC clients remain post-v0.4 protocol decisions.
+The current CLI speaks gRPC to `grpc://` daemon endpoints and keeps HTTP/JSON available for scripts, debugging, and compatibility. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another device. Operon decides whether that device can read a directory, run a job, use a secret, or inspect an execution trace.
 
@@ -285,16 +288,16 @@ Cloudflare Mesh or Tailscale can decide whether one device can reach another dev
 
 ## ⚡ Example
 
-Run the local Docker v0.4 demo:
+Run the local Docker v0.5 gRPC demo:
 
 ```bash
-scripts/verify-v0.4-docker.sh
+scripts/verify-v0.5-docker.sh
 ```
 
-This starts two `operond` containers, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, LAN mDNS discovery, policy denial, scoped secrets, persisted store output, filtered audit output, trace summaries, mount PoC output, and runs:
+This starts two `operond` containers with HTTP and gRPC listeners, validates capability discovery, token auth, fs operations, streaming file transfer, job execution, stdin/log streams, service checks, policy denial, scoped secrets, audit output, trace summaries, and runs:
 
 ```bash
-operon --config examples/docker-nodes.yaml run --trace-output /tmp/operon-docker-trace.json examples/docker-copy-and-run.yaml
+operon --config examples/docker-nodes-grpc.yaml run --trace-output /tmp/operon-docker-grpc-trace.json examples/docker-copy-and-run.yaml
 ```
 
 Example workflow:
@@ -403,8 +406,8 @@ Agents can:
 import { OperonClient } from "@operon/sdk";
 
 const operon = new OperonClient([
-  { nodeId: "cloud-a", endpoint: "http://100.96.12.34:7788", token: "cloud-token" },
-  { nodeId: "gpu-node", endpoint: "http://100.96.18.20:7788", token: "gpu-token" }
+  { nodeId: "cloud-a", endpoint: "grpc://100.96.12.34:7789", token: "cloud-token" },
+  { nodeId: "gpu-node", endpoint: "grpc://100.96.18.20:7789", token: "gpu-token" }
 ]);
 
 const trace = await operon.run({
@@ -468,7 +471,9 @@ Roadmap:
 - [x] Read-only mount PoC
 - [x] Service / port metadata and health checks
 - [x] Filtered audit and human-readable trace CLI UX
-- [ ] FUSE / WinFsp mount
+- [x] gRPC runtime protocol
+- [ ] Linux FUSE mount
+- [ ] CLI TUI console
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters
 

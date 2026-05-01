@@ -1,17 +1,19 @@
 # Runtime API
 
-Operon v0.4 keeps the daemon API intentionally small and HTTP-first while the
-core runtime shape stabilizes. The API is meant for local CLI, SDK, and agent
-tooling on an already trusted private network. HTTPS and gRPC clients remain
-future protocol decisions.
+Operon v0.5 uses gRPC as the core runtime protocol and keeps HTTP/JSON as a
+scriptable compatibility facade. The API is meant for local CLI, SDK, and agent
+tooling on an already trusted private network. HTTPS, mTLS, and signed node
+identity remain later hardening work.
 
 ## Current Boundary
 
-- The daemon listens on HTTP.
+- The daemon listens on HTTP when `--listen` is set.
+- The daemon listens on gRPC when `--grpc-listen` is set.
 - Authentication is bearer-token based when `operond` starts with
   `--auth-token` or `--auth-token-file`.
 - Policy is enforced by the daemon for every capability operation.
-- Errors use one structured response shape.
+- HTTP errors use one structured JSON response shape.
+- gRPC errors use status codes that map to the same authz and policy outcomes.
 - Long-running execution remains job-based with explicit polling or streaming
   log/stdin endpoints.
 
@@ -43,12 +45,12 @@ Fields:
 - `capability`: optional capability id involved in the failure.
 - `resource`: optional path, service id, job id, or other target resource.
 
-## Stable v0.4 Surfaces
+## Stable HTTP Facade Surfaces
 
 Node and capability:
 
 - `GET /health`
-- `GET /node/info`
+- `GET /node`
 - `GET /capabilities`
 
 Filesystem:
@@ -105,15 +107,14 @@ ids fail through policy.
 This capability does not forward traffic, proxy bytes, allocate ports, or create
 network reachability. It only exposes configured metadata and health checks.
 
-## gRPC Candidates
+## Stable gRPC Runtime Surface
 
-The following surfaces are candidates for future gRPC streaming clients:
+The source of truth is `proto/operon/runtime.proto`. v0.5 exposes:
 
-- file read/write streams
-- job logs
-- job stdin
-- future trace event streams
-- future high-volume capability streams
+- unary calls for health, node metadata, capabilities, fs stat/list, job
+  run/status/list/cancel, services, and audit.
+- server-streaming calls for file reads and job logs.
+- client-streaming calls for file writes and job stdin.
 
-The HTTP API remains the compatibility and local-control surface until those
-clients are explicitly added.
+The HTTP API remains the compatibility and local-control surface for scripts and
+debugging.
