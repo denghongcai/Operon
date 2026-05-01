@@ -102,6 +102,18 @@ adapters and other clients that need write-through random write behavior.
 mutation calls used by the Linux mount adapter. The daemon still owns policy and
 audit for these operations.
 
+The human CLI maps these mutation calls to:
+
+```text
+operon fs mkdir <node:/path>
+operon fs truncate <node:/path> --size <bytes>
+operon fs rm <node:/path>
+operon fs rename <node:/from> <node:/to>
+```
+
+`WriteFileRange` is intentionally not exposed as a normal human CLI command. It
+is a low-level protocol operation for mount adapters and direct clients.
+
 `StreamJobLogs` returns ordered `JobLog` messages. Each message has `stream`
 (`stdout` or `stderr`) and text `data`.
 

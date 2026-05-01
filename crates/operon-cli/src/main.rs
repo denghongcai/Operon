@@ -141,6 +141,21 @@ enum FsCommand {
         #[arg(long)]
         file: Option<PathBuf>,
     },
+    Mkdir {
+        target: String,
+    },
+    Rm {
+        target: String,
+    },
+    Rename {
+        from: String,
+        to: String,
+    },
+    Truncate {
+        target: String,
+        #[arg(long)]
+        size: u64,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -297,6 +312,10 @@ fn main() -> anyhow::Result<()> {
                 content,
                 file,
             } => fs_write(args.config, &target, content, file, output),
+            FsCommand::Mkdir { target } => fs_mkdir(args.config, &target, output),
+            FsCommand::Rm { target } => fs_rm(args.config, &target, output),
+            FsCommand::Rename { from, to } => fs_rename(args.config, &from, &to, output),
+            FsCommand::Truncate { target, size } => fs_truncate(args.config, &target, size, output),
         },
         Command::Audit { command } => match command {
             AuditCommand::List { node_id } => list_audit(args.config, &node_id, output),
@@ -596,6 +615,95 @@ fn fs_write(
         target.node_id, write.path, write.bytes_written
     );
 
+    Ok(())
+}
+
+fn fs_mkdir(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
+    let target = parse_node_path(target)?;
+    let endpoint = load_endpoint(config_path, &target.node_id)?;
+    let stat = grpc::fs_mkdir(&endpoint, &target.path)?;
+    if output.json {
+        print_json(&stat)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    println!(
+        "{}:{} file={} dir={} size={}",
+        target.node_id, stat.path, stat.is_file, stat.is_dir, stat.size
+    );
+    Ok(())
+}
+
+fn fs_rm(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
+    let target = parse_node_path(target)?;
+    let endpoint = load_endpoint(config_path, &target.node_id)?;
+    let path = grpc::fs_delete(&endpoint, &target.path)?;
+    let result = serde_json::json!({ "path": path });
+    if output.json {
+        print_json(&result)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    println!(
+        "{}:{} deleted=true",
+        target.node_id,
+        result["path"].as_str().unwrap_or_default()
+    );
+    Ok(())
+}
+
+fn fs_rename(config_path: PathBuf, from: &str, to: &str, output: OutputMode) -> anyhow::Result<()> {
+    let from = parse_node_path(from)?;
+    let to = parse_node_path(to)?;
+    if from.node_id != to.node_id {
+        anyhow::bail!("fs rename requires source and target to use the same node");
+    }
+    let endpoint = load_endpoint(config_path, &from.node_id)?;
+    let (from_path, to_path) = grpc::fs_rename(&endpoint, &from.path, &to.path)?;
+    let result = serde_json::json!({
+        "from_path": from_path,
+        "to_path": to_path,
+    });
+    if output.json {
+        print_json(&result)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    println!(
+        "{}:{} -> {}",
+        from.node_id,
+        result["from_path"].as_str().unwrap_or_default(),
+        result["to_path"].as_str().unwrap_or_default()
+    );
+    Ok(())
+}
+
+fn fs_truncate(
+    config_path: PathBuf,
+    target: &str,
+    size: u64,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let target = parse_node_path(target)?;
+    let endpoint = load_endpoint(config_path, &target.node_id)?;
+    let stat = grpc::fs_truncate(&endpoint, &target.path, size)?;
+    if output.json {
+        print_json(&stat)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    println!(
+        "{}:{} file={} dir={} size={}",
+        target.node_id, stat.path, stat.is_file, stat.is_dir, stat.size
+    );
     Ok(())
 }
 

@@ -76,11 +76,14 @@ pnpm test
 scripts/verify-v0.5-docker.sh
 scripts/verify-v0.6-linux-mount.sh
 scripts/verify-v0.6.1-linux-write-mount.sh
+scripts/verify-v0.6.2-cli-fs-cleanup.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
 The v0.6.1 Linux write mount validation checks create, write, read-after-write,
 truncate, delete, rename, denied write/delete/rename audit, and cleanup.
+The v0.6.2 CLI fs cleanup validation checks direct CLI mutation commands for
+mkdir, truncate, rename, rm, denied mutations, and audit.
 
 ---
 
@@ -234,6 +237,10 @@ operon --config ./operon.nodes.yaml fs read cloud-a:/input.txt
 operon --config ./operon.nodes.yaml fs read cloud-a:/large.bin --output ./large.bin
 operon --config ./operon.nodes.yaml fs write cloud-a:/input.txt --content "hello"
 operon --config ./operon.nodes.yaml fs write cloud-a:/large.bin --file ./large.bin
+operon --config ./operon.nodes.yaml fs mkdir cloud-a:/work
+operon --config ./operon.nodes.yaml fs truncate cloud-a:/work/file.txt --size 0
+operon --config ./operon.nodes.yaml fs rename cloud-a:/work/file.txt cloud-a:/work/renamed.txt
+operon --config ./operon.nodes.yaml fs rm cloud-a:/work/renamed.txt
 
 operon --config ./operon.nodes.yaml job run cloud-a -- echo hello
 operon --config ./operon.nodes.yaml job run cloud-a --secret GITHUB_TOKEN -- test x'$GITHUB_TOKEN' = xexpected
@@ -316,6 +323,7 @@ Run the Linux FUSE mount validations:
 ```bash
 scripts/verify-v0.6-linux-mount.sh
 scripts/verify-v0.6.1-linux-write-mount.sh
+scripts/verify-v0.6.2-cli-fs-cleanup.sh
 ```
 
 Example workflow:
@@ -493,6 +501,7 @@ Roadmap:
 - [x] Remove HTTP runtime facade
 - [x] Linux read-only FUSE mount
 - [x] Linux write FUSE mount
+- [x] CLI fs mutation commands
 - [ ] CLI TUI console
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters

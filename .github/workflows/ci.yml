@@ -115,3 +115,22 @@ jobs:
 
       - name: Validate v0.6.1 Linux write mount
         run: scripts/verify-v0.6.1-linux-write-mount.sh
+
+  v062-cli-fs-cleanup:
+    name: v0.6.2 CLI FS Cleanup Validation
+    runs-on: ubuntu-latest
+    needs:
+      - rust
+      - typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Validate v0.6.2 CLI fs cleanup
+        run: scripts/verify-v0.6.2-cli-fs-cleanup.sh

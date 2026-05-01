@@ -12,9 +12,10 @@ use operon_core::{
 };
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    operon_runtime_client::OperonRuntimeClient, FsPathRequest, GetNodeRequest, HealthRequest,
-    JobCancelRequest, JobIdRequest, JobStdinRequest, ListAuditRequest, ListCapabilitiesRequest,
-    ListJobsRequest, ListServicesRequest, ServiceIdRequest, WriteFileRequest,
+    operon_runtime_client::OperonRuntimeClient, FsPathRequest, FsRenameRequest, FsTruncateRequest,
+    GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest, JobStdinRequest,
+    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
+    ServiceIdRequest, WriteFileRequest,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -112,6 +113,60 @@ pub fn write_file(endpoint: &NodeEndpoint, path: &str, file: &Path) -> anyhow::R
         .with_context(|| format!("failed to open {}", file.display()))?
         .read_to_end(&mut data)?;
     write_file_bytes(endpoint, path, &data)
+}
+
+pub fn fs_mkdir(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
+    let path = path.to_string();
+    block_on(endpoint, |mut client, endpoint| async move {
+        Ok(client
+            .mkdir_fs(with_auth(&endpoint, FsPathRequest { path })?)
+            .await?
+            .into_inner()
+            .into())
+    })
+}
+
+pub fn fs_delete(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<String> {
+    let path = path.to_string();
+    block_on(endpoint, |mut client, endpoint| async move {
+        Ok(client
+            .delete_fs(with_auth(&endpoint, FsPathRequest { path })?)
+            .await?
+            .into_inner()
+            .path)
+    })
+}
+
+pub fn fs_rename(
+    endpoint: &NodeEndpoint,
+    from_path: &str,
+    to_path: &str,
+) -> anyhow::Result<(String, String)> {
+    let request = FsRenameRequest {
+        from_path: from_path.to_string(),
+        to_path: to_path.to_string(),
+    };
+    block_on(endpoint, |mut client, endpoint| async move {
+        let response = client
+            .rename_fs(with_auth(&endpoint, request)?)
+            .await?
+            .into_inner();
+        Ok((response.from_path, response.to_path))
+    })
+}
+
+pub fn fs_truncate(endpoint: &NodeEndpoint, path: &str, size: u64) -> anyhow::Result<FsStat> {
+    let request = FsTruncateRequest {
+        path: path.to_string(),
+        size,
+    };
+    block_on(endpoint, |mut client, endpoint| async move {
+        Ok(client
+            .truncate_fs(with_auth(&endpoint, request)?)
+            .await?
+            .into_inner()
+            .into())
+    })
 }
 
 pub fn run_job(endpoint: &NodeEndpoint, request: JobRunRequest) -> anyhow::Result<JobRecord> {

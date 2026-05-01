@@ -1648,6 +1648,80 @@ Remaining:
 
 - None for v0.6.1.
 
+## v0.6.2 Cleanup Goal
+
+Operon v0.6.2 should align the CLI with the filesystem mutation operations that
+were added for the v0.6.1 write-through mount.
+
+```text
+v0.6.2 = CLI fs mutation commands over the existing Core FS Protocol.
+```
+
+v0.6.2 is a cleanup phase. It should not add new daemon capabilities, mount
+modes, provider discovery, or a new runtime API surface. `WriteFileRange` remains
+available through the protocol for mount adapters and direct clients, but normal
+CLI users should use higher-level commands.
+
+## Phase 32.4: CLI FS Mutation Surface
+
+Status: Completed.
+
+Goal: expose the daemon fs mutation RPCs through user-facing CLI commands.
+
+Planned:
+
+- add `operon fs mkdir <node:/path>`.
+- add `operon fs rm <node:/path>`.
+- add `operon fs rename <node:/from> <node:/to>`.
+- add `operon fs truncate <node:/path> --size <bytes>`.
+- keep `WriteFileRange` out of the normal CLI surface unless a concrete
+  operator use case appears.
+
+Done when:
+
+- CLI command coverage matches the user-facing v0.6.1 fs mutation model.
+- commands use the existing gRPC runtime API.
+- daemon policy and audit remain authoritative.
+
+Completed:
+
+- Added CLI gRPC helpers for `MkdirFs`, `DeleteFs`, `RenameFs`, and
+  `TruncateFs`.
+- Added `operon fs mkdir <node:/path>`.
+- Added `operon fs rm <node:/path>`.
+- Added `operon fs rename <node:/from> <node:/to>`.
+- Added `operon fs truncate <node:/path> --size <bytes>`.
+- Kept `WriteFileRange` out of the normal CLI surface.
+
+## Phase 32.5: v0.6.2 Acceptance
+
+Status: Completed.
+
+Goal: make the CLI cleanup reproducible before starting v0.7.
+
+Planned:
+
+- `docs/plan/v0.6.2-cli-fs-cleanup-acceptance.md`.
+- validation script for CLI fs mutation commands.
+- README, PROTOCOL, and AGENTS updates.
+
+Done when:
+
+- validation covers mkdir, truncate, rename, rm, denied mutations, and audit.
+- docs clearly state that `WriteFileRange` remains a low-level protocol
+  operation.
+- v0.7 can start without a known CLI/runtime fs mismatch.
+
+Completed:
+
+- Added `docs/plan/v0.6.2-cli-fs-cleanup-acceptance.md`.
+- Added `scripts/verify-v0.6.2-cli-fs-cleanup.sh`.
+- Updated README, PROTOCOL, AGENTS, and CI for v0.6.2.
+
+Remaining:
+
+- None for v0.6.2.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.
