@@ -125,6 +125,10 @@ Client-streaming calls:
 - `WriteFile`
 - `WriteJobStdin`
 
+Bidirectional-streaming calls:
+
+- `OpenServiceTunnel`
+
 ## Streaming Rules
 
 `ReadFile` returns ordered `FileChunk` messages. Concatenate `data` bytes in
@@ -218,6 +222,39 @@ stdout/stderr bytes, including non-UTF-8 output.
 must set the `target` variant with `JobStdinTarget.job_id`. Later messages must
 set the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
 targets or switch jobs. Use `CloseJobStdin` to close the target job's stdin.
+
+## Service Forwarding
+
+`ListServices` returns services explicitly configured in daemon policy.
+`CheckService` attempts a TCP connection to one configured service and records
+an audit event.
+
+`OpenServiceTunnel` is the low-level protocol for explicit local port
+forwarding. The first client message must set `ServiceTunnelRequest.target`
+with the policy service id. Later client messages set `data` to send bytes to
+that service or `close` to half-close the client side. The server first returns
+`opened` after connecting to the configured service, then returns `data` chunks
+from the service, and finally returns `close` when the remote service closes or
+the tunnel fails.
+
+The daemon only connects to `host:port` values present in its own
+`policy.service.services`. It does not accept arbitrary destination host/port
+pairs from clients.
+
+The human CLI maps this to:
+
+```text
+operon service list <node-id>
+operon service check <node-id> <service-id>
+operon service forward <node-id> <service-id> --listen 127.0.0.1:8080
+```
+
+Forwarding is local and explicit: the CLI binds the requested local listener,
+and each accepted TCP connection opens one gRPC service tunnel to the selected
+node. Operon still relies on an existing private network for reachability
+between the client and daemon. It does not provide VPN behavior, NAT traversal,
+relay networking, mesh IP assignment, global routing, or unmanaged port
+exposure.
 
 ## Job Semantics
 

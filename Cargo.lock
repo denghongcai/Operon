@@ -780,6 +780,7 @@ name = "operon-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "clap",
  "futures-util",
  "getrandom",

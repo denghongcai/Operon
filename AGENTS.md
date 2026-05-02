@@ -100,7 +100,8 @@ Operon should not own:
     crate boundaries.
 
 - `docs/plan/v0.7-acceptance.md`
-  - v0.7 acceptance scope for the CLI TUI console.
+  - v0.7 acceptance scope for service metadata, health checks, and explicit
+    local service forwarding.
 
 - `docs/plan/v0.8-acceptance.md`
   - v0.8 acceptance scope for Agent Integration.
@@ -124,7 +125,9 @@ Operon should not own:
 
 - `docs/architecture/technology-and-protocol-decisions.md`
   - Technical architecture decisions.
-  - Covers Rust daemon core, TypeScript SDK, CLI TUI console direction, gRPC streaming protocol, CLI/SDK interfaces, provider adapters, distribution targets, and non-goals.
+  - Covers Rust daemon core, TypeScript SDK, gRPC streaming protocol, CLI/SDK
+    interfaces, service forwarding, provider adapters, distribution targets,
+    and non-goals.
 
 - `docs/dicussions/computer-mesh-operon.md`
   - Raw archived discussion that led to the current direction.
@@ -134,7 +137,7 @@ Operon should not own:
 
 - Core daemon: Rust.
 - SDK: TypeScript.
-- CLI and CLI TUI console: Rust.
+- CLI: Rust.
 - Current core daemon protocol: gRPC with streaming.
 - Human, ops, and script interface: `operon` CLI, including `--json`.
 - TypeScript SDK interface: `nice-grpc`.
@@ -166,14 +169,19 @@ Operon should not own:
 - Completed runtime boundary milestone: v0.6.12 protocol streaming envelopes,
   append-only store writer boundaries, daemon runtime helper ownership cleanup,
   Linux mount adapter boundaries, and validation coverage.
-- Next planned milestone: v0.7 CLI TUI console.
+- Completed service milestone: v0.7 service metadata, health checks, and
+  explicit local forwarding for policy-allowed services.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
-- Browser management UI is no longer a planned product surface; use CLI TUI console instead.
+- Browser management UI and CLI TUI console are no longer planned product
+  surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
 - v0.1 should assume nodes are already reachable over TCP.
 - Provider adapters should resolve/discover endpoints, not implement connectivity.
 - Capability authorization must remain inside Operon even when network access is already allowed.
-- Service / port capability is metadata and TCP health checking only; it must not become port forwarding, proxying, VPN, or relay behavior.
+- Service / port capability includes configured metadata, TCP health checking,
+  and explicit local forwarding for policy-allowed services over existing
+  Operon node connections; it must not become VPN, relay networking, NAT
+  traversal, mesh IP assignment, global routing, or unmanaged port exposure.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 
@@ -191,7 +199,7 @@ Prioritize:
 - permission policy
 - CLI
 - minimal SDK
-- service metadata and health checks
+- service metadata, health checks, and explicit local forwarding
 - trace/audit CLI inspection
 
 Defer:
@@ -205,7 +213,7 @@ Defer:
 - complex secret manager
 - plugin marketplace
 - NAT traversal
-- port forwarding and proxying
+- unmanaged port forwarding and proxying
 - relay network
 - VPN/device mesh IP assignment
 
@@ -219,10 +227,9 @@ Defer:
 - Phase updates must state which phase changed, what was completed, and what remains.
 - If implementation changes the phase scope, update the phase text itself instead of only adding a note.
 - If no phase status changed, explicitly record that in the relevant phase or explain it in the final response.
-- Latest phase status update: v0.6.10 completed store durability/path
-  hardening, terminal job audit, spawn error detail, fs range validation,
-  mkdir parent creation, core pagination metadata, mDNS removal handling, and
-  CI validation coverage. Nothing remains in v0.6.10.
+- Latest phase status update: v0.7 completed service tunnel protocol, CLI local
+  forwarding, TypeScript SDK tunnel support, service forwarding docs, and CI
+  validation coverage. Nothing remains in v0.7.
 - Latest phase status update: v0.6.11 completed daemon support-module splits,
   poisoned-lock handling, Linux-only mount dependency gating, and CI governance
   validation. Larger domain splits remain future work.

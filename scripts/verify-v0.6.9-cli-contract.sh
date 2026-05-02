@@ -81,7 +81,7 @@ for _ in $(seq 1 50); do
 done
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" node ping local \
-  | grep -q "version=v0.6.12"
+  | grep -q "version=v0.7.0"
 
 json_job_output="$TMP_DIR/job-run.json"
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json job run local \

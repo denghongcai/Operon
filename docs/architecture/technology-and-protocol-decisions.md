@@ -68,7 +68,7 @@ process: tokio::process, portable-pty later
 storage: rusqlite or sqlx sqlite
 ```
 
-## Decision 2: TypeScript for SDK and Rust for Console UX
+## Decision 2: TypeScript for SDK and Rust for CLI UX
 
 TypeScript should be used for surfaces that benefit from fast iteration and AI ecosystem integration:
 
@@ -79,8 +79,9 @@ TypeScript should be used for surfaces that benefit from fast iteration and AI e
 
 The TypeScript SDK should not define the core protocol independently. It should be generated from, or validated against, the shared protocol schema.
 
-Operator console UX should be terminal-first and live inside the Rust CLI. A
-separate graphical management UI is not part of the current product roadmap.
+Operator UX should remain command-oriented through the Rust CLI. A separate
+graphical management UI and CLI TUI console are not part of the current product
+roadmap.
 
 Recommended TypeScript stack:
 
@@ -92,12 +93,10 @@ tests: vitest
 build: tsup
 ```
 
-Recommended console stack:
+Recommended CLI stack:
 
 ```text
 CLI: clap
-TUI: ratatui or another Rust terminal UI crate
-terminal events: crossterm
 ```
 
 ## Decision 3: gRPC for Daemon Core Protocol
@@ -141,6 +140,7 @@ service OperonRuntime {
   rpc RunJob(JobRunRequest) returns (JobRecord);
   rpc WatchJob(JobIdRequest) returns (stream JobEvent);
   rpc StreamJobLogs(JobIdRequest) returns (stream JobLogStreamEvent);
+  rpc OpenServiceTunnel(stream ServiceTunnelRequest) returns (stream ServiceTunnelResponse);
 }
 ```
 
@@ -155,6 +155,11 @@ Humans / ops / scripts -> operon CLI, including --json
 Programs / agents      -> SDKs generated from the gRPC protocol
 Daemon runtime         -> gRPC streaming protocol
 ```
+
+Service forwarding should use the same boundary. The CLI or SDK opens a local
+listener, then uses `OpenServiceTunnel` to stream bytes to a policy-configured
+service on the remote node. The daemon must only connect to services declared in
+`policy.service.services`; clients do not send arbitrary host/port targets.
 
 This keeps the daemon surface smaller and avoids maintaining two runtime API
 contracts. Direct HTTP runtime calls would duplicate:
@@ -172,7 +177,6 @@ daemon core: gRPC
 script/control interface: operon CLI with --json
 programmatic interface: TypeScript SDK with nice-grpc
 direct protocol interface: generated gRPC clients from proto/operon/runtime.proto
-operator console: Rust CLI TUI over the runtime clients
 ```
 
 ## Decision 5: Workspace Layout
@@ -428,7 +432,7 @@ v0.6.1:
   Linux write FUSE mount adapter
 
 v0.7:
-  CLI TUI console
+  service metadata, health checks, and explicit local forwarding
 
 v0.8:
   agent tool integration
@@ -474,7 +478,7 @@ Operon should be built as:
 ```text
 Rust daemon core
 + gRPC streaming node protocol
-+ TypeScript SDK and Rust CLI TUI console
++ TypeScript SDK and Rust CLI
 + network provider adapters over existing private networks
 + protobuf contracts as protocol source of truth
 + staged binary distribution across architectures

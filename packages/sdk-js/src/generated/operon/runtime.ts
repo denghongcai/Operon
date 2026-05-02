@@ -413,6 +413,36 @@ export interface ServiceCheck {
   reason?: string | undefined;
 }
 
+export interface ServiceTunnelTarget {
+  serviceId: string;
+}
+
+export interface ServiceTunnelData {
+  data: Uint8Array;
+}
+
+export interface ServiceTunnelClose {
+  reason: string;
+}
+
+export interface ServiceTunnelRequest {
+  target?: ServiceTunnelTarget | undefined;
+  data?: ServiceTunnelData | undefined;
+  close?: ServiceTunnelClose | undefined;
+}
+
+export interface ServiceTunnelOpened {
+  serviceId: string;
+  host: string;
+  port: number;
+}
+
+export interface ServiceTunnelResponse {
+  opened?: ServiceTunnelOpened | undefined;
+  data?: ServiceTunnelData | undefined;
+  close?: ServiceTunnelClose | undefined;
+}
+
 export interface AuditEvent {
   subject: string;
   timestampMs: string;
@@ -4594,6 +4624,478 @@ export const ServiceCheck: MessageFns<ServiceCheck> = {
   },
 };
 
+function createBaseServiceTunnelTarget(): ServiceTunnelTarget {
+  return { serviceId: "" };
+}
+
+export const ServiceTunnelTarget: MessageFns<ServiceTunnelTarget> = {
+  encode(message: ServiceTunnelTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceId !== "") {
+      writer.uint32(10).string(message.serviceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceTunnelTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceTunnelTarget();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceTunnelTarget {
+    return {
+      serviceId: isSet(object.serviceId)
+        ? globalThis.String(object.serviceId)
+        : isSet(object.service_id)
+        ? globalThis.String(object.service_id)
+        : "",
+    };
+  },
+
+  toJSON(message: ServiceTunnelTarget): unknown {
+    const obj: any = {};
+    if (message.serviceId !== "") {
+      obj.serviceId = message.serviceId;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceTunnelTarget>): ServiceTunnelTarget {
+    return ServiceTunnelTarget.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceTunnelTarget>): ServiceTunnelTarget {
+    const message = createBaseServiceTunnelTarget();
+    message.serviceId = object.serviceId ?? "";
+    return message;
+  },
+};
+
+function createBaseServiceTunnelData(): ServiceTunnelData {
+  return { data: new Uint8Array(0) };
+}
+
+export const ServiceTunnelData: MessageFns<ServiceTunnelData> = {
+  encode(message: ServiceTunnelData, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.data.length !== 0) {
+      writer.uint32(10).bytes(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceTunnelData {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceTunnelData();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.data = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceTunnelData {
+    return { data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0) };
+  },
+
+  toJSON(message: ServiceTunnelData): unknown {
+    const obj: any = {};
+    if (message.data.length !== 0) {
+      obj.data = base64FromBytes(message.data);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceTunnelData>): ServiceTunnelData {
+    return ServiceTunnelData.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceTunnelData>): ServiceTunnelData {
+    const message = createBaseServiceTunnelData();
+    message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseServiceTunnelClose(): ServiceTunnelClose {
+  return { reason: "" };
+}
+
+export const ServiceTunnelClose: MessageFns<ServiceTunnelClose> = {
+  encode(message: ServiceTunnelClose, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reason !== "") {
+      writer.uint32(10).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceTunnelClose {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceTunnelClose();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceTunnelClose {
+    return { reason: isSet(object.reason) ? globalThis.String(object.reason) : "" };
+  },
+
+  toJSON(message: ServiceTunnelClose): unknown {
+    const obj: any = {};
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceTunnelClose>): ServiceTunnelClose {
+    return ServiceTunnelClose.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceTunnelClose>): ServiceTunnelClose {
+    const message = createBaseServiceTunnelClose();
+    message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseServiceTunnelRequest(): ServiceTunnelRequest {
+  return { target: undefined, data: undefined, close: undefined };
+}
+
+export const ServiceTunnelRequest: MessageFns<ServiceTunnelRequest> = {
+  encode(message: ServiceTunnelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.target !== undefined) {
+      ServiceTunnelTarget.encode(message.target, writer.uint32(10).fork()).join();
+    }
+    if (message.data !== undefined) {
+      ServiceTunnelData.encode(message.data, writer.uint32(18).fork()).join();
+    }
+    if (message.close !== undefined) {
+      ServiceTunnelClose.encode(message.close, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceTunnelRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceTunnelRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.target = ServiceTunnelTarget.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.data = ServiceTunnelData.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.close = ServiceTunnelClose.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceTunnelRequest {
+    return {
+      target: isSet(object.target) ? ServiceTunnelTarget.fromJSON(object.target) : undefined,
+      data: isSet(object.data) ? ServiceTunnelData.fromJSON(object.data) : undefined,
+      close: isSet(object.close) ? ServiceTunnelClose.fromJSON(object.close) : undefined,
+    };
+  },
+
+  toJSON(message: ServiceTunnelRequest): unknown {
+    const obj: any = {};
+    if (message.target !== undefined) {
+      obj.target = ServiceTunnelTarget.toJSON(message.target);
+    }
+    if (message.data !== undefined) {
+      obj.data = ServiceTunnelData.toJSON(message.data);
+    }
+    if (message.close !== undefined) {
+      obj.close = ServiceTunnelClose.toJSON(message.close);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceTunnelRequest>): ServiceTunnelRequest {
+    return ServiceTunnelRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceTunnelRequest>): ServiceTunnelRequest {
+    const message = createBaseServiceTunnelRequest();
+    message.target = (object.target !== undefined && object.target !== null)
+      ? ServiceTunnelTarget.fromPartial(object.target)
+      : undefined;
+    message.data = (object.data !== undefined && object.data !== null)
+      ? ServiceTunnelData.fromPartial(object.data)
+      : undefined;
+    message.close = (object.close !== undefined && object.close !== null)
+      ? ServiceTunnelClose.fromPartial(object.close)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseServiceTunnelOpened(): ServiceTunnelOpened {
+  return { serviceId: "", host: "", port: 0 };
+}
+
+export const ServiceTunnelOpened: MessageFns<ServiceTunnelOpened> = {
+  encode(message: ServiceTunnelOpened, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceId !== "") {
+      writer.uint32(10).string(message.serviceId);
+    }
+    if (message.host !== "") {
+      writer.uint32(18).string(message.host);
+    }
+    if (message.port !== 0) {
+      writer.uint32(24).uint32(message.port);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceTunnelOpened {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceTunnelOpened();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.host = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.port = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceTunnelOpened {
+    return {
+      serviceId: isSet(object.serviceId)
+        ? globalThis.String(object.serviceId)
+        : isSet(object.service_id)
+        ? globalThis.String(object.service_id)
+        : "",
+      host: isSet(object.host) ? globalThis.String(object.host) : "",
+      port: isSet(object.port) ? globalThis.Number(object.port) : 0,
+    };
+  },
+
+  toJSON(message: ServiceTunnelOpened): unknown {
+    const obj: any = {};
+    if (message.serviceId !== "") {
+      obj.serviceId = message.serviceId;
+    }
+    if (message.host !== "") {
+      obj.host = message.host;
+    }
+    if (message.port !== 0) {
+      obj.port = Math.round(message.port);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceTunnelOpened>): ServiceTunnelOpened {
+    return ServiceTunnelOpened.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceTunnelOpened>): ServiceTunnelOpened {
+    const message = createBaseServiceTunnelOpened();
+    message.serviceId = object.serviceId ?? "";
+    message.host = object.host ?? "";
+    message.port = object.port ?? 0;
+    return message;
+  },
+};
+
+function createBaseServiceTunnelResponse(): ServiceTunnelResponse {
+  return { opened: undefined, data: undefined, close: undefined };
+}
+
+export const ServiceTunnelResponse: MessageFns<ServiceTunnelResponse> = {
+  encode(message: ServiceTunnelResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.opened !== undefined) {
+      ServiceTunnelOpened.encode(message.opened, writer.uint32(10).fork()).join();
+    }
+    if (message.data !== undefined) {
+      ServiceTunnelData.encode(message.data, writer.uint32(18).fork()).join();
+    }
+    if (message.close !== undefined) {
+      ServiceTunnelClose.encode(message.close, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceTunnelResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceTunnelResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.opened = ServiceTunnelOpened.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.data = ServiceTunnelData.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.close = ServiceTunnelClose.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceTunnelResponse {
+    return {
+      opened: isSet(object.opened) ? ServiceTunnelOpened.fromJSON(object.opened) : undefined,
+      data: isSet(object.data) ? ServiceTunnelData.fromJSON(object.data) : undefined,
+      close: isSet(object.close) ? ServiceTunnelClose.fromJSON(object.close) : undefined,
+    };
+  },
+
+  toJSON(message: ServiceTunnelResponse): unknown {
+    const obj: any = {};
+    if (message.opened !== undefined) {
+      obj.opened = ServiceTunnelOpened.toJSON(message.opened);
+    }
+    if (message.data !== undefined) {
+      obj.data = ServiceTunnelData.toJSON(message.data);
+    }
+    if (message.close !== undefined) {
+      obj.close = ServiceTunnelClose.toJSON(message.close);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceTunnelResponse>): ServiceTunnelResponse {
+    return ServiceTunnelResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceTunnelResponse>): ServiceTunnelResponse {
+    const message = createBaseServiceTunnelResponse();
+    message.opened = (object.opened !== undefined && object.opened !== null)
+      ? ServiceTunnelOpened.fromPartial(object.opened)
+      : undefined;
+    message.data = (object.data !== undefined && object.data !== null)
+      ? ServiceTunnelData.fromPartial(object.data)
+      : undefined;
+    message.close = (object.close !== undefined && object.close !== null)
+      ? ServiceTunnelClose.fromPartial(object.close)
+      : undefined;
+    return message;
+  },
+};
+
 function createBaseAuditEvent(): AuditEvent {
   return {
     subject: "",
@@ -5102,6 +5604,14 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
+    openServiceTunnel: {
+      name: "OpenServiceTunnel",
+      requestType: ServiceTunnelRequest as typeof ServiceTunnelRequest,
+      requestStream: true,
+      responseType: ServiceTunnelResponse as typeof ServiceTunnelResponse,
+      responseStream: true,
+      options: {},
+    },
     listAudit: {
       name: "ListAudit",
       requestType: ListAuditRequest as typeof ListAuditRequest,
@@ -5156,6 +5666,10 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
   cancelJob(request: JobCancelRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
   listServices(request: ListServicesRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ServiceList>>;
   checkService(request: ServiceIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ServiceCheck>>;
+  openServiceTunnel(
+    request: AsyncIterable<ServiceTunnelRequest>,
+    context: CallContext & CallContextExt,
+  ): ServerStreamingMethodResult<DeepPartial<ServiceTunnelResponse>>;
   listAudit(request: ListAuditRequest, context: CallContext & CallContextExt): Promise<DeepPartial<AuditLog>>;
 }
 
@@ -5196,6 +5710,10 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
   cancelJob(request: DeepPartial<JobCancelRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
   listServices(request: DeepPartial<ListServicesRequest>, options?: CallOptions & CallOptionsExt): Promise<ServiceList>;
   checkService(request: DeepPartial<ServiceIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ServiceCheck>;
+  openServiceTunnel(
+    request: AsyncIterable<DeepPartial<ServiceTunnelRequest>>,
+    options?: CallOptions & CallOptionsExt,
+  ): AsyncIterable<ServiceTunnelResponse>;
   listAudit(request: DeepPartial<ListAuditRequest>, options?: CallOptions & CallOptionsExt): Promise<AuditLog>;
 }
 

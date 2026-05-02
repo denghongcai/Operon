@@ -27,10 +27,10 @@ There is no HTTP runtime facade. A gRPC client library may internally use an
 `http://` h2c channel target for `grpc://` endpoints, but that is transport
 configuration, not an Operon HTTP API.
 
-The runtime API is not a VPN, proxy, relay, or port forwarder. Network
-encryption, routing, and private addressing should come from Cloudflare Mesh,
-Tailscale, WireGuard, SSH tunnels, LAN, Kubernetes networking, or another
-existing secure network layer.
+The runtime API is not a VPN, relay, NAT traversal layer, mesh IP allocator, or
+global router. Network encryption, routing, and private addressing should come
+from Cloudflare Mesh, Tailscale, WireGuard, SSH tunnels, LAN, Kubernetes
+networking, or another existing secure network layer.
 
 ## gRPC Runtime Surface
 
@@ -86,7 +86,7 @@ Runtime schema constraints:
 ## Service / Port Capability
 
 The service capability describes local TCP services that daemon policy allows
-callers to inspect.
+callers to inspect and explicitly forward.
 
 Policy example:
 
@@ -102,11 +102,15 @@ service:
 ```
 
 `ListServices` returns configured services. `CheckService` attempts a TCP
-connection to one configured service and records an audit event. Unknown service
-ids fail through policy.
+connection to one configured service and records an audit event.
+`OpenServiceTunnel` opens a bidirectional byte stream to a configured TCP
+service for explicit local forwarding. Unknown service ids fail through policy.
 
-This capability does not forward traffic, proxy bytes, allocate ports, or create
-network reachability. It only exposes configured metadata and health checks.
+Forwarding is intentionally local and explicit. The CLI can bind a local port
+and open one service tunnel per accepted connection, but the daemon only
+connects to services already present in `policy.service.services`. Operon does
+not accept arbitrary target host/port pairs from clients and does not create
+network reachability beyond the existing Operon node connection.
 
 ## Interface Policy
 

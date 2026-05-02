@@ -27,6 +27,7 @@ service OperonRuntime {
   rpc CancelJob(JobCancelRequest) returns (JobRecord);
   rpc ListServices(ListServicesRequest) returns (ServiceList);
   rpc CheckService(ServiceIdRequest) returns (ServiceCheck);
+  rpc OpenServiceTunnel(stream ServiceTunnelRequest) returns (stream ServiceTunnelResponse);
   rpc ListAudit(ListAuditRequest) returns (AuditLog);
 }
 
@@ -320,6 +321,40 @@ message ServiceCheck {
   optional string reason = 4;
   reserved 5;
   reserved "has_reason";
+}
+
+message ServiceTunnelTarget {
+  string service_id = 1;
+}
+
+message ServiceTunnelData {
+  bytes data = 1;
+}
+
+message ServiceTunnelClose {
+  string reason = 1;
+}
+
+message ServiceTunnelRequest {
+  oneof payload {
+    ServiceTunnelTarget target = 1;
+    ServiceTunnelData data = 2;
+    ServiceTunnelClose close = 3;
+  }
+}
+
+message ServiceTunnelOpened {
+  string service_id = 1;
+  string host = 2;
+  uint32 port = 3;
+}
+
+message ServiceTunnelResponse {
+  oneof payload {
+    ServiceTunnelOpened opened = 1;
+    ServiceTunnelData data = 2;
+    ServiceTunnelClose close = 3;
+  }
 }
 
 message AuditEvent {

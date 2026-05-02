@@ -2033,7 +2033,7 @@ Remaining:
 ## v0.6.6 Release Goal
 
 Operon v0.6.6 should stabilize and release the job event/log protocol cleanup
-before v0.7 TUI work starts.
+before the next feature milestone starts.
 
 ```text
 v0.6.6 = WatchJob status stream, separate job log APIs, and bounded job log retention.
@@ -2070,8 +2070,8 @@ Remaining:
 
 Status: Completed.
 
-Goal: create stable crate APIs for runtime areas that the v0.7 TUI and v0.8
-agent integration will reuse.
+Goal: create stable crate APIs for runtime areas that later service, agent, and
+provider milestones will reuse.
 
 Completed:
 
@@ -2137,7 +2137,7 @@ Remaining:
 ## v0.6.7 Goal
 
 Operon v0.6.7 should close the remaining runtime infrastructure issues before
-building the CLI TUI console.
+the next feature milestone.
 
 ```text
 v0.6.7 = process lifecycle, binary job logs, and explicit async CLI runtime.
@@ -2267,8 +2267,7 @@ Planned:
   and async CLI runtime behavior.
 - update README and PROTOCOL only where user-visible behavior or protocol shape
   changes.
-- update AGENTS.md after completion so the next planned milestone returns to
-  v0.7 CLI TUI console.
+- update AGENTS.md after completion so the next planned milestone is clear.
 
 Completed:
 
@@ -2460,8 +2459,7 @@ Planned:
 - regenerate Rust and TypeScript protocol bindings.
 - update PROTOCOL.md for typed enums, optional presence, streaming envelopes,
   and pagination.
-- update AGENTS.md after completion so the next planned milestone returns to
-  v0.7 CLI TUI console.
+- update AGENTS.md after completion so the next planned milestone is clear.
 
 Done when:
 
@@ -2607,8 +2605,8 @@ Remaining:
 
 Status: Completed.
 
-Goal: reduce the highest-risk maintenance issues before starting larger v0.7
-TUI work.
+Goal: reduce the highest-risk maintenance issues before starting larger feature
+work.
 
 Planned:
 
@@ -2655,7 +2653,7 @@ Remaining:
 Status: Completed.
 
 Goal: stabilize the long-term protocol, store, job log stream, daemon runtime
-helper, and mount adapter boundaries before v0.7 TUI work.
+helper, and mount adapter boundaries before v0.7 service forwarding work.
 
 Planned:
 
@@ -2727,91 +2725,107 @@ Remaining:
 
 ## v0.7 Goal
 
-Operon v0.7 should add an operator-focused CLI TUI console.
+Operon v0.7 should complete the service capability with explicit local port
+forwarding for policy-allowed services.
 
 ```text
-v0.7 = terminal console for nodes, capabilities, jobs, traces, audit, and services.
+v0.7 = service metadata + health checks + explicit local forwarding.
 ```
 
-The TUI console should be an extension of the CLI workflow. It should not add a
-separate graphical server, frontend app, or runtime API surface.
+The CLI TUI console phase is cancelled. Operon should stay CLI/SDK/protocol
+first and avoid adding a separate interactive console surface for now.
 
-## Phase 33: TUI Console Design
+Service forwarding is intentionally narrow: the client opens a local listener
+and tunnels each accepted TCP connection through an already reachable Operon
+daemon connection to a service configured in daemon policy. It must not become
+VPN behavior, relay networking, NAT traversal, global routing, or unmanaged
+port exposure.
 
-Status: Planned.
+## Phase 33: Service Forwarding Protocol
 
-Goal: define a terminal-first console that fits repeated operator workflows.
+Status: Completed.
 
-Planned:
+Goal: add an explicit runtime protocol for forwarding policy-allowed local
+services.
 
-- choose the Rust TUI stack.
-- define views for nodes, capabilities, jobs, traces, audit, services, and
-  policies.
-- define keyboard navigation, refresh behavior, and JSON drill-down.
-- document which actions are read-only and which can mutate runtime state.
+Completed:
 
-Done when:
-
-- TUI interaction model is documented.
-- no separate graphical UI dependency is introduced.
-
-## Phase 34: TUI Console Implementation
-
-Status: Planned.
-
-Goal: implement the first terminal console inside the CLI.
-
-Planned:
-
-- add `operon console`.
-- reuse existing CLI config, auth, endpoint resolution, and gRPC clients.
-- provide node list, capability view, job status/log view, audit filters, trace
-  summaries, and service health view.
-- keep rendering separate from runtime client code.
+- added `OpenServiceTunnel` as a bidirectional gRPC stream.
+- kept `ListServices` and `CheckService` as service metadata and health-check
+  APIs.
+- kept the policy boundary at configured `service.services` entries.
+- audited allowed and denied service forwarding attempts.
 
 Done when:
 
-- `operon console` works against the Docker two-node environment.
-- common inspection workflows no longer require multiple shell commands.
+- direct protocol clients can tunnel bytes without using an SDK.
+- the schema makes the initial target envelope explicit.
 
-## Phase 35: TUI Console Validation
+## Phase 34: CLI and SDK Service Forwarding
 
-Status: Planned.
+Status: Completed.
 
-Goal: make console behavior testable enough for continued development.
+Goal: expose service forwarding through supported clients without reintroducing
+an HTTP facade.
 
-Planned:
+Completed:
 
-- add unit tests for view models and filtering logic.
-- add smoke validation for startup against example node config.
-- document unsupported terminal capabilities.
+- added `operon service forward <node-id> <service-id> --listen <addr>`.
+- each accepted local TCP connection opens one runtime service tunnel.
+- TypeScript SDK exposes `openServiceTunnel` over `nice-grpc`.
+- existing command-style service list/check commands remain available for
+  scripts and CI.
 
 Done when:
 
-- TUI code has focused tests for state transitions.
-- README documents `operon console`.
+- node B can expose `127.0.0.1:8080` locally and tunnel to node A's configured
+  `127.0.0.1:80` service over an already reachable Operon node connection.
+- `operon --json` still works for service metadata and tunnel startup status.
+
+## Phase 35: Service Forwarding Validation
+
+Status: Completed.
+
+Goal: make local forwarding reproducible in CI.
+
+Completed:
+
+- added SDK tests for service tunnel request/response streaming.
+- added `scripts/verify-v0.7-service-forwarding.sh` with a local HTTP service,
+  daemon policy, CLI forwarding, HTTP fetch through the forwarded port, and
+  audit validation.
+- wired the v0.7 validation script into CI.
+
+Done when:
+
+- service forwarding is covered by focused SDK tests and runtime smoke
+  validation.
+- docs explain that forwarding is explicit and policy controlled.
 
 ## Phase 36: v0.7 Acceptance
 
-Status: Planned.
+Status: Completed.
 
-Goal: make the terminal console milestone reproducible.
+Goal: make the service forwarding milestone reproducible.
 
-Planned:
+Completed:
 
 - `docs/plan/v0.7-acceptance.md`.
 - README roadmap update.
-- Docker-backed console smoke path where practical.
+- protocol and architecture docs update.
+- CI-backed local service forwarding smoke path.
 
 Done when:
 
 - v0.7 has documented acceptance criteria.
-- the roadmap no longer contains separate graphical UI work.
+- the roadmap no longer contains TUI console work.
+- service capability explicitly includes metadata, health checks, and local
+  forwarding.
 
 ## v0.8 Goal
 
 Operon v0.8 should expose the runtime as an AI-native tool interface after the
-gRPC runtime, Linux mount, and CLI TUI console are stable.
+gRPC runtime, Linux mount, and service forwarding are stable.
 
 ```text
 v0.8 = agent-facing tool interface over the established runtime API.

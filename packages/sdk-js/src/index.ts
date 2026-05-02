@@ -17,6 +17,7 @@ import {
   type OperonRuntimeClient,
   type ServiceCheck as GrpcServiceCheck,
   type ServiceList as GrpcServiceList,
+  type ServiceTunnelResponse as GrpcServiceTunnelResponse,
 } from "./generated/operon/runtime";
 
 const DEFAULT_LIST_PAGE_SIZE = 1000;
@@ -327,6 +328,17 @@ export class OperonClient {
     );
   }
 
+  async openServiceTunnel(
+    nodeId: string,
+    serviceId: string,
+    input: AsyncIterable<Uint8Array>,
+  ): Promise<ReadableStream<Uint8Array>> {
+    const endpoint = this.endpointFor(nodeId);
+    const iterator = this.grpcClient(endpoint)
+      .openServiceTunnel(grpcServiceTunnelRequests(serviceId, input), this.grpcOptions(endpoint))[Symbol.asyncIterator]();
+    return serviceTunnelReadableStream(iterator);
+  }
+
   private async runStep(step: OperonStep, index: number, runId: string): Promise<OperonStepTrace> {
     const startedAtMs = Date.now();
     const id = step.id ?? `step-${index + 1}`;
@@ -595,6 +607,46 @@ async function* grpcStdinChunks(jobId: string, bytes: Uint8Array): AsyncIterable
       chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
     };
   }
+}
+
+async function* grpcServiceTunnelRequests(
+  serviceId: string,
+  input: AsyncIterable<Uint8Array>,
+): AsyncIterable<{ target?: { serviceId: string }; data?: { data: Uint8Array }; close?: { reason: string } }> {
+  yield { target: { serviceId } };
+  for await (const chunk of input) {
+    yield { data: { data: chunk } };
+  }
+  yield { close: { reason: "client input ended" } };
+}
+
+function serviceTunnelReadableStream(
+  iterator: AsyncIterator<GrpcServiceTunnelResponse>,
+): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      while (true) {
+        const next = await iterator.next();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        if (next.value.data) {
+          controller.enqueue(next.value.data.data);
+          return;
+        }
+        if (next.value.close) {
+          controller.close();
+          return;
+        }
+      }
+    },
+    async cancel() {
+      if (iterator.return) {
+        await iterator.return();
+      }
+    },
+  });
 }
 
 function fromGrpcFsStat(stat: GrpcFsStat) {

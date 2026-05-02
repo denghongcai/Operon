@@ -108,7 +108,7 @@ Development prerequisites:
 - Docker with Docker Compose
 - `/dev/fuse` and `fusermount3` for Linux mount validation
 
-Run the full v0.6 validation:
+Run the full validation:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -129,6 +129,7 @@ scripts/verify-v0.6.9-cli-contract.sh
 scripts/verify-v0.6.10-runtime-hardening.sh
 scripts/verify-v0.6.11-governance.sh
 scripts/verify-v0.6.12-runtime-boundary.sh
+scripts/verify-v0.7-service-forwarding.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -149,6 +150,9 @@ and current paginated list API callers.
 The v0.6.12 runtime-boundary validation checks job-log streaming envelopes,
 append-only store writer APIs, Linux-only mount adapter dependency boundaries,
 and the current public protocol version.
+The v0.7 service forwarding validation checks policy-configured service
+metadata, TCP health checks, explicit local port forwarding, and service
+forwarding audit events.
 
 ## Release Automation
 
@@ -363,6 +367,7 @@ operon provider list
 operon --config ./operon.config.yaml capability list cloud-a
 operon --config ./operon.config.yaml service list cloud-a
 operon --config ./operon.config.yaml service check cloud-a daemon
+operon --config ./operon.config.yaml service forward cloud-a web --listen 127.0.0.1:8080
 
 operon init config ./operon.config.yaml
 
@@ -554,7 +559,8 @@ Supported (initial):
 - filesystem (read / write / list)
 - job execution
 - process control
-- service / port metadata and TCP health checks over an existing private network
+- service / port metadata, TCP health checks, and explicit local forwarding
+  over existing Operon node connections
 
 Planned:
 
@@ -655,7 +661,7 @@ Roadmap:
 - [x] LAN mDNS discovery
 - [x] Queryable job/audit/trace commands
 - [x] Read-only mount PoC
-- [x] Service / port metadata and health checks
+- [x] Service / port metadata, health checks, and explicit local forwarding
 - [x] Filtered audit and human-readable trace CLI UX
 - [x] gRPC runtime protocol
 - [x] Remove HTTP runtime facade
@@ -665,7 +671,6 @@ Roadmap:
 - [x] Same-node fs copy
 - [x] Workspace containment and isolated job environment hardening
 - [x] gRPC runtime schema stabilization
-- [ ] CLI TUI console
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters
 

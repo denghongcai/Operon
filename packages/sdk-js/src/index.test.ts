@@ -26,6 +26,7 @@ const niceGrpcMock = vi.hoisted(() => {
       closeJobStdin: vi.fn(),
       listServices: vi.fn(),
       checkService: vi.fn(),
+      openServiceTunnel: vi.fn(),
     },
     metadata,
     createChannel: vi.fn(),
@@ -206,6 +207,31 @@ describe("OperonClient", () => {
       { fromPath: "/a.txt", toPath: "/b.txt" },
       expect.any(Object),
     );
+  });
+
+  it("opens service tunnels as binary streams", async () => {
+    const response = new Uint8Array([0x48, 0x54, 0x54, 0x50]);
+    niceGrpcMock.client.openServiceTunnel.mockReturnValue(asyncIterable([
+      { opened: { serviceId: "web", host: "127.0.0.1", port: 80 } },
+      { data: { data: response } },
+      { close: { reason: "remote service closed" } },
+    ]));
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789", token: "test-token" }]);
+    const stream = await client.openServiceTunnel("node-a", "web", asyncIterable([new TextEncoder().encode("GET / HTTP/1.0\r\n\r\n")]));
+    const reader = stream.getReader();
+
+    await expect(reader.read()).resolves.toEqual({ done: false, value: response });
+    await expect(reader.read()).resolves.toEqual({ done: true, value: undefined });
+    expect(niceGrpcMock.client.openServiceTunnel).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+    const requestStream = niceGrpcMock.client.openServiceTunnel.mock.calls[0][0] as AsyncIterable<unknown>;
+    const requests = [];
+    for await (const request of requestStream) {
+      requests.push(request);
+    }
+    expect(requests[0]).toEqual({ target: { serviceId: "web" } });
+    expect(requests[1]).toEqual({ data: { data: new TextEncoder().encode("GET / HTTP/1.0\r\n\r\n") } });
+    expect(requests[2]).toEqual({ close: { reason: "client input ended" } });
   });
 
   it("streams job logs as bytes without string re-encoding", async () => {

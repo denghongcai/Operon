@@ -18,10 +18,10 @@ rg -n '^#!\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
 
 rg -n 'export type JobLogStreamEvent' packages/sdk-js/src/index.ts
 rg -n 'streamJobLogEvents' packages/sdk-js/src/index.ts
-rg -n 'PROTOCOL_VERSION: &str = "v0.6.12"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.7.0"' crates/operon-protocol/src/lib.rs
 
 cargo test -p operon-store --locked
 cargo test -p operond --locked
 pnpm --filter @operon/sdk test
 
-echo "v0.6.12 runtime-boundary validation passed"
+echo "runtime-boundary validation passed"

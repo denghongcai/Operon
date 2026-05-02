@@ -3,6 +3,7 @@ use std::{
     fmt::Write as _,
     fs::{self, OpenOptions},
     io::Write as _,
+    net::SocketAddr,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -186,8 +187,19 @@ enum AuditCommand {
 
 #[derive(Debug, Subcommand)]
 enum ServiceCommand {
-    List { node_id: String },
-    Check { node_id: String, service_id: String },
+    List {
+        node_id: String,
+    },
+    Check {
+        node_id: String,
+        service_id: String,
+    },
+    Forward {
+        node_id: String,
+        service_id: String,
+        #[arg(long)]
+        listen: SocketAddr,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -363,6 +375,11 @@ async fn main() -> anyhow::Result<()> {
                 node_id,
                 service_id,
             } => service_check(config_path, &node_id, &service_id, output).await,
+            ServiceCommand::Forward {
+                node_id,
+                service_id,
+                listen,
+            } => service_forward(config_path, node_id, service_id, listen, output).await,
         },
         Command::Job { command } => match command {
             JobCommand::Run {
@@ -896,6 +913,43 @@ async fn service_check(
         check.reason.as_deref().unwrap_or("-")
     );
     Ok(())
+}
+
+async fn service_forward(
+    config_path: PathBuf,
+    node_id: String,
+    service_id: String,
+    listen: SocketAddr,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, &node_id)?;
+    let listener = tokio::net::TcpListener::bind(listen).await?;
+    let local_addr = listener.local_addr()?;
+    if output.json {
+        print_json(&serde_json::json!({
+            "node_id": node_id,
+            "service_id": service_id,
+            "listen": local_addr.to_string(),
+        }))?;
+    } else if !output.quiet {
+        println!("forwarding {} -> {}:{}", local_addr, node_id, service_id);
+    }
+
+    loop {
+        let (socket, peer_addr) = listener.accept().await?;
+        let endpoint = endpoint.clone();
+        let service_id = service_id.clone();
+        tokio::spawn(async move {
+            if let Err(error) =
+                grpc::forward_service_connection(&endpoint, &service_id, socket).await
+            {
+                eprintln!(
+                    "service forward connection from {} failed: {:#}",
+                    peer_addr, error
+                );
+            }
+        });
+    }
 }
 
 async fn job_run(input: JobRunInput) -> anyhow::Result<()> {

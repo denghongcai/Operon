@@ -14,10 +14,16 @@ use operon_core::{
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     job_log_stream_event, job_stdin_request, operon_runtime_client::OperonRuntimeClient,
-    write_file_request, FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest,
-    FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest,
-    JobStdinRequest, JobStdinTarget, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
-    ListServicesRequest, ServiceIdRequest, WriteFileRequest, WriteFileTarget,
+    service_tunnel_request, service_tunnel_response, write_file_request, FileChunk, FsCopyRequest,
+    FsPathRequest, FsRenameRequest, FsTruncateRequest, GetNodeRequest, HealthRequest,
+    JobCancelRequest, JobIdRequest, JobStdinRequest, JobStdinTarget, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceIdRequest,
+    ServiceTunnelClose, ServiceTunnelData, ServiceTunnelRequest, ServiceTunnelTarget,
+    WriteFileRequest, WriteFileTarget,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -539,6 +545,68 @@ pub async fn check_service(
             .await?
             .into_inner()
             .into())
+    })
+    .await
+}
+
+pub async fn forward_service_connection(
+    endpoint: &NodeEndpoint,
+    service_id: &str,
+    socket: TcpStream,
+) -> anyhow::Result<()> {
+    let service_id = service_id.to_string();
+    let (mut local_reader, mut local_writer) = socket.into_split();
+    call(endpoint, |mut client, endpoint| async move {
+        let outbound = async_stream::stream! {
+            yield ServiceTunnelRequest {
+                payload: Some(service_tunnel_request::Payload::Target(ServiceTunnelTarget {
+                    service_id,
+                })),
+            };
+            let mut buffer = vec![0_u8; 64 * 1024];
+            loop {
+                match local_reader.read(&mut buffer).await {
+                    Ok(0) => {
+                        yield ServiceTunnelRequest {
+                            payload: Some(service_tunnel_request::Payload::Close(ServiceTunnelClose {
+                                reason: "local client closed".to_string(),
+                            })),
+                        };
+                        break;
+                    }
+                    Ok(bytes_read) => {
+                        yield ServiceTunnelRequest {
+                            payload: Some(service_tunnel_request::Payload::Data(ServiceTunnelData {
+                                data: buffer[..bytes_read].to_vec(),
+                            })),
+                        };
+                    }
+                    Err(error) => {
+                        yield ServiceTunnelRequest {
+                            payload: Some(service_tunnel_request::Payload::Close(ServiceTunnelClose {
+                                reason: format!("local client read failed: {error}"),
+                            })),
+                        };
+                        break;
+                    }
+                }
+            }
+        };
+        let mut inbound = client
+            .open_service_tunnel(with_auth(&endpoint, outbound)?)
+            .await?
+            .into_inner();
+        while let Some(message) = inbound.message().await? {
+            match message.payload {
+                Some(service_tunnel_response::Payload::Opened(_)) => {}
+                Some(service_tunnel_response::Payload::Data(data)) => {
+                    local_writer.write_all(&data.data).await?;
+                }
+                Some(service_tunnel_response::Payload::Close(_)) | None => break,
+            }
+        }
+        let _ = local_writer.shutdown().await;
+        Ok(())
     })
     .await
 }
