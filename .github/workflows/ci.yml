@@ -117,6 +117,8 @@ jobs:
             node: true
           - name: Docs Help Skills Sync Validation
             script: scripts/verify-docs-help-skills-sync.sh
+          - name: v0.9 Endpoint Model Validation
+            script: scripts/verify-v0.9-endpoint-model.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

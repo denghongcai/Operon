@@ -297,7 +297,9 @@ Operon should not own:
   while continuing to load valid endpoint configuration.
 - Completed docs/help/skills sync milestone: v0.8.18 added a validation gate
   for docs, public CLI help paths, repo-local skills, and AGENTS.md sync rules.
-- Next planned milestone: v0.9 endpoint model acceptance and mDNS discovery UX.
+- Completed acceptance milestone: v0.9 endpoint model acceptance and mDNS
+  discovery UX validation.
+- Next planned milestone: post-v0.9 discovery UX.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -452,3 +454,7 @@ Defer:
   discovery syntax, graph/workflow help paths are validated, CI runs the sync
   gate, and AGENTS.md records the synchronization rule. Nothing remains in
   v0.8.18.
+- Latest phase status update: v0.9 completed Endpoint Model Acceptance.
+  Endpoint-only example config, mDNS endpoint candidate records, endpoint-only
+  discovery export, and no automatic policy grants are covered by
+  `scripts/verify-v0.9-endpoint-model.sh`. Nothing remains in v0.9.

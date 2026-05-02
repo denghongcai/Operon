@@ -3793,7 +3793,7 @@ Remaining:
 
 ## Phase 62: v0.9 Endpoint Model Acceptance
 
-Status: Planned.
+Status: Completed.
 
 Goal: make endpoint-only configuration and mDNS discovery reproducible.
 
@@ -3810,6 +3810,20 @@ Done when:
 - v0.9 has documented acceptance criteria.
 - config and discovery validation prove that Operon consumes only endpoints.
 - docs explicitly preserve the "Operon is not a VPN" boundary.
+
+Completed:
+
+- Added `scripts/verify-v0.9-endpoint-model.sh`.
+- Kept `examples/config.yaml` endpoint-only.
+- Added mDNS discovery record coverage for endpoint candidates without provider
+  metadata.
+- Added discovery export coverage proving generated config contains endpoint
+  client nodes and no policy grants.
+- Added the v0.9 validation to CI and README validation guidance.
+
+Remaining:
+
+- No v0.9 acceptance work remains.
 
 ## Phase 63: Post-v0.9 Discovery UX
 

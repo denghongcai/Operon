@@ -161,4 +161,32 @@ mod tests {
         assert!(records.is_empty());
         assert!(fullnames.is_empty());
     }
+
+    #[test]
+    fn resolved_mdns_record_yields_endpoint_candidate_without_provider_metadata() {
+        let info = mdns_sd::ServiceInfo::new(
+            OPERON_MDNS_SERVICE,
+            "gpu",
+            "gpu.local.",
+            "10.0.0.8",
+            7789,
+            &[
+                ("node_id", "gpu"),
+                ("endpoint", "grpc://10.0.0.8:7789"),
+                ("capabilities", "fs:workspace,job:default"),
+                ("provider", "tailscale"),
+            ][..],
+        )
+        .expect("service info")
+        .as_resolved_service();
+
+        let record = discovery_record_from_info(&info);
+
+        assert_eq!(record.node_id, "gpu");
+        assert_eq!(record.endpoint, "grpc://10.0.0.8:7789");
+        assert_eq!(
+            record.capabilities,
+            vec!["fs:workspace".to_string(), "job:default".to_string()]
+        );
+    }
 }

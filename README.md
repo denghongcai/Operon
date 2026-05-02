@@ -149,6 +149,7 @@ scripts/verify-v0.8.4-modularization.sh
 scripts/verify-v0.8.5-core-domain-modules.sh
 scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
 scripts/verify-docs-help-skills-sync.sh
+scripts/verify-v0.9-endpoint-model.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -196,6 +197,9 @@ modules, graph/workflow aliases, and TypeScript SDK public API alignment.
 The docs/help/skills synchronization validation checks current public CLI help
 paths, repo-local skill guidance, AGENTS.md synchronization rules, and stale
 provider command examples in docs and skills.
+The v0.9 endpoint-model validation checks endpoint-only config, stale-field
+warnings, mDNS endpoint candidates, endpoint-only discovery export, and the
+absence of automatic capability grants for discovered nodes.
 
 ## Release Automation
 
