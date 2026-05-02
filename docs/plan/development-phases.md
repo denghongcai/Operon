@@ -4030,8 +4030,7 @@ Remaining:
 
 ## Later Candidate Work
 
-- clipboard capability.
-- screen/input feasibility spike.
+No later candidate phases are currently planned.
 
 ## Planning Principle
 

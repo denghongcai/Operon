@@ -652,7 +652,6 @@ Operon exposes machines through capabilities:
 ```text
 mesh://cloud-a/fs/workspace
 mesh://gpu-node/job/run
-mesh://mac/screen/main
 ```
 
 Supported (initial):
@@ -666,13 +665,6 @@ Supported (initial):
 from configured mounts, job capability appears only when policy allows at least
 one working directory, and service capabilities come from configured services
 and their permissions.
-
-Planned:
-
-- screen / input
-- audio
-- clipboard
-- device access
 
 ---
 

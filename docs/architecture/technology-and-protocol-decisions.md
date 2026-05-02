@@ -4,7 +4,9 @@ This document records the current architecture decisions for Operon based on the
 
 ## Context
 
-Operon is daemon-first infrastructure. Each node runs a long-lived agent that exposes local capabilities such as filesystem access, process execution, service/port access, and later screen/audio/input.
+Operon is daemon-first infrastructure. Each node runs a long-lived agent that
+exposes local capabilities such as filesystem access, process execution, and
+service/port access.
 
 Operon should run on top of an existing secure private network instead of implementing its own network mesh. Supported network environments include Cloudflare Mesh, Tailscale, WireGuard, SSH tunnels, LAN, Kubernetes networking, and manually configured private endpoints.
 
@@ -111,7 +113,6 @@ The protocol has native streaming requirements:
 - job status streams
 - execution event streams
 - filesystem watch events
-- later screen/audio streams
 - possible bidirectional capability streams
 
 gRPC handles these better than ad hoc JSON-RPC:
