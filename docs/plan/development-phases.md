@@ -3037,7 +3037,33 @@ Done when:
 - `operon completion zsh` generates a zsh completion script.
 - `operon onboard` shows the user how to install completions.
 
-## Phase 44: Provider Discovery Contract
+## Phase 44: Test Coverage and Integration Audit
+
+Status: Completed.
+
+Goal: make test coverage explicit and add integration tests before provider
+discovery expands the surface area.
+
+Completed:
+
+- audited unit coverage across every Rust crate and recorded the current
+  coverage map in `docs/quality/test-coverage-audit.md`.
+- added compiled-binary CLI integration tests for help, shell completions,
+  starter config generation, `config explain --json`, and onboard completion
+  guidance.
+- added `scripts/verify-v0.8.1-integration-coverage.sh`, which starts a real
+  daemon and exercises config, node, capability, fs, job, service, audit,
+  graph, trace, and completion flows.
+- added the integration coverage validation script to CI.
+
+Done when:
+
+- every Rust crate has registered unit tests.
+- CLI binary behavior is covered outside helper-only unit tests.
+- a real daemon integration smoke validates the core user-facing flows.
+- test coverage expectations are documented for future phases.
+
+## Phase 45: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3056,7 +3082,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 45: Non-LAN Provider Adapters
+## Phase 46: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3076,7 +3102,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 46: v0.9 Acceptance
+## Phase 47: v0.9 Acceptance
 
 Status: Planned.
 

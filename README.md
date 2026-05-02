@@ -142,6 +142,7 @@ scripts/verify-v0.6.12-runtime-boundary.sh
 scripts/verify-v0.7-service-forwarding.sh
 scripts/verify-v0.7.1-udp-datagram-forwarding.sh
 scripts/verify-v0.8-agent-skills.sh
+scripts/verify-v0.8.1-integration-coverage.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -171,6 +172,10 @@ events.
 The v0.8 agent skills validation checks repo-local skill metadata, public CLI
 help paths, `operon config explain`, current service forwarding command names,
 and safety guidance for agent workflows.
+The v0.8.1 integration coverage validation starts a real daemon and exercises
+config, node, capability, filesystem, job, service, audit, execution graph,
+trace, and completion flows. The current coverage audit is in
+`docs/quality/test-coverage-audit.md`.
 
 ## Release Automation
 

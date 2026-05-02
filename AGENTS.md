@@ -183,6 +183,9 @@ Operon should not own:
 - Completed CLI cleanup milestone: shell completion generation via
   `operon completion <shell>` and completion setup guidance in `operon
   onboard`.
+- Completed test coverage milestone: unit coverage audit, compiled-binary CLI
+  integration tests, real-daemon integration coverage script, and CI validation
+  for the core config/node/capability/fs/job/service/audit/graph/trace flows.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
