@@ -758,36 +758,34 @@ Done when:
 - denied operations return structured JSON errors.
 - Docker validation covers unauthorized and authorized requests.
 
-## Phase 11: Provider Resolver Adapters
+## Phase 11: Endpoint Resolver Cleanup
 
 Status: Completed.
 
-Goal: make network providers explicit without implementing connectivity.
+Goal: resolve configured endpoints without implementing connectivity.
 
 Planned:
 
-- provider resolver trait in `operon-network`.
 - manual resolver implementation.
-- provider metadata validation for Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, and Kubernetes.
 - CLI `node resolve <node-id>`.
-- CLI `provider list`.
+- validation that external networks are represented as ordinary endpoints.
 
 Completed:
 
-- Added explicit provider kinds in `operon-network`.
 - Added endpoint resolution through `NodesConfig::resolve`.
-- Added CLI `node resolve <node-id>` and `provider list`.
-- Extended Docker validation to cover manual provider resolution.
+- Added CLI `node resolve <node-id>`.
+- Extended Docker validation to cover manual endpoint resolution.
+- Later v0.8.16 removed the provider abstraction from the endpoint model.
 
 Remaining:
 
-- Provider API discovery for Cloudflare Mesh, Tailscale, LAN mDNS, and Kubernetes is deferred.
+- API discovery for external control planes is outside the runtime model.
 
 Done when:
 
-- config endpoints resolve through provider abstraction.
-- unsupported provider values fail clearly.
-- Docker validation covers manual provider resolution.
+- config endpoints resolve to `grpc://` or `grpcs://` addresses.
+- unsupported endpoint values fail clearly.
+- Docker validation covers manual endpoint resolution.
 
 ## Phase 12: Persistent Store for Jobs, Audit, and Traces
 
@@ -1009,14 +1007,14 @@ Goal: discover Operon daemons on the local network without owning connectivity.
 
 Planned:
 
-- daemon can advertise node id, provider, endpoint, and capability summary through LAN mDNS.
-- CLI `node discover --provider lan`.
+- daemon can advertise node id, endpoint, and capability summary through LAN mDNS.
+- CLI `node discover --timeout-secs 3`.
 - discovered records are displayed and can optionally be written into a node config file.
 
 Completed:
 
 - Added daemon `--advertise-lan` mDNS advertisement.
-- Added CLI `node discover --provider lan`.
+- Added CLI `node discover --timeout-secs 3`.
 - Added optional `--output-config` for discovered node config generation.
 - Docker validation runs LAN discovery inside the compose network.
 
@@ -1671,7 +1669,7 @@ v0.6.2 = CLI fs mutation commands over the existing Core FS Protocol.
 ```
 
 v0.6.2 is a cleanup phase. It should not add new daemon capabilities, mount
-modes, provider discovery, or a new runtime API surface. `WriteFileRange` remains
+modes, endpoint discovery UX, or a new runtime API surface. `WriteFileRange` remains
 available through the protocol for mount adapters and direct clients, but normal
 CLI users should use higher-level commands.
 
@@ -1821,7 +1819,7 @@ v0.6.4 = onboard as a guided wrapper over existing setup primitives.
 ```
 
 `operon onboard` must generate normal Operon files and show the equivalent CLI
-commands. `init config`, `node discover --provider lan`, and other
+commands. `init config`, `node discover --timeout-secs 3`, and other
 command-style configuration paths remain the stable automation surface.
 
 ## Phase 32.8: Onboard Command
@@ -3003,22 +3001,24 @@ Done when:
 
 ## v0.9 Goal
 
-Operon v0.9 should add non-LAN provider discovery adapters while preserving the
-network boundary.
+Operon v0.9 should make endpoint-only configuration and mDNS discovery
+reproducible while preserving the network boundary.
 
 ```text
-v0.9 = provider API discovery for existing private-network endpoints.
+v0.9 = endpoint model acceptance and mDNS discovery UX.
 ```
 
-v0.9 should discover or resolve endpoints only. It must not implement NAT
-traversal, relays, VPN behavior, mesh IP assignment, subnet routing, or global
-routing.
+v0.9 should consume explicit endpoints and optionally discover local mDNS
+endpoint candidates. It must not implement NAT traversal, relays, VPN behavior,
+mesh IP assignment, subnet routing, global routing, or provider-specific API
+adapters.
 
 ## Phase 43: CLI Shell Completion Cleanup
 
 Status: Completed.
 
-Goal: make the CLI easier to use interactively before provider discovery work.
+Goal: make the CLI easier to use interactively before endpoint discovery UX
+work.
 
 Completed:
 
@@ -3041,8 +3041,8 @@ Done when:
 
 Status: Completed.
 
-Goal: make test coverage explicit and add integration tests before provider
-discovery expands the surface area.
+Goal: make test coverage explicit and add integration tests before endpoint
+discovery UX expands the surface area.
 
 Completed:
 
@@ -3098,7 +3098,7 @@ Done when:
 Status: Completed.
 
 Goal: close the concrete FUSE random-read performance gap and make release,
-package, and protocol version rules explicit before provider discovery.
+package, and protocol version rules explicit before endpoint discovery UX.
 
 Plan:
 
@@ -3142,7 +3142,7 @@ Completed:
 Status: Completed.
 
 Goal: reduce the largest maintenance hotspots through behavior-preserving
-module splits before adding provider discovery.
+module splits before adding endpoint discovery UX.
 
 Plan:
 
@@ -3189,7 +3189,7 @@ Remaining:
 
 Status: Completed.
 
-Goal: split `operon-core` into domain modules before provider discovery and
+Goal: split `operon-core` into domain modules before endpoint discovery UX and
 policy/trace schemas grow further.
 
 Plan:
@@ -3238,7 +3238,7 @@ Remaining:
 
 Status: Completed.
 
-Goal: finish the deferred maintainability split before provider discovery by
+Goal: finish the deferred maintainability split before endpoint discovery UX by
 moving daemon job/service/audit/log internals, non-fs CLI command families, and
 shared Rust gRPC client concerns behind focused module boundaries.
 
@@ -3686,7 +3686,7 @@ Done when:
 
 - `provider` is removed from `NodeEndpoint`, `NodeConfig`, mDNS discovery
   records, generated config, CLI output, and the TypeScript SDK endpoint type.
-- `operon provider` and `operon node discover --provider` are removed.
+- the legacy provider command and discovery provider flag are removed.
 - stale `provider` fields in older client node config are ignored rather than
   consumed as model data.
 - current docs and acceptance criteria describe endpoint-only configuration.
@@ -3758,7 +3758,40 @@ Remaining:
 - Future schema additions should update the unknown-field allowlist in
   `operon-config`.
 
-## Phase 61: v0.9 Endpoint Model Acceptance
+## Phase 61: v0.8.18 Docs, Help, and Skills Synchronization
+
+Status: Completed.
+
+Goal: keep docs, CLI help, repo-local skills, and agent rules synchronized with
+the implemented endpoint-only model.
+
+Done when:
+
+- repo-local skills use current endpoint-only discovery commands.
+- current docs do not instruct users to run removed provider commands or
+  legacy discovery flags.
+- validation checks public CLI help paths, skill guidance, AGENTS.md sync
+  rules, and stale provider command examples.
+- CI runs the synchronization validation.
+
+Detailed plan:
+`docs/plan/v0.8.18-docs-help-skills-sync.md`.
+
+Completed:
+
+- Updated repo-local skills and planning docs to use current mDNS discovery
+  syntax.
+- Added `scripts/verify-docs-help-skills-sync.sh`.
+- Added graph/workflow help validation to the docs/help/skills sync gate.
+- Added AGENTS.md rules requiring future CLI, config, endpoint, docs, and skill
+  changes to keep those surfaces synchronized.
+- Added the sync validation to CI and README validation guidance.
+
+Remaining:
+
+- No v0.8.18 work remains.
+
+## Phase 62: v0.9 Endpoint Model Acceptance
 
 Status: Planned.
 
@@ -3778,7 +3811,7 @@ Done when:
 - config and discovery validation prove that Operon consumes only endpoints.
 - docs explicitly preserve the "Operon is not a VPN" boundary.
 
-## Phase 62: Post-v0.9 Discovery UX
+## Phase 63: Post-v0.9 Discovery UX
 
 Status: Planned.
 

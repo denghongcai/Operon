@@ -116,7 +116,7 @@ Operon should not own:
 
 - `docs/plan/v0.8.4-runtime-cli-modularization.md`
   - v0.8.4 scope for behavior-preserving `operond` and `operon-cli`
-    modularization before provider discovery work resumes.
+    modularization before endpoint discovery UX work resumes.
 
 - `docs/plan/v0.8.6-runtime-cli-client-modularization.md`
   - v0.8.6 scope for shared Rust gRPC client helpers, non-fs CLI command
@@ -166,6 +166,10 @@ Operon should not own:
 - `docs/plan/v0.8.17-config-unknown-field-warnings.md`
   - v0.8.17 cleanup scope for warning about unknown `config.yaml` fields
     without blocking startup or CLI commands.
+
+- `docs/plan/v0.8.18-docs-help-skills-sync.md`
+  - v0.8.18 cleanup scope for keeping docs, CLI help, repo-local skills, and
+    AGENTS.md sync rules aligned with the implemented endpoint-only model.
 
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for endpoint-only config and mDNS discovery UX.
@@ -291,6 +295,8 @@ Operon should not own:
   config, CLI output, mDNS discovery records, and SDK endpoint types.
 - Completed config cleanup milestone: v0.8.17 warns about unknown config fields
   while continuing to load valid endpoint configuration.
+- Completed docs/help/skills sync milestone: v0.8.18 added a validation gate
+  for docs, public CLI help paths, repo-local skills, and AGENTS.md sync rules.
 - Next planned milestone: v0.9 endpoint model acceptance and mDNS discovery UX.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -315,6 +321,13 @@ Operon should not own:
 - v0.8 skills teach scenarios, command selection, safety checks, and
   when to inspect audit/trace output. They should direct agents to use
   `operon <command> --help` for exact syntax instead of duplicating every flag.
+- Skills explain scenarios and command choice; CLI help is the source of truth
+  for exact flags and arguments.
+- When CLI commands, config shape, endpoint/discovery behavior, docs, or skills
+  change, update README, PROTOCOL, relevant docs/plan files, repo-local skills,
+  and AGENTS.md in the same task when affected.
+- Run `scripts/verify-docs-help-skills-sync.sh` after changes that touch CLI
+  help, docs, skills, endpoint/discovery behavior, or AGENTS.md rules.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 
@@ -434,3 +447,8 @@ Defer:
 - Latest phase status update: v0.8.17 completed Config Unknown Field
   Warnings. Config loading now lists unknown field paths as warnings while
   continuing to load valid endpoint configuration. Nothing remains in v0.8.17.
+- Latest phase status update: v0.8.18 completed Docs, Help, and Skills
+  Synchronization. Docs and repo-local skills now use current endpoint-only
+  discovery syntax, graph/workflow help paths are validated, CI runs the sync
+  gate, and AGENTS.md records the synchronization rule. Nothing remains in
+  v0.8.18.

@@ -115,6 +115,8 @@ jobs:
           - name: v0.8.6 Runtime CLI Client Modularization Validation
             script: scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
             node: true
+          - name: Docs Help Skills Sync Validation
+            script: scripts/verify-docs-help-skills-sync.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

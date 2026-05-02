@@ -148,6 +148,7 @@ scripts/verify-v0.8.3-read-range-release-cleanup.sh
 scripts/verify-v0.8.4-modularization.sh
 scripts/verify-v0.8.5-core-domain-modules.sh
 scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
+scripts/verify-docs-help-skills-sync.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -192,6 +193,9 @@ policies live in focused modules with compatible root re-exports.
 The v0.8.6 modularization validation checks shared Rust gRPC client helpers,
 non-fs CLI command modules, Linux mount adapter modules, daemon job/service/audit
 modules, graph/workflow aliases, and TypeScript SDK public API alignment.
+The docs/help/skills synchronization validation checks current public CLI help
+paths, repo-local skill guidance, AGENTS.md synchronization rules, and stale
+provider command examples in docs and skills.
 
 ## Release Automation
 

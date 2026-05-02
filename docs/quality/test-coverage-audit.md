@@ -18,11 +18,11 @@ Current Rust crate coverage by responsibility:
 | Crate | Covered behaviors | Remaining emphasis |
 | --- | --- | --- |
 | `operon-core` | DTO serialization, policy YAML, service policy, graph YAML | keep enum and wire-name tests when protocol evolves |
-| `operon-config` | unified config loading, endpoint resolution, auth serialization | add provider discovery config tests when v0.9 lands |
+| `operon-config` | unified config loading, endpoint resolution, auth serialization, unknown-field warnings | keep endpoint-only config tests aligned with v0.9 acceptance |
 | `operon-fs` | workspace path containment, symlink behavior, policy scope, stable ids | add more Linux fd/openat2 tests if containment moves lower |
 | `operon-process` | job policy, environment allowlist, preserve-env mode | add more process-group tests around platform differences |
 | `operon-store` | append-only JSONL writer, fsync toggle, symlink rejection | add corruption/recovery tests if a richer store is added |
-| `operon-network` | LAN discovery removal handling | add provider API mocking in v0.9 |
+| `operon-network` | LAN mDNS discovery removal handling | add endpoint export/import tests if discovery UX grows |
 | `operon-protocol` | page tokens and protocol version | keep conversion tests aligned with proto changes |
 | `operon-mount` | inode table, path validation, runtime wrapper, Linux mount boundaries | real FUSE behavior remains in Linux validation scripts |
 | `operond` | daemon policy, fs, job lifecycle, audit, pagination, store path, locks | keep high-risk runtime behavior here instead of only scripts |
@@ -44,7 +44,7 @@ The repository now includes two additional integration checks:
 
 Existing validation scripts continue to cover Docker two-node behavior, Linux
 mount behavior, runtime hardening, protocol boundaries, service forwarding,
-UDP/datagram forwarding, and agent skills.
+UDP/datagram forwarding, agent skills, and docs/help/skills synchronization.
 
 ## Coverage Policy
 

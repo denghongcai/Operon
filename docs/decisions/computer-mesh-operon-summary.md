@@ -229,7 +229,7 @@ This distinction is central to the project's uniqueness.
 
 Operon should outsource connectivity to mature network layers.
 
-Recommended network providers:
+Recommended external connectivity layers:
 
 ```text
 Cloudflare Mesh
@@ -241,7 +241,7 @@ Kubernetes networking
 manual endpoints
 ```
 
-These providers answer:
+These systems answer:
 
 ```text
 Can node A reach node B's agent endpoint?
@@ -286,7 +286,8 @@ nodes:
     endpoint: https://100.96.18.20:7788
 ```
 
-Later versions can add provider adapters for endpoint resolution and discovery.
+Later versions can improve endpoint import/export and mDNS discovery UX without
+making external connectivity systems part of the Operon runtime model.
 
 ## AI-native Decision
 
@@ -389,11 +390,12 @@ Make capability use explicit, scoped, and traceable.
 
 Expose discovery, execution, and trace inspection APIs designed for AI agents.
 
-### Phase 6: Mounts, Provider Discovery, and Advanced Capabilities
+### Phase 6: Mounts, Endpoint Discovery, and Advanced Capabilities
 
 Continue OS mount adapters beyond the current Linux FUSE implementation, add
-provider API discovery, and consider screen/input/audio plus richer device
-capabilities once the core model is stable.
+endpoint import/export or mDNS discovery improvements, and consider
+screen/input/audio plus richer device capabilities once the core model is
+stable.
 
 ## Product Statement
 
@@ -420,7 +422,7 @@ This decision implies:
 - filesystem and process capabilities are the right first wedge
 - remote desktop features should not define the project
 - private networking should be treated as an external dependency
-- provider adapters should resolve endpoints, not implement connectivity
+- external network control planes should remain outside the runtime model
 - AI SDK design is part of the core product, not an afterthought
 
 ## Open Questions
@@ -430,7 +432,8 @@ This decision implies:
 - How much policy expressiveness is required before OPA/Rego or another policy engine becomes useful?
 - What is the first killer demo: distributed file workflow, remote job execution, or AI-run multi-node task?
 - Should `mesh://` remain the URI scheme or should it become `operon://`?
-- Which provider adapter should come first after manual endpoints: Cloudflare Mesh, Tailscale, SSH, or LAN discovery?
+- Which endpoint-import workflow is useful first after manual endpoints: mDNS,
+  user scripts, or generated config from an external control plane?
 
 ## References
 

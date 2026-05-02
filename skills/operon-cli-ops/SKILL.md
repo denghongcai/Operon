@@ -29,7 +29,7 @@ Common scenarios:
 
 - Need to know which config is active: `operon config explain`.
 - Need to see reachable configured nodes: `operon node list`, then `operon node ping <node>`.
-- Need LAN discovery: `operon node discover --provider lan`.
+- Need LAN mDNS endpoint discovery: `operon node discover --timeout-secs 3`.
 - Need to know what a node allows: `operon capability list <node>`.
 - Need evidence for a change: `operon audit show <node>` with filters such as capability, action, allowed, resource, or limit.
 - Need execution graph evidence: run a graph with `operon run <workflow.yaml> --trace-output <trace.json>`, then inspect with `operon trace show <trace.json>`.
