@@ -3687,7 +3687,8 @@ Done when:
 - `provider` is removed from `NodeEndpoint`, `NodeConfig`, mDNS discovery
   records, generated config, CLI output, and the TypeScript SDK endpoint type.
 - `operon provider` and `operon node discover --provider` are removed.
-- client node config rejects `provider` as an unknown field.
+- stale `provider` fields in older client node config are ignored rather than
+  consumed as model data.
 - current docs and acceptance criteria describe endpoint-only configuration.
 
 Detailed plan:
@@ -3702,6 +3703,8 @@ Completed:
 - Removed the provider CLI command and discover provider flag.
 - Updated init/onboard generated config, validation scripts, README, and v0.9
   acceptance docs.
+- Left stale `provider` config fields inert so existing endpoint entries are
+  not blocked by metadata Operon no longer consumes.
 - Added `scripts/verify-v0.8.16-endpoint-model-simplification.sh`.
 
 Remaining:

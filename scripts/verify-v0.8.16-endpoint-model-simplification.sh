@@ -9,7 +9,7 @@ source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.8.16-endpoint-model-simplification.md
 require_pattern 'pub struct NodeEndpoint' crates/operon-config/src/lib.rs
-require_pattern '#\[serde\(deny_unknown_fields\)\]' crates/operon-config/src/lib.rs
+require_pattern 'ignores_legacy_provider_field_in_client_node_config' crates/operon-config/src/lib.rs
 reject_pattern 'NetworkProviderKind' crates/operon-config/src/lib.rs
 reject_pattern 'provider:' crates/operon-cli/src/commands/init.rs
 reject_pattern 'provider:' README.md

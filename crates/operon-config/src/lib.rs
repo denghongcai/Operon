@@ -63,7 +63,6 @@ pub struct NodeEndpoint {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct NodeConfig {
     pub endpoint: String,
     #[serde(default, skip_serializing_if = "AuthConfig::is_empty")]
@@ -183,8 +182,8 @@ client:
     }
 
     #[test]
-    fn rejects_provider_field_in_client_node_config() {
-        let error = serde_yaml::from_str::<OperonConfig>(
+    fn ignores_legacy_provider_field_in_client_node_config() {
+        let config: OperonConfig = serde_yaml::from_str(
             r#"
 version: 1
 client:
@@ -194,9 +193,13 @@ client:
       provider: tailscale
 "#,
         )
-        .expect_err("provider should not be accepted");
+        .expect("provider should not affect endpoint config");
 
-        assert!(error.to_string().contains("unknown field `provider`"));
+        let endpoint = config
+            .endpoint("gpu", Path::new("."))
+            .expect("gpu endpoint");
+        assert_eq!(endpoint.node_id, "gpu");
+        assert_eq!(endpoint.endpoint, "grpc://100.96.18.20:7789");
     }
 
     #[test]
