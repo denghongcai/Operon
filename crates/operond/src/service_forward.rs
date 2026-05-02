@@ -37,7 +37,7 @@ pub(crate) async fn grpc_service_check(
         Err(error) => {
             record_audit_capability(
                 state,
-                "service:default",
+                &format!("service:{service_id}"),
                 "check",
                 &service_id,
                 false,
@@ -132,7 +132,7 @@ pub(crate) async fn open_service_tunnel(
         Err(error) => {
             record_audit_capability(
                 state,
-                "service:default",
+                &format!("service:{service_id}"),
                 "forward",
                 &service_id,
                 false,
@@ -335,7 +335,7 @@ pub(crate) async fn open_service_datagram_tunnel(
         Err(error) => {
             record_audit_capability(
                 state,
-                "service:default",
+                &format!("service:{service_id}"),
                 "forward-udp",
                 &service_id,
                 false,

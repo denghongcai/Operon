@@ -151,6 +151,7 @@ scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
 scripts/verify-docs-help-skills-sync.sh
 scripts/verify-v0.9-endpoint-model.sh
 scripts/verify-post-v0.9-discovery-ux.sh
+scripts/verify-policy-derived-capabilities.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -204,6 +205,9 @@ absence of automatic capability grants for discovered nodes.
 The post-v0.9 discovery UX validation checks mDNS export conflict handling,
 optional endpoint health status output, and continued endpoint-only discovery
 config generation.
+The policy-derived capability validation checks that daemon capability
+discovery reflects configured policy mounts, job roots, and services instead of
+advertising a static default capability set.
 
 ## Release Automation
 
@@ -623,9 +627,13 @@ Supported (initial):
 
 - filesystem (read / write / list)
 - job execution
-- process control
 - service / port metadata, TCP health checks, and explicit local forwarding
   over existing Operon node connections
+
+`operon capability list <node>` is policy-derived: filesystem capabilities come
+from configured mounts, job capability appears only when policy allows at least
+one working directory, and service capabilities come from configured services
+and their permissions.
 
 Planned:
 

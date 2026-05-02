@@ -121,6 +121,8 @@ jobs:
             script: scripts/verify-v0.9-endpoint-model.sh
           - name: Post-v0.9 Discovery UX Validation
             script: scripts/verify-post-v0.9-discovery-ux.sh
+          - name: Policy-Derived Capability Validation
+            script: scripts/verify-policy-derived-capabilities.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

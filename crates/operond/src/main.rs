@@ -50,7 +50,7 @@ mod store_config;
 use audit::now_ms;
 use audit::{record_audit, record_audit_capability};
 use auth::authorize_grpc;
-use defaults::{default_capabilities, default_policy};
+use defaults::{capabilities_from_policy, default_policy};
 use job_runtime::{
     get_job_record, job_event_from_record, job_log_complete, job_log_complete_event,
     job_log_entry_event, job_log_list, job_log_snapshot, job_log_snapshot_event, next_job_sequence,
@@ -133,7 +133,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         os: env::consts::OS.to_string(),
         arch: env::consts::ARCH.to_string(),
     };
-    let capability_list = default_capabilities(&node.id);
+    let capability_list = capabilities_from_policy(&node.id, &policy);
     let jobs = Arc::new(Mutex::new(stored_jobs));
     let state = AppState {
         capabilities: capability_list.clone(),
@@ -871,7 +871,7 @@ mod tests {
                 os: "linux".to_string(),
                 arch: "x86_64".to_string(),
             },
-            capabilities: default_capabilities("node-a"),
+            capabilities: capabilities_from_policy("node-a", &test_policy()),
             workspace,
             policy,
             auth_token: None,
@@ -1078,7 +1078,7 @@ mod tests {
                 os: "linux".to_string(),
                 arch: "x86_64".to_string(),
             },
-            capabilities: default_capabilities("node-a"),
+            capabilities: capabilities_from_policy("node-a", &test_policy()),
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
@@ -1123,7 +1123,7 @@ mod tests {
                 os: "linux".to_string(),
                 arch: "x86_64".to_string(),
             },
-            capabilities: default_capabilities("node-a"),
+            capabilities: capabilities_from_policy("node-a", &test_policy()),
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
@@ -1177,7 +1177,7 @@ mod tests {
                 os: "linux".to_string(),
                 arch: "x86_64".to_string(),
             },
-            capabilities: default_capabilities("node-a"),
+            capabilities: capabilities_from_policy("node-a", &test_policy()),
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,

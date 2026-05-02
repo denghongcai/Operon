@@ -213,7 +213,6 @@ Example output:
 
 ```text
 cloud-a/fs:workspace read,write
-cloud-a/process:default run
 cloud-a/job:default run,cancel,logs
 cloud-a/device-info:default read
 ```
@@ -3861,6 +3860,34 @@ Completed:
 Remaining:
 
 - No post-v0.9 discovery UX work remains.
+
+## Phase 64: v0.9.2 Policy-Derived Capability Discovery
+
+Status: Completed.
+
+Goal: make capability discovery reflect daemon policy instead of a static
+default capability set.
+
+Done when:
+
+- filesystem capabilities are derived from configured policy mounts.
+- job capability is advertised only when policy permits at least one working
+  directory.
+- service capabilities are derived from configured services and their
+  permissions.
+- discovery remains endpoint-only and does not mutate policy.
+
+Completed:
+
+- Added `capabilities_from_policy`.
+- Removed the static `default_capabilities` source.
+- Updated daemon startup to build `CapabilityList` from `PolicyConfig`.
+- Updated service denial audit ids to use `service:<service_id>`.
+- Added `scripts/verify-policy-derived-capabilities.sh`.
+
+Remaining:
+
+- No v0.9.2 work remains.
 
 ## Later Candidate Work
 

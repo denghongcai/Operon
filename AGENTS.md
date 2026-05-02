@@ -178,6 +178,10 @@ Operon should not own:
   - v0.9.1 scope for mDNS export conflict handling, optional discovery health
     checks, and external endpoint-only config generator guidance.
 
+- `docs/plan/v0.9.2-policy-derived-capabilities.md`
+  - v0.9.2 scope for policy-derived capability discovery instead of static
+    default capability advertising.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -305,8 +309,9 @@ Operon should not own:
   discovery UX validation.
 - Completed discovery UX milestone: v0.9.1 mDNS export conflict handling,
   optional discovery health checks, and endpoint-only external generator docs.
-- Next planned milestone: choose the next runtime hardening or capability
-  truthfulness phase.
+- Completed capability truthfulness milestone: v0.9.2 daemon capability
+  discovery is derived from `PolicyConfig`.
+- Next planned milestone: choose the next runtime hardening phase.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -471,3 +476,9 @@ Defer:
   endpoint config generator guidance is documented, and
   `scripts/verify-post-v0.9-discovery-ux.sh` covers the behavior. Nothing
   remains in v0.9.1.
+- Latest phase status update: v0.9.2 completed Policy-Derived Capability
+  Discovery. Daemon capability lists now come from `PolicyConfig`; fs, job, and
+  service capabilities are advertised only when configured, service denial audit
+  ids use `service:<service_id>`, and
+  `scripts/verify-policy-derived-capabilities.sh` covers the behavior. Nothing
+  remains in v0.9.2.
