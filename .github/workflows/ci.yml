@@ -98,6 +98,8 @@ jobs:
             script: scripts/verify-v0.6.12-runtime-boundary.sh
           - name: v0.7 Service Forwarding Validation
             script: scripts/verify-v0.7-service-forwarding.sh
+          - name: v0.7.1 UDP Datagram Forwarding Validation
+            script: scripts/verify-v0.7.1-udp-datagram-forwarding.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

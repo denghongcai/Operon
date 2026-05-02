@@ -16,6 +16,7 @@ import {
   type JobStdinClose as GrpcJobStdinClose,
   type OperonRuntimeClient,
   type ServiceCheck as GrpcServiceCheck,
+  type ServiceDatagramTunnelResponse as GrpcServiceDatagramTunnelResponse,
   type ServiceList as GrpcServiceList,
   type ServiceTunnelResponse as GrpcServiceTunnelResponse,
 } from "./generated/operon/runtime";
@@ -151,7 +152,7 @@ export type ServiceDefinition = {
   name: string;
   host: string;
   port: number;
-  protocol: "tcp";
+  protocol: "tcp" | "udp";
   description: string;
 };
 
@@ -165,6 +166,16 @@ export type ServiceCheck = {
   latency_ms: number;
   reason?: string | null;
 };
+
+export type ServiceDatagram = {
+  peer_id: string;
+  data: Uint8Array;
+};
+
+export type ServiceDatagramTunnelEvent =
+  | { type: "opened"; service_id: string; host: string; port: number }
+  | { type: "datagram"; peer_id: string; data: Uint8Array }
+  | { type: "close"; peer_id: string; reason: string };
 
 export class OperonClient {
   private readonly endpoints: Map<string, NodeEndpoint>;
@@ -337,6 +348,19 @@ export class OperonClient {
     const iterator = this.grpcClient(endpoint)
       .openServiceTunnel(grpcServiceTunnelRequests(serviceId, input), this.grpcOptions(endpoint))[Symbol.asyncIterator]();
     return serviceTunnelReadableStream(iterator);
+  }
+
+  async openServiceDatagramTunnel(
+    nodeId: string,
+    serviceId: string,
+    input: AsyncIterable<ServiceDatagram>,
+  ): Promise<AsyncIterable<ServiceDatagramTunnelEvent>> {
+    const endpoint = this.endpointFor(nodeId);
+    const responses = this.grpcClient(endpoint).openServiceDatagramTunnel(
+      grpcServiceDatagramTunnelRequests(serviceId, input),
+      this.grpcOptions(endpoint),
+    );
+    return mapGrpcServiceDatagramTunnelEvents(responses);
   }
 
   private async runStep(step: OperonStep, index: number, runId: string): Promise<OperonStepTrace> {
@@ -620,6 +644,21 @@ async function* grpcServiceTunnelRequests(
   yield { close: { reason: "client input ended" } };
 }
 
+async function* grpcServiceDatagramTunnelRequests(
+  serviceId: string,
+  input: AsyncIterable<ServiceDatagram>,
+): AsyncIterable<{
+  target?: { serviceId: string };
+  datagram?: { peerId: string; data: Uint8Array };
+  close?: { peerId: string; reason: string };
+}> {
+  yield { target: { serviceId } };
+  for await (const datagram of input) {
+    yield { datagram: { peerId: datagram.peer_id, data: datagram.data } };
+  }
+  yield { close: { peerId: "", reason: "client input ended" } };
+}
+
 function serviceTunnelReadableStream(
   iterator: AsyncIterator<GrpcServiceTunnelResponse>,
 ): ReadableStream<Uint8Array> {
@@ -647,6 +686,33 @@ function serviceTunnelReadableStream(
       }
     },
   });
+}
+
+async function* mapGrpcServiceDatagramTunnelEvents(
+  events: AsyncIterable<GrpcServiceDatagramTunnelResponse>,
+): AsyncIterable<ServiceDatagramTunnelEvent> {
+  for await (const event of events) {
+    if (event.opened) {
+      yield {
+        type: "opened",
+        service_id: event.opened.serviceId,
+        host: event.opened.host,
+        port: event.opened.port,
+      };
+    } else if (event.datagram) {
+      yield {
+        type: "datagram",
+        peer_id: event.datagram.peerId,
+        data: event.datagram.data,
+      };
+    } else if (event.close) {
+      yield {
+        type: "close",
+        peer_id: event.close.peerId,
+        reason: event.close.reason,
+      };
+    }
+  }
 }
 
 function fromGrpcFsStat(stat: GrpcFsStat) {
@@ -853,6 +919,8 @@ function fromGrpcServiceProtocol(protocol: GrpcServiceProtocol): ServiceDefiniti
   switch (protocol) {
     case GrpcServiceProtocol.SERVICE_PROTOCOL_TCP:
       return "tcp";
+    case GrpcServiceProtocol.SERVICE_PROTOCOL_UDP:
+      return "udp";
     default:
       throw new Error(`unknown service protocol ${protocol}`);
   }

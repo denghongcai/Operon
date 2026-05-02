@@ -103,6 +103,10 @@ Operon should not own:
   - v0.7 acceptance scope for service metadata, health checks, and explicit
     local service forwarding.
 
+- `docs/plan/v0.7.1-udp-datagram-forwarding.md`
+  - Planned v0.7.1 scope for UDP/datagram forwarding as a separate protocol
+    from TCP service forwarding.
+
 - `docs/plan/v0.8-acceptance.md`
   - v0.8 acceptance scope for Agent Integration.
 
@@ -171,7 +175,10 @@ Operon should not own:
   Linux mount adapter boundaries, and validation coverage.
 - Completed service milestone: v0.7 service metadata, health checks, and
   explicit local forwarding for policy-allowed services.
-- Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
+- Completed service milestone: v0.7.1 UDP/datagram forwarding with a separate
+  datagram protocol.
+- Next planned milestone: v0.8 Agent Integration.
+- Later planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -182,6 +189,8 @@ Operon should not own:
   and explicit local forwarding for policy-allowed services over existing
   Operon node connections; it must not become VPN, relay networking, NAT
   traversal, mesh IP assignment, global routing, or unmanaged port exposure.
+- UDP/datagram forwarding uses a separate datagram-oriented protocol instead of
+  reusing the TCP byte-stream tunnel.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 
@@ -230,6 +239,10 @@ Defer:
 - Latest phase status update: v0.7 completed service tunnel protocol, CLI local
   forwarding, TypeScript SDK tunnel support, service forwarding docs, and CI
   validation coverage. Nothing remains in v0.7.
+- Latest phase status update: v0.7.1 completed UDP service protocol support,
+  `OpenServiceDatagramTunnel`, daemon UDP peer sessions, CLI `forward-udp`,
+  TypeScript SDK datagram helpers, documentation updates, and CI validation.
+  Nothing remains in v0.7.1.
 - Latest phase status update: v0.6.11 completed daemon support-module splits,
   poisoned-lock handling, Linux-only mount dependency gating, and CI governance
   validation. Larger domain splits remain future work.

@@ -200,6 +200,12 @@ enum ServiceCommand {
         #[arg(long)]
         listen: SocketAddr,
     },
+    ForwardUdp {
+        node_id: String,
+        service_id: String,
+        #[arg(long)]
+        listen: SocketAddr,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -380,6 +386,11 @@ async fn main() -> anyhow::Result<()> {
                 service_id,
                 listen,
             } => service_forward(config_path, node_id, service_id, listen, output).await,
+            ServiceCommand::ForwardUdp {
+                node_id,
+                service_id,
+                listen,
+            } => service_forward_udp(config_path, node_id, service_id, listen, output).await,
         },
         Command::Job { command } => match command {
             JobCommand::Run {
@@ -952,6 +963,33 @@ async fn service_forward(
     }
 }
 
+async fn service_forward_udp(
+    config_path: PathBuf,
+    node_id: String,
+    service_id: String,
+    listen: SocketAddr,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, &node_id)?;
+    let socket = tokio::net::UdpSocket::bind(listen).await?;
+    let local_addr = socket.local_addr()?;
+    if output.json {
+        print_json(&serde_json::json!({
+            "node_id": node_id,
+            "service_id": service_id,
+            "listen": local_addr.to_string(),
+            "protocol": "udp",
+        }))?;
+    } else if !output.quiet {
+        println!(
+            "forwarding udp {} -> {}:{}",
+            local_addr, node_id, service_id
+        );
+    }
+
+    grpc::forward_service_datagrams(&endpoint, &service_id, socket).await
+}
+
 async fn job_run(input: JobRunInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
     let request = JobRunRequest {
@@ -1488,6 +1526,7 @@ fn print_job_status(record: &JobRecord) {
 fn format_service_protocol(protocol: &ServiceProtocol) -> &'static str {
     match protocol {
         ServiceProtocol::Tcp => "tcp",
+        ServiceProtocol::Udp => "udp",
     }
 }
 

@@ -1,7 +1,10 @@
 use std::{
+    collections::BTreeMap,
     fs,
     io::{Read, Write},
+    net::SocketAddr,
     path::Path,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::Context;
@@ -14,16 +17,18 @@ use operon_core::{
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     job_log_stream_event, job_stdin_request, operon_runtime_client::OperonRuntimeClient,
-    service_tunnel_request, service_tunnel_response, write_file_request, FileChunk, FsCopyRequest,
-    FsPathRequest, FsRenameRequest, FsTruncateRequest, GetNodeRequest, HealthRequest,
-    JobCancelRequest, JobIdRequest, JobStdinRequest, JobStdinTarget, ListAuditRequest,
-    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceIdRequest,
-    ServiceTunnelClose, ServiceTunnelData, ServiceTunnelRequest, ServiceTunnelTarget,
-    WriteFileRequest, WriteFileTarget,
+    service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
+    service_tunnel_response, write_file_request, FileChunk, FsCopyRequest, FsPathRequest,
+    FsRenameRequest, FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest,
+    JobIdRequest, JobStdinRequest, JobStdinTarget, ListAuditRequest, ListCapabilitiesRequest,
+    ListJobsRequest, ListServicesRequest, ServiceDatagram, ServiceDatagramTunnelRequest,
+    ServiceDatagramTunnelTarget, ServiceIdRequest, ServiceTunnelClose, ServiceTunnelData,
+    ServiceTunnelRequest, ServiceTunnelTarget, WriteFileRequest, WriteFileTarget,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
+    net::{TcpStream, UdpSocket},
+    sync::mpsc,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -609,6 +614,132 @@ pub async fn forward_service_connection(
         Ok(())
     })
     .await
+}
+
+#[derive(Debug, Default)]
+struct DatagramPeerState {
+    next_peer_id: u64,
+    addr_to_peer: BTreeMap<SocketAddr, String>,
+    peer_to_addr: BTreeMap<String, SocketAddr>,
+}
+
+pub async fn forward_service_datagrams(
+    endpoint: &NodeEndpoint,
+    service_id: &str,
+    socket: UdpSocket,
+) -> anyhow::Result<()> {
+    let service_id = service_id.to_string();
+    let socket = Arc::new(socket);
+    call(endpoint, |mut client, endpoint| async move {
+        let (request_tx, mut request_rx) = mpsc::unbounded_channel();
+        request_tx
+            .send(ServiceDatagramTunnelRequest {
+                payload: Some(service_datagram_tunnel_request::Payload::Target(
+                    ServiceDatagramTunnelTarget { service_id },
+                )),
+            })
+            .map_err(|_| anyhow::anyhow!("failed to open UDP datagram tunnel request stream"))?;
+
+        let peer_state = Arc::new(Mutex::new(DatagramPeerState::default()));
+        let local_reader = socket.clone();
+        let local_request_tx = request_tx.clone();
+        let local_peer_state = peer_state.clone();
+        let local_read_task = tokio::spawn(async move {
+            let mut buffer = vec![0_u8; 65_507];
+            loop {
+                let Ok((bytes_read, peer_addr)) = local_reader.recv_from(&mut buffer).await else {
+                    break;
+                };
+                let peer_id = datagram_peer_id(&local_peer_state, peer_addr);
+                if local_request_tx
+                    .send(ServiceDatagramTunnelRequest {
+                        payload: Some(service_datagram_tunnel_request::Payload::Datagram(
+                            ServiceDatagram {
+                                peer_id,
+                                data: buffer[..bytes_read].to_vec(),
+                            },
+                        )),
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+        let outbound = async_stream::stream! {
+            while let Some(request) = request_rx.recv().await {
+                yield request;
+            }
+        };
+        let request = match with_auth(&endpoint, outbound) {
+            Ok(request) => request,
+            Err(error) => {
+                local_read_task.abort();
+                return Err(error);
+            }
+        };
+        let response = match client.open_service_datagram_tunnel(request).await {
+            Ok(response) => response,
+            Err(error) => {
+                local_read_task.abort();
+                return Err(error.into());
+            }
+        };
+        let mut inbound = response.into_inner();
+        while let Some(message) = inbound.message().await? {
+            match message.payload {
+                Some(service_datagram_tunnel_response::Payload::Opened(_)) => {}
+                Some(service_datagram_tunnel_response::Payload::Datagram(datagram)) => {
+                    let peer_addr = peer_addr_for_id(&peer_state, &datagram.peer_id);
+                    if let Some(peer_addr) = peer_addr {
+                        socket.send_to(&datagram.data, peer_addr).await?;
+                    }
+                }
+                Some(service_datagram_tunnel_response::Payload::Close(close)) => {
+                    if close.peer_id.is_empty() {
+                        break;
+                    }
+                    remove_datagram_peer(&peer_state, &close.peer_id);
+                }
+                None => {}
+            }
+        }
+        local_read_task.abort();
+        Ok(())
+    })
+    .await
+}
+
+fn datagram_peer_id(peer_state: &Arc<Mutex<DatagramPeerState>>, peer_addr: SocketAddr) -> String {
+    let mut state = peer_state.lock().expect("datagram peer state poisoned");
+    if let Some(peer_id) = state.addr_to_peer.get(&peer_addr) {
+        return peer_id.clone();
+    }
+    state.next_peer_id = state.next_peer_id.saturating_add(1);
+    let peer_id = format!("peer-{}", state.next_peer_id);
+    state.addr_to_peer.insert(peer_addr, peer_id.clone());
+    state.peer_to_addr.insert(peer_id.clone(), peer_addr);
+    peer_id
+}
+
+fn peer_addr_for_id(
+    peer_state: &Arc<Mutex<DatagramPeerState>>,
+    peer_id: &str,
+) -> Option<SocketAddr> {
+    peer_state
+        .lock()
+        .expect("datagram peer state poisoned")
+        .peer_to_addr
+        .get(peer_id)
+        .copied()
+}
+
+fn remove_datagram_peer(peer_state: &Arc<Mutex<DatagramPeerState>>, peer_id: &str) {
+    let mut state = peer_state.lock().expect("datagram peer state poisoned");
+    if let Some(peer_addr) = state.peer_to_addr.remove(peer_id) {
+        state.addr_to_peer.remove(&peer_addr);
+    }
 }
 
 pub async fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {

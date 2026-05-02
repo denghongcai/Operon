@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
-  echo "v0.7 service forwarding validation currently requires Linux" >&2
+  echo "v0.7.1 UDP datagram forwarding validation currently requires Linux" >&2
   exit 1
 fi
 
@@ -31,20 +31,26 @@ cleanup() {
 trap cleanup EXIT
 
 WORKSPACE_DIR="$TMP_DIR/workspace"
-WEB_DIR="$TMP_DIR/web"
 CONFIG_PATH="$TMP_DIR/config.yaml"
 STORE_PATH="$TMP_DIR/store.jsonl"
-DAEMON_PORT="18873"
-SERVICE_PORT="18874"
-FORWARD_PORT="18875"
+DAEMON_PORT="18876"
+SERVICE_PORT="18877"
+FORWARD_PORT="18878"
 
-mkdir -p "$WORKSPACE_DIR" "$WEB_DIR"
-printf 'operon service forwarding\n' >"$WEB_DIR/index.html"
-rg -n 'rpc OpenServiceTunnel\(stream ServiceTunnelRequest\) returns \(stream ServiceTunnelResponse\)' proto/operon/runtime.proto >/dev/null
-rg -n 'PROTOCOL_VERSION: &str = "v0.7.1"' crates/operon-protocol/src/lib.rs >/dev/null
+mkdir -p "$WORKSPACE_DIR"
+rg -n 'rpc OpenServiceDatagramTunnel\(stream ServiceDatagramTunnelRequest\) returns \(stream ServiceDatagramTunnelResponse\)' proto/operon/runtime.proto >/dev/null
+rg -n 'SERVICE_PROTOCOL_UDP' proto/operon/runtime.proto >/dev/null
 
-python3 -m http.server "$SERVICE_PORT" --bind 127.0.0.1 --directory "$WEB_DIR" \
-  >"$TMP_DIR/service.log" 2>&1 &
+python3 - "$SERVICE_PORT" >"$TMP_DIR/udp-service.log" 2>&1 <<'PY' &
+import socket
+import sys
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("127.0.0.1", int(sys.argv[1])))
+while True:
+    data, addr = sock.recvfrom(65535)
+    sock.sendto(b"echo:" + data, addr)
+PY
 SERVICE_PID="$!"
 
 for _ in $(seq 1 50); do
@@ -52,9 +58,11 @@ for _ in $(seq 1 50); do
 import socket
 import sys
 
-with socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=0.2) as sock:
-    sock.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
-    assert b"operon service forwarding" in sock.recv(4096)
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(0.2)
+sock.sendto(b"ready", ("127.0.0.1", int(sys.argv[1])))
+data, _ = sock.recvfrom(65535)
+assert data == b"echo:ready", data
 PY
   then
     break
@@ -98,12 +106,12 @@ policy:
     allowed_secrets: []
   service:
     services:
-      - id: web
-        name: local-web
+      - id: echo-udp
+        name: echo-udp
         host: 127.0.0.1
         port: $SERVICE_PORT
-        protocol: tcp
-        description: local test web server
+        protocol: udp
+        description: local UDP echo service
 YAML
 
 cargo run -q -p operond -- start --config "$CONFIG_PATH" >"$TMP_DIR/operond.log" 2>&1 &
@@ -118,31 +126,30 @@ done
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" service list local \
   >"$TMP_DIR/services.txt"
-grep -q "web" "$TMP_DIR/services.txt"
+grep -q "echo-udp" "$TMP_DIR/services.txt"
+grep -q "udp" "$TMP_DIR/services.txt"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" service check local web \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" service check local echo-udp \
   >"$TMP_DIR/service-check.txt"
 grep -q "ok=true" "$TMP_DIR/service-check.txt"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" service forward local web \
-  --listen 127.0.0.1:$FORWARD_PORT >"$TMP_DIR/forward.log" 2>&1 &
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" service forward-udp local echo-udp \
+  --listen 127.0.0.1:$FORWARD_PORT >"$TMP_DIR/forward-udp.log" 2>&1 &
 FORWARD_PID="$!"
 
 for _ in $(seq 1 50); do
-  if python3 - "$FORWARD_PORT" <<'PY' >"$TMP_DIR/forward-response.txt" 2>/dev/null
+  if python3 - "$FORWARD_PORT" <<'PY' >"$TMP_DIR/forward-udp-response.txt" 2>/dev/null
 import socket
 import sys
 
-with socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=0.5) as sock:
-    sock.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
-    payload = b""
-    while True:
-        chunk = sock.recv(4096)
-        if not chunk:
-            break
-        payload += chunk
-print(payload.decode("utf-8", "replace"))
-assert b"operon service forwarding" in payload
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.settimeout(0.5)
+target = ("127.0.0.1", int(sys.argv[1]))
+for payload in (b"one", b"two"):
+    sock.sendto(payload, target)
+    data, _ = sock.recvfrom(65535)
+    print(data.decode("utf-8"))
+    assert data == b"echo:" + payload, data
 PY
   then
     break
@@ -150,14 +157,15 @@ PY
   sleep 0.1
 done
 
-grep -q "operon service forwarding" "$TMP_DIR/forward-response.txt"
+grep -q "echo:one" "$TMP_DIR/forward-udp-response.txt"
+grep -q "echo:two" "$TMP_DIR/forward-udp-response.txt"
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json audit show local \
-  --capability service:web \
-  --action forward \
+  --capability service:echo-udp \
+  --action forward-udp \
   --allowed true \
   --limit 1 \
-  >"$TMP_DIR/service-forward-audit.json"
-python3 - "$TMP_DIR/service-forward-audit.json" <<'PY'
+  >"$TMP_DIR/service-forward-udp-audit.json"
+python3 - "$TMP_DIR/service-forward-udp-audit.json" <<'PY'
 import json
 import sys
 
@@ -166,9 +174,9 @@ with open(sys.argv[1], "r", encoding="utf-8") as handle:
 events = audit["events"]
 assert len(events) == 1, events
 event = events[0]
-assert event["capability"] == "service:web", event
-assert event["action"] == "forward", event
+assert event["capability"] == "service:echo-udp", event
+assert event["action"] == "forward-udp", event
 assert event["allowed"] is True, event
 PY
 
-echo "v0.7 service forwarding validation passed"
+echo "v0.7.1 UDP datagram forwarding validation passed"

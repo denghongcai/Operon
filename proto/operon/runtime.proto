@@ -28,6 +28,7 @@ service OperonRuntime {
   rpc ListServices(ListServicesRequest) returns (ServiceList);
   rpc CheckService(ServiceIdRequest) returns (ServiceCheck);
   rpc OpenServiceTunnel(stream ServiceTunnelRequest) returns (stream ServiceTunnelResponse);
+  rpc OpenServiceDatagramTunnel(stream ServiceDatagramTunnelRequest) returns (stream ServiceDatagramTunnelResponse);
   rpc ListAudit(ListAuditRequest) returns (AuditLog);
 }
 
@@ -76,6 +77,7 @@ enum JobStatus {
 enum ServiceProtocol {
   SERVICE_PROTOCOL_UNSPECIFIED = 0;
   SERVICE_PROTOCOL_TCP = 1;
+  SERVICE_PROTOCOL_UDP = 2;
 }
 
 message HealthStatus {
@@ -354,6 +356,42 @@ message ServiceTunnelResponse {
     ServiceTunnelOpened opened = 1;
     ServiceTunnelData data = 2;
     ServiceTunnelClose close = 3;
+  }
+}
+
+message ServiceDatagramTunnelTarget {
+  string service_id = 1;
+}
+
+message ServiceDatagram {
+  string peer_id = 1;
+  bytes data = 2;
+}
+
+message ServiceDatagramTunnelClose {
+  string peer_id = 1;
+  string reason = 2;
+}
+
+message ServiceDatagramTunnelRequest {
+  oneof payload {
+    ServiceDatagramTunnelTarget target = 1;
+    ServiceDatagram datagram = 2;
+    ServiceDatagramTunnelClose close = 3;
+  }
+}
+
+message ServiceDatagramTunnelOpened {
+  string service_id = 1;
+  string host = 2;
+  uint32 port = 3;
+}
+
+message ServiceDatagramTunnelResponse {
+  oneof payload {
+    ServiceDatagramTunnelOpened opened = 1;
+    ServiceDatagram datagram = 2;
+    ServiceDatagramTunnelClose close = 3;
   }
 }
 

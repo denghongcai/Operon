@@ -27,6 +27,7 @@ const niceGrpcMock = vi.hoisted(() => {
       listServices: vi.fn(),
       checkService: vi.fn(),
       openServiceTunnel: vi.fn(),
+      openServiceDatagramTunnel: vi.fn(),
     },
     metadata,
     createChannel: vi.fn(),
@@ -171,7 +172,7 @@ describe("OperonClient", () => {
           name: "app",
           host: "127.0.0.1",
           port: 3000,
-          protocol: ServiceProtocol.SERVICE_PROTOCOL_TCP,
+          protocol: ServiceProtocol.SERVICE_PROTOCOL_UDP,
           description: "application",
         },
       ],
@@ -185,6 +186,7 @@ describe("OperonClient", () => {
 
     expect(services.services[0].id).toBe("daemon");
     expect(services.services[1].id).toBe("app");
+    expect(services.services[1].protocol).toBe("udp");
     expect(services.services[0].port).toBe(7789);
     expect(check.ok).toBe(true);
     expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "" }, expect.any(Object));
@@ -232,6 +234,37 @@ describe("OperonClient", () => {
     expect(requests[0]).toEqual({ target: { serviceId: "web" } });
     expect(requests[1]).toEqual({ data: { data: new TextEncoder().encode("GET / HTTP/1.0\r\n\r\n") } });
     expect(requests[2]).toEqual({ close: { reason: "client input ended" } });
+  });
+
+  it("opens UDP service datagram tunnels with peer ids", async () => {
+    const requestData = new Uint8Array([0x01, 0x02]);
+    const responseData = new Uint8Array([0x03, 0x04]);
+    niceGrpcMock.client.openServiceDatagramTunnel.mockReturnValue(asyncIterable([
+      { opened: { serviceId: "dns", host: "127.0.0.1", port: 5353 } },
+      { datagram: { peerId: "peer-1", data: responseData } },
+      { close: { peerId: "peer-1", reason: "peer session idle timeout" } },
+    ]));
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789", token: "test-token" }]);
+    const events = [];
+    for await (const event of await client.openServiceDatagramTunnel("node-a", "dns", asyncIterable([{ peer_id: "peer-1", data: requestData }]))) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "opened", service_id: "dns", host: "127.0.0.1", port: 5353 },
+      { type: "datagram", peer_id: "peer-1", data: responseData },
+      { type: "close", peer_id: "peer-1", reason: "peer session idle timeout" },
+    ]);
+    expect(niceGrpcMock.client.openServiceDatagramTunnel).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+    const requestStream = niceGrpcMock.client.openServiceDatagramTunnel.mock.calls[0][0] as AsyncIterable<unknown>;
+    const requests = [];
+    for await (const request of requestStream) {
+      requests.push(request);
+    }
+    expect(requests[0]).toEqual({ target: { serviceId: "dns" } });
+    expect(requests[1]).toEqual({ datagram: { peerId: "peer-1", data: requestData } });
+    expect(requests[2]).toEqual({ close: { peerId: "", reason: "client input ended" } });
   });
 
   it("streams job logs as bytes without string re-encoding", async () => {

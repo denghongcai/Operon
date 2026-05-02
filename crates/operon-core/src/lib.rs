@@ -202,6 +202,7 @@ pub struct ServiceDefinition {
 #[serde(rename_all = "kebab-case")]
 pub enum ServiceProtocol {
     Tcp,
+    Udp,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -434,6 +435,12 @@ service:
       port: 8080
       protocol: tcp
       description: local app
+    - id: dns
+      name: dns
+      host: 127.0.0.1
+      port: 5353
+      protocol: udp
+      description: local dns
 "#,
         )
         .expect("policy should parse");
@@ -442,6 +449,11 @@ service:
         assert!(matches!(
             policy.service.services[0].protocol,
             ServiceProtocol::Tcp
+        ));
+        assert_eq!(policy.service.services[1].id, "dns");
+        assert!(matches!(
+            policy.service.services[1].protocol,
+            ServiceProtocol::Udp
         ));
     }
 

@@ -30,16 +30,18 @@ use operon_process::{authorize_job, job_environment, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     job_log_stream_event, job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    service_tunnel_request, service_tunnel_response, write_file_request, FileChunk, FsCopyRequest,
-    FsPathRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest,
-    HealthRequest, JobIdRequest, JobLogComplete, JobLogEntry, JobLogSnapshot, JobLogStreamEvent,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
-    ServiceIdRequest, ServiceTunnelClose, ServiceTunnelData, ServiceTunnelOpened,
-    ServiceTunnelRequest, ServiceTunnelResponse, WriteFileRequest,
+    service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
+    service_tunnel_response, write_file_request, FileChunk, FsCopyRequest, FsPathRequest,
+    FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest,
+    JobIdRequest, JobLogComplete, JobLogEntry, JobLogSnapshot, JobLogStreamEvent, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceDatagram,
+    ServiceDatagramTunnelClose, ServiceDatagramTunnelOpened, ServiceDatagramTunnelRequest,
+    ServiceDatagramTunnelResponse, ServiceIdRequest, ServiceTunnelClose, ServiceTunnelData,
+    ServiceTunnelOpened, ServiceTunnelRequest, ServiceTunnelResponse, WriteFileRequest,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-    net::TcpStream,
+    net::{TcpStream, UdpSocket},
     process::{Child, Command as TokioCommand},
     sync::{broadcast, mpsc, oneshot},
     task::JoinHandle,
@@ -67,6 +69,8 @@ const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
 const MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS: usize = 512;
 const MAX_FS_WRITE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 const MAX_FS_FILE_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
+const MAX_SERVICE_DATAGRAM_BYTES: usize = 65_507;
+const SERVICE_DATAGRAM_PEER_IDLE_SECS: u64 = 60;
 
 tokio::task_local! {
     static AUDIT_CONTEXT: RequestContext;
@@ -254,6 +258,13 @@ type GrpcJobEventStream = Pin<
 >;
 type GrpcServiceTunnelStream = Pin<
     Box<dyn futures_util::Stream<Item = Result<ServiceTunnelResponse, Status>> + Send + 'static>,
+>;
+type GrpcServiceDatagramTunnelStream = Pin<
+    Box<
+        dyn futures_util::Stream<Item = Result<ServiceDatagramTunnelResponse, Status>>
+            + Send
+            + 'static,
+    >,
 >;
 
 #[tonic::async_trait]
@@ -1015,6 +1026,82 @@ impl OperonRuntime for GrpcRuntime {
             .await
     }
 
+    type OpenServiceDatagramTunnelStream = GrpcServiceDatagramTunnelStream;
+
+    async fn open_service_datagram_tunnel(
+        &self,
+        request: Request<tonic::Streaming<ServiceDatagramTunnelRequest>>,
+    ) -> Result<GrpcResponse<Self::OpenServiceDatagramTunnelStream>, Status> {
+        let context = authorize_grpc(&self.state, request.metadata())?;
+        let mut input = request.into_inner();
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let first = input.next().await.ok_or_else(|| {
+                    Status::invalid_argument("service datagram tunnel target metadata is required")
+                })??;
+                let service_id = match first.payload {
+                    Some(service_datagram_tunnel_request::Payload::Target(target)) => {
+                        if target.service_id.is_empty() {
+                            return Err(Status::invalid_argument(
+                                "service datagram tunnel target service_id is required",
+                            ));
+                        }
+                        target.service_id
+                    }
+                    Some(service_datagram_tunnel_request::Payload::Datagram(_)) => {
+                        return Err(Status::invalid_argument(
+                            "service datagram arrived before target metadata",
+                        ));
+                    }
+                    Some(service_datagram_tunnel_request::Payload::Close(_)) | None => {
+                        return Err(Status::invalid_argument(
+                            "service datagram tunnel target metadata is required",
+                        ));
+                    }
+                };
+                let service = match authorize_service(&self.state.policy, &service_id) {
+                    Ok(service) => service,
+                    Err(error) => {
+                        record_audit_capability(
+                            &self.state,
+                            "service:default",
+                            "forward-udp",
+                            &service_id,
+                            false,
+                            &error.1,
+                        );
+                        return Err(status_from_error(error));
+                    }
+                };
+                if !matches!(service.protocol, operon_core::ServiceProtocol::Udp) {
+                    record_audit_capability(
+                        &self.state,
+                        &format!("service:{}", service.id),
+                        "forward-udp",
+                        &service.id,
+                        false,
+                        "only UDP services can be forwarded with datagram tunnels",
+                    );
+                    return Err(Status::failed_precondition(
+                        "only UDP services can be forwarded with datagram tunnels",
+                    ));
+                }
+                record_audit_capability(
+                    &self.state,
+                    &format!("service:{}", service.id),
+                    "forward-udp",
+                    &service.id,
+                    true,
+                    "allowed",
+                );
+                let stream = service_datagram_tunnel_stream(service, input);
+                Ok(GrpcResponse::new(
+                    Box::pin(stream) as Self::OpenServiceDatagramTunnelStream
+                ))
+            })
+            .await
+    }
+
     async fn list_audit(
         &self,
         request: Request<ListAuditRequest>,
@@ -1510,8 +1597,14 @@ async fn grpc_service_check(state: &AppState, service_id: String) -> Result<Serv
         }
     };
 
-    let check =
-        operon_network::check_tcp_service(&service, std::time::Duration::from_secs(2)).await;
+    let check = match service.protocol {
+        operon_core::ServiceProtocol::Tcp => {
+            operon_network::check_tcp_service(&service, std::time::Duration::from_secs(2)).await
+        }
+        operon_core::ServiceProtocol::Udp => {
+            operon_network::check_udp_service(&service, std::time::Duration::from_secs(2)).await
+        }
+    };
     record_audit_capability(
         state,
         &format!("service:{}", service.id),
@@ -1664,6 +1757,266 @@ fn service_tunnel_stream(
             }
         }
     }
+}
+
+struct ServiceDatagramPeerSession {
+    socket: Arc<UdpSocket>,
+    read_task: JoinHandle<()>,
+    last_seen: time::Instant,
+    packets_from_client: u64,
+    bytes_from_client: u64,
+}
+
+fn service_datagram_tunnel_stream(
+    service: ServiceDefinition,
+    input: tonic::Streaming<ServiceDatagramTunnelRequest>,
+) -> impl futures_util::Stream<Item = Result<ServiceDatagramTunnelResponse, Status>> + Send + 'static
+{
+    async_stream::stream! {
+        let (output_tx, mut output_rx) = mpsc::unbounded_channel();
+        tokio::spawn(run_service_datagram_tunnel(service, input, output_tx));
+        while let Some(message) = output_rx.recv().await {
+            yield message;
+        }
+    }
+}
+
+async fn run_service_datagram_tunnel(
+    service: ServiceDefinition,
+    mut input: tonic::Streaming<ServiceDatagramTunnelRequest>,
+    output_tx: mpsc::UnboundedSender<Result<ServiceDatagramTunnelResponse, Status>>,
+) {
+    let _ = output_tx.send(Ok(ServiceDatagramTunnelResponse {
+        payload: Some(service_datagram_tunnel_response::Payload::Opened(
+            ServiceDatagramTunnelOpened {
+                service_id: service.id.clone(),
+                host: service.host.clone(),
+                port: u32::from(service.port),
+            },
+        )),
+    }));
+
+    let address = format!("{}:{}", service.host, service.port);
+    let mut sessions: BTreeMap<String, ServiceDatagramPeerSession> = BTreeMap::new();
+    let mut cleanup_interval = time::interval(std::time::Duration::from_secs(5));
+    let idle_timeout = std::time::Duration::from_secs(SERVICE_DATAGRAM_PEER_IDLE_SECS);
+
+    loop {
+        tokio::select! {
+            message = input.next() => {
+                match message {
+                    Some(Ok(message)) => {
+                        if !handle_service_datagram_message(
+                            message,
+                            &address,
+                            &mut sessions,
+                            &output_tx,
+                        ).await {
+                            break;
+                        }
+                    }
+                    Some(Err(status)) => {
+                        let _ = output_tx.send(Err(status));
+                        break;
+                    }
+                    None => break,
+                }
+            }
+            _ = cleanup_interval.tick() => {
+                prune_idle_datagram_sessions(&mut sessions, &output_tx, idle_timeout);
+            }
+        }
+    }
+
+    for (_, session) in sessions {
+        session.read_task.abort();
+    }
+    let _ = output_tx.send(Ok(ServiceDatagramTunnelResponse {
+        payload: Some(service_datagram_tunnel_response::Payload::Close(
+            ServiceDatagramTunnelClose {
+                peer_id: String::new(),
+                reason: "datagram tunnel closed".to_string(),
+            },
+        )),
+    }));
+}
+
+async fn handle_service_datagram_message(
+    message: ServiceDatagramTunnelRequest,
+    address: &str,
+    sessions: &mut BTreeMap<String, ServiceDatagramPeerSession>,
+    output_tx: &mpsc::UnboundedSender<Result<ServiceDatagramTunnelResponse, Status>>,
+) -> bool {
+    match message.payload {
+        Some(service_datagram_tunnel_request::Payload::Datagram(datagram)) => {
+            if datagram.peer_id.is_empty() {
+                let _ = output_tx.send(Err(Status::invalid_argument(
+                    "service datagram peer_id is required",
+                )));
+                return false;
+            }
+            if datagram.data.len() > MAX_SERVICE_DATAGRAM_BYTES {
+                send_service_datagram_close(
+                    output_tx,
+                    &datagram.peer_id,
+                    "service datagram exceeds maximum UDP payload size",
+                );
+                return true;
+            }
+            if !sessions.contains_key(&datagram.peer_id) {
+                match create_service_datagram_session(&datagram.peer_id, address, output_tx).await {
+                    Ok(session) => {
+                        sessions.insert(datagram.peer_id.clone(), session);
+                    }
+                    Err(error) => {
+                        send_service_datagram_close(
+                            output_tx,
+                            &datagram.peer_id,
+                            &format!("failed to connect UDP service: {error}"),
+                        );
+                        return true;
+                    }
+                }
+            }
+            let socket = {
+                let session = sessions
+                    .get_mut(&datagram.peer_id)
+                    .expect("session should exist after creation");
+                session.last_seen = time::Instant::now();
+                session.packets_from_client = session.packets_from_client.saturating_add(1);
+                session.bytes_from_client = session
+                    .bytes_from_client
+                    .saturating_add(datagram.data.len() as u64);
+                session.socket.clone()
+            };
+            if let Err(error) = socket.send(&datagram.data).await {
+                if let Some(session) = sessions.remove(&datagram.peer_id) {
+                    session.read_task.abort();
+                }
+                send_service_datagram_close(
+                    output_tx,
+                    &datagram.peer_id,
+                    &format!("failed to send UDP datagram: {error}"),
+                );
+            }
+            true
+        }
+        Some(service_datagram_tunnel_request::Payload::Close(close)) => {
+            if close.peer_id.is_empty() {
+                return false;
+            }
+            if let Some(session) = sessions.remove(&close.peer_id) {
+                session.read_task.abort();
+            }
+            send_service_datagram_close(
+                output_tx,
+                &close.peer_id,
+                if close.reason.is_empty() {
+                    "peer closed"
+                } else {
+                    &close.reason
+                },
+            );
+            true
+        }
+        Some(service_datagram_tunnel_request::Payload::Target(_)) => {
+            let _ = output_tx.send(Err(Status::invalid_argument(
+                "service datagram tunnel target metadata was sent more than once",
+            )));
+            false
+        }
+        None => true,
+    }
+}
+
+async fn create_service_datagram_session(
+    peer_id: &str,
+    address: &str,
+    output_tx: &mpsc::UnboundedSender<Result<ServiceDatagramTunnelResponse, Status>>,
+) -> std::io::Result<ServiceDatagramPeerSession> {
+    let socket = Arc::new(connect_udp_socket(address).await?);
+    let read_socket = socket.clone();
+    let peer_id = peer_id.to_string();
+    let output_tx = output_tx.clone();
+    let read_task = tokio::spawn(async move {
+        let mut buffer = vec![0_u8; MAX_SERVICE_DATAGRAM_BYTES];
+        loop {
+            match read_socket.recv(&mut buffer).await {
+                Ok(bytes_read) => {
+                    let _ = output_tx.send(Ok(ServiceDatagramTunnelResponse {
+                        payload: Some(service_datagram_tunnel_response::Payload::Datagram(
+                            ServiceDatagram {
+                                peer_id: peer_id.clone(),
+                                data: buffer[..bytes_read].to_vec(),
+                            },
+                        )),
+                    }));
+                }
+                Err(error) => {
+                    send_service_datagram_close(
+                        &output_tx,
+                        &peer_id,
+                        &format!("failed to receive UDP datagram: {error}"),
+                    );
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok(ServiceDatagramPeerSession {
+        socket,
+        read_task,
+        last_seen: time::Instant::now(),
+        packets_from_client: 0,
+        bytes_from_client: 0,
+    })
+}
+
+async fn connect_udp_socket(address: &str) -> std::io::Result<UdpSocket> {
+    let socket = UdpSocket::bind("0.0.0.0:0").await?;
+    match socket.connect(address).await {
+        Ok(()) => Ok(socket),
+        Err(ipv4_error) => {
+            let socket = UdpSocket::bind("[::]:0").await?;
+            socket.connect(address).await.map_err(|_| ipv4_error)?;
+            Ok(socket)
+        }
+    }
+}
+
+fn prune_idle_datagram_sessions(
+    sessions: &mut BTreeMap<String, ServiceDatagramPeerSession>,
+    output_tx: &mpsc::UnboundedSender<Result<ServiceDatagramTunnelResponse, Status>>,
+    idle_timeout: std::time::Duration,
+) {
+    let now = time::Instant::now();
+    let idle_peer_ids = sessions
+        .iter()
+        .filter(|(_, session)| now.duration_since(session.last_seen) > idle_timeout)
+        .map(|(peer_id, _)| peer_id.clone())
+        .collect::<Vec<_>>();
+    for peer_id in idle_peer_ids {
+        if let Some(session) = sessions.remove(&peer_id) {
+            session.read_task.abort();
+        }
+        send_service_datagram_close(output_tx, &peer_id, "peer session idle timeout");
+    }
+}
+
+fn send_service_datagram_close(
+    output_tx: &mpsc::UnboundedSender<Result<ServiceDatagramTunnelResponse, Status>>,
+    peer_id: &str,
+    reason: &str,
+) {
+    let _ = output_tx.send(Ok(ServiceDatagramTunnelResponse {
+        payload: Some(service_datagram_tunnel_response::Payload::Close(
+            ServiceDatagramTunnelClose {
+                peer_id: peer_id.to_string(),
+                reason: reason.to_string(),
+            },
+        )),
+    }));
 }
 
 fn record_audit(state: &AppState, action: &str, resource: &str, allowed: bool, reason: &str) {

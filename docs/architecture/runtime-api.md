@@ -112,6 +112,11 @@ connects to services already present in `policy.service.services`. Operon does
 not accept arbitrary target host/port pairs from clients and does not create
 network reachability beyond the existing Operon node connection.
 
+UDP/datagram forwarding uses `OpenServiceDatagramTunnel` instead of
+`OpenServiceTunnel`. It preserves packet boundaries, carries a stable `peer_id`
+so responses can be routed back to the original local UDP peer, and keeps the
+same policy rule: the daemon only sends to configured UDP services.
+
 ## Interface Policy
 
 `operon` is the supported human, ops, and script interface. Use `--json` when a

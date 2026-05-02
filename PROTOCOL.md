@@ -128,6 +128,10 @@ Client-streaming calls:
 Bidirectional-streaming calls:
 
 - `OpenServiceTunnel`
+- `OpenServiceDatagramTunnel`
+
+UDP/datagram forwarding uses datagram-specific envelopes rather than reuse of
+the TCP byte-stream tunnel.
 
 ## Streaming Rules
 
@@ -247,6 +251,7 @@ The human CLI maps this to:
 operon service list <node-id>
 operon service check <node-id> <service-id>
 operon service forward <node-id> <service-id> --listen 127.0.0.1:8080
+operon service forward-udp <node-id> <service-id> --listen 127.0.0.1:5353
 ```
 
 Forwarding is local and explicit: the CLI binds the requested local listener,
@@ -255,6 +260,19 @@ node. Operon still relies on an existing private network for reachability
 between the client and daemon. It does not provide VPN behavior, NAT traversal,
 relay networking, mesh IP assignment, global routing, or unmanaged port
 exposure.
+
+`OpenServiceDatagramTunnel` is the low-level protocol for UDP forwarding. The
+first client message must set `ServiceDatagramTunnelRequest.target` with the
+policy service id. Later client messages set `datagram` with a stable `peer_id`
+and packet bytes. The server returns datagrams with the same `peer_id`, allowing
+the client-side forwarder to route each response to the original local UDP peer.
+The server can send `close` for one peer or for the whole tunnel.
+
+Datagram forwarding preserves packet boundaries. It uses idle peer-session
+cleanup and daemon-side packet size checks. It is still local and explicit: the
+CLI binds a local UDP socket, and the daemon sends only to the configured UDP
+service. It does not provide UDP hole punching, mDNS relay behavior, QUIC
+transport replacement, relay networking, or arbitrary host/port forwarding.
 
 ## Job Semantics
 

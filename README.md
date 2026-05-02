@@ -130,6 +130,7 @@ scripts/verify-v0.6.10-runtime-hardening.sh
 scripts/verify-v0.6.11-governance.sh
 scripts/verify-v0.6.12-runtime-boundary.sh
 scripts/verify-v0.7-service-forwarding.sh
+scripts/verify-v0.7.1-udp-datagram-forwarding.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -153,6 +154,9 @@ and the current public protocol version.
 The v0.7 service forwarding validation checks policy-configured service
 metadata, TCP health checks, explicit local port forwarding, and service
 forwarding audit events.
+The v0.7.1 UDP datagram forwarding validation checks policy-configured UDP
+service metadata, local UDP forwarding, packet-boundary preservation, and audit
+events.
 
 ## Release Automation
 
@@ -368,6 +372,7 @@ operon --config ./operon.config.yaml capability list cloud-a
 operon --config ./operon.config.yaml service list cloud-a
 operon --config ./operon.config.yaml service check cloud-a daemon
 operon --config ./operon.config.yaml service forward cloud-a web --listen 127.0.0.1:8080
+operon --config ./operon.config.yaml service forward-udp cloud-a dns --listen 127.0.0.1:5353
 
 operon init config ./operon.config.yaml
 
@@ -671,6 +676,7 @@ Roadmap:
 - [x] Same-node fs copy
 - [x] Workspace containment and isolated job environment hardening
 - [x] gRPC runtime schema stabilization
+- [x] UDP/datagram service forwarding
 - [ ] Agent integration
 - [ ] Non-LAN provider discovery adapters
 

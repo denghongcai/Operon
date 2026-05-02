@@ -434,6 +434,9 @@ v0.6.1:
 v0.7:
   service metadata, health checks, and explicit local forwarding
 
+v0.7.1:
+  UDP/datagram service forwarding as a separate datagram protocol
+
 v0.8:
   agent tool integration
 

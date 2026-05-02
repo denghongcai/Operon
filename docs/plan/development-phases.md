@@ -2822,6 +2822,84 @@ Done when:
 - service capability explicitly includes metadata, health checks, and local
   forwarding.
 
+## v0.7.1 Goal
+
+Operon v0.7.1 adds UDP/datagram forwarding as a separate protocol and
+runtime phase from v0.7 TCP forwarding.
+
+```text
+v0.7.1 = explicit UDP/datagram forwarding for policy-allowed services.
+```
+
+UDP must not be folded into the existing `OpenServiceTunnel` TCP byte stream.
+Datagram forwarding needs packet-boundary preservation, peer-session handling,
+idle cleanup, packet-size behavior, and separate audit semantics.
+
+## Phase 37: UDP / Datagram Forwarding Design
+
+Status: Completed.
+
+Goal: define the UDP forwarding contract before implementation.
+
+Completed:
+
+- create and maintain `docs/plan/v0.7.1-udp-datagram-forwarding.md`.
+- represented UDP services through `ServiceProtocol::Udp`.
+- defined `OpenServiceDatagramTunnel` request/response envelopes and
+  packet-boundary semantics.
+- defined local UDP listener behavior and peer session expiration.
+- defined audit action `forward-udp`.
+- defined explicit non-goals: NAT traversal, UDP hole punching, relay
+  networking, mDNS relay, global routing, and arbitrary host/port forwarding.
+
+Done when:
+
+- UDP/datagram forwarding semantics are documented.
+- TCP forwarding remains unchanged.
+- the protocol does not reuse `OpenServiceTunnel` for datagram traffic.
+
+## Phase 38: UDP / Datagram Forwarding Implementation
+
+Status: Completed.
+
+Goal: implement policy-controlled UDP forwarding over existing Operon node
+connections.
+
+Completed:
+
+- added datagram-oriented gRPC API `OpenServiceDatagramTunnel`.
+- extended service policy and protocol types for UDP without weakening TCP
+  behavior.
+- implemented daemon-side UDP socket forwarding only to configured services.
+- added `operon service forward-udp`.
+- exposed TypeScript SDK datagram tunnel helpers over `nice-grpc`.
+
+Done when:
+
+- a local UDP client can send datagrams through Operon to a policy-allowed
+  daemon-local UDP service.
+- packet boundaries are preserved.
+- denied UDP service ids fail through policy and audit.
+
+## Phase 39: v0.7.1 Acceptance
+
+Status: Completed.
+
+Goal: make UDP/datagram forwarding reproducible.
+
+Completed:
+
+- added `scripts/verify-v0.7.1-udp-datagram-forwarding.sh`.
+- validated against a local UDP echo service.
+- updated README, PROTOCOL.md, architecture docs, and AGENTS.md.
+
+Done when:
+
+- v0.7.1 has documented acceptance criteria.
+- CI validates UDP datagram forwarding.
+- docs clearly distinguish TCP byte-stream forwarding from UDP datagram
+  forwarding.
+
 ## v0.8 Goal
 
 Operon v0.8 should expose the runtime as an AI-native tool interface after the
@@ -2834,7 +2912,7 @@ v0.8 = agent-facing tool interface over the established runtime API.
 v0.8 should not invent a separate agent runtime. Agents should call the same
 capability, policy, audit, and trace surfaces that the CLI and SDK use.
 
-## Phase 37: Agent Tool Contract
+## Phase 40: Agent Tool Contract
 
 Status: Planned.
 
@@ -2855,7 +2933,7 @@ Done when:
 - tools map cleanly to existing runtime APIs without bypassing policy.
 - audit and trace semantics remain unchanged.
 
-## Phase 38: Agent Integration Implementation
+## Phase 41: Agent Integration Implementation
 
 Status: Planned.
 
@@ -2875,7 +2953,7 @@ Done when:
 - an agent can run a constrained workflow through Operon.
 - all agent actions are visible in audit and trace output.
 
-## Phase 39: v0.8 Acceptance
+## Phase 42: v0.8 Acceptance
 
 Status: Planned.
 
@@ -2906,7 +2984,7 @@ v0.9 should discover or resolve endpoints only. It must not implement NAT
 traversal, relays, VPN behavior, mesh IP assignment, subnet routing, or global
 routing.
 
-## Phase 40: Provider Discovery Contract
+## Phase 43: Provider Discovery Contract
 
 Status: Planned.
 
@@ -2925,7 +3003,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 41: Non-LAN Provider Adapters
+## Phase 44: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -2945,7 +3023,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 42: v0.9 Acceptance
+## Phase 45: v0.9 Acceptance
 
 Status: Planned.
 

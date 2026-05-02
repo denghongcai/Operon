@@ -63,6 +63,37 @@ pub async fn check_tcp_service(service: &ServiceDefinition, timeout: Duration) -
     }
 }
 
+pub async fn check_udp_service(service: &ServiceDefinition, timeout: Duration) -> ServiceCheck {
+    let started = Instant::now();
+    let address = format!("{}:{}", service.host, service.port);
+    let result = tokio::time::timeout(timeout, connect_udp_socket(&address)).await;
+    let latency_ms = started.elapsed().as_millis();
+    let (ok, reason) = match result {
+        Ok(Ok(_)) => (true, None),
+        Ok(Err(error)) => (false, Some(error.to_string())),
+        Err(_) => (false, Some("service check timed out".to_string())),
+    };
+
+    ServiceCheck {
+        id: service.id.clone(),
+        ok,
+        latency_ms,
+        reason,
+    }
+}
+
+async fn connect_udp_socket(address: &str) -> std::io::Result<tokio::net::UdpSocket> {
+    let socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
+    match socket.connect(address).await {
+        Ok(()) => Ok(socket),
+        Err(ipv4_error) => {
+            let socket = tokio::net::UdpSocket::bind("[::]:0").await?;
+            socket.connect(address).await.map_err(|_| ipv4_error)?;
+            Ok(socket)
+        }
+    }
+}
+
 fn remove_discovered_service(
     records: &mut BTreeMap<String, DiscoveryRecord>,
     fullnames: &mut BTreeMap<String, String>,

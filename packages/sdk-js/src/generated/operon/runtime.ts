@@ -127,6 +127,7 @@ export function jobStatusToJSON(object: JobStatus): string {
 export enum ServiceProtocol {
   SERVICE_PROTOCOL_UNSPECIFIED = 0,
   SERVICE_PROTOCOL_TCP = 1,
+  SERVICE_PROTOCOL_UDP = 2,
   UNRECOGNIZED = -1,
 }
 
@@ -138,6 +139,9 @@ export function serviceProtocolFromJSON(object: any): ServiceProtocol {
     case 1:
     case "SERVICE_PROTOCOL_TCP":
       return ServiceProtocol.SERVICE_PROTOCOL_TCP;
+    case 2:
+    case "SERVICE_PROTOCOL_UDP":
+      return ServiceProtocol.SERVICE_PROTOCOL_UDP;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -151,6 +155,8 @@ export function serviceProtocolToJSON(object: ServiceProtocol): string {
       return "SERVICE_PROTOCOL_UNSPECIFIED";
     case ServiceProtocol.SERVICE_PROTOCOL_TCP:
       return "SERVICE_PROTOCOL_TCP";
+    case ServiceProtocol.SERVICE_PROTOCOL_UDP:
+      return "SERVICE_PROTOCOL_UDP";
     case ServiceProtocol.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
@@ -441,6 +447,38 @@ export interface ServiceTunnelResponse {
   opened?: ServiceTunnelOpened | undefined;
   data?: ServiceTunnelData | undefined;
   close?: ServiceTunnelClose | undefined;
+}
+
+export interface ServiceDatagramTunnelTarget {
+  serviceId: string;
+}
+
+export interface ServiceDatagram {
+  peerId: string;
+  data: Uint8Array;
+}
+
+export interface ServiceDatagramTunnelClose {
+  peerId: string;
+  reason: string;
+}
+
+export interface ServiceDatagramTunnelRequest {
+  target?: ServiceDatagramTunnelTarget | undefined;
+  datagram?: ServiceDatagram | undefined;
+  close?: ServiceDatagramTunnelClose | undefined;
+}
+
+export interface ServiceDatagramTunnelOpened {
+  serviceId: string;
+  host: string;
+  port: number;
+}
+
+export interface ServiceDatagramTunnelResponse {
+  opened?: ServiceDatagramTunnelOpened | undefined;
+  datagram?: ServiceDatagram | undefined;
+  close?: ServiceDatagramTunnelClose | undefined;
 }
 
 export interface AuditEvent {
@@ -5096,6 +5134,522 @@ export const ServiceTunnelResponse: MessageFns<ServiceTunnelResponse> = {
   },
 };
 
+function createBaseServiceDatagramTunnelTarget(): ServiceDatagramTunnelTarget {
+  return { serviceId: "" };
+}
+
+export const ServiceDatagramTunnelTarget: MessageFns<ServiceDatagramTunnelTarget> = {
+  encode(message: ServiceDatagramTunnelTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceId !== "") {
+      writer.uint32(10).string(message.serviceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceDatagramTunnelTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceDatagramTunnelTarget();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceDatagramTunnelTarget {
+    return {
+      serviceId: isSet(object.serviceId)
+        ? globalThis.String(object.serviceId)
+        : isSet(object.service_id)
+        ? globalThis.String(object.service_id)
+        : "",
+    };
+  },
+
+  toJSON(message: ServiceDatagramTunnelTarget): unknown {
+    const obj: any = {};
+    if (message.serviceId !== "") {
+      obj.serviceId = message.serviceId;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceDatagramTunnelTarget>): ServiceDatagramTunnelTarget {
+    return ServiceDatagramTunnelTarget.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceDatagramTunnelTarget>): ServiceDatagramTunnelTarget {
+    const message = createBaseServiceDatagramTunnelTarget();
+    message.serviceId = object.serviceId ?? "";
+    return message;
+  },
+};
+
+function createBaseServiceDatagram(): ServiceDatagram {
+  return { peerId: "", data: new Uint8Array(0) };
+}
+
+export const ServiceDatagram: MessageFns<ServiceDatagram> = {
+  encode(message: ServiceDatagram, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.peerId !== "") {
+      writer.uint32(10).string(message.peerId);
+    }
+    if (message.data.length !== 0) {
+      writer.uint32(18).bytes(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceDatagram {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceDatagram();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.peerId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.data = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceDatagram {
+    return {
+      peerId: isSet(object.peerId)
+        ? globalThis.String(object.peerId)
+        : isSet(object.peer_id)
+        ? globalThis.String(object.peer_id)
+        : "",
+      data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: ServiceDatagram): unknown {
+    const obj: any = {};
+    if (message.peerId !== "") {
+      obj.peerId = message.peerId;
+    }
+    if (message.data.length !== 0) {
+      obj.data = base64FromBytes(message.data);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceDatagram>): ServiceDatagram {
+    return ServiceDatagram.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceDatagram>): ServiceDatagram {
+    const message = createBaseServiceDatagram();
+    message.peerId = object.peerId ?? "";
+    message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseServiceDatagramTunnelClose(): ServiceDatagramTunnelClose {
+  return { peerId: "", reason: "" };
+}
+
+export const ServiceDatagramTunnelClose: MessageFns<ServiceDatagramTunnelClose> = {
+  encode(message: ServiceDatagramTunnelClose, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.peerId !== "") {
+      writer.uint32(10).string(message.peerId);
+    }
+    if (message.reason !== "") {
+      writer.uint32(18).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceDatagramTunnelClose {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceDatagramTunnelClose();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.peerId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceDatagramTunnelClose {
+    return {
+      peerId: isSet(object.peerId)
+        ? globalThis.String(object.peerId)
+        : isSet(object.peer_id)
+        ? globalThis.String(object.peer_id)
+        : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: ServiceDatagramTunnelClose): unknown {
+    const obj: any = {};
+    if (message.peerId !== "") {
+      obj.peerId = message.peerId;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceDatagramTunnelClose>): ServiceDatagramTunnelClose {
+    return ServiceDatagramTunnelClose.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceDatagramTunnelClose>): ServiceDatagramTunnelClose {
+    const message = createBaseServiceDatagramTunnelClose();
+    message.peerId = object.peerId ?? "";
+    message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseServiceDatagramTunnelRequest(): ServiceDatagramTunnelRequest {
+  return { target: undefined, datagram: undefined, close: undefined };
+}
+
+export const ServiceDatagramTunnelRequest: MessageFns<ServiceDatagramTunnelRequest> = {
+  encode(message: ServiceDatagramTunnelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.target !== undefined) {
+      ServiceDatagramTunnelTarget.encode(message.target, writer.uint32(10).fork()).join();
+    }
+    if (message.datagram !== undefined) {
+      ServiceDatagram.encode(message.datagram, writer.uint32(18).fork()).join();
+    }
+    if (message.close !== undefined) {
+      ServiceDatagramTunnelClose.encode(message.close, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceDatagramTunnelRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceDatagramTunnelRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.target = ServiceDatagramTunnelTarget.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.datagram = ServiceDatagram.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.close = ServiceDatagramTunnelClose.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceDatagramTunnelRequest {
+    return {
+      target: isSet(object.target) ? ServiceDatagramTunnelTarget.fromJSON(object.target) : undefined,
+      datagram: isSet(object.datagram) ? ServiceDatagram.fromJSON(object.datagram) : undefined,
+      close: isSet(object.close) ? ServiceDatagramTunnelClose.fromJSON(object.close) : undefined,
+    };
+  },
+
+  toJSON(message: ServiceDatagramTunnelRequest): unknown {
+    const obj: any = {};
+    if (message.target !== undefined) {
+      obj.target = ServiceDatagramTunnelTarget.toJSON(message.target);
+    }
+    if (message.datagram !== undefined) {
+      obj.datagram = ServiceDatagram.toJSON(message.datagram);
+    }
+    if (message.close !== undefined) {
+      obj.close = ServiceDatagramTunnelClose.toJSON(message.close);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceDatagramTunnelRequest>): ServiceDatagramTunnelRequest {
+    return ServiceDatagramTunnelRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceDatagramTunnelRequest>): ServiceDatagramTunnelRequest {
+    const message = createBaseServiceDatagramTunnelRequest();
+    message.target = (object.target !== undefined && object.target !== null)
+      ? ServiceDatagramTunnelTarget.fromPartial(object.target)
+      : undefined;
+    message.datagram = (object.datagram !== undefined && object.datagram !== null)
+      ? ServiceDatagram.fromPartial(object.datagram)
+      : undefined;
+    message.close = (object.close !== undefined && object.close !== null)
+      ? ServiceDatagramTunnelClose.fromPartial(object.close)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseServiceDatagramTunnelOpened(): ServiceDatagramTunnelOpened {
+  return { serviceId: "", host: "", port: 0 };
+}
+
+export const ServiceDatagramTunnelOpened: MessageFns<ServiceDatagramTunnelOpened> = {
+  encode(message: ServiceDatagramTunnelOpened, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceId !== "") {
+      writer.uint32(10).string(message.serviceId);
+    }
+    if (message.host !== "") {
+      writer.uint32(18).string(message.host);
+    }
+    if (message.port !== 0) {
+      writer.uint32(24).uint32(message.port);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceDatagramTunnelOpened {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceDatagramTunnelOpened();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.host = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.port = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceDatagramTunnelOpened {
+    return {
+      serviceId: isSet(object.serviceId)
+        ? globalThis.String(object.serviceId)
+        : isSet(object.service_id)
+        ? globalThis.String(object.service_id)
+        : "",
+      host: isSet(object.host) ? globalThis.String(object.host) : "",
+      port: isSet(object.port) ? globalThis.Number(object.port) : 0,
+    };
+  },
+
+  toJSON(message: ServiceDatagramTunnelOpened): unknown {
+    const obj: any = {};
+    if (message.serviceId !== "") {
+      obj.serviceId = message.serviceId;
+    }
+    if (message.host !== "") {
+      obj.host = message.host;
+    }
+    if (message.port !== 0) {
+      obj.port = Math.round(message.port);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceDatagramTunnelOpened>): ServiceDatagramTunnelOpened {
+    return ServiceDatagramTunnelOpened.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceDatagramTunnelOpened>): ServiceDatagramTunnelOpened {
+    const message = createBaseServiceDatagramTunnelOpened();
+    message.serviceId = object.serviceId ?? "";
+    message.host = object.host ?? "";
+    message.port = object.port ?? 0;
+    return message;
+  },
+};
+
+function createBaseServiceDatagramTunnelResponse(): ServiceDatagramTunnelResponse {
+  return { opened: undefined, datagram: undefined, close: undefined };
+}
+
+export const ServiceDatagramTunnelResponse: MessageFns<ServiceDatagramTunnelResponse> = {
+  encode(message: ServiceDatagramTunnelResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.opened !== undefined) {
+      ServiceDatagramTunnelOpened.encode(message.opened, writer.uint32(10).fork()).join();
+    }
+    if (message.datagram !== undefined) {
+      ServiceDatagram.encode(message.datagram, writer.uint32(18).fork()).join();
+    }
+    if (message.close !== undefined) {
+      ServiceDatagramTunnelClose.encode(message.close, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceDatagramTunnelResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceDatagramTunnelResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.opened = ServiceDatagramTunnelOpened.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.datagram = ServiceDatagram.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.close = ServiceDatagramTunnelClose.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceDatagramTunnelResponse {
+    return {
+      opened: isSet(object.opened) ? ServiceDatagramTunnelOpened.fromJSON(object.opened) : undefined,
+      datagram: isSet(object.datagram) ? ServiceDatagram.fromJSON(object.datagram) : undefined,
+      close: isSet(object.close) ? ServiceDatagramTunnelClose.fromJSON(object.close) : undefined,
+    };
+  },
+
+  toJSON(message: ServiceDatagramTunnelResponse): unknown {
+    const obj: any = {};
+    if (message.opened !== undefined) {
+      obj.opened = ServiceDatagramTunnelOpened.toJSON(message.opened);
+    }
+    if (message.datagram !== undefined) {
+      obj.datagram = ServiceDatagram.toJSON(message.datagram);
+    }
+    if (message.close !== undefined) {
+      obj.close = ServiceDatagramTunnelClose.toJSON(message.close);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServiceDatagramTunnelResponse>): ServiceDatagramTunnelResponse {
+    return ServiceDatagramTunnelResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServiceDatagramTunnelResponse>): ServiceDatagramTunnelResponse {
+    const message = createBaseServiceDatagramTunnelResponse();
+    message.opened = (object.opened !== undefined && object.opened !== null)
+      ? ServiceDatagramTunnelOpened.fromPartial(object.opened)
+      : undefined;
+    message.datagram = (object.datagram !== undefined && object.datagram !== null)
+      ? ServiceDatagram.fromPartial(object.datagram)
+      : undefined;
+    message.close = (object.close !== undefined && object.close !== null)
+      ? ServiceDatagramTunnelClose.fromPartial(object.close)
+      : undefined;
+    return message;
+  },
+};
+
 function createBaseAuditEvent(): AuditEvent {
   return {
     subject: "",
@@ -5612,6 +6166,14 @@ export const OperonRuntimeDefinition = {
       responseStream: true,
       options: {},
     },
+    openServiceDatagramTunnel: {
+      name: "OpenServiceDatagramTunnel",
+      requestType: ServiceDatagramTunnelRequest as typeof ServiceDatagramTunnelRequest,
+      requestStream: true,
+      responseType: ServiceDatagramTunnelResponse as typeof ServiceDatagramTunnelResponse,
+      responseStream: true,
+      options: {},
+    },
     listAudit: {
       name: "ListAudit",
       requestType: ListAuditRequest as typeof ListAuditRequest,
@@ -5670,6 +6232,10 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
     request: AsyncIterable<ServiceTunnelRequest>,
     context: CallContext & CallContextExt,
   ): ServerStreamingMethodResult<DeepPartial<ServiceTunnelResponse>>;
+  openServiceDatagramTunnel(
+    request: AsyncIterable<ServiceDatagramTunnelRequest>,
+    context: CallContext & CallContextExt,
+  ): ServerStreamingMethodResult<DeepPartial<ServiceDatagramTunnelResponse>>;
   listAudit(request: ListAuditRequest, context: CallContext & CallContextExt): Promise<DeepPartial<AuditLog>>;
 }
 
@@ -5714,6 +6280,10 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
     request: AsyncIterable<DeepPartial<ServiceTunnelRequest>>,
     options?: CallOptions & CallOptionsExt,
   ): AsyncIterable<ServiceTunnelResponse>;
+  openServiceDatagramTunnel(
+    request: AsyncIterable<DeepPartial<ServiceDatagramTunnelRequest>>,
+    options?: CallOptions & CallOptionsExt,
+  ): AsyncIterable<ServiceDatagramTunnelResponse>;
   listAudit(request: DeepPartial<ListAuditRequest>, options?: CallOptions & CallOptionsExt): Promise<AuditLog>;
 }
 

@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.7.0";
+pub const PROTOCOL_VERSION: &str = "v0.7.1";
 
 pub mod runtime {
     pub mod v1 {
@@ -540,6 +540,7 @@ fn parse_grpc_job_status(value: i32) -> Result<operon_core::JobStatus, String> {
 fn grpc_service_protocol(protocol: &operon_core::ServiceProtocol) -> runtime::v1::ServiceProtocol {
     match protocol {
         operon_core::ServiceProtocol::Tcp => runtime::v1::ServiceProtocol::Tcp,
+        operon_core::ServiceProtocol::Udp => runtime::v1::ServiceProtocol::Udp,
     }
 }
 
@@ -548,6 +549,7 @@ fn parse_grpc_service_protocol(value: i32) -> Result<operon_core::ServiceProtoco
         .map_err(|_| format!("unknown service protocol `{value}`"))?
     {
         runtime::v1::ServiceProtocol::Tcp => Ok(operon_core::ServiceProtocol::Tcp),
+        runtime::v1::ServiceProtocol::Udp => Ok(operon_core::ServiceProtocol::Udp),
         runtime::v1::ServiceProtocol::Unspecified => {
             Err("service protocol is unspecified".to_string())
         }
@@ -560,7 +562,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.7.0");
+        assert_eq!(PROTOCOL_VERSION, "v0.7.1");
     }
 
     #[test]
