@@ -29,3 +29,22 @@ pub(crate) fn load_endpoint(
     let config_dir = OperonConfig::config_dir(&config_path);
     config.endpoint(node_id, &config_dir)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_node_path_target() {
+        let target = parse_node_path("node-a:/workspace/file.txt").expect("target should parse");
+
+        assert_eq!(target.node_id, "node-a");
+        assert_eq!(target.path, "/workspace/file.txt");
+    }
+
+    #[test]
+    fn rejects_node_path_without_separator() {
+        let error = parse_node_path("node-a/workspace").expect_err("target should fail");
+        assert!(error.to_string().contains("node:/path"));
+    }
+}

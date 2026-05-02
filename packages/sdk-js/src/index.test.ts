@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { JobStatus, ServiceProtocol } from "./generated/operon/runtime";
+import { CapabilityKind, JobStatus, ServiceProtocol } from "./generated/operon/runtime";
 import { OperonClient } from "./index";
 
 const niceGrpcMock = vi.hoisted(() => {
@@ -13,6 +13,7 @@ const niceGrpcMock = vi.hoisted(() => {
     client: {
       statFs: vi.fn(),
       listFs: vi.fn(),
+      listCapabilities: vi.fn(),
       readFile: vi.fn(),
       readFileRange: vi.fn(),
       writeFile: vi.fn(),
@@ -27,6 +28,8 @@ const niceGrpcMock = vi.hoisted(() => {
       closeJobStdin: vi.fn(),
       listServices: vi.fn(),
       checkService: vi.fn(),
+      cancelJob: vi.fn(),
+      listAudit: vi.fn(),
       openServiceTunnel: vi.fn(),
       openServiceDatagramTunnel: vi.fn(),
     },
@@ -197,6 +200,95 @@ describe("OperonClient", () => {
     expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "" }, expect.any(Object));
     expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "1" }, expect.any(Object));
     expect(niceGrpcMock.client.checkService).toHaveBeenCalledWith({ serviceId: "daemon" }, expect.any(Object));
+  });
+
+  it("exposes direct public runtime APIs beyond graph helpers", async () => {
+    niceGrpcMock.client.listCapabilities.mockResolvedValueOnce({
+      capabilities: [{
+        id: "fs:workspace",
+        kind: CapabilityKind.CAPABILITY_KIND_FS,
+        nodeId: "node-a",
+        name: "workspace",
+        permissions: ["read"],
+        description: "workspace fs",
+      }],
+      nextPageToken: "",
+    });
+    niceGrpcMock.client.statFs.mockResolvedValue({ path: "/a.txt", isFile: true, isDir: false, size: "3" });
+    niceGrpcMock.client.listFs.mockResolvedValue({ path: "/", entries: [], nextPageToken: "" });
+    niceGrpcMock.client.runJob.mockResolvedValue({
+      id: "job-1",
+      nodeId: "node-a",
+      command: "true",
+      cwd: "/",
+      status: JobStatus.JOB_STATUS_RUNNING,
+      logCount: "0",
+      logsTruncated: false,
+    });
+    niceGrpcMock.client.getJob.mockResolvedValue({
+      id: "job-1",
+      nodeId: "node-a",
+      command: "true",
+      cwd: "/",
+      status: JobStatus.JOB_STATUS_SUCCEEDED,
+      exitCode: 0,
+      logCount: "0",
+      logsTruncated: false,
+    });
+    niceGrpcMock.client.cancelJob.mockResolvedValue({
+      id: "job-1",
+      nodeId: "node-a",
+      command: "true",
+      cwd: "/",
+      status: JobStatus.JOB_STATUS_CANCELLED,
+      logCount: "0",
+      logsTruncated: false,
+    });
+    niceGrpcMock.client.listAudit.mockResolvedValueOnce({
+      events: [{
+        subject: "local-cli",
+        timestampMs: "123",
+        nodeId: "node-a",
+        capability: "fs:workspace",
+        action: "stat",
+        resource: "/a.txt",
+        allowed: true,
+        reason: "allowed",
+      }],
+      nextPageToken: "",
+    });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+
+    await expect(client.listCapabilities("node-a")).resolves.toEqual({
+      capabilities: [{
+        id: "fs:workspace",
+        kind: "fs",
+        node_id: "node-a",
+        name: "workspace",
+        permissions: ["read"],
+        description: "workspace fs",
+      }],
+    });
+    await expect(client.statFs("node-a", "/a.txt")).resolves.toMatchObject({ path: "/a.txt", size: 3 });
+    await expect(client.listFs("node-a", "/")).resolves.toMatchObject({ path: "/", entries: [] });
+    await expect(client.runJob("node-a", { command: "true", timeoutSecs: 5 })).resolves.toMatchObject({ id: "job-1", status: "running" });
+    await expect(client.getJob("node-a", "job-1")).resolves.toMatchObject({ id: "job-1", status: "succeeded" });
+    await expect(client.cancelJob("node-a", "job-1")).resolves.toMatchObject({ id: "job-1", status: "cancelled" });
+    await expect(client.listAudit("node-a")).resolves.toEqual({
+      events: [{
+        subject: "local-cli",
+        timestamp_ms: 123,
+        node_id: "node-a",
+        capability: "fs:workspace",
+        action: "stat",
+        resource: "/a.txt",
+        allowed: true,
+        reason: "allowed",
+        run_id: null,
+        step_id: null,
+      }],
+    });
   });
 
   it("copies files through daemon-side fs copy", async () => {

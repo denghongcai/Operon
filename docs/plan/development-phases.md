@@ -3234,7 +3234,79 @@ Remaining:
 - Moving policy or discovery into separate crates remains a future decision
   only if module boundaries stop being enough.
 
-## Phase 49: Provider Discovery Contract
+## Phase 49: v0.8.6 Runtime, CLI, and Client Modularization
+
+Status: Completed.
+
+Goal: finish the deferred maintainability split before provider discovery by
+moving daemon job/service/audit/log internals, non-fs CLI command families, and
+shared Rust gRPC client concerns behind focused module boundaries.
+
+Plan:
+
+- split `operond` runtime internals into state, runtime service, auth, job
+  runtime, job logs, service forwarding, datagram forwarding, and audit
+  modules.
+- split non-fs `operon-cli` command families into `commands/*` modules and
+  reduce repeated text/json/quiet rendering branches where practical.
+- add a lightweight Rust `operon-grpc-client` crate for tonic endpoint URI
+  normalization, auth/context metadata, typed client construction, and Rust-side
+  stream chunk helpers shared by CLI and mount.
+- split `operon-mount` into remote client, inode table, FUSE callbacks, path,
+  errors, and session modules while keeping it a Linux adapter crate.
+- add `operon graph run` and optionally `operon workflow run` aliases while
+  keeping top-level `operon run` compatible.
+- make `operon --json fs read <target> --output <file>` return a structured
+  write summary.
+- expose direct TypeScript SDK methods for `statFs`, `listFs`, `runJob`,
+  `getJob`, `cancelJob`, `listCapabilities`, and `listAudit`.
+- extract low-risk validation shell helpers for daemon startup, cleanup,
+  temporary config setup, and `wait_for_node`.
+
+Done when:
+
+- `crates/operond/src/main.rs` no longer directly owns job runtime, job log
+  retention, audit append, TCP service tunnel, or UDP datagram tunnel internals.
+- `crates/operon-cli/src/main.rs` no longer owns non-fs command handlers and
+  renderers.
+- CLI and mount share Rust gRPC endpoint/auth/client helpers.
+- `operon-mount` has module boundaries for remote client, inode table, FUSE
+  callbacks, paths, errors, and session lifecycle.
+- TypeScript SDK exposes direct public methods for the listed core protocol
+  capabilities.
+- behavior-sensitive CLI/SDK/script contracts remain green.
+
+Detailed plan:
+`docs/plan/v0.8.6-runtime-cli-client-modularization.md`.
+
+Completed:
+
+- Added `operon-grpc-client` and migrated CLI plus Linux mount gRPC callers to
+  shared endpoint/auth/context/client/chunk helpers.
+- Split non-fs CLI command handlers into `commands/*` modules and reduced
+  `operon-cli/src/main.rs` to Clap model construction and high-level dispatch.
+- Added `operon graph run` and `operon workflow run` aliases while preserving
+  top-level `operon run`.
+- Updated `operon --json fs read <target> --output <file>` to emit a
+  structured `{ path, output, bytes_written }` summary.
+- Split Linux mount internals into remote client, inode table, FUSE callbacks,
+  path, errors, and session modules.
+- Split daemon auth, audit, state, job runtime/log retention, and service
+  forwarding internals out of `operond/src/main.rs`.
+- Exposed direct TypeScript SDK methods for capabilities, fs stat/list, job
+  run/get/cancel, and audit listing.
+- Added reusable validation helpers in `scripts/lib/validation.sh`.
+- Added `scripts/verify-v0.8.6-runtime-cli-client-modularization.sh` and wired
+  it into CI.
+
+Remaining:
+
+- No blocking v0.8.6 work remains.
+- Moving the tonic `GrpcRuntime` routing impl into a separate
+  `runtime_service.rs` remains an optional future cleanup if method routing
+  grows again.
+
+## Phase 50: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3253,7 +3325,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 50: Non-LAN Provider Adapters
+## Phase 51: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3273,7 +3345,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 51: v0.9 Acceptance
+## Phase 52: v0.9 Acceptance
 
 Status: Planned.
 

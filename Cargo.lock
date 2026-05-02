@@ -797,6 +797,7 @@ dependencies = [
  "mdns-sd",
  "operon-config",
  "operon-core",
+ "operon-grpc-client",
  "operon-mount",
  "operon-network",
  "operon-protocol",
@@ -835,6 +836,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "operon-grpc-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "operon-core",
+ "operon-network",
+ "operon-protocol",
+ "tonic",
+]
+
+[[package]]
 name = "operon-mount"
 version = "0.1.0"
 dependencies = [
@@ -842,7 +854,9 @@ dependencies = [
  "ctrlc",
  "fuser",
  "futures-util",
+ "libc",
  "operon-core",
+ "operon-grpc-client",
  "operon-network",
  "operon-protocol",
  "tokio",

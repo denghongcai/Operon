@@ -112,6 +112,9 @@ jobs:
             script: scripts/verify-v0.8.4-modularization.sh
           - name: v0.8.5 Core Domain Module Validation
             script: scripts/verify-v0.8.5-core-domain-modules.sh
+          - name: v0.8.6 Runtime CLI Client Modularization Validation
+            script: scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
+            node: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6

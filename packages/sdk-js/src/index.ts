@@ -1,8 +1,11 @@
 import { createChannel, createClient, Metadata, type Channel, type CallOptions } from "nice-grpc";
 import {
+  CapabilityKind as GrpcCapabilityKind,
   JobStatus as GrpcJobStatus,
   OperonRuntimeDefinition,
   ServiceProtocol as GrpcServiceProtocol,
+  type AuditLog as GrpcAuditLog,
+  type Capability as GrpcCapability,
   type FsList as GrpcFsList,
   type FsStat as GrpcFsStat,
   type FsWrite as GrpcFsWrite,
@@ -94,6 +97,23 @@ export type JobRecord = {
   logs_truncated: boolean;
 };
 
+export type Capability = {
+  id: string;
+  kind: "fs" | "process" | "job" | "device-info" | "service" | "unspecified" | "unrecognized";
+  node_id: string;
+  name: string;
+  permissions: string[];
+  description: string;
+};
+
+export type CapabilityList = {
+  capabilities: Capability[];
+};
+
+export type FsStat = ReturnType<typeof fromGrpcFsStat>;
+
+export type FsList = ReturnType<typeof fromGrpcFsList>;
+
 export type JobList = {
   jobs: JobRecord[];
 };
@@ -173,6 +193,23 @@ export type ServiceCheck = {
   reason?: string | null;
 };
 
+export type AuditEvent = {
+  subject: string;
+  timestamp_ms: number;
+  node_id: string;
+  capability: string;
+  action: string;
+  resource: string;
+  allowed: boolean;
+  reason: string;
+  run_id?: string | null;
+  step_id?: string | null;
+};
+
+export type AuditLog = {
+  events: AuditEvent[];
+};
+
 export type ServiceDatagram = {
   peer_id: string;
   data: Uint8Array;
@@ -234,6 +271,35 @@ export class OperonClient {
     return toArrayBuffer(concatChunks(chunks));
   }
 
+  async listCapabilities(nodeId: string): Promise<CapabilityList> {
+    const endpoint = this.endpointFor(nodeId);
+    const capabilities: Capability[] = [];
+    let pageToken = "";
+    do {
+      const page = await this.grpcClient(endpoint).listCapabilities(
+        { pageSize: DEFAULT_LIST_PAGE_SIZE, pageToken },
+        this.grpcOptions(endpoint),
+      );
+      capabilities.push(...page.capabilities.map(fromGrpcCapability));
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return { capabilities };
+  }
+
+  async statFs(nodeId: string, path: string): Promise<FsStat> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcFsStat(
+      await this.grpcClient(endpoint).statFs({ path }, this.grpcOptions(endpoint)),
+    );
+  }
+
+  async listFs(nodeId: string, path: string): Promise<FsList> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcFsList(
+      await this.grpcClient(endpoint).listFs({ path }, this.grpcOptions(endpoint)),
+    );
+  }
+
   async readFileRangeBytes(
     nodeId: string,
     path: string,
@@ -280,6 +346,38 @@ export class OperonClient {
       pageToken = page.nextPageToken;
     } while (pageToken);
     return { jobs };
+  }
+
+  async runJob(
+    nodeId: string,
+    request: { command: string; cwd?: string; timeoutSecs?: number; secrets?: string[] },
+  ): Promise<JobRecord> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcJobRecord(
+      await this.grpcClient(endpoint).runJob(
+        {
+          command: request.command,
+          cwd: request.cwd ?? "",
+          timeoutSecs: request.timeoutSecs === undefined ? undefined : String(request.timeoutSecs),
+          secrets: request.secrets ?? [],
+        },
+        this.grpcOptions(endpoint),
+      ),
+    );
+  }
+
+  async getJob(nodeId: string, jobId: string): Promise<JobRecord> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcJobRecord(
+      await this.grpcClient(endpoint).getJob({ jobId }, this.grpcOptions(endpoint)),
+    );
+  }
+
+  async cancelJob(nodeId: string, jobId: string): Promise<JobRecord> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcJobRecord(
+      await this.grpcClient(endpoint).cancelJob({ jobId }, this.grpcOptions(endpoint)),
+    );
   }
 
   async listJobLogs(nodeId: string, jobId: string): Promise<JobLogList> {
@@ -353,6 +451,21 @@ export class OperonClient {
     return fromGrpcServiceCheck(
       await this.grpcClient(endpoint).checkService({ serviceId }, this.grpcOptions(endpoint)),
     );
+  }
+
+  async listAudit(nodeId: string): Promise<AuditLog> {
+    const endpoint = this.endpointFor(nodeId);
+    const events: AuditEvent[] = [];
+    let pageToken = "";
+    do {
+      const page = await this.grpcClient(endpoint).listAudit(
+        { pageSize: DEFAULT_LIST_PAGE_SIZE, pageToken },
+        this.grpcOptions(endpoint),
+      );
+      events.push(...page.events.map(fromGrpcAuditEvent));
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return { events };
   }
 
   async openServiceTunnel(
@@ -767,6 +880,36 @@ function fromGrpcFsList(list: GrpcFsList) {
   };
 }
 
+function fromGrpcCapability(capability: GrpcCapability): Capability {
+  return {
+    id: capability.id,
+    kind: fromGrpcCapabilityKind(capability.kind),
+    node_id: capability.nodeId,
+    name: capability.name,
+    permissions: capability.permissions,
+    description: capability.description,
+  };
+}
+
+function fromGrpcCapabilityKind(kind: GrpcCapabilityKind): Capability["kind"] {
+  switch (kind) {
+    case GrpcCapabilityKind.CAPABILITY_KIND_FS:
+      return "fs";
+    case GrpcCapabilityKind.CAPABILITY_KIND_PROCESS:
+      return "process";
+    case GrpcCapabilityKind.CAPABILITY_KIND_JOB:
+      return "job";
+    case GrpcCapabilityKind.CAPABILITY_KIND_DEVICE_INFO:
+      return "device-info";
+    case GrpcCapabilityKind.CAPABILITY_KIND_SERVICE:
+      return "service";
+    case GrpcCapabilityKind.CAPABILITY_KIND_UNSPECIFIED:
+      return "unspecified";
+    default:
+      return "unrecognized";
+  }
+}
+
 function fromGrpcFsWrite(write: GrpcFsWrite) {
   return {
     path: write.path,
@@ -846,6 +989,21 @@ function fromGrpcJobEvent(event: GrpcJobEvent): JobEvent {
     exit_code: event.exitCode ?? null,
     log_count: Number(event.logCount),
     logs_truncated: event.logsTruncated,
+  };
+}
+
+function fromGrpcAuditEvent(event: GrpcAuditLog["events"][number]): AuditEvent {
+  return {
+    subject: event.subject,
+    timestamp_ms: Number(event.timestampMs),
+    node_id: event.nodeId,
+    capability: event.capability,
+    action: event.action,
+    resource: event.resource,
+    allowed: event.allowed,
+    reason: event.reason,
+    run_id: event.runId ?? null,
+    step_id: event.stepId ?? null,
   };
 }
 

@@ -5,7 +5,7 @@ use operon_core::{
     JobRecord, JobRunRequest, JobStatus, RequestContext,
 };
 
-use crate::{grpc, load_endpoint, load_job};
+use crate::{commands::job::load as load_job, grpc, target::load_endpoint};
 
 pub(crate) async fn run_graph(
     config_path: PathBuf,

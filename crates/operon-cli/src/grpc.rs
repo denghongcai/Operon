@@ -14,23 +14,23 @@ use operon_core::{
     JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, RequestContext,
     ServiceCheck, ServiceList,
 };
+use operon_grpc_client::{chunk_stdin_requests, chunk_write_requests};
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    job_log_stream_event, job_stdin_request, operon_runtime_client::OperonRuntimeClient,
+    job_log_stream_event, operon_runtime_client::OperonRuntimeClient,
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
-    service_tunnel_response, write_file_request, FileChunk, FsCopyRequest, FsPathRequest,
-    FsRenameRequest, FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest,
-    JobIdRequest, JobStdinRequest, JobStdinTarget, ListAuditRequest, ListCapabilitiesRequest,
-    ListJobsRequest, ListServicesRequest, ServiceDatagram, ServiceDatagramTunnelRequest,
-    ServiceDatagramTunnelTarget, ServiceIdRequest, ServiceTunnelClose, ServiceTunnelData,
-    ServiceTunnelRequest, ServiceTunnelTarget, WriteFileRequest, WriteFileTarget,
+    service_tunnel_response, FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest,
+    GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceDatagram,
+    ServiceDatagramTunnelRequest, ServiceDatagramTunnelTarget, ServiceIdRequest,
+    ServiceTunnelClose, ServiceTunnelData, ServiceTunnelRequest, ServiceTunnelTarget,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
     sync::mpsc,
 };
-use tonic::{metadata::MetadataValue, transport::Channel, Request};
+use tonic::transport::Channel;
 
 const DEFAULT_LIST_PAGE_SIZE: u32 = 1000;
 
@@ -787,88 +787,15 @@ where
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
     let endpoint = endpoint.clone();
-    let channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?
-        .connect()
-        .await?;
-    f(OperonRuntimeClient::new(channel), endpoint).await
+    let client = operon_grpc_client::connect(&endpoint).await?;
+    f(client, endpoint).await
 }
 
-fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T>> {
-    let mut request = Request::new(message);
-    if let Some(token) = &endpoint.token {
-        request.metadata_mut().insert(
-            "authorization",
-            MetadataValue::try_from(format!("Bearer {token}"))?,
-        );
-    }
+fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<tonic::Request<T>> {
     if let Ok(context) = REQUEST_CONTEXT.try_with(Clone::clone) {
-        if let Some(run_id) = &context.run_id {
-            request
-                .metadata_mut()
-                .insert("x-operon-run-id", MetadataValue::try_from(run_id.as_str())?);
-        }
-        if let Some(step_id) = &context.step_id {
-            request.metadata_mut().insert(
-                "x-operon-step-id",
-                MetadataValue::try_from(step_id.as_str())?,
-            );
-        }
+        return operon_grpc_client::request_with_context(endpoint, Some(&context), message);
     }
-    Ok(request)
-}
-
-fn grpc_channel_uri(endpoint: &str) -> anyhow::Result<String> {
-    if let Some(rest) = endpoint.strip_prefix("grpc://") {
-        Ok(format!("http://{rest}"))
-    } else if let Some(rest) = endpoint.strip_prefix("grpcs://") {
-        Ok(format!("https://{rest}"))
-    } else {
-        anyhow::bail!("only grpc:// and grpcs:// endpoints are supported by the gRPC client")
-    }
-}
-
-fn chunk_write_requests(path: String, body: &[u8]) -> Vec<WriteFileRequest> {
-    let mut chunks = vec![WriteFileRequest {
-        payload: Some(write_file_request::Payload::Target(WriteFileTarget {
-            path,
-        })),
-    }];
-    if body.is_empty() {
-        chunks.push(WriteFileRequest {
-            payload: Some(write_file_request::Payload::Chunk(FileChunk {
-                data: Vec::new(),
-            })),
-        });
-        return chunks;
-    }
-    chunks.extend(body.chunks(64 * 1024).map(|chunk| WriteFileRequest {
-        payload: Some(write_file_request::Payload::Chunk(FileChunk {
-            data: chunk.to_vec(),
-        })),
-    }));
-    chunks
-}
-
-fn chunk_stdin_requests(job_id: String, body: &[u8]) -> Vec<JobStdinRequest> {
-    let mut chunks = vec![JobStdinRequest {
-        payload: Some(job_stdin_request::Payload::Target(JobStdinTarget {
-            job_id,
-        })),
-    }];
-    if body.is_empty() {
-        chunks.push(JobStdinRequest {
-            payload: Some(job_stdin_request::Payload::Chunk(FileChunk {
-                data: Vec::new(),
-            })),
-        });
-        return chunks;
-    }
-    chunks.extend(body.chunks(64 * 1024).map(|chunk| JobStdinRequest {
-        payload: Some(job_stdin_request::Payload::Chunk(FileChunk {
-            data: chunk.to_vec(),
-        })),
-    }));
-    chunks
+    operon_grpc_client::request(endpoint, message)
 }
 
 fn grpc_job_run_request(value: JobRunRequest) -> operon_protocol::runtime::v1::JobRunRequest {
@@ -887,7 +814,7 @@ mod tests {
     #[test]
     fn converts_grpc_uri_to_tonic_http_uri() {
         assert_eq!(
-            grpc_channel_uri("grpc://127.0.0.1:7789").expect("uri"),
+            operon_grpc_client::grpc_channel_uri("grpc://127.0.0.1:7789").expect("uri"),
             "http://127.0.0.1:7789"
         );
     }
@@ -899,15 +826,15 @@ mod tests {
         assert_eq!(chunks.len(), 3);
         assert!(matches!(
             chunks[0].payload.as_ref(),
-            Some(write_file_request::Payload::Target(target)) if target.path == "file.txt"
+            Some(operon_protocol::runtime::v1::write_file_request::Payload::Target(target)) if target.path == "file.txt"
         ));
         assert!(matches!(
             chunks[1].payload.as_ref(),
-            Some(write_file_request::Payload::Chunk(chunk)) if chunk.data.len() == 64 * 1024
+            Some(operon_protocol::runtime::v1::write_file_request::Payload::Chunk(chunk)) if chunk.data.len() == 64 * 1024
         ));
         assert!(matches!(
             chunks[2].payload.as_ref(),
-            Some(write_file_request::Payload::Chunk(chunk)) if chunk.data.len() == 6 * 1024
+            Some(operon_protocol::runtime::v1::write_file_request::Payload::Chunk(chunk)) if chunk.data.len() == 6 * 1024
         ));
     }
 

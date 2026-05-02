@@ -8,6 +8,13 @@ use crate::{
     target::{load_endpoint, parse_node_path},
 };
 
+#[derive(Debug, serde::Serialize)]
+struct FsReadOutputSummary {
+    path: String,
+    output: String,
+    bytes_written: u64,
+}
+
 pub(crate) async fn stat(
     config_path: PathBuf,
     target: &str,
@@ -72,6 +79,14 @@ pub(crate) async fn read(
     if let Some(file_output) = file_output {
         let mut file = fs::File::create(&file_output)?;
         grpc::read_file_to_writer(&endpoint, &target.path, &mut file).await?;
+        let bytes_written = file.metadata()?.len();
+        if output.json {
+            print_json(&FsReadOutputSummary {
+                path: target.path,
+                output: file_output.display().to_string(),
+                bytes_written,
+            })?;
+        }
     } else {
         let mut content = Vec::new();
         grpc::read_file_to_writer(&endpoint, &target.path, &mut content).await?;

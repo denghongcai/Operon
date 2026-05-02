@@ -146,6 +146,8 @@ scripts/verify-v0.8-agent-skills.sh
 scripts/verify-v0.8.1-integration-coverage.sh
 scripts/verify-v0.8.3-read-range-release-cleanup.sh
 scripts/verify-v0.8.4-modularization.sh
+scripts/verify-v0.8.5-core-domain-modules.sh
+scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -185,6 +187,11 @@ version policy documentation.
 The v0.8.4 modularization validation checks that fs runtime handlers,
 pagination helpers, CLI fs command handlers, output rendering helpers, and
 target parsing live outside the entrypoint files.
+The v0.8.5 core-domain validation checks that `operon-core` domain DTOs and
+policies live in focused modules with compatible root re-exports.
+The v0.8.6 modularization validation checks shared Rust gRPC client helpers,
+non-fs CLI command modules, Linux mount adapter modules, daemon job/service/audit
+modules, graph/workflow aliases, and TypeScript SDK public API alignment.
 
 ## Release Automation
 

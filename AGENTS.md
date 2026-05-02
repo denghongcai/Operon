@@ -118,6 +118,11 @@ Operon should not own:
   - v0.8.4 scope for behavior-preserving `operond` and `operon-cli`
     modularization before provider discovery work resumes.
 
+- `docs/plan/v0.8.6-runtime-cli-client-modularization.md`
+  - v0.8.6 scope for shared Rust gRPC client helpers, non-fs CLI command
+    modules, Linux mount adapter modules, daemon runtime internals, and SDK
+    public API alignment.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -210,6 +215,10 @@ Operon should not own:
 - Completed core domain boundary milestone: v0.8.5 split `operon-core` into
   runtime, fs, job, service, policy, audit, discovery, and trace modules while
   keeping root-level public re-exports for compatibility.
+- Completed maintainability milestone: v0.8.6 added shared Rust gRPC client
+  helpers, split non-fs CLI commands, split Linux mount modules, extracted
+  daemon auth/audit/state/job/service internals, added graph/workflow aliases,
+  aligned the TypeScript SDK public surface, and added CI validation coverage.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -304,3 +313,9 @@ Defer:
   are split, compatibility re-exports remain in place, CI has a dedicated
   v0.8.5 validation script, and no behavior or schema work remains in this
   phase.
+- Latest phase status update: v0.8.6 is planned as the next execution phase.
+  It should finish deferred daemon job/service/audit/log extraction, non-fs CLI
+  command-family extraction, shared Rust gRPC client helpers, internal
+  `operon-mount` module boundaries, SDK public API alignment, graph/workflow
+  aliases, `fs read --output --json` summary output, and low-risk validation
+  shell helpers. No v0.8.6 implementation work has started yet.

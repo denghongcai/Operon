@@ -20,6 +20,7 @@ getrandom.workspace = true
 mdns-sd.workspace = true
 operon-config = { path = "../operon-config" }
 operon-core = { path = "../operon-core" }
+operon-grpc-client = { path = "../operon-grpc-client" }
 operon-network = { path = "../operon-network" }
 operon-protocol = { path = "../operon-protocol" }
 serde.workspace = true
