@@ -234,6 +234,16 @@ export class OperonClient {
     return toArrayBuffer(concatChunks(chunks));
   }
 
+  async readFileRangeBytes(
+    nodeId: string,
+    path: string,
+    offset: number,
+    size: number,
+  ): Promise<Uint8Array> {
+    const endpoint = this.endpointFor(nodeId);
+    return this.readFileRangeBytesWithEndpoint(endpoint, path, offset, size);
+  }
+
   async readFileStream(nodeId: string, path: string): Promise<ReadableStream<Uint8Array>> {
     const endpoint = this.endpointFor(nodeId);
     return this.readFileStreamWithEndpoint(endpoint, path);
@@ -532,6 +542,20 @@ export class OperonClient {
         }
       },
     });
+  }
+
+  private async readFileRangeBytesWithEndpoint(
+    endpoint: NodeEndpoint,
+    path: string,
+    offset: number,
+    size: number,
+    context?: RequestContext,
+  ): Promise<Uint8Array> {
+    const response = await this.grpcClient(endpoint).readFileRange(
+      { path, offset: String(offset), size },
+      this.grpcOptions(endpoint, context),
+    );
+    return response.data;
   }
 }
 

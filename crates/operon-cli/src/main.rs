@@ -11,15 +11,21 @@ use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use operon_config::{resolve_path, AuthConfig, NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
-    AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, FsList, FsRead, FsWrite, HealthStatus,
-    JobList, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo,
-    ServiceCheck, ServiceList, ServiceProtocol, TraceFile, TraceFileList,
+    AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, HealthStatus, JobList, JobLogList,
+    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, ServiceCheck,
+    ServiceList, ServiceProtocol, TraceFile, TraceFileList,
 };
 
+mod commands;
 mod graph;
 mod grpc;
 mod onboard;
+mod output;
 mod private_files;
+mod target;
+
+use output::{print_json, OutputMode};
+use target::{load_endpoint, parse_node_path};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -395,12 +401,6 @@ enum TraceCommand {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct OutputMode {
-    json: bool,
-    quiet: bool,
-}
-
 struct JobRunInput {
     config_path: PathBuf,
     node_id: String,
@@ -543,23 +543,27 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::Fs { command } => match command {
-            FsCommand::Stat { target } => fs_stat(config_path, &target, output).await,
-            FsCommand::List { target } => fs_list(config_path, &target, output).await,
+            FsCommand::Stat { target } => commands::fs::stat(config_path, &target, output).await,
+            FsCommand::List { target } => commands::fs::list(config_path, &target, output).await,
             FsCommand::Read {
                 target,
                 output: file_output,
-            } => fs_read(config_path, &target, file_output, output).await,
+            } => commands::fs::read(config_path, &target, file_output, output).await,
             FsCommand::Write {
                 target,
                 content,
                 file,
-            } => fs_write(config_path, &target, content, file, output).await,
-            FsCommand::Mkdir { target } => fs_mkdir(config_path, &target, output).await,
-            FsCommand::Rm { target } => fs_rm(config_path, &target, output).await,
-            FsCommand::Rename { from, to } => fs_rename(config_path, &from, &to, output).await,
-            FsCommand::Copy { from, to } => fs_copy(config_path, &from, &to, output).await,
+            } => commands::fs::write(config_path, &target, content, file, output).await,
+            FsCommand::Mkdir { target } => commands::fs::mkdir(config_path, &target, output).await,
+            FsCommand::Rm { target } => commands::fs::rm(config_path, &target, output).await,
+            FsCommand::Rename { from, to } => {
+                commands::fs::rename(config_path, &from, &to, output).await
+            }
+            FsCommand::Copy { from, to } => {
+                commands::fs::copy(config_path, &from, &to, output).await
+            }
             FsCommand::Truncate { target, size } => {
-                fs_truncate(config_path, &target, size, output).await
+                commands::fs::truncate(config_path, &target, size, output).await
             }
         },
         Command::Audit { command } => match command {
@@ -962,245 +966,6 @@ async fn list_capabilities(
         );
     }
 
-    Ok(())
-}
-
-async fn fs_stat(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat = grpc::fs_stat(&endpoint, &target.path).await?;
-    if output.json {
-        print_json(&stat)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-
-    println!(
-        "{}:{} file={} dir={} size={}",
-        target.node_id, stat.path, stat.is_file, stat.is_dir, stat.size
-    );
-
-    Ok(())
-}
-
-async fn fs_list(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let list: FsList = grpc::fs_list(&endpoint, &target.path).await?;
-    if output.json {
-        print_json(&list)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-
-    for entry in list.entries {
-        println!(
-            "{}\t{}\t{}",
-            if entry.is_dir { "dir" } else { "file" },
-            entry.size,
-            entry.path
-        );
-    }
-
-    Ok(())
-}
-
-async fn fs_read(
-    config_path: PathBuf,
-    target: &str,
-    file_output: Option<PathBuf>,
-    output: OutputMode,
-) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-
-    if let Some(file_output) = file_output {
-        let mut file = fs::File::create(&file_output)?;
-        grpc::read_file_to_writer(&endpoint, &target.path, &mut file).await?;
-    } else {
-        let mut content = Vec::new();
-        grpc::read_file_to_writer(&endpoint, &target.path, &mut content).await?;
-        let read = FsRead {
-            path: target.path.clone(),
-            content: String::from_utf8(content)?,
-        };
-        if output.json {
-            print_json(&read)?;
-            return Ok(());
-        }
-        if output.quiet {
-            return Ok(());
-        }
-        print!("{}", read.content);
-    }
-
-    Ok(())
-}
-
-async fn fs_write(
-    config_path: PathBuf,
-    target: &str,
-    content: Option<String>,
-    file: Option<PathBuf>,
-    output: OutputMode,
-) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-
-    let write: FsWrite = match (content, file) {
-        (Some(content), None) => {
-            grpc::write_file_bytes(&endpoint, &target.path, content.as_bytes()).await?
-        }
-        (None, Some(file)) => grpc::write_file(&endpoint, &target.path, &file).await?,
-        (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
-        (None, None) => anyhow::bail!("fs write requires --content or --file"),
-    };
-    if output.json {
-        print_json(&write)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-
-    println!(
-        "{}:{} bytes_written={}",
-        target.node_id, write.path, write.bytes_written
-    );
-
-    Ok(())
-}
-
-async fn fs_mkdir(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat = grpc::fs_mkdir(&endpoint, &target.path).await?;
-    if output.json {
-        print_json(&stat)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-    println!(
-        "{}:{} file={} dir={} size={}",
-        target.node_id, stat.path, stat.is_file, stat.is_dir, stat.size
-    );
-    Ok(())
-}
-
-async fn fs_rm(config_path: PathBuf, target: &str, output: OutputMode) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let path = grpc::fs_delete(&endpoint, &target.path).await?;
-    let result = serde_json::json!({ "path": path });
-    if output.json {
-        print_json(&result)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-    println!(
-        "{}:{} deleted=true",
-        target.node_id,
-        result["path"].as_str().unwrap_or_default()
-    );
-    Ok(())
-}
-
-async fn fs_rename(
-    config_path: PathBuf,
-    from: &str,
-    to: &str,
-    output: OutputMode,
-) -> anyhow::Result<()> {
-    let from = parse_node_path(from)?;
-    let to = parse_node_path(to)?;
-    if from.node_id != to.node_id {
-        anyhow::bail!("fs rename requires source and target to use the same node");
-    }
-    let endpoint = load_endpoint(config_path, &from.node_id)?;
-    let (from_path, to_path) = grpc::fs_rename(&endpoint, &from.path, &to.path).await?;
-    let result = serde_json::json!({
-        "from_path": from_path,
-        "to_path": to_path,
-    });
-    if output.json {
-        print_json(&result)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-    println!(
-        "{}:{} -> {}",
-        from.node_id,
-        result["from_path"].as_str().unwrap_or_default(),
-        result["to_path"].as_str().unwrap_or_default()
-    );
-    Ok(())
-}
-
-async fn fs_copy(
-    config_path: PathBuf,
-    from: &str,
-    to: &str,
-    output: OutputMode,
-) -> anyhow::Result<()> {
-    let from = parse_node_path(from)?;
-    let to = parse_node_path(to)?;
-    if from.node_id != to.node_id {
-        anyhow::bail!("fs copy requires source and target to use the same node");
-    }
-    let endpoint = load_endpoint(config_path, &from.node_id)?;
-    let (from_path, to_path, bytes_copied) = grpc::fs_copy(&endpoint, &from.path, &to.path).await?;
-    let result = serde_json::json!({
-        "from_path": from_path,
-        "to_path": to_path,
-        "bytes_copied": bytes_copied,
-    });
-    if output.json {
-        print_json(&result)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-    println!(
-        "{}:{} -> {} bytes_copied={}",
-        from.node_id,
-        result["from_path"].as_str().unwrap_or_default(),
-        result["to_path"].as_str().unwrap_or_default(),
-        result["bytes_copied"].as_u64().unwrap_or_default()
-    );
-    Ok(())
-}
-
-async fn fs_truncate(
-    config_path: PathBuf,
-    target: &str,
-    size: u64,
-    output: OutputMode,
-) -> anyhow::Result<()> {
-    let target = parse_node_path(target)?;
-    let endpoint = load_endpoint(config_path, &target.node_id)?;
-    let stat = grpc::fs_truncate(&endpoint, &target.path, size).await?;
-    if output.json {
-        print_json(&stat)?;
-        return Ok(());
-    }
-    if output.quiet {
-        return Ok(());
-    }
-    println!(
-        "{}:{} file={} dir={} size={}",
-        target.node_id, stat.path, stat.is_file, stat.is_dir, stat.size
-    );
     Ok(())
 }
 
@@ -1900,39 +1665,6 @@ fn format_service_protocol(protocol: &ServiceProtocol) -> &'static str {
         ServiceProtocol::Tcp => "tcp",
         ServiceProtocol::Udp => "udp",
     }
-}
-
-pub(crate) fn print_json(value: &impl serde::Serialize) -> anyhow::Result<()> {
-    println!("{}", serde_json::to_string_pretty(value)?);
-    Ok(())
-}
-
-#[derive(Debug)]
-struct NodePath {
-    node_id: String,
-    path: String,
-}
-
-fn parse_node_path(target: &str) -> anyhow::Result<NodePath> {
-    let (node_id, path) = target
-        .split_once(':')
-        .ok_or_else(|| anyhow::anyhow!("target must be in node:/path form"))?;
-    if node_id.is_empty() || path.is_empty() {
-        anyhow::bail!("target must include node and path");
-    }
-    Ok(NodePath {
-        node_id: node_id.to_string(),
-        path: path.to_string(),
-    })
-}
-
-pub(crate) fn load_endpoint(
-    config_path: PathBuf,
-    node_id: &str,
-) -> anyhow::Result<operon_network::NodeEndpoint> {
-    let config = OperonConfig::load(&config_path)?;
-    let config_dir = OperonConfig::config_dir(&config_path);
-    config.endpoint(node_id, &config_dir)
 }
 
 #[cfg(test)]

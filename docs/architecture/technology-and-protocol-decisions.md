@@ -125,7 +125,7 @@ gRPC handles these better than ad hoc JSON-RPC:
 - standard metadata for auth/session context
 
 The protobuf schema should be treated as the source of truth for node protocol
-contracts. As of v0.6.12, the active contract lives at
+contracts. The active contract lives at
 `proto/operon/runtime.proto`, Rust bindings are generated through tonic/prost,
 and the TypeScript SDK uses `nice-grpc` with generated `ts-proto` types for
 `grpc://` endpoints. Legacy design proto files live under `proto/archive/` and
@@ -136,6 +136,7 @@ Example shape:
 ```proto
 service OperonRuntime {
   rpc ReadFile(FsPathRequest) returns (stream FileChunk);
+  rpc ReadFileRange(FsReadRangeRequest) returns (FileChunk);
   rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
   rpc RunJob(JobRunRequest) returns (JobRecord);
   rpc WatchJob(JobIdRequest) returns (stream JobEvent);
@@ -236,7 +237,7 @@ Runtime transport implementation
       │
       ▼
 operond fs capability
-  StatFs / ListFs / ReadFile / WriteFile
+  StatFs / ListFs / ReadFile / ReadFileRange / WriteFile
   WriteFileRange / TruncateFs / MkdirFs / DeleteFs / RenameFs / CopyFs
   policy / audit owned by daemon
 ```
@@ -441,6 +442,10 @@ v0.7.1:
 
 v0.8:
   agent skills pack
+
+v0.8.3:
+  ReadFileRange for efficient mount random reads
+  release/package/protocol version policy
 
 v0.9:
   non-LAN provider API discovery

@@ -56,7 +56,7 @@ for node in node-a node-b; do
   cmp /tmp/operon-"${node}"-grpc-stream-input.txt /tmp/operon-"${node}"-grpc-stream-output.txt
 
   cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" -- echo "job from ${node} grpc"
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" --secret OPERON_TEST_SECRET -- test x'$OPERON_TEST_SECRET' = xdocker-secret
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" --secret OPERON_TEST_SECRET -- 'test "x$OPERON_TEST_SECRET" = xdocker-secret'
 
   cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" --detach --timeout-secs 10 -- "cat > stdin-grpc.txt" >/tmp/operon-"${node}"-grpc-stdin-job.log
   stdin_job_id="$(awk '{print $2}' /tmp/operon-"${node}"-grpc-stdin-job.log | head -n1)"

@@ -5,7 +5,7 @@ daemon:
   grpc_listen: 0.0.0.0:7789
   workspace: /workspace
   advertise_lan: true
-  store: /workspace/operon-store.jsonl
+  store: /etc/operon/operon-store.jsonl
   auth:
     token: docker-token
 

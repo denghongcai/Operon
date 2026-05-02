@@ -14,6 +14,7 @@ const niceGrpcMock = vi.hoisted(() => {
       statFs: vi.fn(),
       listFs: vi.fn(),
       readFile: vi.fn(),
+      readFileRange: vi.fn(),
       writeFile: vi.fn(),
       copyFs: vi.fn(),
       runJob: vi.fn(),
@@ -211,6 +212,20 @@ describe("OperonClient", () => {
     expect(result).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7 });
     expect(niceGrpcMock.client.copyFs).toHaveBeenCalledWith(
       { fromPath: "/a.txt", toPath: "/b.txt" },
+      expect.any(Object),
+    );
+  });
+
+  it("reads byte ranges through the range-read protocol", async () => {
+    const data = new Uint8Array([0x42, 0x43]);
+    niceGrpcMock.client.readFileRange.mockResolvedValue({ data });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    const result = await client.readFileRangeBytes("node-a", "/large.bin", 1024, 2);
+
+    expect(result).toEqual(data);
+    expect(niceGrpcMock.client.readFileRange).toHaveBeenCalledWith(
+      { path: "/large.bin", offset: "1024", size: 2 },
       expect.any(Object),
     );
   });

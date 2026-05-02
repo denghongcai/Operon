@@ -3093,7 +3093,99 @@ Done when:
 - deferred hardening items are explicit and not hidden as incidental TODOs.
 - focused tests cover the changed conversion and helper behavior.
 
-## Phase 46: Provider Discovery Contract
+## Phase 46: v0.8.3 Read Range and Release Cleanup
+
+Status: Completed.
+
+Goal: close the concrete FUSE random-read performance gap and make release,
+package, and protocol version rules explicit before provider discovery.
+
+Plan:
+
+- add `ReadFileRange(path, offset, size)` to the gRPC runtime protocol.
+- implement daemon range reads with direct seek-and-read behavior.
+- update the Linux FUSE mount adapter so `read_range` no longer streams the
+  full file and skips bytes locally.
+- update protocol/core conversions, TS SDK generation, and focused tests for
+  the new range-read API.
+- keep `ReadFile` as the streaming full-file API and document the difference.
+- clean up README release examples so they do not hard-code a stale release
+  version.
+- document how GitHub release tags, Rust crate versions, TS SDK package
+  versions, and `PROTOCOL_VERSION` relate to each other.
+
+Done when:
+
+- FUSE random reads use `ReadFileRange`.
+- daemon range-read validation prevents offset/size overflow.
+- protocol and SDK tests cover the new API surface.
+- README and release docs do not imply `v0.6.12` is the current install target.
+- version policy explains why protocol version bumps are tied to wire/API
+  compatibility, not every skills, testing, or internal cleanup phase.
+
+Detailed plan: `docs/plan/v0.8.3-read-range-release-cleanup.md`.
+
+Completed:
+
+- Added `ReadFileRange` to the gRPC runtime protocol.
+- Implemented daemon direct range reads and audit events.
+- Updated Linux FUSE `GrpcRemoteFs::read_range` to use `ReadFileRange`.
+- Added SDK range-read helper and regenerated TypeScript proto bindings.
+- Bumped `PROTOCOL_VERSION` to `v0.8.3`.
+- Updated README, `PROTOCOL.md`, runtime architecture docs, and CI validation
+  for release/package/protocol version policy.
+- Validation passed with
+  `scripts/verify-v0.8.3-read-range-release-cleanup.sh`.
+
+## Phase 47: v0.8.4 Runtime and CLI Modularization
+
+Status: Completed.
+
+Goal: reduce the largest maintenance hotspots through behavior-preserving
+module splits before adding provider discovery.
+
+Plan:
+
+- split `crates/operond/src/main.rs` so it keeps startup wiring and top-level
+  command dispatch, while fs, job, service forwarding, audit, pagination, and
+  runtime state move into focused modules.
+- split `crates/operon-cli/src/main.rs` so it keeps clap model construction and
+  high-level dispatch, while command families, output rendering, and target
+  parsing move into focused modules.
+- preserve current public CLI behavior, gRPC behavior, JSON output, quiet
+  output, and failure exit semantics.
+- add focused module-level tests where extraction exposes pure helpers.
+
+Done when:
+
+- `operond/src/main.rs` no longer directly owns fs, job, service-forwarding,
+  audit, and pagination implementation details.
+- `operon-cli/src/main.rs` no longer directly owns every command handler and
+  renderer.
+- existing daemon, CLI, service, mount, SDK, and integration validations remain
+  green.
+- intentionally deferred extraction is documented with an owner module and
+  reason.
+
+Detailed plan: `docs/plan/v0.8.4-runtime-cli-modularization.md`.
+
+Completed:
+
+- Extracted daemon filesystem runtime handlers into `fs_service`.
+- Extracted daemon pagination helpers into `pagination`.
+- Extracted CLI output helpers into `output`.
+- Extracted CLI target parsing and endpoint loading into `target`.
+- Extracted CLI filesystem command handlers into `commands/fs`.
+- Added CI validation for the current modularization boundaries.
+- Validation passed with `scripts/verify-v0.8.4-modularization.sh`.
+
+Remaining:
+
+- Job runtime, service forwarding, audit helpers, and non-fs CLI command
+  families still need follow-up extraction before major feature work in those
+  areas.
+
+## Phase 48: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3112,7 +3204,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 47: Non-LAN Provider Adapters
+## Phase 49: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3132,7 +3224,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 48: v0.9 Acceptance
+## Phase 50: v0.9 Acceptance
 
 Status: Planned.
 

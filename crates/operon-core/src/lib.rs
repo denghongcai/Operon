@@ -102,6 +102,20 @@ pub struct FsRead {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FsReadRangeRequest {
+    pub path: String,
+    pub offset: u64,
+    pub size: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FsReadRange {
+    pub path: String,
+    pub offset: u64,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FsWriteRequest {
     pub path: String,
     pub content: String,

@@ -26,6 +26,8 @@ COPY examples/docker-node-a-config.yaml /etc/operon/node-a-config.yaml
 COPY examples/docker-node-b-config.yaml /etc/operon/node-b-config.yaml
 COPY docker/entrypoint.sh /usr/local/bin/operon-docker-entrypoint
 
+RUN chown -R operon:operon /etc/operon /workspace
+
 USER operon
 
 EXPOSE 7789

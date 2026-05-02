@@ -244,6 +244,12 @@ export interface FileChunk {
   data: Uint8Array;
 }
 
+export interface FsReadRangeRequest {
+  path: string;
+  offset: string;
+  size: number;
+}
+
 export interface WriteFileRequest {
   target?: WriteFileTarget | undefined;
   chunk?: FileChunk | undefined;
@@ -1795,6 +1801,98 @@ export const FileChunk: MessageFns<FileChunk> = {
   fromPartial(object: DeepPartial<FileChunk>): FileChunk {
     const message = createBaseFileChunk();
     message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseFsReadRangeRequest(): FsReadRangeRequest {
+  return { path: "", offset: "0", size: 0 };
+}
+
+export const FsReadRangeRequest: MessageFns<FsReadRangeRequest> = {
+  encode(message: FsReadRangeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    if (message.offset !== "0") {
+      writer.uint32(16).uint64(message.offset);
+    }
+    if (message.size !== 0) {
+      writer.uint32(24).uint32(message.size);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsReadRangeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsReadRangeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.offset = reader.uint64().toString();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.size = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsReadRangeRequest {
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      offset: isSet(object.offset) ? globalThis.String(object.offset) : "0",
+      size: isSet(object.size) ? globalThis.Number(object.size) : 0,
+    };
+  },
+
+  toJSON(message: FsReadRangeRequest): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    if (message.offset !== "0") {
+      obj.offset = message.offset;
+    }
+    if (message.size !== 0) {
+      obj.size = Math.round(message.size);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsReadRangeRequest>): FsReadRangeRequest {
+    return FsReadRangeRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsReadRangeRequest>): FsReadRangeRequest {
+    const message = createBaseFsReadRangeRequest();
+    message.path = object.path ?? "";
+    message.offset = object.offset ?? "0";
+    message.size = object.size ?? 0;
     return message;
   },
 };
@@ -6114,6 +6212,14 @@ export const OperonRuntimeDefinition = {
       responseStream: true,
       options: {},
     },
+    readFileRange: {
+      name: "ReadFileRange",
+      requestType: FsReadRangeRequest as typeof FsReadRangeRequest,
+      requestStream: false,
+      responseType: FileChunk as typeof FileChunk,
+      responseStream: false,
+      options: {},
+    },
     writeFile: {
       name: "WriteFile",
       requestType: WriteFileRequest as typeof WriteFileRequest,
@@ -6298,6 +6404,7 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
     request: FsPathRequest,
     context: CallContext & CallContextExt,
   ): ServerStreamingMethodResult<DeepPartial<FileChunk>>;
+  readFileRange(request: FsReadRangeRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FileChunk>>;
   writeFile(
     request: AsyncIterable<WriteFileRequest>,
     context: CallContext & CallContextExt,
@@ -6349,6 +6456,7 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
   statFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsStat>;
   listFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsList>;
   readFile(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<FileChunk>;
+  readFileRange(request: DeepPartial<FsReadRangeRequest>, options?: CallOptions & CallOptionsExt): Promise<FileChunk>;
   writeFile(
     request: AsyncIterable<DeepPartial<WriteFileRequest>>,
     options?: CallOptions & CallOptionsExt,

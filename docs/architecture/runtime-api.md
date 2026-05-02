@@ -43,6 +43,7 @@ Unary calls:
 - `ListCapabilities`
 - `StatFs`
 - `ListFs`
+- `ReadFileRange`
 - `WriteFileRange`
 - `TruncateFs`
 - `MkdirFs`
@@ -77,6 +78,9 @@ Runtime schema constraints:
   presence rather than paired `has_*` booleans.
 - `WriteFile` and `WriteJobStdin` use explicit target and chunk envelope
   variants.
+- `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
+  unary random-read API for mount adapters and generated clients that need
+  offset/size reads.
 - `StreamJobLogs` uses an explicit event envelope with snapshot, entry, and
   complete variants; raw `JobLog` remains a payload type, not the stream
   response type.

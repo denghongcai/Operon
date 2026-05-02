@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.7.1";
+pub const PROTOCOL_VERSION: &str = "v0.8.3";
 
 pub mod runtime {
     pub mod v1 {
@@ -160,6 +160,26 @@ impl From<runtime::v1::FsList> for operon_core::FsList {
         Self {
             path: value.path,
             entries: value.entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<operon_core::FsReadRangeRequest> for runtime::v1::FsReadRangeRequest {
+    fn from(value: operon_core::FsReadRangeRequest) -> Self {
+        Self {
+            path: value.path,
+            offset: value.offset,
+            size: value.size,
+        }
+    }
+}
+
+impl From<runtime::v1::FsReadRangeRequest> for operon_core::FsReadRangeRequest {
+    fn from(value: runtime::v1::FsReadRangeRequest) -> Self {
+        Self {
+            path: value.path,
+            offset: value.offset,
+            size: value.size,
         }
     }
 }
@@ -582,7 +602,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.7.1");
+        assert_eq!(PROTOCOL_VERSION, "v0.8.3");
     }
 
     #[test]
@@ -622,6 +642,25 @@ mod tests {
         assert_eq!(grpc.next_page_token, "audit-next");
         let core = operon_core::AuditLog::from(grpc);
         assert_eq!(core.next_page_token, "audit-next");
+    }
+
+    #[test]
+    fn fs_read_range_request_round_trips() {
+        let request = operon_core::FsReadRangeRequest {
+            path: "/large.bin".to_string(),
+            offset: 4096,
+            size: 8192,
+        };
+
+        let grpc: runtime::v1::FsReadRangeRequest = request.clone().into();
+        assert_eq!(grpc.path, request.path);
+        assert_eq!(grpc.offset, request.offset);
+        assert_eq!(grpc.size, request.size);
+
+        let core = operon_core::FsReadRangeRequest::from(grpc);
+        assert_eq!(core.path, request.path);
+        assert_eq!(core.offset, request.offset);
+        assert_eq!(core.size, request.size);
     }
 
     #[test]

@@ -104,6 +104,10 @@ jobs:
             script: scripts/verify-v0.8-agent-skills.sh
           - name: v0.8.1 Integration Coverage Validation
             script: scripts/verify-v0.8.1-integration-coverage.sh
+          - name: v0.8.3 Read Range and Release Cleanup Validation
+            script: scripts/verify-v0.8.3-read-range-release-cleanup.sh
+          - name: v0.8.4 Modularization Validation
+            script: scripts/verify-v0.8.4-modularization.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

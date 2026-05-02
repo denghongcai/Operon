@@ -59,7 +59,8 @@ Operon is not a VPN. It runs on top of Cloudflare Mesh, Tailscale, WireGuard, SS
 Install the latest Linux release binary:
 
 ```bash
-VERSION=v0.6.12
+VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
+test -n "$VERSION" || { echo "failed to resolve latest Operon release" >&2; exit 1; }
 case "$(uname -m)" in
   x86_64) ARCH=linux-x86_64 ;;
   aarch64|arm64) ARCH=linux-arm64 ;;
@@ -143,6 +144,8 @@ scripts/verify-v0.7-service-forwarding.sh
 scripts/verify-v0.7.1-udp-datagram-forwarding.sh
 scripts/verify-v0.8-agent-skills.sh
 scripts/verify-v0.8.1-integration-coverage.sh
+scripts/verify-v0.8.3-read-range-release-cleanup.sh
+scripts/verify-v0.8.4-modularization.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -176,6 +179,12 @@ The v0.8.1 integration coverage validation starts a real daemon and exercises
 config, node, capability, filesystem, job, service, audit, execution graph,
 trace, and completion flows. The current coverage audit is in
 `docs/quality/test-coverage-audit.md`.
+The v0.8.3 read-range validation checks the `ReadFileRange` protocol path,
+Linux mount random-read behavior, SDK helper coverage, and release/protocol
+version policy documentation.
+The v0.8.4 modularization validation checks that fs runtime handlers,
+pagination helpers, CLI fs command handlers, output rendering helpers, and
+target parsing live outside the entrypoint files.
 
 ## Release Automation
 
@@ -183,13 +192,24 @@ Pushing a tag that matches `v*` starts the `Draft Release` GitHub Actions
 workflow:
 
 ```bash
-git tag v0.6.12
-git push origin v0.6.12
+git tag v0.x.y
+git push origin v0.x.y
 ```
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
 `armv7` binary tarballs, a JavaScript SDK tarball, and `SHA256SUMS`. Draft
 releases are intentionally left unpublished for manual review.
+
+Version policy:
+
+- GitHub release tags identify shipped binary bundles.
+- Rust crate versions and the TypeScript SDK package version identify package
+  publication lines; they do not need to change for every binary release until
+  crates.io/npm publishing is enabled.
+- `PROTOCOL_VERSION` identifies the public gRPC wire/API compatibility line.
+  Bump it when `proto/operon/runtime.proto` changes or compatibility semantics
+  change. Do not bump it for skills, test coverage, documentation-only, or
+  internal refactor phases.
 
 ---
 

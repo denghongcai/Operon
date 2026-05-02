@@ -110,6 +110,14 @@ Operon should not own:
 - `docs/plan/v0.8-acceptance.md`
   - v0.8 acceptance scope for the Agent Skills Pack.
 
+- `docs/plan/v0.8.3-read-range-release-cleanup.md`
+  - v0.8.3 scope for gRPC `ReadFileRange`, Linux FUSE random-read efficiency,
+    and release/package/protocol version policy cleanup.
+
+- `docs/plan/v0.8.4-runtime-cli-modularization.md`
+  - v0.8.4 scope for behavior-preserving `operond` and `operon-cli`
+    modularization before provider discovery work resumes.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -191,6 +199,14 @@ Operon should not own:
   aborted local read tasks, service check/forward are explicitly authorized,
   and larger policy/protocol hardening items are recorded in
   `docs/plan/v0.8.2-runtime-cleanup.md`.
+- Completed protocol cleanup milestone: v0.8.3 added `ReadFileRange` for
+  efficient FUSE random reads, kept `ReadFile` as the streaming full-file API,
+  documented release/package/protocol version policy, and bumped
+  `PROTOCOL_VERSION` to `v0.8.3`.
+- Completed maintainability cleanup milestone: v0.8.4 extracted daemon
+  filesystem handlers and pagination helpers, plus CLI output, target parsing,
+  and fs command handlers. Job runtime, service forwarding, audit helpers, and
+  non-fs CLI command families remain follow-up modularization work.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -274,3 +290,10 @@ Defer:
   includes the v0.6.12 validation script, and the post-release documentation
   drift pass aligned current docs with the v0.6.12 runtime. Nothing remains in
   v0.6.12.
+- Latest phase status update: v0.8.3 completed Read Range and Release Cleanup.
+  `ReadFileRange` is implemented in proto, daemon, Linux mount, SDK, docs, and
+  CI validation. Nothing remains in v0.8.3.
+- Latest phase status update: v0.8.4 completed the first Runtime and CLI
+  Modularization pass. Daemon fs and pagination logic plus CLI fs/output/target
+  logic are extracted and validated. Job/service/audit and non-fs CLI command
+  extraction remains future maintainability work.

@@ -98,6 +98,7 @@ Unary calls:
 - `ListCapabilities`
 - `StatFs`
 - `ListFs`
+- `ReadFileRange`
 - `WriteFileRange`
 - `TruncateFs`
 - `MkdirFs`
@@ -138,6 +139,11 @@ the TCP byte-stream tunnel.
 `ReadFile` returns ordered `FileChunk` messages. Concatenate `data` bytes in
 receive order.
 
+`ReadFileRange` reads one byte range from `path` at `offset` with `size` bytes
+and returns a single `FileChunk`. It is the efficient random-read API for OS
+mount adapters and direct clients that need seek-style reads. `ReadFile`
+remains the streaming full-file API.
+
 `WriteFile` accepts ordered `WriteFileRequest` messages. The first message must
 set the `target` variant with `WriteFileTarget.path`. Later messages must set
 the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
@@ -148,7 +154,8 @@ should not treat that as an omitted write.
 `WriteFileRange` writes one byte range at `offset`. It is intended for OS mount
 adapters and other clients that need write-through random write behavior. The
 daemon rejects oversized chunks, offset/data overflow, and writes beyond its
-maximum fs object size bound.
+maximum fs object size bound. `ReadFileRange` applies the same offset/size bound
+checks before reading.
 
 `TruncateFs`, `MkdirFs`, `DeleteFs`, and `RenameFs` are unary filesystem
 mutation calls used by the Linux mount adapter. `CopyFs` is a daemon-side,
@@ -166,8 +173,9 @@ operon fs rename <node:/from> <node:/to>
 operon fs copy <node:/from> <node:/to>
 ```
 
-`WriteFileRange` is intentionally not exposed as a normal human CLI command. It
-is a low-level protocol operation for mount adapters and direct clients.
+`ReadFileRange` and `WriteFileRange` are intentionally not exposed as normal
+human CLI commands. They are low-level protocol operations for mount adapters
+and direct clients.
 
 `CopyFs` requires read permission on `from_path` and write permission on
 `to_path`. It is same-node only. Cross-node copy is a separate future protocol
@@ -180,9 +188,10 @@ The current filesystem protocol does not provide conflict detection.
 
 Filesystem mutation requests do not carry file versions, etags, lock tokens,
 leases, or compare-and-swap preconditions. `ReadFile` is a live stream from the
-remote daemon, not a snapshot read. `WriteFile` replaces file content, and
-`WriteFileRange` writes the requested byte range, but neither operation checks
-that the file is unchanged since a prior read.
+remote daemon, not a snapshot read. `ReadFileRange` reads the requested bytes at
+call time. `WriteFile` replaces file content, and `WriteFileRange` writes the
+requested byte range, but neither operation checks that the file is unchanged
+since a prior read.
 
 The daemon resolves filesystem targets under the configured workspace and
 rejects symlink-resolved paths that escape that workspace.

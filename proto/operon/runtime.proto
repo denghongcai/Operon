@@ -9,6 +9,7 @@ service OperonRuntime {
   rpc StatFs(FsPathRequest) returns (FsStat);
   rpc ListFs(FsPathRequest) returns (FsList);
   rpc ReadFile(FsPathRequest) returns (stream FileChunk);
+  rpc ReadFileRange(FsReadRangeRequest) returns (FileChunk);
   rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
   rpc WriteFileRange(FsWriteRangeRequest) returns (FsWrite);
   rpc TruncateFs(FsTruncateRequest) returns (FsStat);
@@ -133,6 +134,12 @@ message FsList {
 
 message FileChunk {
   bytes data = 1;
+}
+
+message FsReadRangeRequest {
+  string path = 1;
+  uint64 offset = 2;
+  uint32 size = 3;
 }
 
 message WriteFileRequest {

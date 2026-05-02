@@ -14,33 +14,29 @@ use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
-    AuditEvent, AuditLog, CapabilityList, FsEntry, FsList, FsStat, FsWrite, HealthStatus, JobEvent,
-    JobList, JobLog, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
-    NodeInfo, PolicyConfig, RequestContext, RuntimeErrorKind, ServiceCheck, ServiceDefinition,
-    ServiceList,
+    AuditEvent, AuditLog, CapabilityList, FsWrite, HealthStatus, JobEvent, JobList, JobLog,
+    JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo,
+    PolicyConfig, RequestContext, RuntimeErrorKind, ServiceCheck, ServiceDefinition, ServiceList,
 };
 #[cfg(test)]
 use operon_core::{FsMountPolicy, FsPermissions, FsPolicy, JobPolicy, ServicePolicy};
-use operon_fs::{
-    authorize_fs, join_virtual_path, resolve_create_workspace_path,
-    resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
-    resolve_write_workspace_path,
-};
+use operon_fs::{authorize_fs, resolve_existing_workspace_path, resolve_write_workspace_path};
 use operon_process::{authorize_job, job_environment, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     job_log_stream_event, job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
     service_tunnel_response, write_file_request, FileChunk, FsCopyRequest, FsPathRequest,
-    FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest,
-    JobIdRequest, JobLogComplete, JobLogEntry, JobLogSnapshot, JobLogStreamEvent, ListAuditRequest,
-    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceDatagram,
-    ServiceDatagramTunnelClose, ServiceDatagramTunnelOpened, ServiceDatagramTunnelRequest,
-    ServiceDatagramTunnelResponse, ServiceIdRequest, ServiceTunnelClose, ServiceTunnelData,
-    ServiceTunnelOpened, ServiceTunnelRequest, ServiceTunnelResponse, WriteFileRequest,
+    FsReadRangeRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest,
+    HealthRequest, JobIdRequest, JobLogComplete, JobLogEntry, JobLogSnapshot, JobLogStreamEvent,
+    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
+    ServiceDatagram, ServiceDatagramTunnelClose, ServiceDatagramTunnelOpened,
+    ServiceDatagramTunnelRequest, ServiceDatagramTunnelResponse, ServiceIdRequest,
+    ServiceTunnelClose, ServiceTunnelData, ServiceTunnelOpened, ServiceTunnelRequest,
+    ServiceTunnelResponse, WriteFileRequest,
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpStream, UdpSocket},
     process::{Child, Command as TokioCommand},
     sync::{broadcast, mpsc, oneshot},
@@ -51,15 +47,18 @@ use tokio_util::io::ReaderStream;
 use tonic::{metadata::MetadataMap, transport::Server, Request, Response as GrpcResponse, Status};
 
 mod defaults;
+mod fs_service;
 mod grpc_status;
 mod lan_advertise;
 mod locks;
+mod pagination;
 mod store_config;
 
 use defaults::{default_capabilities, default_policy};
-use grpc_status::{status_from_error, status_from_io_error};
+use grpc_status::status_from_error;
 use lan_advertise::advertise_lan;
 use locks::lock;
+use pagination::paginate_items;
 use store_config::resolve_store_path;
 
 const RUN_ID_METADATA: &str = "x-operon-run-id";
@@ -67,8 +66,8 @@ const STEP_ID_METADATA: &str = "x-operon-step-id";
 const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
 const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
 const MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS: usize = 512;
-const MAX_FS_WRITE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
-const MAX_FS_FILE_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
+pub(crate) const MAX_FS_WRITE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_FS_FILE_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
 const MAX_SERVICE_DATAGRAM_BYTES: usize = 65_507;
 const SERVICE_DATAGRAM_PEER_IDLE_SECS: u64 = 60;
 
@@ -107,7 +106,7 @@ struct StartArgs {
 }
 
 #[derive(Debug, Clone)]
-struct AppState {
+pub(crate) struct AppState {
     node: NodeInfo,
     capabilities: CapabilityList,
     workspace: PathBuf,
@@ -320,7 +319,7 @@ impl OperonRuntime for GrpcRuntime {
         let path = request.into_inner().path;
         AUDIT_CONTEXT
             .scope(context, async {
-                let stat = grpc_fs_stat(&self.state, path).await?;
+                let stat = fs_service::stat(&self.state, path).await?;
                 Ok(GrpcResponse::new(stat.into()))
             })
             .await
@@ -334,7 +333,7 @@ impl OperonRuntime for GrpcRuntime {
         let path = request.into_inner().path;
         AUDIT_CONTEXT
             .scope(context, async {
-                let list = grpc_fs_list(&self.state, path).await?;
+                let list = fs_service::list(&self.state, path).await?;
                 Ok(GrpcResponse::new(list.into()))
             })
             .await
@@ -374,6 +373,22 @@ impl OperonRuntime for GrpcRuntime {
                         .map_err(|error| Status::internal(error.to_string()))
                 });
                 Ok(GrpcResponse::new(Box::pin(stream) as Self::ReadFileStream))
+            })
+            .await
+    }
+
+    async fn read_file_range(
+        &self,
+        request: Request<FsReadRangeRequest>,
+    ) -> Result<GrpcResponse<FileChunk>, Status> {
+        let context = authorize_grpc(&self.state, request.metadata())?;
+        let request = request.into_inner();
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let chunk =
+                    fs_service::read_range(&self.state, request.path, request.offset, request.size)
+                        .await?;
+                Ok(GrpcResponse::new(chunk))
             })
             .await
     }
@@ -450,9 +465,12 @@ impl OperonRuntime for GrpcRuntime {
                                     "write stream chunk arrived before target metadata",
                                 ));
                             };
-                            validate_write_chunk(chunk.data.len())?;
-                            bytes_written =
-                                checked_file_end(bytes_written, chunk.data.len(), "write stream")?;
+                            fs_service::validate_write_chunk(chunk.data.len())?;
+                            bytes_written = fs_service::checked_file_end(
+                                bytes_written,
+                                chunk.data.len(),
+                                "write stream",
+                            )?;
                             file.write_all(&chunk.data)
                                 .await
                                 .map_err(|error| Status::internal(error.to_string()))?;
@@ -490,9 +508,13 @@ impl OperonRuntime for GrpcRuntime {
         let request = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let write =
-                    grpc_fs_write_range(&self.state, request.path, request.offset, request.data)
-                        .await?;
+                let write = fs_service::write_range(
+                    &self.state,
+                    request.path,
+                    request.offset,
+                    request.data,
+                )
+                .await?;
                 Ok(GrpcResponse::new(write.into()))
             })
             .await
@@ -506,7 +528,7 @@ impl OperonRuntime for GrpcRuntime {
         let request = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let stat = grpc_fs_truncate(&self.state, request.path, request.size).await?;
+                let stat = fs_service::truncate(&self.state, request.path, request.size).await?;
                 Ok(GrpcResponse::new(stat.into()))
             })
             .await
@@ -520,7 +542,7 @@ impl OperonRuntime for GrpcRuntime {
         let path = request.into_inner().path;
         AUDIT_CONTEXT
             .scope(context, async {
-                let stat = grpc_fs_mkdir(&self.state, path).await?;
+                let stat = fs_service::mkdir(&self.state, path).await?;
                 Ok(GrpcResponse::new(stat.into()))
             })
             .await
@@ -534,7 +556,7 @@ impl OperonRuntime for GrpcRuntime {
         let path = request.into_inner().path;
         AUDIT_CONTEXT
             .scope(context, async {
-                let path = grpc_fs_delete(&self.state, path).await?;
+                let path = fs_service::delete(&self.state, path).await?;
                 Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsDelete {
                     path,
                 }))
@@ -550,7 +572,7 @@ impl OperonRuntime for GrpcRuntime {
         let request = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                grpc_fs_rename(&self.state, &request.from_path, &request.to_path).await?;
+                fs_service::rename(&self.state, &request.from_path, &request.to_path).await?;
                 Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsRename {
                     from_path: request.from_path,
                     to_path: request.to_path,
@@ -568,7 +590,7 @@ impl OperonRuntime for GrpcRuntime {
         AUDIT_CONTEXT
             .scope(context, async {
                 let bytes_copied =
-                    grpc_fs_copy(&self.state, &request.from_path, &request.to_path).await?;
+                    fs_service::copy(&self.state, &request.from_path, &request.to_path).await?;
                 Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsCopy {
                     from_path: request.from_path,
                     to_path: request.to_path,
@@ -1124,59 +1146,6 @@ impl OperonRuntime for GrpcRuntime {
     }
 }
 
-fn paginate_items<T: Clone>(
-    items: &[T],
-    page_size: u32,
-    page_token: &str,
-) -> Result<(Vec<T>, String), Status> {
-    let start = if page_token.is_empty() {
-        0
-    } else {
-        page_token
-            .parse::<usize>()
-            .map_err(|_| Status::invalid_argument("invalid page_token"))?
-    };
-    if start > items.len() {
-        return Err(Status::invalid_argument("page_token is out of range"));
-    }
-    if page_size == 0 {
-        return Ok((items[start..].to_vec(), String::new()));
-    }
-    let size = usize::min(page_size as usize, 1000);
-    let end = usize::min(start.saturating_add(size), items.len());
-    let next = if end < items.len() {
-        end.to_string()
-    } else {
-        String::new()
-    };
-    Ok((items[start..end].to_vec(), next))
-}
-
-fn validate_write_chunk(data_len: usize) -> Result<(), Status> {
-    if data_len > MAX_FS_WRITE_CHUNK_BYTES {
-        return Err(Status::invalid_argument(format!(
-            "fs write chunk exceeds {} bytes",
-            MAX_FS_WRITE_CHUNK_BYTES
-        )));
-    }
-    Ok(())
-}
-
-fn checked_file_end(offset: u64, data_len: usize, operation: &str) -> Result<u64, Status> {
-    let len = u64::try_from(data_len)
-        .map_err(|_| Status::invalid_argument(format!("{operation} data length is too large")))?;
-    let end = offset.checked_add(len).ok_or_else(|| {
-        Status::invalid_argument(format!("{operation} offset plus data length overflows"))
-    })?;
-    if end > MAX_FS_FILE_BYTES {
-        return Err(Status::invalid_argument(format!(
-            "{operation} exceeds maximum fs object size of {} bytes",
-            MAX_FS_FILE_BYTES
-        )));
-    }
-    Ok(end)
-}
-
 fn authorize_grpc(state: &AppState, metadata: &MetadataMap) -> Result<RequestContext, Status> {
     if let Some(expected) = &state.auth_token {
         let Some(header) = metadata.get("authorization") else {
@@ -1205,275 +1174,6 @@ fn metadata_value(metadata: &MetadataMap, key: &'static str) -> Option<String> {
         .and_then(|value| value.to_str().ok())
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-}
-
-async fn grpc_fs_stat(state: &AppState, path: String) -> Result<FsStat, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
-        record_audit(state, "stat", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "stat", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let metadata = tokio::fs::metadata(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    record_audit(state, "stat", &path, true, "allowed");
-    Ok(FsStat {
-        path,
-        is_file: metadata.is_file(),
-        is_dir: metadata.is_dir(),
-        size: metadata.len(),
-    })
-}
-
-async fn grpc_fs_list(state: &AppState, path: String) -> Result<FsList, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
-        record_audit(state, "list", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "list", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let mut entries = Vec::new();
-    let mut reader = tokio::fs::read_dir(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    while let Some(entry) = reader.next_entry().await.map_err(status_from_io_error)? {
-        let metadata = tokio::fs::symlink_metadata(entry.path())
-            .await
-            .map_err(status_from_io_error)?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        let child_path = join_virtual_path(&path, &name);
-        entries.push(FsEntry {
-            name,
-            path: child_path,
-            is_file: metadata.is_file(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-        });
-    }
-    entries.sort_by(|a, b| a.name.cmp(&b.name));
-    record_audit(state, "list", &path, true, "allowed");
-    Ok(FsList { path, entries })
-}
-
-async fn grpc_fs_write_range(
-    state: &AppState,
-    path: String,
-    offset: u64,
-    data: Vec<u8>,
-) -> Result<FsWrite, Status> {
-    validate_write_chunk(data.len())?;
-    checked_file_end(offset, data.len(), "write range")?;
-    if let Err(error) = authorize_fs(&state.policy, "write", &path) {
-        record_audit(state, "write-range", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_write_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "write-range", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    if let Some(parent) = full_path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(status_from_io_error)?;
-    }
-    let mut file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    file.seek(std::io::SeekFrom::Start(offset))
-        .await
-        .map_err(status_from_io_error)?;
-    file.write_all(&data).await.map_err(status_from_io_error)?;
-    file.flush().await.map_err(status_from_io_error)?;
-    record_audit(state, "write-range", &path, true, "allowed");
-    Ok(FsWrite {
-        path,
-        bytes_written: data.len() as u64,
-    })
-}
-
-async fn grpc_fs_truncate(state: &AppState, path: String, size: u64) -> Result<FsStat, Status> {
-    if size > MAX_FS_FILE_BYTES {
-        return Err(Status::invalid_argument(format!(
-            "truncate size exceeds maximum fs object size of {} bytes",
-            MAX_FS_FILE_BYTES
-        )));
-    }
-    if let Err(error) = authorize_fs(&state.policy, "write", &path) {
-        record_audit(state, "truncate", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_write_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "truncate", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    if let Some(parent) = full_path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(status_from_io_error)?;
-    }
-    let file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    file.set_len(size).await.map_err(status_from_io_error)?;
-    record_audit(state, "truncate", &path, true, "allowed");
-    let metadata = tokio::fs::metadata(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    Ok(FsStat {
-        path,
-        is_file: metadata.is_file(),
-        is_dir: metadata.is_dir(),
-        size: metadata.len(),
-    })
-}
-
-async fn grpc_fs_mkdir(state: &AppState, path: String) -> Result<FsStat, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "write", &path) {
-        record_audit(state, "mkdir", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_create_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "mkdir", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    tokio::fs::create_dir_all(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    record_audit(state, "mkdir", &path, true, "allowed");
-    let metadata = tokio::fs::metadata(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    Ok(FsStat {
-        path,
-        is_file: metadata.is_file(),
-        is_dir: metadata.is_dir(),
-        size: metadata.len(),
-    })
-}
-
-async fn grpc_fs_delete(state: &AppState, path: String) -> Result<String, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "delete", &path) {
-        record_audit(state, "delete", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_existing_workspace_leaf_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "delete", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let metadata = tokio::fs::symlink_metadata(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    if metadata.is_dir() {
-        tokio::fs::remove_dir(&full_path)
-            .await
-            .map_err(status_from_io_error)?;
-    } else {
-        tokio::fs::remove_file(&full_path)
-            .await
-            .map_err(status_from_io_error)?;
-    }
-    record_audit(state, "delete", &path, true, "allowed");
-    Ok(path)
-}
-
-async fn grpc_fs_rename(state: &AppState, from_path: &str, to_path: &str) -> Result<(), Status> {
-    let resource = format!("{from_path} -> {to_path}");
-    if let Err(error) = authorize_fs(&state.policy, "delete", from_path) {
-        record_audit(state, "rename", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    if let Err(error) = authorize_fs(&state.policy, "write", to_path) {
-        record_audit(state, "rename", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let from_full_path = match resolve_existing_workspace_leaf_path(&state.workspace, from_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "rename", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let to_full_path = match resolve_write_workspace_path(&state.workspace, to_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "rename", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    tokio::fs::rename(&from_full_path, &to_full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    record_audit(state, "rename", &resource, true, "allowed");
-    Ok(())
-}
-
-async fn grpc_fs_copy(state: &AppState, from_path: &str, to_path: &str) -> Result<u64, Status> {
-    let resource = format!("{from_path} -> {to_path}");
-    if let Err(error) = authorize_fs(&state.policy, "read", from_path) {
-        record_audit(state, "copy", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    if let Err(error) = authorize_fs(&state.policy, "write", to_path) {
-        record_audit(state, "copy", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let from_full_path = match resolve_existing_workspace_path(&state.workspace, from_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "copy", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let to_full_path = match resolve_write_workspace_path(&state.workspace, to_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "copy", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let metadata = tokio::fs::metadata(&from_full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    if !metadata.is_file() {
-        record_audit(state, "copy", &resource, false, "copy source is not a file");
-        return Err(Status::failed_precondition("copy source is not a file"));
-    }
-    let bytes_copied = tokio::fs::copy(&from_full_path, &to_full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    record_audit(state, "copy", &resource, true, "allowed");
-    Ok(bytes_copied)
 }
 
 fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Status> {
@@ -2033,7 +1733,13 @@ fn send_service_datagram_close(
     }));
 }
 
-fn record_audit(state: &AppState, action: &str, resource: &str, allowed: bool, reason: &str) {
+pub(crate) fn record_audit(
+    state: &AppState,
+    action: &str,
+    resource: &str,
+    allowed: bool,
+    reason: &str,
+) {
     record_audit_capability(state, "fs:workspace", action, resource, allowed, reason);
 }
 
@@ -2718,17 +2424,38 @@ mod tests {
 
     #[test]
     fn fs_range_validation_rejects_overflow_and_large_chunks() {
-        let chunk_error =
-            validate_write_chunk(MAX_FS_WRITE_CHUNK_BYTES + 1).expect_err("chunk too large");
+        let chunk_error = fs_service::validate_write_chunk(MAX_FS_WRITE_CHUNK_BYTES + 1)
+            .expect_err("chunk too large");
         assert_eq!(chunk_error.code(), tonic::Code::InvalidArgument);
 
-        let overflow =
-            checked_file_end(u64::MAX, 1, "write range").expect_err("offset should overflow");
+        let read_error =
+            fs_service::validate_read_range_size((MAX_FS_WRITE_CHUNK_BYTES + 1) as u32)
+                .expect_err("read range too large");
+        assert_eq!(read_error.code(), tonic::Code::InvalidArgument);
+
+        let overflow = fs_service::checked_file_end(u64::MAX, 1, "write range")
+            .expect_err("offset should overflow");
         assert_eq!(overflow.code(), tonic::Code::InvalidArgument);
 
-        let too_large_end = checked_file_end(MAX_FS_FILE_BYTES, 1, "write range")
+        let too_large_end = fs_service::checked_file_end(MAX_FS_FILE_BYTES, 1, "write range")
             .expect_err("file bound should be enforced");
         assert_eq!(too_large_end.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn read_range_reads_only_requested_bytes() {
+        let base = unique_temp_dir("operond-read-range-test");
+        let workspace = base.join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::write(workspace.join("data.bin"), b"0123456789").expect("file");
+        let state = test_state(default_policy(), workspace);
+
+        let chunk = fs_service::read_range(&state, "/data.bin".to_string(), 3, 4)
+            .await
+            .expect("read range");
+
+        assert_eq!(chunk.data, b"3456");
+        let _ = fs::remove_dir_all(base);
     }
 
     #[tokio::test]
@@ -2738,47 +2465,12 @@ mod tests {
         fs::create_dir_all(&workspace).expect("workspace");
         let state = test_state(default_policy(), workspace.clone());
 
-        grpc_fs_mkdir(&state, "/a/b/c".to_string())
+        fs_service::mkdir(&state, "/a/b/c".to_string())
             .await
             .expect("mkdir nested");
 
         assert!(workspace.join("a/b/c").is_dir());
         let _ = fs::remove_dir_all(base);
-    }
-
-    #[test]
-    fn pagination_returns_deterministic_pages() {
-        let items = vec![1, 2, 3, 4, 5];
-
-        let (first, first_token) = paginate_items(&items, 2, "").expect("first page");
-        assert_eq!(first, vec![1, 2]);
-        assert_eq!(first_token, "2");
-
-        let (second, second_token) = paginate_items(&items, 2, &first_token).expect("second page");
-        assert_eq!(second, vec![3, 4]);
-        assert_eq!(second_token, "4");
-
-        let (last, last_token) = paginate_items(&items, 2, &second_token).expect("last page");
-        assert_eq!(last, vec![5]);
-        assert!(last_token.is_empty());
-    }
-
-    #[test]
-    fn pagination_rejects_invalid_tokens() {
-        let items = vec![1, 2, 3];
-
-        assert_eq!(
-            paginate_items(&items, 2, "not-a-number")
-                .expect_err("invalid token")
-                .code(),
-            tonic::Code::InvalidArgument
-        );
-        assert_eq!(
-            paginate_items(&items, 2, "4")
-                .expect_err("out of range token")
-                .code(),
-            tonic::Code::InvalidArgument
-        );
     }
 
     #[test]
@@ -2863,7 +2555,7 @@ mod tests {
         policy.fs.mounts[0].permissions.delete = true;
         let state = test_state(policy, workspace);
 
-        grpc_fs_delete(&state, "/link".to_string())
+        fs_service::delete(&state, "/link".to_string())
             .await
             .expect("delete symlink");
 

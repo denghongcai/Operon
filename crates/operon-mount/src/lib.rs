@@ -17,8 +17,8 @@ use anyhow::Context;
 use operon_core::{FsList, FsStat};
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    operon_runtime_client::OperonRuntimeClient, FsPathRequest, FsRenameRequest, FsTruncateRequest,
-    FsWriteRangeRequest,
+    operon_runtime_client::OperonRuntimeClient, FsPathRequest, FsReadRangeRequest, FsRenameRequest,
+    FsTruncateRequest, FsWriteRangeRequest,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Code, Request, Status};
 
@@ -164,35 +164,18 @@ impl RemoteFs for GrpcRemoteFs {
     }
 
     fn read_range(&self, path: &str, offset: u64, size: u32) -> anyhow::Result<Vec<u8>> {
-        let path = path.to_string();
+        let request = FsReadRangeRequest {
+            path: path.to_string(),
+            offset,
+            size,
+        };
         block_on_runtime(self.runtime(), async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
-            let mut stream = client
-                .read_file(with_auth(&self.endpoint, FsPathRequest { path })?)
+            Ok(client
+                .read_file_range(with_auth(&self.endpoint, request)?)
                 .await?
-                .into_inner();
-            let mut remaining_skip =
-                usize::try_from(offset).map_err(|_| anyhow::anyhow!("read offset too large"))?;
-            let mut remaining_take = size as usize;
-            let mut data = Vec::with_capacity(remaining_take);
-
-            while remaining_take > 0 {
-                let Some(chunk) = stream.message().await? else {
-                    break;
-                };
-                let chunk = chunk.data;
-                if remaining_skip >= chunk.len() {
-                    remaining_skip -= chunk.len();
-                    continue;
-                }
-                let start = remaining_skip;
-                remaining_skip = 0;
-                let take = remaining_take.min(chunk.len() - start);
-                data.extend_from_slice(&chunk[start..start + take]);
-                remaining_take -= take;
-            }
-
-            Ok(data)
+                .into_inner()
+                .data)
         })
     }
 
