@@ -108,7 +108,7 @@ Operon should not own:
     from TCP service forwarding.
 
 - `docs/plan/v0.8-acceptance.md`
-  - v0.8 acceptance scope for Agent Integration.
+  - v0.8 acceptance scope for the Agent Skills Pack.
 
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
@@ -177,8 +177,10 @@ Operon should not own:
   explicit local forwarding for policy-allowed services.
 - Completed service milestone: v0.7.1 UDP/datagram forwarding with a separate
   datagram protocol.
-- Next planned milestone: v0.8 Agent Integration.
-- Later planned milestone: v0.9 non-LAN provider discovery.
+- Completed agent skills milestone: v0.8 repo-local skills, `operon config
+  explain`, public CLI help validation, and CI coverage for agent usage
+  guidance.
+- Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -191,6 +193,14 @@ Operon should not own:
   traversal, mesh IP assignment, global routing, or unmanaged port exposure.
 - UDP/datagram forwarding uses a separate datagram-oriented protocol instead of
   reusing the TCP byte-stream tunnel.
+- v0.8 produced skills that teach agents how to use Operon; it did not add an
+  agent runtime or a parallel control plane.
+- v0.8 improved CLI self-description for agents: all public command help paths
+  are validated, and `operon config explain` provides a config interpretation
+  view.
+- v0.8 skills teach scenarios, command selection, safety checks, and
+  when to inspect audit/trace output. They should direct agents to use
+  `operon <command> --help` for exact syntax instead of duplicating every flag.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 

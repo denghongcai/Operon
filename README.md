@@ -131,6 +131,7 @@ scripts/verify-v0.6.11-governance.sh
 scripts/verify-v0.6.12-runtime-boundary.sh
 scripts/verify-v0.7-service-forwarding.sh
 scripts/verify-v0.7.1-udp-datagram-forwarding.sh
+scripts/verify-v0.8-agent-skills.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -157,6 +158,9 @@ forwarding audit events.
 The v0.7.1 UDP datagram forwarding validation checks policy-configured UDP
 service metadata, local UDP forwarding, packet-boundary preservation, and audit
 events.
+The v0.8 agent skills validation checks repo-local skill metadata, public CLI
+help paths, `operon config explain`, current service forwarding command names,
+and safety guidance for agent workflows.
 
 ## Release Automation
 
@@ -186,6 +190,7 @@ From the repo, run them through Cargo:
 ```bash
 cargo run -p operond -- start --config examples/config.yaml
 cargo run -p operon-cli -- --config examples/config.yaml node list
+cargo run -p operon-cli -- --config examples/config.yaml config explain
 ```
 
 After installing built binaries, the same commands are:
@@ -673,6 +678,7 @@ Roadmap:
 - [x] Linux read-only FUSE mount
 - [x] Linux write FUSE mount
 - [x] CLI fs mutation commands
+- [x] Agent skills pack and config explain CLI
 - [x] Same-node fs copy
 - [x] Workspace containment and isolated job environment hardening
 - [x] gRPC runtime schema stabilization

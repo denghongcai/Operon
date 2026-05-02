@@ -12,7 +12,7 @@ use std::{
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use clap::{Parser, Subcommand};
-use operon_config::{NetworkProviderKind, NodeConfig, OperonConfig};
+use operon_config::{resolve_path, AuthConfig, NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
     AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, FsList, FsRead, FsWrite, HealthStatus,
     JobList, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo,
@@ -24,14 +24,20 @@ mod grpc;
 mod onboard;
 
 #[derive(Debug, Parser)]
-#[command(name = "operon", about = "Operon CLI")]
+#[command(
+    name = "operon",
+    about = "Operate Operon nodes through config.yaml, gRPC runtime APIs, and policy-aware capabilities"
+)]
 struct Args {
+    /// Path to config.yaml. Defaults to $HOME/.operon/config.yaml.
     #[arg(short, long)]
     config: Option<PathBuf>,
 
+    /// Render command output as JSON for scripts.
     #[arg(long)]
     json: bool,
 
+    /// Suppress non-essential human output.
     #[arg(long)]
     quiet: bool,
 
@@ -41,125 +47,194 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    #[command(about = "Inspect and validate configured nodes")]
     Node {
         #[command(subcommand)]
         command: NodeCommand,
     },
+    #[command(about = "Create starter Operon configuration files")]
     Init {
         #[command(subcommand)]
         command: InitCommand,
     },
+    #[command(about = "Interactively create a usable local Operon configuration")]
     Onboard(onboard::OnboardArgs),
+    #[command(about = "Inspect supported network provider kinds")]
     Provider {
         #[command(subcommand)]
         command: ProviderCommand,
     },
+    #[command(about = "Inspect policy-allowed runtime capabilities")]
     Capability {
         #[command(subcommand)]
         command: CapabilityCommand,
     },
+    #[command(about = "Read and mutate remote filesystem capabilities")]
     Fs {
         #[command(subcommand)]
         command: FsCommand,
     },
+    #[command(about = "Inspect audit events emitted by a node")]
     Audit {
         #[command(subcommand)]
         command: AuditCommand,
     },
+    #[command(about = "Inspect service metadata, health, and local forwards")]
     Service {
         #[command(subcommand)]
         command: ServiceCommand,
     },
+    #[command(about = "Run jobs and stream job stdin/stdout/stderr")]
     Job {
         #[command(subcommand)]
         command: JobCommand,
     },
+    #[command(about = "Run an execution graph YAML file")]
     Run {
+        /// Execution graph YAML path.
         workflow: PathBuf,
+        /// Optional path for the execution trace JSON output.
         #[arg(long)]
         trace_output: Option<PathBuf>,
     },
+    #[command(about = "Inspect execution trace files")]
     Trace {
         #[command(subcommand)]
         command: TraceCommand,
     },
+    #[command(about = "Mount a remote filesystem capability on Linux")]
     Mount {
+        /// Remote target in node:/path form.
         target: String,
+        /// Local mount point.
         #[arg(long)]
         to: PathBuf,
+    },
+    #[command(about = "Explain the active Operon config.yaml without reading raw YAML")]
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
     },
 }
 
 #[derive(Debug, Subcommand)]
 enum NodeCommand {
+    #[command(about = "List client nodes configured in config.yaml")]
     List,
+    #[command(about = "Discover LAN nodes with mDNS")]
     Discover {
+        /// Discovery provider. v0.3+ supports lan.
         #[arg(long, default_value = "lan")]
         provider: String,
+        /// Discovery timeout in seconds.
         #[arg(long, default_value_t = 3)]
         timeout_secs: u64,
+        /// Optional YAML file to write discovered client nodes into.
         #[arg(long)]
         output_config: Option<PathBuf>,
     },
+    #[command(about = "Resolve a configured node to its endpoint")]
     Resolve {
+        /// Node id from config.yaml.
         node_id: String,
     },
+    #[command(about = "Call runtime health and node info on a configured node")]
     Ping {
+        /// Node id from config.yaml.
         node_id: String,
     },
 }
 
 #[derive(Debug, Subcommand)]
 enum InitCommand {
-    Config { path: PathBuf },
+    #[command(about = "Create a starter config.yaml plus referenced token and secrets files")]
+    Config {
+        /// Path for the new config.yaml.
+        path: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ConfigCommand {
+    #[command(about = "Summarize daemon, client, auth, policy, services, and secrets settings")]
+    Explain,
 }
 
 #[derive(Debug, Subcommand)]
 enum ProviderCommand {
+    #[command(about = "List provider kinds accepted by config.yaml")]
     List,
 }
 
 #[derive(Debug, Subcommand)]
 enum CapabilityCommand {
-    List { node_id: String },
+    #[command(about = "List capabilities exposed by a node")]
+    List {
+        /// Node id from config.yaml.
+        node_id: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum FsCommand {
+    #[command(about = "Stat a remote file or directory")]
     Stat {
+        /// Remote target in node:/path form.
         target: String,
     },
+    #[command(about = "List a remote directory")]
     List {
+        /// Remote target in node:/path form.
         target: String,
     },
+    #[command(about = "Stream a remote file to stdout or a local file")]
     Read {
+        /// Remote target in node:/path form.
         target: String,
+        /// Local output file. Omit to write content to stdout or JSON.
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    #[command(about = "Write local content or a local file to a remote path")]
     Write {
+        /// Remote target in node:/path form.
         target: String,
+        /// Inline content to write.
         #[arg(long)]
         content: Option<String>,
+        /// Local file whose bytes should be streamed to the target.
         #[arg(long)]
         file: Option<PathBuf>,
     },
+    #[command(about = "Create a remote directory")]
     Mkdir {
+        /// Remote target in node:/path form.
         target: String,
     },
+    #[command(about = "Remove a remote file or directory")]
     Rm {
+        /// Remote target in node:/path form.
         target: String,
     },
+    #[command(about = "Rename or move a remote path")]
     Rename {
+        /// Source target in node:/path form.
         from: String,
+        /// Destination target in node:/path form.
         to: String,
     },
+    #[command(about = "Copy a remote file or directory")]
     Copy {
+        /// Source target in node:/path form.
         from: String,
+        /// Destination target in node:/path form.
         to: String,
     },
+    #[command(about = "Resize a remote file")]
     Truncate {
+        /// Remote target in node:/path form.
         target: String,
+        /// New file size in bytes.
         #[arg(long)]
         size: u64,
     },
@@ -167,19 +242,28 @@ enum FsCommand {
 
 #[derive(Debug, Subcommand)]
 enum AuditCommand {
+    #[command(about = "List audit events for a node")]
     List {
+        /// Node id from config.yaml.
         node_id: String,
     },
+    #[command(about = "Show audit events with optional filters")]
     Show {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Maximum number of events to show.
         #[arg(long)]
         limit: Option<usize>,
+        /// Filter by capability id.
         #[arg(long)]
         capability: Option<String>,
+        /// Filter by action name.
         #[arg(long)]
         action: Option<String>,
+        /// Filter by authorization outcome.
         #[arg(long)]
         allowed: Option<bool>,
+        /// Filter by resource substring.
         #[arg(long)]
         resource: Option<String>,
     },
@@ -187,22 +271,35 @@ enum AuditCommand {
 
 #[derive(Debug, Subcommand)]
 enum ServiceCommand {
+    #[command(about = "List service metadata exposed by a node")]
     List {
+        /// Node id from config.yaml.
         node_id: String,
     },
+    #[command(about = "Run a policy-aware health check for a service")]
     Check {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Service id from policy.service.services.
         service_id: String,
     },
+    #[command(about = "Forward a local TCP port to a policy-allowed remote service")]
     Forward {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Service id from policy.service.services.
         service_id: String,
+        /// Local socket address to listen on, for example 127.0.0.1:8080.
         #[arg(long)]
         listen: SocketAddr,
     },
+    #[command(about = "Forward UDP datagrams to a policy-allowed remote UDP service")]
     ForwardUdp {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Service id from policy.service.services.
         service_id: String,
+        /// Local UDP socket address to listen on, for example 127.0.0.1:5353.
         #[arg(long)]
         listen: SocketAddr,
     },
@@ -210,56 +307,86 @@ enum ServiceCommand {
 
 #[derive(Debug, Subcommand)]
 enum JobCommand {
+    #[command(about = "Run a shell command on a node")]
     Run {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Remote working directory allowed by policy.
         #[arg(long)]
         cwd: Option<String>,
+        /// Job timeout in seconds.
         #[arg(long, default_value_t = 30)]
         timeout_secs: u64,
+        /// Secret name to inject when allowed by policy.
         #[arg(long)]
         secret: Vec<String>,
+        /// Return after the job is accepted instead of waiting for completion.
         #[arg(long)]
         detach: bool,
+        /// Shell command to execute. Multiple CLI words are shell-escaped.
         #[arg(required = true, trailing_var_arg = true)]
         command: Vec<String>,
     },
+    #[command(about = "List jobs known by a node")]
     List {
+        /// Node id from config.yaml.
         node_id: String,
     },
+    #[command(about = "Get a job status record")]
     Status {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Job id returned by job run or job list.
         job_id: String,
     },
+    #[command(about = "Read or follow job stdout/stderr logs")]
     Logs {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Job id returned by job run or job list.
         job_id: String,
+        /// Keep following log output.
         #[arg(long)]
         follow: bool,
+        /// Use the streaming log RPC.
         #[arg(long)]
         stream: bool,
     },
+    #[command(about = "Write stdin bytes to a running job")]
     Stdin {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Job id returned by job run or job list.
         job_id: String,
+        /// Inline stdin content.
         #[arg(long)]
         content: Option<String>,
+        /// Local file whose bytes should be streamed to job stdin.
         #[arg(long)]
         file: Option<PathBuf>,
+        /// Close job stdin after optional content or file bytes.
         #[arg(long)]
         close: bool,
     },
+    #[command(about = "Cancel a running job")]
     Cancel {
+        /// Node id from config.yaml.
         node_id: String,
+        /// Job id returned by job run or job list.
         job_id: String,
     },
 }
 
 #[derive(Debug, Subcommand)]
 enum TraceCommand {
+    #[command(about = "Show one execution trace JSON file")]
     Show {
+        /// Path to a trace JSON file.
         path: PathBuf,
     },
+    #[command(about = "List execution trace files under a directory")]
     List {
+        /// Directory to scan.
         #[arg(default_value = ".")]
         dir: PathBuf,
     },
@@ -296,6 +423,81 @@ struct InitConfigSummary {
     config: String,
     token: String,
     secrets: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ConfigExplain {
+    path: String,
+    default_path: bool,
+    config_dir: String,
+    daemon: Option<DaemonExplain>,
+    client: ClientExplain,
+    policy: Option<PolicyExplain>,
+    secrets: Option<SecretsExplain>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DaemonExplain {
+    node_id: String,
+    grpc_listen: String,
+    workspace: String,
+    advertise_lan: bool,
+    store: Option<String>,
+    auth: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ClientExplain {
+    nodes: Vec<NodeExplain>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct NodeExplain {
+    node_id: String,
+    endpoint: String,
+    provider: String,
+    auth: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct PolicyExplain {
+    subject: String,
+    fs_mounts: Vec<FsMountExplain>,
+    job: JobPolicyExplain,
+    services: Vec<ServiceExplain>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct FsMountExplain {
+    name: String,
+    path: String,
+    read: bool,
+    write: bool,
+    delete: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct JobPolicyExplain {
+    allowed_cwds: Vec<String>,
+    default_timeout_secs: u64,
+    max_timeout_secs: u64,
+    preserve_env: bool,
+    env_allowlist: Vec<String>,
+    allowed_secrets: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ServiceExplain {
+    id: String,
+    name: String,
+    endpoint: String,
+    protocol: String,
+    description: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SecretsExplain {
+    file: Option<String>,
 }
 
 #[tokio::main]
@@ -443,6 +645,9 @@ async fn main() -> anyhow::Result<()> {
             TraceCommand::List { dir } => trace_list(dir, output),
         },
         Command::Mount { target, to } => mount_fs(config_path, &target, to, output),
+        Command::Config { command } => match command {
+            ConfigCommand::Explain => config_explain(config_path, output),
+        },
     }
 }
 
@@ -524,6 +729,195 @@ async fn ping_node(config_path: PathBuf, node_id: &str, output: OutputMode) -> a
     );
 
     Ok(())
+}
+
+fn config_explain(config_path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
+    let config = OperonConfig::load(&config_path)?;
+    let explain = ConfigExplain::from_config(&config_path, &config);
+    if output.json {
+        print_json(&explain)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+    print_config_explain(&explain);
+    Ok(())
+}
+
+impl ConfigExplain {
+    fn from_config(config_path: &Path, config: &OperonConfig) -> Self {
+        let config_dir = OperonConfig::config_dir(config_path);
+        let default_path = OperonConfig::default_path();
+        let daemon = config.daemon.as_ref().map(|daemon| DaemonExplain {
+            node_id: daemon.node_id.clone(),
+            grpc_listen: daemon.grpc_listen.to_string(),
+            workspace: display_path(resolve_path(&config_dir, &daemon.workspace)),
+            advertise_lan: daemon.advertise_lan,
+            store: daemon
+                .store
+                .as_ref()
+                .map(|path| display_path(resolve_path(&config_dir, path))),
+            auth: auth_source(&daemon.auth, &config_dir),
+        });
+        let nodes = config
+            .client
+            .nodes
+            .iter()
+            .map(|(node_id, node)| NodeExplain {
+                node_id: node_id.clone(),
+                endpoint: node.endpoint.clone(),
+                provider: node.provider.as_str().to_string(),
+                auth: auth_source(&node.auth, &config_dir),
+            })
+            .collect();
+        let policy = config.policy.as_ref().map(|policy| PolicyExplain {
+            subject: policy.subject.clone(),
+            fs_mounts: policy
+                .fs
+                .mounts
+                .iter()
+                .map(|mount| FsMountExplain {
+                    name: mount.name.clone(),
+                    path: mount.path.clone(),
+                    read: mount.permissions.read,
+                    write: mount.permissions.write,
+                    delete: mount.permissions.delete,
+                })
+                .collect(),
+            job: JobPolicyExplain {
+                allowed_cwds: policy.job.allowed_cwds.clone(),
+                default_timeout_secs: policy.job.default_timeout_secs,
+                max_timeout_secs: policy.job.max_timeout_secs,
+                preserve_env: policy.job.preserve_env,
+                env_allowlist: policy.job.env_allowlist.clone(),
+                allowed_secrets: policy.job.allowed_secrets.clone(),
+            },
+            services: policy
+                .service
+                .services
+                .iter()
+                .map(|service| ServiceExplain {
+                    id: service.id.clone(),
+                    name: service.name.clone(),
+                    endpoint: format!("{}:{}", service.host, service.port),
+                    protocol: format_service_protocol(&service.protocol).to_string(),
+                    description: service.description.clone(),
+                })
+                .collect(),
+        });
+        let secrets = config.secrets.as_ref().map(|secrets| SecretsExplain {
+            file: secrets
+                .file
+                .as_ref()
+                .map(|path| display_path(resolve_path(&config_dir, path))),
+        });
+
+        Self {
+            path: display_path(config_path),
+            default_path: config_path == default_path,
+            config_dir: display_path(&config_dir),
+            daemon,
+            client: ClientExplain { nodes },
+            policy,
+            secrets,
+        }
+    }
+}
+
+fn print_config_explain(explain: &ConfigExplain) {
+    println!("config: {}", explain.path);
+    println!("default_path: {}", explain.default_path);
+    println!("config_dir: {}", explain.config_dir);
+
+    match &explain.daemon {
+        Some(daemon) => {
+            println!("daemon:");
+            println!("  node_id: {}", daemon.node_id);
+            println!("  grpc_listen: {}", daemon.grpc_listen);
+            println!("  workspace: {}", daemon.workspace);
+            println!("  advertise_lan: {}", daemon.advertise_lan);
+            println!("  store: {}", daemon.store.as_deref().unwrap_or("<none>"));
+            println!("  auth: {}", daemon.auth);
+        }
+        None => println!("daemon: <none>"),
+    }
+
+    println!("client nodes:");
+    if explain.client.nodes.is_empty() {
+        println!("  <none>");
+    }
+    for node in &explain.client.nodes {
+        println!(
+            "  {} -> {} ({}, auth: {})",
+            node.node_id, node.endpoint, node.provider, node.auth
+        );
+    }
+
+    match &explain.policy {
+        Some(policy) => {
+            println!("policy:");
+            println!("  subject: {}", policy.subject);
+            println!("  fs mounts:");
+            if policy.fs_mounts.is_empty() {
+                println!("    <none>");
+            }
+            for mount in &policy.fs_mounts {
+                println!(
+                    "    {} path={} read={} write={} delete={}",
+                    mount.name, mount.path, mount.read, mount.write, mount.delete
+                );
+            }
+            println!(
+                "  job: allowed_cwds={} default_timeout={} max_timeout={} preserve_env={} env_allowlist={} allowed_secrets={}",
+                policy.job.allowed_cwds.join(","),
+                policy.job.default_timeout_secs,
+                policy.job.max_timeout_secs,
+                policy.job.preserve_env,
+                policy.job.env_allowlist.join(","),
+                policy.job.allowed_secrets.join(",")
+            );
+            println!("  services:");
+            if policy.services.is_empty() {
+                println!("    <none>");
+            }
+            for service in &policy.services {
+                println!(
+                    "    {} {} {} {} - {}",
+                    service.id,
+                    service.protocol,
+                    service.endpoint,
+                    service.name,
+                    service.description
+                );
+            }
+        }
+        None => println!("policy: <none>"),
+    }
+
+    match &explain.secrets {
+        Some(secrets) => println!("secrets: {}", secrets.file.as_deref().unwrap_or("<none>")),
+        None => println!("secrets: <none>"),
+    }
+}
+
+fn auth_source(auth: &AuthConfig, config_dir: &Path) -> String {
+    match (&auth.token, &auth.token_file, &auth.token_env) {
+        (None, None, None) => "none".to_string(),
+        (Some(_), None, None) => "inline".to_string(),
+        (None, Some(path), None) => {
+            format!(
+                "token_file:{}",
+                display_path(resolve_path(config_dir, path))
+            )
+        }
+        (None, None, Some(name)) => format!("token_env:{name}"),
+        _ => "invalid:multiple-sources".to_string(),
+    }
+}
+
+fn display_path(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 async fn list_capabilities(
@@ -1673,6 +2067,45 @@ mod tests {
         assert_eq!(token.len(), 64);
         assert_eq!(endpoint.token.as_deref(), Some(token.as_str()));
         assert!(secrets.is_empty());
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn config_explain_summarizes_unified_config_without_secret_values() {
+        let base = unique_temp_dir("operon-config-explain-test");
+        let config_path = base.join("config.yaml");
+
+        init_config(
+            config_path.clone(),
+            OutputMode {
+                json: false,
+                quiet: true,
+            },
+        )
+        .expect("init config");
+        let config = OperonConfig::load(&config_path).expect("config should load");
+        let explain = ConfigExplain::from_config(&config_path, &config);
+
+        assert_eq!(explain.path, config_path.display().to_string());
+        assert_eq!(explain.config_dir, base.display().to_string());
+        let daemon = explain.daemon.expect("daemon explain");
+        assert_eq!(daemon.node_id, "local");
+        assert_eq!(
+            daemon.auth,
+            format!("token_file:{}", base.join("token").display())
+        );
+        assert!(!daemon.auth.contains("token: "));
+        assert_eq!(explain.client.nodes.len(), 1);
+        assert_eq!(explain.client.nodes[0].provider, "manual");
+        let policy = explain.policy.expect("policy explain");
+        assert_eq!(policy.subject, "local-cli");
+        assert_eq!(policy.fs_mounts[0].name, "workspace");
+        assert_eq!(policy.services[0].protocol, "tcp");
+        let expected_secrets = base.join("secrets.yaml").display().to_string();
+        assert_eq!(
+            explain.secrets.expect("secrets").file.as_deref(),
+            Some(expected_secrets.as_str())
+        );
         let _ = fs::remove_dir_all(base);
     }
 

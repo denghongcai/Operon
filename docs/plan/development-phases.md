@@ -2902,74 +2902,104 @@ Done when:
 
 ## v0.8 Goal
 
-Operon v0.8 should expose the runtime as an AI-native tool interface after the
-gRPC runtime, Linux mount, and service forwarding are stable.
+Operon v0.8 should ship an agent skills pack after the gRPC runtime, Linux
+mount, and service forwarding are stable.
 
 ```text
-v0.8 = agent-facing tool interface over the established runtime API.
+v0.8 = skills that teach agents how to use Operon.
 ```
 
-v0.8 should not invent a separate agent runtime. Agents should call the same
-capability, policy, audit, and trace surfaces that the CLI and SDK use.
+v0.8 should not add MCP, a separate agent runtime, or a parallel control plane.
+The deliverable is documentation-as-behavior: portable skills that teach an
+agent to use the existing `operon` CLI, config model, protocol docs, and
+TypeScript SDK safely.
 
-## Phase 40: Agent Tool Contract
+## Phase 40: Agent Skill Contract
 
-Status: Planned.
+Status: Completed.
 
-Goal: define the stable tool contract agents will call.
+Goal: define the skills agents will load.
 
-Planned:
+Completed:
 
-- choose the first supported agent tool surface, such as MCP or a simple
-  OpenAPI-compatible tool schema.
-- define tool schemas for node discovery, capability inspection, fs, jobs,
-  services, audit, traces, and execution graphs.
-- map tool errors to existing structured runtime errors.
-- document safety rules for destructive or policy-sensitive tools.
+- reviewed CLI help coverage and improved high-value help text for commands that
+  agents will call directly.
+- added a CLI config interpretation view, `operon config explain`, so the
+  CLI can summarize the active config without requiring agents to understand
+  raw YAML first.
+- chose the repo-local skill layout `skills/<name>/SKILL.md`.
+- defined a small skills pack for:
+  - Operon concepts and safety boundaries.
+  - config and onboarding.
+  - CLI node/capability/fs/job/service/audit/trace workflows.
+  - service forwarding, including TCP and UDP differences.
+  - direct protocol and SDK usage for agents that need code-level integration.
+- defined skill frontmatter, trigger descriptions, prerequisites, and examples.
+- kept skills focused on scenarios, decision paths, safety rules, and which
+  commands to use; skills should tell agents to inspect `operon <command>
+  --help` for exact flags instead of duplicating the CLI manual.
+- documented destructive-operation rules, including explicit confirmation for
+  writes, deletes, job execution, cancellation, and forwarding commands.
 
 Done when:
 
-- agent tool schemas are documented.
-- tools map cleanly to existing runtime APIs without bypassing policy.
+- every public CLI command exposes working help output.
+- the config interpretation view explains daemon, client nodes, auth sources,
+  policy scopes, service definitions, secrets references, and default config
+  path behavior.
+- the skill set is documented.
+- each skill points agents to existing runtime APIs instead of inventing new
+  surfaces.
 - audit and trace semantics remain unchanged.
 
-## Phase 41: Agent Integration Implementation
+## Phase 41: Agent Skills Implementation
 
-Status: Planned.
+Status: Completed.
 
-Goal: make Operon callable by an AI agent through the selected tool interface.
+Goal: create the skills that teach agents how to operate Operon.
 
-Planned:
+Completed:
 
-- add the agent integration package or binary.
-- reuse existing CLI/SDK endpoint resolution and auth configuration.
-- implement read-only inspection tools first.
-- add controlled fs/job/service tools with policy-aware error reporting.
-- include an example agent workflow.
+- added the CLI config interpretation command and included `--json` output.
+- added repo-local skill directories and `SKILL.md` files.
+- included scenario-oriented CLI examples for common workflows.
+- included config file expectations and default config path behavior.
+- included policy-aware guidance for fs, jobs, service forwarding, audit, and
+  trace usage.
+- included instructions for agents to call the relevant `--help` command before
+  using less familiar flags or subcommands.
+- included SDK/protocol notes only where CLI usage is insufficient.
+- included example agent playbooks for inspection, controlled fs/job workflows,
+  and service forwarding checks.
 
 Done when:
 
-- an agent can inspect nodes and capabilities.
-- an agent can run a constrained workflow through Operon.
-- all agent actions are visible in audit and trace output.
+- `operon config explain` or the chosen equivalent gives agents a safe summary
+  of the active `config.yaml`.
+- an agent with the skills can inspect nodes and capabilities through `operon`.
+- an agent with the skills can run a constrained workflow without bypassing
+  policy.
+- the skills teach agents to check audit and trace output after actions.
 
 ## Phase 42: v0.8 Acceptance
 
-Status: Planned.
+Status: Completed.
 
-Goal: make agent integration reproducible.
+Goal: make the skills pack reproducible.
 
-Planned:
+Completed:
 
 - `docs/plan/v0.8-acceptance.md`.
-- Docker-backed agent workflow validation.
-- README updates for agent tool usage.
+- CLI help and config explain validation.
+- static validation for skill structure and required safety sections.
+- smoke validation that documented CLI examples match current command names.
+- README updates documenting v0.8 validation and skills status.
 
 Done when:
 
 - v0.8 has documented acceptance criteria.
-- the agent integration uses existing runtime contracts instead of introducing
-  a parallel control plane.
+- the skills use existing runtime contracts instead of introducing a parallel
+  control plane.
 
 ## v0.9 Goal
 

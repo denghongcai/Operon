@@ -74,7 +74,7 @@ TypeScript should be used for surfaces that benefit from fast iteration and AI e
 
 - JavaScript/TypeScript SDK
 - examples
-- agent integration helpers
+- repo-local agent skills and usage guidance in `skills/*/SKILL.md`
 - documentation tooling
 
 The TypeScript SDK should not define the core protocol independently. It should be generated from, or validated against, the shared protocol schema.
@@ -438,7 +438,7 @@ v0.7.1:
   UDP/datagram service forwarding as a separate datagram protocol
 
 v0.8:
-  agent tool integration
+  agent skills pack
 
 v0.9:
   non-LAN provider API discovery
