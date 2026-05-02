@@ -3,40 +3,74 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::Context;
 use operon_core::JobRecord;
 
 pub const DEFAULT_STORE_PATH: &str = "operon.db";
 
-pub fn append_record(path: Option<&Path>, record: &serde_json::Value) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FsyncPolicy {
+    Always,
+    Disabled,
+}
+
+impl Default for FsyncPolicy {
+    fn default() -> Self {
+        Self::Always
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StoreWriter {
+    path: Option<PathBuf>,
+    fsync_policy: FsyncPolicy,
+}
+
+impl StoreWriter {
+    pub fn new(path: Option<PathBuf>) -> Self {
+        Self {
+            path,
+            fsync_policy: FsyncPolicy::default(),
+        }
+    }
+
+    pub fn with_fsync_policy(mut self, fsync_policy: FsyncPolicy) -> Self {
+        self.fsync_policy = fsync_policy;
+        self
+    }
+
+    pub fn append_json_value(&self, record: &serde_json::Value) -> anyhow::Result<()> {
+        append_record_with_policy(self.path.as_deref(), record, self.fsync_policy)
+    }
+}
+
+pub fn append_record(path: Option<&Path>, record: &serde_json::Value) -> anyhow::Result<()> {
+    append_record_with_policy(path, record, FsyncPolicy::default())
+}
+
+fn append_record_with_policy(
+    path: Option<&Path>,
+    record: &serde_json::Value,
+    fsync_policy: FsyncPolicy,
+) -> anyhow::Result<()> {
     let Some(path) = path else {
-        return;
+        return Ok(());
     };
     if let Some(parent) = path.parent() {
-        if let Err(error) = std::fs::create_dir_all(parent) {
-            tracing_warn(&format!(
-                "failed to create store directory {}: {error}",
-                parent.display()
-            ));
-            return;
-        }
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create store directory {}", parent.display()))?;
     }
-    let line = match serde_json::to_string(record) {
-        Ok(line) => line,
-        Err(error) => {
-            tracing_warn(&format!("failed to serialize store record: {error}"));
-            return;
-        }
-    };
-    if let Err(error) = open_store_file(path).and_then(|mut file| {
-        use std::io::Write;
-        writeln!(file, "{line}")?;
-        file.sync_data()
-    }) {
-        tracing_warn(&format!(
-            "failed to append store record {}: {error}",
-            path.display()
-        ));
-    }
+    let line = serde_json::to_string(record).context("failed to serialize store record")?;
+    open_store_file(path)
+        .and_then(|mut file| {
+            use std::io::Write;
+            writeln!(file, "{line}")?;
+            if fsync_policy == FsyncPolicy::Always {
+                file.sync_data()?;
+            }
+            Ok(())
+        })
+        .with_context(|| format!("failed to append store record {}", path.display()))
 }
 
 fn open_store_file(path: &Path) -> std::io::Result<std::fs::File> {
@@ -81,10 +115,6 @@ pub fn load_jobs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, JobReco
     Ok(jobs)
 }
 
-fn tracing_warn(message: &str) {
-    eprintln!("{message}");
-}
-
 pub fn default_store_path() -> PathBuf {
     PathBuf::from(DEFAULT_STORE_PATH)
 }
@@ -107,8 +137,10 @@ mod tests {
         let link = base.join("link.jsonl");
         std::os::unix::fs::symlink(&target, &link).expect("symlink");
 
-        append_record(Some(&link), &serde_json::json!({"kind": "audit"}));
+        let error = append_record(Some(&link), &serde_json::json!({"kind": "audit"}))
+            .expect_err("symlink store path should be rejected");
 
+        assert!(error.to_string().contains("failed to append store record"));
         assert!(!target.exists());
         let _ = std::fs::remove_dir_all(base);
     }
@@ -119,10 +151,26 @@ mod tests {
         std::fs::create_dir_all(&base).expect("base dir");
         let store = base.join("store.jsonl");
 
-        append_record(Some(&store), &serde_json::json!({"kind": "audit"}));
+        append_record(Some(&store), &serde_json::json!({"kind": "audit"})).expect("append record");
 
         let content = std::fs::read_to_string(&store).expect("store content");
         assert_eq!(content, "{\"kind\":\"audit\"}\n");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn store_writer_can_disable_fsync_for_tests() {
+        let base = unique_temp_dir("operon-store-writer-test");
+        std::fs::create_dir_all(&base).expect("base dir");
+        let store = base.join("store.jsonl");
+        let writer = StoreWriter::new(Some(store.clone())).with_fsync_policy(FsyncPolicy::Disabled);
+
+        writer
+            .append_json_value(&serde_json::json!({"kind": "job"}))
+            .expect("append record");
+
+        let content = std::fs::read_to_string(&store).expect("store content");
+        assert_eq!(content, "{\"kind\":\"job\"}\n");
         let _ = std::fs::remove_dir_all(base);
     }
 

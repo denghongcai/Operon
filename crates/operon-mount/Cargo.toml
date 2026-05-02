@@ -9,10 +9,12 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 ctrlc.workspace = true
-fuser.workspace = true
 futures-util.workspace = true
 operon-core = { path = "../operon-core" }
 operon-network = { path = "../operon-network" }
 operon-protocol = { path = "../operon-protocol" }
 tokio.workspace = true
 tonic.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser.workspace = true

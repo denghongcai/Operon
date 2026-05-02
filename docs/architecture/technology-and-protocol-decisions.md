@@ -140,7 +140,7 @@ service OperonRuntime {
   rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
   rpc RunJob(JobRunRequest) returns (JobRecord);
   rpc WatchJob(JobIdRequest) returns (stream JobEvent);
-  rpc StreamJobLogs(JobIdRequest) returns (stream JobLog);
+  rpc StreamJobLogs(JobIdRequest) returns (stream JobLogStreamEvent);
 }
 ```
 

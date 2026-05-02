@@ -77,6 +77,9 @@ Runtime schema constraints:
   presence rather than paired `has_*` booleans.
 - `WriteFile` and `WriteJobStdin` use explicit target and chunk envelope
   variants.
+- `StreamJobLogs` uses an explicit event envelope with snapshot, entry, and
+  complete variants; raw `JobLog` remains a payload type, not the stream
+  response type.
 - list calls accept `page_size` and `page_token`; responses expose
   `next_page_token`.
 

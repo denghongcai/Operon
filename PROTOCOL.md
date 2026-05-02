@@ -199,13 +199,20 @@ terminal state. Clients that need to wait for a job should prefer `WatchJob`
 over polling `GetJob`.
 
 `ListJobLogs` returns the daemon's current in-memory log ring for a job.
-`StreamJobLogs` returns ordered `JobLog` messages and stays open while the job
-is running. Each message has `stream` (`stdout` or `stderr`), binary `data`, and
-a monotonic `sequence` number. Job logs are not embedded in `JobRecord`; they
-are stored as separate append-only log records and retained in a bounded
-in-memory ring. `JobRecord` only reports `log_count` and `logs_truncated`.
-Clients should decode `data` only at presentation boundaries; the protocol
-preserves stdout/stderr bytes, including non-UTF-8 output.
+`StreamJobLogs` returns `JobLogStreamEvent` envelope messages and stays open
+while the job is running. The stream can carry:
+
+- `snapshot`: the current retained log window plus `truncated`,
+  `dropped_log_count`, and `next_sequence`.
+- `entry`: a single ordered stdout/stderr `JobLog` chunk.
+- `complete`: terminal job status plus final log truncation metadata.
+
+Each `JobLog` has `stream` (`stdout` or `stderr`), binary `data`, and a
+monotonic `sequence` number. Job logs are not embedded in `JobRecord`; they are
+stored as separate append-only log records and retained in a bounded in-memory
+ring. `JobRecord` only reports `log_count` and `logs_truncated`. Clients should
+decode `data` only at presentation boundaries; the protocol preserves
+stdout/stderr bytes, including non-UTF-8 output.
 
 `WriteJobStdin` accepts ordered `JobStdinRequest` messages. The first message
 must set the `target` variant with `JobStdinTarget.job_id`. Later messages must
@@ -314,8 +321,20 @@ for await (const chunk of client.readFile({ path: "/hello.txt" }, { metadata }))
   chunks.push(chunk.data);
 }
 
-for await (const log of client.streamJobLogs({ jobId: "job-1" }, { metadata })) {
-  process.stdout.write(Buffer.from(log.data));
+let nextSequence = 0;
+for await (const event of client.streamJobLogs({ jobId: "job-1" }, { metadata })) {
+  if (event.snapshot) {
+    for (const log of event.snapshot.logs) {
+      if (Number(log.sequence) >= nextSequence) {
+        nextSequence = Number(log.sequence) + 1;
+        process.stdout.write(Buffer.from(log.data));
+      }
+    }
+    nextSequence = Math.max(nextSequence, Number(event.snapshot.nextSequence));
+  } else if (event.entry?.log && Number(event.entry.log.sequence) >= nextSequence) {
+    nextSequence = Number(event.entry.log.sequence) + 1;
+    process.stdout.write(Buffer.from(event.entry.log.data));
+  }
 }
 ```
 

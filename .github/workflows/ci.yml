@@ -86,7 +86,7 @@ jobs:
             script: scripts/verify-v0.6.3-fs-copy.sh
           - name: v0.6.4/v0.6.5 Onboard and Unified Config Validation
             script: scripts/verify-v0.6.4-onboard.sh
-          - name: v0.6.7/v0.6.8 Runtime and Protocol Validation
+          - name: v0.6.7/v0.6.8/v0.6.12 Runtime and Protocol Validation
             script: scripts/verify-v0.6.7-runtime.sh
           - name: v0.6.9 CLI Contract Validation
             script: scripts/verify-v0.6.9-cli-contract.sh
@@ -94,6 +94,8 @@ jobs:
             script: scripts/verify-v0.6.10-runtime-hardening.sh
           - name: v0.6.11 Governance Validation
             script: scripts/verify-v0.6.11-governance.sh
+          - name: v0.6.12 Runtime Boundary Validation
+            script: scripts/verify-v0.6.12-runtime-boundary.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -2643,6 +2643,79 @@ Remaining:
   modules, `operon-cli` command modules, and `operon-mount` remote/inode/FUSE
   modules.
 
+## Phase 32.33: v0.6.12 Runtime Boundary Stabilization
+
+Status: Completed.
+
+Goal: stabilize the long-term protocol, store, job log stream, daemon runtime
+helper, and mount adapter boundaries before v0.7 TUI work.
+
+Planned:
+
+- `docs/plan/v0.6.12-runtime-boundary-stabilization.md`.
+- replace bare `StreamJobLogs` chunks with a typed streaming envelope that can
+  carry snapshots, entries, and terminal metadata.
+- keep `ListJobLogs` as the snapshot query API while CLI and SDK consume the
+  streaming envelope for live log flows.
+- promote `operon-store` to an explicit append-only event writer boundary with
+  visible fsync policy and `Result`-returning append operations.
+- surface store append failures at daemon runtime boundaries.
+- consolidate daemon background job/log/audit lock handling through runtime
+  helper boundaries instead of scattered `eprintln!` paths.
+- make `operon-mount` a Linux FUSE adapter boundary by excluding the `fuser`
+  dependency outside Linux.
+- add focused validation coverage and wire it into CI.
+
+Done when:
+
+- `StreamJobLogs` returns envelope messages.
+- CLI JSON and stream output preserve job-log truncation metadata.
+- TS SDK exposes real stream events for job logs.
+- `operon-store` append failures are testable and no longer swallowed inside the
+  store crate.
+- daemon persistence failures are logged consistently at the daemon boundary.
+- non-Linux builds do not resolve `fuser` through `operon-mount`.
+- CI runs `scripts/verify-v0.6.12-runtime-boundary.sh`.
+- workspace validation passes.
+
+Completed:
+
+- Added `docs/plan/v0.6.12-runtime-boundary-stabilization.md`.
+- Replaced raw `StreamJobLogs` chunks with a `JobLogStreamEvent` envelope that
+  carries snapshot, entry, and complete variants.
+- Updated daemon streaming to emit initial snapshots, live entries, lag
+  snapshots, and terminal completion metadata.
+- Updated CLI JSON and streaming log paths to consume the envelope and preserve
+  truncation metadata.
+- Updated the TypeScript SDK generated client, public stream event types, byte
+  stream helper, and SDK tests for the new envelope.
+- Added `StoreWriter` and `FsyncPolicy` to `operon-store`; append failures now
+  return `Result`.
+- Routed daemon append-only persistence through the store writer boundary and
+  logged persistence failures at daemon runtime boundaries.
+- Replaced remaining background mutex-poison `eprintln!` paths in daemon
+  runtime helpers with structured tracing errors.
+- Made `operon-mount` a Linux-only FUSE adapter boundary by gating the crate and
+  the `fuser` dependency to Linux.
+- Updated protocol docs, runtime architecture docs, README release examples,
+  and the public protocol version to v0.6.12.
+- Added `scripts/verify-v0.6.12-runtime-boundary.sh` and wired it into CI.
+- Validation passed:
+  - `scripts/verify-v0.6.12-runtime-boundary.sh`
+  - `scripts/verify-v0.6.7-runtime.sh`
+  - `scripts/verify-v0.6.9-cli-contract.sh`
+  - `scripts/verify-v0.6.10-runtime-hardening.sh`
+  - `scripts/verify-v0.6.11-governance.sh`
+  - `cargo fmt --all --check`
+  - `cargo clippy --workspace --locked -- -D warnings`
+  - `cargo test --workspace --locked`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+Remaining:
+
+- No open v0.6.12 implementation items.
+
 ## v0.7 Goal
 
 Operon v0.7 should add an operator-focused CLI TUI console.

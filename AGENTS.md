@@ -148,6 +148,9 @@ Operon should not own:
 - Completed governance milestone: v0.6.11 maintainability governance split
   daemon support modules, removed direct poisoned-lock panics from `operond`
   main, gated mount dependencies to Linux, and added validation coverage.
+- Completed runtime boundary milestone: v0.6.12 protocol streaming envelopes,
+  append-only store writer boundaries, daemon runtime helper ownership cleanup,
+  Linux mount adapter boundaries, and validation coverage.
 - Next planned milestone: v0.7 CLI TUI console.
 - Later planned milestones: v0.8 Agent Integration, v0.9 non-LAN provider discovery.
 - Browser management UI is no longer a planned product surface; use CLI TUI console instead.
@@ -208,3 +211,8 @@ Defer:
 - Latest phase status update: v0.6.11 completed daemon support-module splits,
   poisoned-lock handling, Linux-only mount dependency gating, and CI governance
   validation. Larger domain splits remain future work.
+- Latest phase status update: v0.6.12 completed Runtime Boundary Stabilization.
+  `StreamJobLogs` now uses event envelopes, `operon-store` exposes an
+  append-only writer boundary, daemon persistence failures surface at runtime
+  boundaries, `operon-mount` is a Linux FUSE adapter crate boundary, and CI
+  includes the v0.6.12 validation script. Nothing remains in v0.6.12.

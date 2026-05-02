@@ -59,7 +59,7 @@ Operon is not a VPN. It runs on top of Cloudflare Mesh, Tailscale, WireGuard, SS
 Install the latest Linux release binary:
 
 ```bash
-VERSION=v0.6.8
+VERSION=v0.6.12
 case "$(uname -m)" in
   x86_64) ARCH=linux-x86_64 ;;
   aarch64|arm64) ARCH=linux-arm64 ;;
@@ -126,6 +126,9 @@ scripts/verify-v0.6.3-fs-copy.sh
 scripts/verify-v0.6.4-onboard.sh
 scripts/verify-v0.6.7-runtime.sh
 scripts/verify-v0.6.9-cli-contract.sh
+scripts/verify-v0.6.10-runtime-hardening.sh
+scripts/verify-v0.6.11-governance.sh
+scripts/verify-v0.6.12-runtime-boundary.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -140,9 +143,12 @@ output, job failure exit status, audit JSON filters, health version reporting,
 and starter config file generation.
 The v0.6.4 onboard validation checks generated unified config, token auth,
 daemon startup, CLI ping, capability inspection, fs operation, and audit.
-The v0.6.7/v0.6.8 runtime validation checks process-group cancellation,
-binary-safe job logs, streaming file writes, job stdin streaming, and current
-paginated list API callers.
+The v0.6.7/v0.6.8/v0.6.12 runtime validation checks process-group
+cancellation, binary-safe job logs, streaming file writes, job stdin streaming,
+and current paginated list API callers.
+The v0.6.12 runtime-boundary validation checks job-log streaming envelopes,
+append-only store writer APIs, Linux-only mount adapter dependency boundaries,
+and the current public protocol version.
 
 ## Release Automation
 
@@ -150,8 +156,8 @@ Pushing a tag that matches `v*` starts the `Draft Release` GitHub Actions
 workflow:
 
 ```bash
-git tag v0.6.8
-git push origin v0.6.8
+git tag v0.6.12
+git push origin v0.6.12
 ```
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and

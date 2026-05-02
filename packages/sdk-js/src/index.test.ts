@@ -212,8 +212,27 @@ describe("OperonClient", () => {
     const first = new Uint8Array([0xff, 0x00, 0x41]);
     const second = new Uint8Array([0x42]);
     niceGrpcMock.client.streamJobLogs.mockReturnValue(asyncIterable([
-      { stream: "stdout", data: first, sequence: "0" },
-      { stream: "stderr", data: second, sequence: "1" },
+      {
+        snapshot: {
+          jobId: "job-1",
+          logs: [{ stream: "stdout", data: first, sequence: "0" }],
+          truncated: false,
+          droppedLogCount: "0",
+          nextSequence: "1",
+        },
+      },
+      { entry: { jobId: "job-1", log: { stream: "stderr", data: second, sequence: "1" } } },
+      {
+        complete: {
+          jobId: "job-1",
+          status: JobStatus.JOB_STATUS_SUCCEEDED,
+          exitCode: 0,
+          logCount: "2",
+          logsTruncated: false,
+          truncated: false,
+          droppedLogCount: "0",
+        },
+      },
     ]));
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
@@ -222,6 +241,40 @@ describe("OperonClient", () => {
     await expect(reader.read()).resolves.toEqual({ done: false, value: first });
     await expect(reader.read()).resolves.toEqual({ done: false, value: second });
     await expect(reader.read()).resolves.toEqual({ done: true, value: undefined });
+  });
+
+  it("exposes typed job log stream envelope events", async () => {
+    const data = new Uint8Array([0x41]);
+    niceGrpcMock.client.streamJobLogs.mockReturnValue(asyncIterable([
+      {
+        snapshot: {
+          jobId: "job-1",
+          logs: [{ stream: "stdout", data, sequence: "3" }],
+          truncated: true,
+          droppedLogCount: "3",
+          nextSequence: "4",
+        },
+      },
+    ]));
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    const events = [];
+    for await (const event of await client.streamJobLogEvents("node-a", "job-1")) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "snapshot",
+        snapshot: {
+          job_id: "job-1",
+          logs: [{ stream: "stdout", data, sequence: 3 }],
+          truncated: true,
+          dropped_log_count: 3,
+          next_sequence: 4,
+        },
+      },
+    ]);
   });
 
   it("runs fs.copy steps over gRPC", async () => {

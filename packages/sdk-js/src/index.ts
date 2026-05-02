@@ -10,6 +10,7 @@ import {
   type JobList as GrpcJobList,
   type JobLog as GrpcJobLog,
   type JobLogList as GrpcJobLogList,
+  type JobLogStreamEvent as GrpcJobLogStreamEvent,
   type JobRecord as GrpcJobRecord,
   type JobStdin as GrpcJobStdin,
   type JobStdinClose as GrpcJobStdinClose,
@@ -107,6 +108,24 @@ export type JobLogList = {
   truncated: boolean;
   dropped_log_count: number;
 };
+
+export type JobLogSnapshot = JobLogList & {
+  next_sequence: number;
+};
+
+export type JobLogStreamEvent =
+  | { type: "snapshot"; snapshot: JobLogSnapshot }
+  | { type: "entry"; job_id: string; log: JobLog }
+  | {
+      type: "complete";
+      job_id: string;
+      status: JobRecord["status"];
+      exit_code?: number | null;
+      log_count: number;
+      logs_truncated: boolean;
+      truncated: boolean;
+      dropped_log_count: number;
+    };
 
 export type JobEvent = {
   job_id: string;
@@ -247,8 +266,7 @@ export class OperonClient {
   }
 
   async streamJobLogs(nodeId: string, jobId: string): Promise<ReadableStream<Uint8Array>> {
-    const endpoint = this.endpointFor(nodeId);
-    const iterator = this.grpcClient(endpoint).streamJobLogs({ jobId }, this.grpcOptions(endpoint))[Symbol.asyncIterator]();
+    const iterator = streamEventLogs(await this.streamJobLogEvents(nodeId, jobId))[Symbol.asyncIterator]();
     return new ReadableStream<Uint8Array>({
       async pull(controller) {
         const next = await iterator.next();
@@ -256,7 +274,7 @@ export class OperonClient {
           controller.close();
           return;
         }
-        controller.enqueue(next.value.data);
+        controller.enqueue(next.value);
       },
       async cancel() {
         if (iterator.return) {
@@ -264,6 +282,12 @@ export class OperonClient {
         }
       },
     });
+  }
+
+  async streamJobLogEvents(nodeId: string, jobId: string): Promise<AsyncIterable<JobLogStreamEvent>> {
+    const endpoint = this.endpointFor(nodeId);
+    const events = this.grpcClient(endpoint).streamJobLogs({ jobId }, this.grpcOptions(endpoint));
+    return mapGrpcJobLogStreamEvents(events);
   }
 
   async writeJobStdin(nodeId: string, jobId: string, body: BodyInit): Promise<JobStdinResult> {
@@ -632,6 +656,41 @@ function fromGrpcJobLogList(list: GrpcJobLogList): JobLogList {
   };
 }
 
+function fromGrpcJobLogStreamEvent(event: GrpcJobLogStreamEvent): JobLogStreamEvent | undefined {
+  if (event.snapshot) {
+    return {
+      type: "snapshot",
+      snapshot: {
+        job_id: event.snapshot.jobId,
+        logs: event.snapshot.logs.map(fromGrpcJobLog),
+        truncated: event.snapshot.truncated,
+        dropped_log_count: Number(event.snapshot.droppedLogCount),
+        next_sequence: Number(event.snapshot.nextSequence),
+      },
+    };
+  }
+  if (event.entry?.log) {
+    return {
+      type: "entry",
+      job_id: event.entry.jobId,
+      log: fromGrpcJobLog(event.entry.log),
+    };
+  }
+  if (event.complete) {
+    return {
+      type: "complete",
+      job_id: event.complete.jobId,
+      status: fromGrpcJobStatus(event.complete.status),
+      exit_code: event.complete.exitCode ?? null,
+      log_count: Number(event.complete.logCount),
+      logs_truncated: event.complete.logsTruncated,
+      truncated: event.complete.truncated,
+      dropped_log_count: Number(event.complete.droppedLogCount),
+    };
+  }
+  return undefined;
+}
+
 function fromGrpcJobEvent(event: GrpcJobEvent): JobEvent {
   return {
     job_id: event.jobId,
@@ -645,6 +704,33 @@ function fromGrpcJobEvent(event: GrpcJobEvent): JobEvent {
 async function* mapGrpcJobEvents(events: AsyncIterable<GrpcJobEvent>): AsyncIterable<JobEvent> {
   for await (const event of events) {
     yield fromGrpcJobEvent(event);
+  }
+}
+
+async function* mapGrpcJobLogStreamEvents(events: AsyncIterable<GrpcJobLogStreamEvent>): AsyncIterable<JobLogStreamEvent> {
+  for await (const event of events) {
+    const mapped = fromGrpcJobLogStreamEvent(event);
+    if (mapped) {
+      yield mapped;
+    }
+  }
+}
+
+async function* streamEventLogs(events: AsyncIterable<JobLogStreamEvent>): AsyncIterable<Uint8Array> {
+  let nextSequence = 0;
+  for await (const event of events) {
+    if (event.type === "snapshot") {
+      for (const log of event.snapshot.logs) {
+        if (log.sequence >= nextSequence) {
+          nextSequence = log.sequence + 1;
+          yield log.data;
+        }
+      }
+      nextSequence = Math.max(nextSequence, event.snapshot.next_sequence);
+    } else if (event.type === "entry" && event.log.sequence >= nextSequence) {
+      nextSequence = event.log.sequence + 1;
+      yield event.log.data;
+    }
   }
 }
 

@@ -13,11 +13,11 @@ use operon_core::{
 };
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    job_stdin_request, operon_runtime_client::OperonRuntimeClient, write_file_request, FileChunk,
-    FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest, GetNodeRequest,
-    HealthRequest, JobCancelRequest, JobIdRequest, JobStdinRequest, JobStdinTarget,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
-    ServiceIdRequest, WriteFileRequest, WriteFileTarget,
+    job_log_stream_event, job_stdin_request, operon_runtime_client::OperonRuntimeClient,
+    write_file_request, FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest,
+    FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest,
+    JobStdinRequest, JobStdinTarget, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
+    ListServicesRequest, ServiceIdRequest, WriteFileRequest, WriteFileTarget,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -353,8 +353,29 @@ pub async fn stream_job_logs_to_writer(
             .stream_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
             .await?
             .into_inner();
-        while let Some(log) = stream.message().await? {
-            writer.write_all(&log.data)?;
+        let mut next_sequence = 0;
+        while let Some(event) = stream.message().await? {
+            match event.event {
+                Some(job_log_stream_event::Event::Snapshot(snapshot)) => {
+                    for log in snapshot.logs {
+                        if log.sequence >= next_sequence {
+                            next_sequence = log.sequence.saturating_add(1);
+                            writer.write_all(&log.data)?;
+                        }
+                    }
+                    next_sequence = next_sequence.max(snapshot.next_sequence);
+                }
+                Some(job_log_stream_event::Event::Entry(entry)) => {
+                    let Some(log) = entry.log else {
+                        continue;
+                    };
+                    if log.sequence >= next_sequence {
+                        next_sequence = log.sequence.saturating_add(1);
+                        writer.write_all(&log.data)?;
+                    }
+                }
+                Some(job_log_stream_event::Event::Complete(_)) | None => {}
+            }
         }
         Ok(())
     })
@@ -370,14 +391,43 @@ pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::R
             .await?
             .into_inner();
         let mut logs = Vec::new();
-        while let Some(log) = stream.message().await? {
-            logs.push(log.into());
+        let mut truncated = false;
+        let mut dropped_log_count = 0;
+        let mut next_sequence = 0;
+        while let Some(event) = stream.message().await? {
+            match event.event {
+                Some(job_log_stream_event::Event::Snapshot(snapshot)) => {
+                    truncated = snapshot.truncated;
+                    dropped_log_count = snapshot.dropped_log_count;
+                    for log in snapshot.logs {
+                        if log.sequence >= next_sequence {
+                            next_sequence = log.sequence.saturating_add(1);
+                            logs.push(log.into());
+                        }
+                    }
+                    next_sequence = next_sequence.max(snapshot.next_sequence);
+                }
+                Some(job_log_stream_event::Event::Entry(entry)) => {
+                    let Some(log) = entry.log else {
+                        continue;
+                    };
+                    if log.sequence >= next_sequence {
+                        next_sequence = log.sequence.saturating_add(1);
+                        logs.push(log.into());
+                    }
+                }
+                Some(job_log_stream_event::Event::Complete(complete)) => {
+                    truncated = complete.truncated;
+                    dropped_log_count = complete.dropped_log_count;
+                }
+                None => {}
+            }
         }
         Ok(JobLogList {
             job_id: response_job_id,
             logs,
-            truncated: false,
-            dropped_log_count: 0,
+            truncated,
+            dropped_log_count,
         })
     })
     .await

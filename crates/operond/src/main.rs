@@ -28,12 +28,13 @@ use operon_fs::{
 };
 use operon_process::{authorize_job, job_environment, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
-    job_stdin_request,
+    job_log_stream_event, job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
     write_file_request, FileChunk, FsCopyRequest, FsPathRequest, FsRenameRequest,
     FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
-    ServiceIdRequest, WriteFileRequest,
+    JobLogComplete, JobLogEntry, JobLogSnapshot, JobLogStreamEvent, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceIdRequest,
+    WriteFileRequest,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -106,7 +107,7 @@ struct AppState {
     workspace: PathBuf,
     policy: PolicyConfig,
     auth_token: Option<String>,
-    store: Option<PathBuf>,
+    store_writer: operon_store::StoreWriter,
     secrets: Arc<BTreeMap<String, String>>,
     audit: Arc<Mutex<VecDeque<AuditEvent>>>,
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
@@ -126,7 +127,7 @@ struct JobTask {
     log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
     cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     stdin: JobStdinRegistry,
-    store: Option<PathBuf>,
+    store_writer: operon_store::StoreWriter,
     job_id: String,
     command: String,
     cwd: PathBuf,
@@ -147,7 +148,7 @@ struct JobCompletion {
     log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
     cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     stdin: JobStdinRegistry,
-    store: Option<PathBuf>,
+    store_writer: operon_store::StoreWriter,
     job_id: String,
     subject: String,
     node_id: String,
@@ -174,6 +175,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
     let policy = config.policy.unwrap_or_else(default_policy);
     let auth_token = daemon.auth.resolve(&config_dir)?;
     let store = resolve_store_path(&config_dir, daemon.store.as_deref())?;
+    let store_writer = operon_store::StoreWriter::new(store.clone());
     let secrets_path = config
         .secrets
         .as_ref()
@@ -196,7 +198,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         workspace: daemon.workspace,
         policy,
         auth_token,
-        store: store.clone(),
+        store_writer,
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(VecDeque::new())),
         jobs,
@@ -239,13 +241,8 @@ struct GrpcRuntime {
 
 type GrpcFileStream =
     Pin<Box<dyn futures_util::Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
-type GrpcJobLogStream = Pin<
-    Box<
-        dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::JobLog, Status>>
-            + Send
-            + 'static,
-    >,
->;
+type GrpcJobLogStream =
+    Pin<Box<dyn futures_util::Stream<Item = Result<JobLogStreamEvent, Status>> + Send + 'static>>;
 type GrpcJobEventStream = Pin<
     Box<
         dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::JobEvent, Status>>
@@ -697,15 +694,15 @@ impl OperonRuntime for GrpcRuntime {
             .get(&job_id)
             .map(JobEventSender::subscribe);
         let initial_record = get_job_record(&self.state, &job_id)?;
-        let initial_logs = job_log_list(&self.state, &job_id)?;
+        let (initial_snapshot, mut next_sequence) = job_log_snapshot(&self.state, &job_id)?;
         let state = self.state.clone();
         let stream = async_stream::stream! {
-            let mut next_sequence = 0;
-            for log in initial_logs.logs {
-                next_sequence = log.sequence.saturating_add(1);
-                yield Ok::<_, Status>(log.into());
-            }
+            yield Ok::<_, Status>(job_log_snapshot_event(initial_snapshot));
             if !matches!(initial_record.status, JobStatus::Running) {
+                match job_log_complete(&state, &job_id) {
+                    Ok(complete) => yield Ok(job_log_complete_event(complete)),
+                    Err(status) => yield Err(status),
+                }
                 return;
             }
             if let (Some(log_receiver), Some(event_receiver)) =
@@ -718,18 +715,14 @@ impl OperonRuntime for GrpcRuntime {
                                 Ok(log) => {
                                     if log.sequence >= next_sequence {
                                         next_sequence = log.sequence.saturating_add(1);
-                                        yield Ok::<_, Status>(log.into());
+                                        yield Ok::<_, Status>(job_log_entry_event(&job_id, log));
                                     }
                                 }
                                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                                    match job_log_list(&state, &job_id) {
-                                        Ok(snapshot) => {
-                                            for log in snapshot.logs {
-                                                if log.sequence >= next_sequence {
-                                                    next_sequence = log.sequence.saturating_add(1);
-                                                    yield Ok::<_, Status>(log.into());
-                                                }
-                                            }
+                                    match job_log_snapshot(&state, &job_id) {
+                                        Ok((snapshot, snapshot_next_sequence)) => {
+                                            next_sequence = next_sequence.max(snapshot_next_sequence);
+                                            yield Ok::<_, Status>(job_log_snapshot_event(snapshot));
                                         }
                                         Err(status) => {
                                             yield Err(status);
@@ -744,18 +737,17 @@ impl OperonRuntime for GrpcRuntime {
                             match event {
                                 Ok(event) => {
                                     if !matches!(event.status, JobStatus::Running) {
-                                        match job_log_list(&state, &job_id) {
-                                            Ok(snapshot) => {
-                                                for log in snapshot.logs {
-                                                    if log.sequence >= next_sequence {
-                                                        next_sequence = log.sequence.saturating_add(1);
-                                                        yield Ok::<_, Status>(log.into());
-                                                    }
-                                                }
+                                        match job_log_snapshot(&state, &job_id) {
+                                            Ok((snapshot, _snapshot_next_sequence)) => {
+                                                yield Ok::<_, Status>(job_log_snapshot_event(snapshot));
                                             }
                                             Err(status) => {
                                                 yield Err(status);
                                             }
+                                        }
+                                        match job_log_complete(&state, &job_id) {
+                                            Ok(complete) => yield Ok::<_, Status>(job_log_complete_event(complete)),
+                                            Err(status) => yield Err(status),
                                         }
                                         break;
                                     }
@@ -1341,7 +1333,7 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
     let log_events = state.job_log_events.clone();
     let cancels = state.job_cancel.clone();
     let stdin = state.job_stdin.clone();
-    let store = state.store.clone();
+    let store_writer = state.store_writer.clone();
     let command = request.command;
     let timeout_secs = request
         .timeout_secs
@@ -1362,7 +1354,7 @@ fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Stat
                     log_events,
                     cancels,
                     stdin,
-                    store,
+                    store_writer,
                     job_id,
                     command,
                     cwd,
@@ -1488,16 +1480,16 @@ fn record_audit_capability(
         run_id: context.run_id,
         step_id: context.step_id,
     };
-    push_audit_event(&state.audit, state.store.as_deref(), event);
+    push_audit_event(&state.audit, &state.store_writer, event);
 }
 
 fn push_audit_event(
     audit: &Arc<Mutex<VecDeque<AuditEvent>>>,
-    store: Option<&Path>,
+    store_writer: &operon_store::StoreWriter,
     event: AuditEvent,
 ) {
     let Ok(mut audit) = audit.lock() else {
-        eprintln!("audit log mutex poisoned");
+        tracing::error!("audit log mutex poisoned");
         return;
     };
     audit.push_back(event.clone());
@@ -1505,21 +1497,26 @@ fn push_audit_event(
         audit.pop_front();
     }
     drop(audit);
-    append_store_record(
-        store,
+    if let Err(error) = append_store_record(
+        store_writer,
         &serde_json::json!({
             "kind": "audit",
             "event": event,
         }),
-    );
+    ) {
+        tracing::warn!("failed to persist audit event: {error:#}");
+    }
 }
 
 fn current_request_context() -> RequestContext {
     AUDIT_CONTEXT.try_with(Clone::clone).unwrap_or_default()
 }
 
-fn append_store_record(path: Option<&Path>, record: &serde_json::Value) {
-    operon_store::append_record(path, record);
+fn append_store_record(
+    writer: &operon_store::StoreWriter,
+    record: &serde_json::Value,
+) -> anyhow::Result<()> {
+    writer.append_json_value(record)
 }
 
 fn now_ms() -> u128 {
@@ -1538,7 +1535,7 @@ async fn run_job_task(task: JobTask) {
         log_events: task.log_events.clone(),
         cancels: task.cancels.clone(),
         stdin: task.stdin.clone(),
-        store: task.store.clone(),
+        store_writer: task.store_writer.clone(),
         job_id: task.job_id.clone(),
         subject: task.subject.clone(),
         node_id: task.node_id.clone(),
@@ -1551,7 +1548,7 @@ async fn run_job_task(task: JobTask) {
                 &task.jobs,
                 &task.logs,
                 &task.log_events,
-                task.store.as_deref(),
+                &task.store_writer,
                 &task.job_id,
                 JobLog {
                     stream: "stderr".to_string(),
@@ -1573,7 +1570,7 @@ async fn run_job_task(task: JobTask) {
             task.jobs.clone(),
             task.logs.clone(),
             task.log_events.clone(),
-            task.store.clone(),
+            task.store_writer.clone(),
             task.job_id.clone(),
             "stdout",
             stdout,
@@ -1584,7 +1581,7 @@ async fn run_job_task(task: JobTask) {
             task.jobs.clone(),
             task.logs.clone(),
             task.log_events.clone(),
-            task.store.clone(),
+            task.store_writer.clone(),
             task.job_id.clone(),
             "stderr",
             stderr,
@@ -1592,7 +1589,7 @@ async fn run_job_task(task: JobTask) {
     }
 
     let (job_status, exit_code) = tokio::select! {
-        status = child.wait() => job_status_from_wait(status, &task.jobs, &task.logs, &task.log_events, task.store.as_deref(), &task.job_id),
+        status = child.wait() => job_status_from_wait(status, &task.jobs, &task.logs, &task.log_events, &task.store_writer, &task.job_id),
         _ = task.cancel_rx => {
             terminate_child(&mut child).await;
             (JobStatus::Cancelled, None)
@@ -1612,7 +1609,7 @@ fn job_status_from_wait(
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
     logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
     log_events: &Arc<Mutex<BTreeMap<String, JobLogSender>>>,
-    store: Option<&Path>,
+    store_writer: &operon_store::StoreWriter,
     job_id: &str,
 ) -> (JobStatus, Option<i32>) {
     match status {
@@ -1629,7 +1626,7 @@ fn job_status_from_wait(
                 jobs,
                 logs,
                 log_events,
-                store,
+                store_writer,
                 job_id,
                 JobLog {
                     stream: "stderr".to_string(),
@@ -1736,7 +1733,7 @@ async fn capture_job_stream<R>(
     jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
     logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
     log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
-    store: Option<PathBuf>,
+    store_writer: operon_store::StoreWriter,
     job_id: String,
     stream: &'static str,
     mut reader: R,
@@ -1751,7 +1748,7 @@ async fn capture_job_stream<R>(
                 &jobs,
                 &logs,
                 &log_events,
-                store.as_deref(),
+                &store_writer,
                 &job_id,
                 JobLog {
                     stream: stream.to_string(),
@@ -1764,7 +1761,7 @@ async fn capture_job_stream<R>(
                     &jobs,
                     &logs,
                     &log_events,
-                    store.as_deref(),
+                    &store_writer,
                     &job_id,
                     JobLog {
                         stream: "stderr".to_string(),
@@ -1817,17 +1814,79 @@ fn job_log_list(state: &AppState, job_id: &str) -> Result<JobLogList, Status> {
     })
 }
 
+fn job_log_snapshot(state: &AppState, job_id: &str) -> Result<(JobLogSnapshot, u64), Status> {
+    let logs = lock(&state.job_logs, "job log")?;
+    let Some(buffer) = logs.get(job_id) else {
+        return Ok((
+            JobLogSnapshot {
+                job_id: job_id.to_string(),
+                logs: Vec::new(),
+                truncated: false,
+                dropped_log_count: 0,
+                next_sequence: 0,
+            },
+            0,
+        ));
+    };
+    Ok((
+        JobLogSnapshot {
+            job_id: job_id.to_string(),
+            logs: buffer.logs.iter().cloned().map(Into::into).collect(),
+            truncated: buffer.dropped_log_count > 0,
+            dropped_log_count: buffer.dropped_log_count,
+            next_sequence: buffer.next_sequence,
+        },
+        buffer.next_sequence,
+    ))
+}
+
+fn job_log_snapshot_event(snapshot: JobLogSnapshot) -> JobLogStreamEvent {
+    JobLogStreamEvent {
+        event: Some(job_log_stream_event::Event::Snapshot(snapshot)),
+    }
+}
+
+fn job_log_entry_event(job_id: &str, log: JobLog) -> JobLogStreamEvent {
+    JobLogStreamEvent {
+        event: Some(job_log_stream_event::Event::Entry(JobLogEntry {
+            job_id: job_id.to_string(),
+            log: Some(log.into()),
+        })),
+    }
+}
+
+fn job_log_complete(state: &AppState, job_id: &str) -> Result<JobLogComplete, Status> {
+    let record = get_job_record(state, job_id)?;
+    let logs = job_log_list(state, job_id)?;
+    let event: operon_protocol::runtime::v1::JobEvent = job_event_from_record(&record).into();
+    Ok(JobLogComplete {
+        job_id: job_id.to_string(),
+        status: event.status,
+        exit_code: event.exit_code,
+        log_count: event.log_count,
+        logs_truncated: event.logs_truncated,
+        truncated: logs.truncated,
+        dropped_log_count: logs.dropped_log_count,
+    })
+}
+
+fn job_log_complete_event(complete: JobLogComplete) -> JobLogStreamEvent {
+    JobLogStreamEvent {
+        event: Some(job_log_stream_event::Event::Complete(complete)),
+    }
+}
+
 fn append_job_log(
     jobs: &Arc<Mutex<BTreeMap<String, JobRecord>>>,
     logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
     log_events: &Arc<Mutex<BTreeMap<String, JobLogSender>>>,
-    store: Option<&Path>,
+    store_writer: &operon_store::StoreWriter,
     job_id: &str,
     mut log: JobLog,
 ) {
     let (log_count, logs_truncated, dropped_log_count, log) = {
         let Ok(mut buffers) = logs.lock() else {
-            eprintln!("job log mutex poisoned");
+            tracing::error!("job log mutex poisoned");
             return;
         };
         let buffer = buffers.entry(job_id.to_string()).or_default();
@@ -1852,7 +1911,7 @@ fn append_job_log(
             record.logs_truncated = logs_truncated;
         }
     } else {
-        eprintln!("job map mutex poisoned");
+        tracing::error!("job map mutex poisoned");
     }
     match log_events.lock() {
         Ok(log_events) => {
@@ -1860,34 +1919,36 @@ fn append_job_log(
                 let _ = sender.send(log.clone());
             }
         }
-        Err(_) => eprintln!("job log event mutex poisoned"),
+        Err(_) => tracing::error!("job log event mutex poisoned"),
     }
-    append_store_record(
-        store,
+    if let Err(error) = append_store_record(
+        store_writer,
         &serde_json::json!({
             "kind": "job_log",
             "job_id": job_id,
             "log": log,
             "dropped_log_count": dropped_log_count,
         }),
-    );
+    ) {
+        tracing::warn!("failed to persist job log: {error:#}");
+    }
 }
 
 fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i32>) {
     if let Ok(mut cancels) = completion.cancels.lock() {
         cancels.remove(&completion.job_id);
     } else {
-        eprintln!("job cancel mutex poisoned");
+        tracing::error!("job cancel mutex poisoned");
     }
     if let Ok(mut stdin) = completion.stdin.lock() {
         stdin.remove(&completion.job_id);
     } else {
-        eprintln!("job stdin mutex poisoned");
+        tracing::error!("job stdin mutex poisoned");
     }
 
     let terminal = {
         let Ok(mut jobs) = completion.jobs.lock() else {
-            eprintln!("job map mutex poisoned");
+            tracing::error!("job map mutex poisoned");
             cleanup_finished_job_runtime(completion);
             return;
         };
@@ -1901,13 +1962,15 @@ fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i
         }
     };
     if let Some((event, record)) = terminal {
-        append_store_record(
-            completion.store.as_deref(),
+        if let Err(error) = append_store_record(
+            &completion.store_writer,
             &serde_json::json!({
                 "kind": "job",
                 "record": record,
             }),
-        );
+        ) {
+            tracing::warn!("failed to persist job record: {error:#}");
+        }
         record_job_completion_audit(completion, &record);
         match completion.events.lock() {
             Ok(events) => {
@@ -1915,7 +1978,7 @@ fn finish_job(completion: &JobCompletion, status: JobStatus, exit_code: Option<i
                     let _ = sender.send(event);
                 }
             }
-            Err(_) => eprintln!("job event mutex poisoned"),
+            Err(_) => tracing::error!("job event mutex poisoned"),
         }
     }
     cleanup_finished_job_runtime(completion);
@@ -1934,7 +1997,7 @@ fn record_job_completion_audit(completion: &JobCompletion, record: &JobRecord) {
     };
     push_audit_event(
         &completion.audit,
-        completion.store.as_deref(),
+        &completion.store_writer,
         AuditEvent {
             subject: completion.subject.clone(),
             timestamp_ms: now_ms(),
@@ -1954,12 +2017,12 @@ fn cleanup_finished_job_runtime(completion: &JobCompletion) {
     if let Ok(mut events) = completion.events.lock() {
         events.remove(&completion.job_id);
     } else {
-        eprintln!("job event mutex poisoned");
+        tracing::error!("job event mutex poisoned");
     }
     if let Ok(mut log_events) = completion.log_events.lock() {
         log_events.remove(&completion.job_id);
     } else {
-        eprintln!("job log event mutex poisoned");
+        tracing::error!("job log event mutex poisoned");
     }
     prune_completed_job_log_buffers(&completion.jobs, &completion.logs);
 }
@@ -1969,11 +2032,11 @@ fn prune_completed_job_log_buffers(
     logs: &Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
 ) {
     let Ok(jobs) = jobs.lock() else {
-        eprintln!("job map mutex poisoned");
+        tracing::error!("job map mutex poisoned");
         return;
     };
     let Ok(logs_guard) = logs.lock() else {
-        eprintln!("job log mutex poisoned");
+        tracing::error!("job log mutex poisoned");
         return;
     };
     let mut completed_log_job_ids = logs_guard
@@ -2001,7 +2064,7 @@ fn prune_completed_job_log_buffers(
                 logs.remove(&job_id);
             }
         }
-        Err(_) => eprintln!("job log mutex poisoned"),
+        Err(_) => tracing::error!("job log mutex poisoned"),
     }
 }
 
@@ -2056,7 +2119,7 @@ mod tests {
             workspace,
             policy,
             auth_token: None,
-            store: None,
+            store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
@@ -2264,7 +2327,7 @@ mod tests {
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
-            store: None,
+            store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(secrets),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
@@ -2309,7 +2372,7 @@ mod tests {
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
-            store: None,
+            store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
@@ -2363,7 +2426,7 @@ mod tests {
             workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
-            store: None,
+            store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
             jobs: Arc::new(Mutex::new(BTreeMap::new())),
@@ -2418,7 +2481,7 @@ mod tests {
                 &jobs,
                 &logs,
                 &log_events,
-                None,
+                &operon_store::StoreWriter::new(None),
                 "job-1",
                 JobLog {
                     stream: "stdout".to_string(),
@@ -2490,7 +2553,7 @@ mod tests {
             log_events: log_events.clone(),
             cancels: Arc::new(Mutex::new(BTreeMap::new())),
             stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            store: None,
+            store_writer: operon_store::StoreWriter::new(None),
             job_id: target_job_id.clone(),
             subject: "test-subject".to_string(),
             node_id: "node-a".to_string(),
@@ -2542,7 +2605,7 @@ mod tests {
             log_events: Arc::new(Mutex::new(BTreeMap::from([(job_id.clone(), log_sender)]))),
             cancels: Arc::new(Mutex::new(BTreeMap::new())),
             stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            store: None,
+            store_writer: operon_store::StoreWriter::new(None),
             job_id: job_id.clone(),
             subject: "test-subject".to_string(),
             node_id: "node-a".to_string(),

@@ -182,4 +182,4 @@ cargo run -q -p operon-cli -- --config "$CONFIG_PATH" audit list local >"$TMP_DI
 grep -q "write-stream" "$TMP_DIR/audit.txt"
 grep -q "job:default" "$TMP_DIR/audit.txt"
 
-echo "v0.6.7/v0.6.8 runtime validation passed"
+echo "v0.6.7/v0.6.8/v0.6.12 runtime validation passed"

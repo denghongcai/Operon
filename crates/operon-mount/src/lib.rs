@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use std::{
     collections::HashMap,
     ffi::OsStr,

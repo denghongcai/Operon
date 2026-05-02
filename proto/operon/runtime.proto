@@ -21,7 +21,7 @@ service OperonRuntime {
   rpc ListJobs(ListJobsRequest) returns (JobList);
   rpc WatchJob(JobIdRequest) returns (stream JobEvent);
   rpc ListJobLogs(JobIdRequest) returns (JobLogList);
-  rpc StreamJobLogs(JobIdRequest) returns (stream JobLog);
+  rpc StreamJobLogs(JobIdRequest) returns (stream JobLogStreamEvent);
   rpc WriteJobStdin(stream JobStdinRequest) returns (JobStdin);
   rpc CloseJobStdin(JobIdRequest) returns (JobStdinClose);
   rpc CancelJob(JobCancelRequest) returns (JobRecord);
@@ -231,6 +231,37 @@ message JobLogList {
   repeated JobLog logs = 2;
   bool truncated = 3;
   uint64 dropped_log_count = 4;
+}
+
+message JobLogSnapshot {
+  string job_id = 1;
+  repeated JobLog logs = 2;
+  bool truncated = 3;
+  uint64 dropped_log_count = 4;
+  uint64 next_sequence = 5;
+}
+
+message JobLogEntry {
+  string job_id = 1;
+  JobLog log = 2;
+}
+
+message JobLogComplete {
+  string job_id = 1;
+  JobStatus status = 2;
+  optional int32 exit_code = 3;
+  uint64 log_count = 4;
+  bool logs_truncated = 5;
+  bool truncated = 6;
+  uint64 dropped_log_count = 7;
+}
+
+message JobLogStreamEvent {
+  oneof event {
+    JobLogSnapshot snapshot = 1;
+    JobLogEntry entry = 2;
+    JobLogComplete complete = 3;
+  }
 }
 
 message JobEvent {
