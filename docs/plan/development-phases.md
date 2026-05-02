@@ -3626,7 +3626,46 @@ Remaining:
   `String` formatting invariant in token generation; those do not represent
   user-triggered onboarding panics.
 
-## Phase 58: Provider Discovery Contract
+## Phase 58: v0.8.15 Token Generation Panic Cleanup
+
+Status: Completed.
+
+Goal: remove the remaining production panic-style token formatting invariant
+from CLI private-file helpers.
+
+Review finding:
+
+- `crates/operon-cli/src/private_files.rs` formatted generated token bytes
+  with `write!` and `expect("writing to String should not fail")`.
+- Writing to a `String` is effectively infallible, but token generation does
+  not need a panic-style assertion for hex encoding.
+
+Done when:
+
+- generated token hex encoding does not use panic-style formatting.
+- validation rejects reintroducing the `String` write `expect`.
+- CLI tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.15-token-generation-panic-cleanup.md`.
+
+Completed:
+
+- Replaced `write!`-based hex formatting with direct nibble-to-character
+  encoding.
+- Removed the now-unused `fmt::Write` import.
+- Added `scripts/verify-v0.8.15-token-generation-panic-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.15 work remains.
+- The remaining `expect`, `unwrap`, and `panic!` scan hits in the reviewed
+  Rust surfaces are test assertions.
+- CLI file upload and job stdin helpers still buffer local files before
+  sending requests. That remains a future streaming-client improvement
+  candidate for very large local inputs.
+
+## Phase 59: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3645,7 +3684,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 59: Non-LAN Provider Adapters
+## Phase 60: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3665,7 +3704,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 60: v0.9 Acceptance
+## Phase 61: v0.9 Acceptance
 
 Status: Planned.
 

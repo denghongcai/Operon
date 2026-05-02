@@ -155,6 +155,10 @@ Operon should not own:
   - v0.8.14 cleanup scope for returning a normal CLI error instead of
     panicking on a broken daemon onboarding token invariant.
 
+- `docs/plan/v0.8.15-token-generation-panic-cleanup.md`
+  - v0.8.15 cleanup scope for direct token hex encoding without a
+    panic-style `String` formatting invariant.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -273,6 +277,8 @@ Operon should not own:
   mount remote runtime invariant panics with logged or returned errors.
 - Completed hardening milestone: v0.8.14 replaced the daemon onboarding token
   invariant panic with a normal CLI error.
+- Completed hardening milestone: v0.8.15 replaced token generation's
+  panic-style `String` formatting invariant with direct hex encoding.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -403,3 +409,6 @@ Defer:
 - Latest phase status update: v0.8.14 completed Onboard Invariant Cleanup.
   Daemon onboarding token invariant failures now return a normal CLI error
   instead of panicking. Nothing remains in v0.8.14.
+- Latest phase status update: v0.8.15 completed Token Generation Panic
+  Cleanup. CLI token generation now uses direct hex encoding without a
+  panic-style `String` formatting invariant. Nothing remains in v0.8.15.

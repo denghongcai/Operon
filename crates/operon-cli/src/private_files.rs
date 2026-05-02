@@ -1,4 +1,4 @@
-use std::{fmt::Write as _, fs, path::Path};
+use std::{fs, path::Path};
 
 #[cfg(unix)]
 use std::{
@@ -14,8 +14,10 @@ pub(crate) fn generate_token() -> anyhow::Result<String> {
     let mut bytes = [0_u8; 32];
     getrandom::fill(&mut bytes)?;
     let mut token = String::with_capacity(bytes.len() * 2);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     for byte in bytes {
-        write!(&mut token, "{byte:02x}").expect("writing to String should not fail");
+        token.push(HEX[(byte >> 4) as usize] as char);
+        token.push(HEX[(byte & 0x0f) as usize] as char);
     }
     Ok(token)
 }
