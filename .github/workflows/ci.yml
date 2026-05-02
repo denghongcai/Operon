@@ -128,6 +128,8 @@ jobs:
           - name: v0.9.4 Runtime Hardening Consolidation Validation
             script: scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
             node: true
+          - name: v0.9.5 Policy Language Hardening Validation
+            script: scripts/verify-v0.9.5-policy-language-hardening.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

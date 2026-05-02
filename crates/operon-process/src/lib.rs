@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use operon_core::{JobPolicy, RuntimeErrorKind, RuntimeResult};
+use operon_core::{JobPolicy, PolicyDecision, PolicyReasonCode, RuntimeResult};
 
 pub const PROCESS_CAPABILITY: &str = "process";
 pub const JOB_CAPABILITY: &str = "job";
@@ -10,28 +10,49 @@ pub fn authorize_job(
     cwd: &str,
     timeout_secs: Option<u64>,
 ) -> RuntimeResult<()> {
+    let decision = authorize_job_decision("", policy, cwd, timeout_secs);
+    if decision.allowed {
+        return Ok(());
+    }
+    Err(decision.runtime_error())
+}
+
+pub fn authorize_job_decision(
+    subject: &str,
+    policy: &JobPolicy,
+    cwd: &str,
+    timeout_secs: Option<u64>,
+) -> PolicyDecision {
     if !policy
         .allowed_cwds
         .iter()
         .any(|allowed| path_in_policy_scope(cwd, allowed))
     {
-        return Err((
-            RuntimeErrorKind::Forbidden,
-            "job cwd denied by policy".to_string(),
-        ));
+        return PolicyDecision::denied(
+            subject,
+            "job:default",
+            "run",
+            cwd,
+            PolicyReasonCode::JobCwdDenied,
+            "job cwd denied by policy",
+        );
     }
     if let Some(timeout_secs) = timeout_secs {
         if timeout_secs > policy.max_timeout_secs {
-            return Err((
-                RuntimeErrorKind::Forbidden,
+            return PolicyDecision::denied(
+                subject,
+                "job:default",
+                "run",
+                cwd,
+                PolicyReasonCode::JobTimeoutExceeded,
                 format!(
                     "job timeout {timeout_secs}s exceeds policy maximum {}s",
                     policy.max_timeout_secs
                 ),
-            ));
+            );
         }
     }
-    Ok(())
+    PolicyDecision::allowed(subject, "job:default", "run", cwd, "allowed")
 }
 
 pub fn resolve_job_secrets(
@@ -39,19 +60,37 @@ pub fn resolve_job_secrets(
     secrets: &BTreeMap<String, String>,
     requested: &[String],
 ) -> RuntimeResult<BTreeMap<String, String>> {
+    resolve_job_secrets_decision("", policy, secrets, requested)
+        .map_err(|decision| decision.runtime_error())
+}
+
+pub fn resolve_job_secrets_decision(
+    subject: &str,
+    policy: &JobPolicy,
+    secrets: &BTreeMap<String, String>,
+    requested: &[String],
+) -> Result<BTreeMap<String, String>, Box<PolicyDecision>> {
     let mut env = BTreeMap::new();
     for name in requested {
         if !policy.allowed_secrets.iter().any(|allowed| allowed == name) {
-            return Err((
-                RuntimeErrorKind::Forbidden,
+            return Err(Box::new(PolicyDecision::denied(
+                subject,
+                "secret:default",
+                "use",
+                name,
+                PolicyReasonCode::SecretDenied,
                 format!("secret `{name}` denied by policy"),
-            ));
+            )));
         }
         let Some(value) = secrets.get(name) else {
-            return Err((
-                RuntimeErrorKind::NotFound,
+            return Err(Box::new(PolicyDecision::denied(
+                subject,
+                "secret:default",
+                "use",
+                name,
+                PolicyReasonCode::SecretUndefined,
                 format!("secret `{name}` is not defined"),
-            ));
+            )));
         };
         env.insert(name.clone(), value.clone());
     }
@@ -97,6 +136,7 @@ fn normalize_virtual_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use operon_core::RuntimeErrorKind;
 
     #[test]
     fn process_capability_ids_are_stable() {
@@ -123,6 +163,75 @@ mod tests {
             .expect_err("timeout")
             .1
             .contains("exceeds policy maximum"));
+    }
+
+    #[test]
+    fn job_authorization_decision_names_reason_codes() {
+        let policy = JobPolicy {
+            allowed_cwds: vec!["/workspace".to_string()],
+            default_timeout_secs: 30,
+            max_timeout_secs: 60,
+            preserve_env: false,
+            env_allowlist: Vec::new(),
+            allowed_secrets: Vec::new(),
+        };
+
+        let allowed = authorize_job_decision("local-cli", &policy, "/workspace", Some(60));
+        assert!(allowed.allowed);
+        assert_eq!(allowed.capability_id, "job:default");
+        assert_eq!(allowed.reason_code, operon_core::PolicyReasonCode::Allowed);
+
+        let cwd = authorize_job_decision("local-cli", &policy, "/tmp", Some(30));
+        assert!(!cwd.allowed);
+        assert_eq!(cwd.reason_code, operon_core::PolicyReasonCode::JobCwdDenied);
+
+        let timeout = authorize_job_decision("local-cli", &policy, "/workspace", Some(61));
+        assert!(!timeout.allowed);
+        assert_eq!(
+            timeout.reason_code,
+            operon_core::PolicyReasonCode::JobTimeoutExceeded
+        );
+    }
+
+    #[test]
+    fn secret_authorization_decision_names_denied_and_missing_secrets() {
+        let policy = JobPolicy {
+            allowed_cwds: vec!["/".to_string()],
+            default_timeout_secs: 30,
+            max_timeout_secs: 60,
+            preserve_env: false,
+            env_allowlist: Vec::new(),
+            allowed_secrets: vec!["TOKEN".to_string()],
+        };
+        let mut secrets = BTreeMap::new();
+        secrets.insert("TOKEN".to_string(), "value".to_string());
+
+        let env =
+            resolve_job_secrets_decision("local-cli", &policy, &secrets, &["TOKEN".to_string()])
+                .expect("allowed secret");
+        assert_eq!(env.get("TOKEN").map(String::as_str), Some("value"));
+
+        let denied =
+            resolve_job_secrets_decision("local-cli", &policy, &secrets, &["OTHER".to_string()])
+                .expect_err("denied secret");
+        assert_eq!(denied.capability_id, "secret:default");
+        assert_eq!(
+            denied.reason_code,
+            operon_core::PolicyReasonCode::SecretDenied
+        );
+
+        let missing = resolve_job_secrets_decision(
+            "local-cli",
+            &policy,
+            &BTreeMap::new(),
+            &["TOKEN".to_string()],
+        )
+        .expect_err("missing secret");
+        assert_eq!(
+            missing.reason_code,
+            operon_core::PolicyReasonCode::SecretUndefined
+        );
+        assert_eq!(missing.runtime_error().0, RuntimeErrorKind::NotFound);
     }
 
     #[test]

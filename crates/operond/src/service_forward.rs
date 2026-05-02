@@ -1,7 +1,9 @@
 use std::{collections::BTreeMap, pin::Pin, sync::Arc};
 
 use futures_util::{Stream, StreamExt};
-use operon_core::{PolicyConfig, RuntimeErrorKind, ServiceCheck, ServiceDefinition};
+use operon_core::{
+    PolicyConfig, PolicyDecision, PolicyReasonCode, ServiceCheck, ServiceDefinition,
+};
 use operon_protocol::runtime::v1::{
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
     service_tunnel_response, ServiceDatagram, ServiceDatagramTunnelClose,
@@ -19,7 +21,9 @@ use tokio::{
 use tonic::Status;
 
 use crate::{
-    audit::record_audit_capability, grpc_status::status_from_error, state::AppState,
+    audit::{record_audit_capability, record_policy_decision},
+    grpc_status::status_from_error,
+    state::AppState,
     MAX_SERVICE_DATAGRAM_BYTES, SERVICE_DATAGRAM_PEER_IDLE_SECS,
 };
 
@@ -32,18 +36,11 @@ pub(crate) async fn grpc_service_check(
     state: &AppState,
     service_id: String,
 ) -> Result<ServiceCheck, Status> {
-    let service = match authorize_service(&state.policy, &service_id, "check") {
-        Ok(service) => service,
-        Err(error) => {
-            record_audit_capability(
-                state,
-                &format!("service:{service_id}"),
-                "check",
-                &service_id,
-                false,
-                &error.1,
-            );
-            return Err(status_from_error(error));
+    let service = match authorize_service_decision(&state.policy, &service_id, "check") {
+        Ok((service, _)) => service,
+        Err(decision) => {
+            record_policy_decision(state, &decision);
+            return Err(status_from_error(decision.runtime_error()));
         }
     };
 
@@ -67,11 +64,22 @@ pub(crate) async fn grpc_service_check(
     Ok(check)
 }
 
+#[cfg(test)]
 pub(crate) fn authorize_service(
     policy: &PolicyConfig,
     service_id: &str,
     action: &str,
-) -> Result<ServiceDefinition, (RuntimeErrorKind, String)> {
+) -> Result<ServiceDefinition, (operon_core::RuntimeErrorKind, String)> {
+    authorize_service_decision(policy, service_id, action)
+        .map(|(service, _)| service)
+        .map_err(|decision| decision.runtime_error())
+}
+
+pub(crate) fn authorize_service_decision(
+    policy: &PolicyConfig,
+    service_id: &str,
+    action: &str,
+) -> Result<(ServiceDefinition, PolicyDecision), Box<PolicyDecision>> {
     let service = policy
         .service
         .services
@@ -79,10 +87,14 @@ pub(crate) fn authorize_service(
         .find(|service| service.id == service_id)
         .cloned()
         .ok_or_else(|| {
-            (
-                RuntimeErrorKind::Forbidden,
+            Box::new(PolicyDecision::denied(
+                &policy.subject,
+                format!("service:{service_id}"),
+                action,
+                service_id,
+                PolicyReasonCode::ServiceUnknown,
                 format!("service `{service_id}` denied by policy"),
-            )
+            ))
         })?;
     let allowed = match action {
         "check" => service.permissions.check,
@@ -90,12 +102,29 @@ pub(crate) fn authorize_service(
         _ => false,
     };
     if allowed {
-        Ok(service)
-    } else {
-        Err((
-            RuntimeErrorKind::Forbidden,
-            format!("service `{service_id}` action `{action}` denied by policy"),
+        Ok((
+            service.clone(),
+            PolicyDecision::allowed(
+                &policy.subject,
+                format!("service:{}", service.id),
+                action,
+                service_id,
+                "allowed",
+            ),
         ))
+    } else {
+        let reason_code = match action {
+            "check" | "forward" => PolicyReasonCode::ServiceActionDenied,
+            _ => PolicyReasonCode::UnsupportedAction,
+        };
+        Err(Box::new(PolicyDecision::denied(
+            &policy.subject,
+            format!("service:{}", service.id),
+            action,
+            service_id,
+            reason_code,
+            format!("service `{service_id}` action `{action}` denied by policy"),
+        )))
     }
 }
 
@@ -144,18 +173,11 @@ pub(crate) async fn open_service_tunnel(
             ));
         }
     };
-    let service = match authorize_service(&state.policy, &service_id, "forward") {
-        Ok(service) => service,
-        Err(error) => {
-            record_audit_capability(
-                state,
-                &format!("service:{service_id}"),
-                "forward",
-                &service_id,
-                false,
-                &error.1,
-            );
-            return Err(status_from_error(error));
+    let service = match authorize_service_decision(&state.policy, &service_id, "forward") {
+        Ok((service, _)) => service,
+        Err(decision) => {
+            record_policy_decision(state, &decision);
+            return Err(status_from_error(decision.runtime_error()));
         }
     };
     if !matches!(service.protocol, operon_core::ServiceProtocol::Tcp) {
@@ -347,18 +369,12 @@ pub(crate) async fn open_service_datagram_tunnel(
             ));
         }
     };
-    let service = match authorize_service(&state.policy, &service_id, "forward") {
-        Ok(service) => service,
-        Err(error) => {
-            record_audit_capability(
-                state,
-                &format!("service:{service_id}"),
-                "forward-udp",
-                &service_id,
-                false,
-                &error.1,
-            );
-            return Err(status_from_error(error));
+    let service = match authorize_service_decision(&state.policy, &service_id, "forward") {
+        Ok((service, _)) => service,
+        Err(mut decision) => {
+            decision.action = "forward-udp".to_string();
+            record_policy_decision(state, &decision);
+            return Err(status_from_error(decision.runtime_error()));
         }
     };
     if !matches!(service.protocol, operon_core::ServiceProtocol::Udp) {
@@ -692,6 +708,57 @@ mod tests {
         assert_eq!(
             service_check_audit_reason(&service, &check),
             "tcp service unreachable: connection refused"
+        );
+    }
+
+    #[test]
+    fn service_authorization_decision_names_reason_codes() {
+        let mut policy = PolicyConfig {
+            subject: "local-cli".to_string(),
+            fs: operon_core::FsPolicy { mounts: Vec::new() },
+            job: operon_core::JobPolicy {
+                allowed_cwds: Vec::new(),
+                default_timeout_secs: 30,
+                max_timeout_secs: 300,
+                preserve_env: false,
+                env_allowlist: Vec::new(),
+                allowed_secrets: Vec::new(),
+            },
+            service: operon_core::ServicePolicy::default(),
+        };
+        policy.service.services.push(ServiceDefinition {
+            id: "web".to_string(),
+            name: "web".to_string(),
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            protocol: ServiceProtocol::Tcp,
+            description: "web".to_string(),
+            permissions: ServicePermissions {
+                check: true,
+                forward: false,
+            },
+        });
+
+        let (_, allowed) =
+            authorize_service_decision(&policy, "web", "check").expect("check allowed");
+        assert!(allowed.allowed);
+        assert_eq!(allowed.capability_id, "service:web");
+        assert_eq!(allowed.reason_code, operon_core::PolicyReasonCode::Allowed);
+
+        let denied =
+            authorize_service_decision(&policy, "web", "forward").expect_err("forward denied");
+        assert_eq!(denied.capability_id, "service:web");
+        assert_eq!(
+            denied.reason_code,
+            operon_core::PolicyReasonCode::ServiceActionDenied
+        );
+
+        let unknown =
+            authorize_service_decision(&policy, "missing", "check").expect_err("missing service");
+        assert_eq!(unknown.capability_id, "service:missing");
+        assert_eq!(
+            unknown.reason_code,
+            operon_core::PolicyReasonCode::ServiceUnknown
         );
     }
 

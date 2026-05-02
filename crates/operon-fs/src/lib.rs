@@ -1,6 +1,8 @@
 use std::path::{Component, Path, PathBuf};
 
-use operon_core::{PolicyConfig, RuntimeErrorKind, RuntimeResult};
+use operon_core::{
+    PolicyConfig, PolicyDecision, PolicyReasonCode, RuntimeErrorKind, RuntimeResult,
+};
 
 pub const FILESYSTEM_CAPABILITY: &str = "fs";
 
@@ -147,16 +149,32 @@ pub fn authorize_fs(
     operation: &str,
     virtual_path: &str,
 ) -> RuntimeResult<()> {
+    let decision = authorize_fs_decision(policy, operation, virtual_path);
+    if decision.allowed {
+        return Ok(());
+    }
+    Err(decision.runtime_error())
+}
+
+pub fn authorize_fs_decision(
+    policy: &PolicyConfig,
+    operation: &str,
+    virtual_path: &str,
+) -> PolicyDecision {
     let Some(mount) = policy
         .fs
         .mounts
         .iter()
         .find(|mount| path_in_policy_scope(virtual_path, &mount.path))
     else {
-        return Err((
-            RuntimeErrorKind::Forbidden,
-            "path is outside allowed fs mounts".to_string(),
-        ));
+        return PolicyDecision::denied(
+            &policy.subject,
+            "fs",
+            operation,
+            virtual_path,
+            PolicyReasonCode::FsMountNotAllowed,
+            "path is outside allowed fs mounts",
+        );
     };
 
     let allowed = match operation {
@@ -166,12 +184,26 @@ pub fn authorize_fs(
         _ => false,
     };
     if allowed {
-        Ok(())
+        PolicyDecision::allowed(
+            &policy.subject,
+            format!("fs:{}", mount.name),
+            operation,
+            virtual_path,
+            "allowed",
+        )
     } else {
-        Err((
-            RuntimeErrorKind::Forbidden,
+        let reason_code = match operation {
+            "read" | "write" | "delete" => PolicyReasonCode::FsPermissionDenied,
+            _ => PolicyReasonCode::UnsupportedAction,
+        };
+        PolicyDecision::denied(
+            &policy.subject,
+            format!("fs:{}", mount.name),
+            operation,
+            virtual_path,
+            reason_code,
             format!("fs {operation} denied by policy"),
-        ))
+        )
     }
 }
 
@@ -217,6 +249,54 @@ mod tests {
             "/workspace-other/file.txt",
             "/workspace"
         ));
+    }
+
+    #[test]
+    fn fs_authorization_decision_names_capability_and_reason_code() {
+        let policy = PolicyConfig {
+            subject: "local-cli".to_string(),
+            fs: operon_core::FsPolicy {
+                mounts: vec![operon_core::FsMountPolicy {
+                    name: "workspace".to_string(),
+                    path: "/workspace".to_string(),
+                    permissions: operon_core::FsPermissions {
+                        read: true,
+                        write: false,
+                        delete: false,
+                    },
+                }],
+            },
+            job: operon_core::JobPolicy {
+                allowed_cwds: Vec::new(),
+                default_timeout_secs: 30,
+                max_timeout_secs: 300,
+                preserve_env: false,
+                env_allowlist: Vec::new(),
+                allowed_secrets: Vec::new(),
+            },
+            service: operon_core::ServicePolicy::default(),
+        };
+
+        let allowed = authorize_fs_decision(&policy, "read", "/workspace/file.txt");
+        assert!(allowed.allowed);
+        assert_eq!(allowed.subject, "local-cli");
+        assert_eq!(allowed.capability_id, "fs:workspace");
+        assert_eq!(allowed.reason_code, operon_core::PolicyReasonCode::Allowed);
+
+        let denied = authorize_fs_decision(&policy, "write", "/workspace/file.txt");
+        assert!(!denied.allowed);
+        assert_eq!(denied.capability_id, "fs:workspace");
+        assert_eq!(
+            denied.reason_code,
+            operon_core::PolicyReasonCode::FsPermissionDenied
+        );
+
+        let outside = authorize_fs_decision(&policy, "read", "/other/file.txt");
+        assert!(!outside.allowed);
+        assert_eq!(
+            outside.reason_code,
+            operon_core::PolicyReasonCode::FsMountNotAllowed
+        );
     }
 
     #[test]

@@ -154,6 +154,7 @@ scripts/verify-post-v0.9-discovery-ux.sh
 scripts/verify-policy-derived-capabilities.sh
 scripts/verify-v0.9.3-store-backed-audit-visibility.sh
 scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
+scripts/verify-v0.9.5-policy-language-hardening.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -217,6 +218,9 @@ The v0.9.4 runtime hardening validation checks service health audit semantics,
 store-backed job log restart visibility, workspace traversal hardening,
 shell-free argv job execution, config LAN advertisement UX, and protocol
 version alignment.
+The v0.9.5 policy language validation checks the shared policy decision
+vocabulary, stable deny reason codes, effective `config explain` grants, and
+policy audit denial reasons.
 
 ## Release Automation
 
@@ -434,6 +438,16 @@ GITHUB_TOKEN: ghp_example
 ```
 
 Secrets are only injected into jobs that request them and are allowed by policy. The daemon does not expose a secret read API; audit output records secret names, not values.
+
+Policy decisions use a small shared policy vocabulary across filesystem, job,
+service, and secret checks. Denials carry a stable reason code such as
+`fs-mount-not-allowed`, `fs-permission-denied`, `job-cwd-denied`,
+`job-timeout-exceeded`, `secret-denied`, `secret-undefined`,
+`service-unknown`, or `service-action-denied`, followed by a human-readable
+message in audit output. `operon config explain --json` includes
+`policy.effective_grants` entries with `capability_id`, `action`, `resource`,
+`allowed`, and `reason_code` fields so agents can inspect the effective policy
+surface without reading secret values.
 
 ### Common Commands
 

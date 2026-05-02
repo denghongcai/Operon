@@ -3,7 +3,7 @@ use std::{path::PathBuf, pin::Pin};
 use futures_util::{Stream, StreamExt};
 use operon_core::{FsEntry, FsList, FsStat, FsWrite};
 use operon_fs::{
-    authorize_fs, join_virtual_path, resolve_create_workspace_path,
+    authorize_fs_decision, join_virtual_path, resolve_create_workspace_path,
     resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
     resolve_write_workspace_path,
 };
@@ -13,6 +13,7 @@ use tokio_util::io::ReaderStream;
 use tonic::Status;
 
 use crate::{
+    audit::record_policy_decision,
     grpc_status::{status_from_error, status_from_io_error},
     record_audit, AppState, MAX_FS_FILE_BYTES, MAX_FS_WRITE_CHUNK_BYTES,
 };
@@ -68,9 +69,12 @@ fn authorize_fs_action(
     permission: &str,
     path: &str,
 ) -> Result<(), Status> {
-    if let Err(error) = authorize_fs(&state.policy, permission, path) {
-        record_audit(state, audit_action, audit_resource, false, &error.1);
-        return Err(status_from_error(error));
+    let mut decision = authorize_fs_decision(&state.policy, permission, path);
+    decision.action = audit_action.to_string();
+    decision.resource = audit_resource.to_string();
+    if !decision.allowed {
+        record_policy_decision(state, &decision);
+        return Err(status_from_error(decision.runtime_error()));
     }
     Ok(())
 }

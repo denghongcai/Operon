@@ -20,6 +20,8 @@ later hardening work.
 - Policy is enforced by the daemon for every capability operation.
 - gRPC errors use status codes for auth, policy, validation, missing resources,
   precondition failures, and internal failures.
+- Policy decisions use a shared vocabulary for subject, capability id, action,
+  resource, allow/deny state, stable reason code, and human-readable message.
 - Long-running execution remains job-based with explicit status calls or
   streaming log/stdin methods.
 
@@ -86,6 +88,24 @@ Runtime schema constraints:
   response type.
 - list calls accept `page_size` and `page_token`; responses expose
   `next_page_token`.
+
+## Policy Decisions
+
+Filesystem, job, service, and secret authorization paths produce a shared
+policy decision internally. The decision records the policy subject, capability
+id, action, resource, allow/deny state, stable reason code, and human-readable
+message. Denied decisions are converted to gRPC policy errors and recorded in
+audit output with the reason code prefix preserved.
+
+Reason codes are stable strings such as `fs-mount-not-allowed`,
+`fs-permission-denied`, `job-cwd-denied`, `job-timeout-exceeded`,
+`secret-denied`, `secret-undefined`, `service-unknown`,
+`service-action-denied`, and `unsupported-action`.
+
+`operon config explain --json` includes `policy.effective_grants`, a
+machine-readable view of configured capability/action/resource grants and
+disabled actions. This is the supported way for agents to inspect effective
+policy without reading daemon internals or secret values.
 
 ## Service / Port Capability
 

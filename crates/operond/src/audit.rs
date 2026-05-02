@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use operon_core::{AuditEvent, RequestContext};
+use operon_core::{AuditEvent, PolicyDecision, RequestContext};
 
 use crate::{
     state::{AppState, MAX_IN_MEMORY_AUDIT_EVENTS},
@@ -42,6 +42,24 @@ pub(crate) fn record_audit_capability(
         step_id: context.step_id,
     };
     push_audit_event(&state.audit, &state.store_writer, event);
+}
+
+pub(crate) fn record_policy_decision(state: &AppState, decision: &PolicyDecision) {
+    record_audit_capability(
+        state,
+        &decision.capability_id,
+        &decision.action,
+        &decision.resource,
+        decision.allowed,
+        &policy_decision_audit_reason(decision),
+    );
+}
+
+pub(crate) fn policy_decision_audit_reason(decision: &PolicyDecision) -> String {
+    if decision.reason_code.as_str() == decision.message {
+        return decision.message.clone();
+    }
+    format!("{}: {}", decision.reason_code.as_str(), decision.message)
 }
 
 pub(crate) fn push_audit_event(
@@ -99,6 +117,7 @@ pub(crate) fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use operon_core::{PolicyDecision, PolicyReasonCode};
 
     #[test]
     fn bounded_audit_events_keeps_recent_persisted_events() {
@@ -123,6 +142,23 @@ mod tests {
         assert_eq!(
             bounded.front().expect("first retained event").resource,
             "/2"
+        );
+    }
+
+    #[test]
+    fn policy_decision_audit_reason_includes_reason_code() {
+        let decision = PolicyDecision::denied(
+            "local-cli",
+            "service:web",
+            "forward",
+            "web",
+            PolicyReasonCode::ServiceActionDenied,
+            "service `web` action `forward` denied by policy",
+        );
+
+        assert_eq!(
+            policy_decision_audit_reason(&decision),
+            "service-action-denied: service `web` action `forward` denied by policy"
         );
     }
 }

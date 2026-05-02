@@ -6,7 +6,7 @@ use std::{
 
 use operon_core::{AuditEvent, JobEvent, JobLog, JobLogList, JobRecord, JobRunRequest, JobStatus};
 use operon_fs::resolve_existing_workspace_path;
-use operon_process::{authorize_job, job_environment, resolve_job_secrets};
+use operon_process::{authorize_job_decision, job_environment, resolve_job_secrets_decision};
 use operon_protocol::runtime::v1::{
     job_log_stream_event, JobLogComplete, JobLogEntry, JobLogSnapshot, JobLogStreamEvent,
 };
@@ -22,7 +22,7 @@ use tonic::Status;
 use crate::{
     audit::{
         append_store_record, current_request_context, now_ms, push_audit_event,
-        record_audit_capability,
+        record_audit_capability, record_policy_decision,
     },
     grpc_status::status_from_error,
     locks::lock,
@@ -34,16 +34,26 @@ use crate::{
 };
 pub(crate) fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Status> {
     let cwd_virtual = request.cwd.clone().unwrap_or_else(|| "/".to_string());
-    if let Err(error) = authorize_job(&state.policy.job, &cwd_virtual, request.timeout_secs) {
-        record_audit_capability(state, "job:default", "run", &cwd_virtual, false, &error.1);
-        return Err(status_from_error(error));
+    let decision = authorize_job_decision(
+        &state.policy.subject,
+        &state.policy.job,
+        &cwd_virtual,
+        request.timeout_secs,
+    );
+    if !decision.allowed {
+        record_policy_decision(state, &decision);
+        return Err(status_from_error(decision.runtime_error()));
     }
-    let secret_env = match resolve_job_secrets(&state.policy.job, &state.secrets, &request.secrets)
-    {
+    let secret_env = match resolve_job_secrets_decision(
+        &state.policy.subject,
+        &state.policy.job,
+        &state.secrets,
+        &request.secrets,
+    ) {
         Ok(secret_env) => secret_env,
-        Err(error) => {
-            record_audit_capability(state, "secret:default", "use", "*", false, &error.1);
-            return Err(status_from_error(error));
+        Err(decision) => {
+            record_policy_decision(state, &decision);
+            return Err(status_from_error(decision.runtime_error()));
         }
     };
     let cwd = match resolve_existing_workspace_path(&state.workspace, &cwd_virtual) {

@@ -51,6 +51,29 @@ authorization: Bearer <token>
 
 Missing or invalid metadata returns gRPC `Unauthenticated`.
 
+## Policy Decision Vocabulary
+
+The daemon owns capability authorization. Filesystem, job, service, and secret
+checks use a shared policy decision vocabulary internally and in audit reasons.
+Denied policy decisions include a stable reason code before the human-readable
+message, for example:
+
+```text
+job-cwd-denied: job cwd denied by policy
+service-action-denied: service `web` action `forward` denied by policy
+```
+
+Current reason codes include `fs-mount-not-allowed`,
+`fs-permission-denied`, `job-cwd-denied`, `job-timeout-exceeded`,
+`secret-denied`, `secret-undefined`, `service-unknown`,
+`service-action-denied`, and `unsupported-action`. Existing audit filters still
+filter by subject, capability, action, resource, and allowed state; the reason
+field remains a string for compatibility.
+
+`operon config explain --json` exposes the effective policy grants under
+`policy.effective_grants`. Each grant includes `capability_id`, `action`,
+`resource`, `allowed`, and `reason_code`. Secret values are never exposed.
+
 ## Execution Context Metadata
 
 Clients that execute an Operon graph should attach optional context metadata to

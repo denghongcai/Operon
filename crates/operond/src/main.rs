@@ -832,7 +832,7 @@ impl OperonRuntime for GrpcRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::job_runtime::{append_job_log, finish_job};
+    use crate::job_runtime::{append_job_log, finish_job, start_job};
 
     fn test_policy() -> PolicyConfig {
         PolicyConfig {
@@ -1072,6 +1072,32 @@ mod tests {
         let timeout_error = authorize_job(&policy.job, "/workspace", Some(31))
             .expect_err("timeout should be denied");
         assert!(timeout_error.1.contains("exceeds policy maximum"));
+    }
+
+    #[test]
+    fn denied_job_policy_audit_uses_reason_code() {
+        let state = test_state(test_policy(), PathBuf::from("/workspace"));
+
+        let error = start_job(
+            &state,
+            JobRunRequest {
+                command: "pwd".to_string(),
+                argv: Vec::new(),
+                cwd: Some("/tmp".to_string()),
+                timeout_secs: Some(1),
+                secrets: Vec::new(),
+            },
+        )
+        .expect_err("job cwd should be denied");
+
+        assert_eq!(error.code(), tonic::Code::PermissionDenied);
+        let audit = state.audit.lock().expect("audit");
+        assert_eq!(audit.len(), 1);
+        assert_eq!(audit[0].capability, "job:default");
+        assert_eq!(audit[0].action, "run");
+        assert_eq!(audit[0].resource, "/tmp");
+        assert!(!audit[0].allowed);
+        assert_eq!(audit[0].reason, "job-cwd-denied: job cwd denied by policy");
     }
 
     #[test]

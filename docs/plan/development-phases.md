@@ -3977,7 +3977,7 @@ Remaining:
 
 ## Phase 67: v0.9.5 Policy Language Hardening
 
-Status: Planned.
+Status: Completed.
 
 Goal: make Operon policy easier to reason about, explain, and audit before
 adding new capability surfaces.
@@ -4010,7 +4010,23 @@ Detailed plan:
 
 Remaining:
 
-- All v0.9.5 implementation work remains.
+Completed:
+
+- Added `PolicyDecision` and `PolicyReasonCode` to `operon-core`.
+- Added shared decision-producing authorization helpers for filesystem, job,
+  secret, and service policy checks.
+- Updated daemon deny audit paths to record stable policy reason codes with
+  human-readable messages.
+- Extended `operon config explain` JSON and human output with effective policy
+  grants.
+- Documented the policy decision vocabulary in README, `PROTOCOL.md`, and
+  runtime API docs.
+- Added `scripts/verify-v0.9.5-policy-language-hardening.sh` and wired it into
+  CI.
+
+Remaining:
+
+- No v0.9.5 work remains.
 
 ## Later Candidate Work
 

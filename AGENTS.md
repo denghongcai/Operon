@@ -192,7 +192,7 @@ Operon should not own:
     config UX cleanup, and focused runtime maintainability cleanup.
 
 - `docs/plan/v0.9.5-policy-language-hardening.md`
-  - Planned v0.9.5 scope for shared policy decision vocabulary, effective
+  - v0.9.5 scope for shared policy decision vocabulary, effective
     policy explain output, authorization consistency, clearer audit denial
     reasons, and validation coverage.
 
@@ -332,7 +332,10 @@ Operon should not own:
   audit semantics, store-backed job log restart visibility, workspace
   traversal fallback validation, shell-free argv job execution, config LAN
   advertisement UX, and protocol version alignment.
-- Next planned milestone: v0.9.5 policy language hardening.
+- Completed policy language milestone: v0.9.5 added shared policy decision
+  vocabulary, stable deny reason codes, effective policy grants in
+  `operon config explain`, and policy audit validation coverage.
+- Next planned milestone: choose the next policy or capability phase.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
