@@ -84,6 +84,21 @@ Operon should not own:
   - v0.6.9 cleanup scope for CLI script contracts, job failure exits, JSON and
     quiet output behavior, health version reporting, and starter config files.
 
+- `docs/plan/v0.6.10-runtime-hardening.md`
+  - v0.6.10 hardening scope for store durability, terminal job audit, fs range
+    validation, pagination metadata, spawn errors, and LAN discovery removal
+    handling.
+
+- `docs/plan/v0.6.11-maintainability-governance.md`
+  - v0.6.11 maintainability scope for daemon support-module splits,
+    poisoned-lock handling, Linux-only mount dependency gating, and governance
+    validation.
+
+- `docs/plan/v0.6.12-runtime-boundary-stabilization.md`
+  - v0.6.12 runtime boundary scope for job-log streaming envelopes, store
+    writer boundaries, daemon persistence visibility, and Linux mount adapter
+    crate boundaries.
+
 - `docs/plan/v0.7-acceptance.md`
   - v0.7 acceptance scope for the CLI TUI console.
 
@@ -214,5 +229,7 @@ Defer:
 - Latest phase status update: v0.6.12 completed Runtime Boundary Stabilization.
   `StreamJobLogs` now uses event envelopes, `operon-store` exposes an
   append-only writer boundary, daemon persistence failures surface at runtime
-  boundaries, `operon-mount` is a Linux FUSE adapter crate boundary, and CI
-  includes the v0.6.12 validation script. Nothing remains in v0.6.12.
+  boundaries, `operon-mount` is a Linux FUSE adapter crate boundary, CI
+  includes the v0.6.12 validation script, and the post-release documentation
+  drift pass aligned current docs with the v0.6.12 runtime. Nothing remains in
+  v0.6.12.

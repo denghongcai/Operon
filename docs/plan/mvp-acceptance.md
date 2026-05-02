@@ -2,6 +2,12 @@
 
 This document defines the v0.1.0 acceptance baseline for Operon.
 
+Historical note: this file captures the MVP acceptance snapshot. Later phases
+replaced the temporary HTTP/JSON client, added auth, moved job/log/audit state
+into bounded runtime/store structures, and expanded filesystem streaming. Use
+`PROTOCOL.md`, `README.md`, and the latest completed phase entries for the
+current runtime contract.
+
 ## Scope
 
 Operon v0.1.0 proves that already-reachable machines can be exposed as an AI-operable capability runtime.

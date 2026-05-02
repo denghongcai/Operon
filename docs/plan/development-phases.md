@@ -1,6 +1,13 @@
 # Development Phases
 
-This plan translates the current product and architecture decisions into an implementation sequence.
+This plan translates the current product and architecture decisions into an
+implementation sequence.
+
+This document is also the historical phase log. Earlier completed phases may
+describe the runtime surface that existed at that time, including temporary
+HTTP endpoints, daemon flags, and split config files. For the current runtime
+contract, use `PROTOCOL.md`, `README.md`, `docs/architecture/runtime-api.md`,
+and the latest completed phase entries.
 
 Related documents:
 
@@ -2699,6 +2706,8 @@ Completed:
   the `fuser` dependency to Linux.
 - Updated protocol docs, runtime architecture docs, README release examples,
   and the public protocol version to v0.6.12.
+- Completed a post-release documentation drift pass that aligned current docs
+  with v0.6.12 and marked older acceptance docs as historical snapshots.
 - Added `scripts/verify-v0.6.12-runtime-boundary.sh` and wired it into CI.
 - Validation passed:
   - `scripts/verify-v0.6.12-runtime-boundary.sh`

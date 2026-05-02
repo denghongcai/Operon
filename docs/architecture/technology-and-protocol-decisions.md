@@ -126,7 +126,7 @@ gRPC handles these better than ad hoc JSON-RPC:
 - standard metadata for auth/session context
 
 The protobuf schema should be treated as the source of truth for node protocol
-contracts. In v0.6.8, the active contract lives at
+contracts. As of v0.6.12, the active contract lives at
 `proto/operon/runtime.proto`, Rust bindings are generated through tonic/prost,
 and the TypeScript SDK uses `nice-grpc` with generated `ts-proto` types for
 `grpc://` endpoints. Legacy design proto files live under `proto/archive/` and
@@ -211,9 +211,10 @@ proto/
 
 Mount support is an adapter over the Core FS Protocol. FUSE, macFUSE, and WinFsp
 should adapt OS filesystem calls into Operon filesystem operations; they should
-not become the core VFS model.
+not become the core VFS model. The current implementation provides a Linux FUSE
+adapter; macFUSE and WinFsp remain future adapter work.
 
-Current v0.6.1 shape:
+Current shape:
 
 ```text
 OS Mount Adapter

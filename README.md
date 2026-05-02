@@ -168,7 +168,7 @@ releases are intentionally left unpublished for manual review.
 
 ## CLI and Configuration
 
-The v0.5 runtime has two binaries:
+The current runtime has two binaries:
 
 - `operond`: the daemon that runs on each reachable machine.
 - `operon`: the CLI that talks to daemon endpoints.
@@ -455,7 +455,7 @@ client:
       provider: cloudflare-mesh
 ```
 
-The current CLI speaks gRPC to `grpc://` daemon endpoints. There is no direct HTTP runtime API; humans and scripts should use `operon`, including `operon --json`, and programs should use SDKs or generated clients from `proto/operon/runtime.proto`. The runtime schema uses typed protobuf enums, proto3 optional presence, target/chunk streaming envelopes, and paginated list APIs. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
+The current CLI speaks gRPC to `grpc://` daemon endpoints. There is no direct HTTP runtime API; humans and scripts should use `operon`, including `operon --json`, and programs should use SDKs or generated clients from `proto/operon/runtime.proto`. The runtime schema uses typed protobuf enums, proto3 optional presence, target/chunk request envelopes, job-log stream event envelopes, and paginated list APIs. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another device. Operon decides whether that device can read a directory, run a job, use a secret, or inspect an execution trace.
 

@@ -192,7 +192,9 @@ Phase 3: local virtual mount
 Phase 4: sync/cache/watch semantics
 ```
 
-FUSE/WinFsp should come after the protocol is stable.
+Current status: Linux FUSE exists as an OS mount adapter over the Core FS
+Protocol. macFUSE, WinFsp, sync, cache, and watch semantics remain later
+adapter/sync phases.
 
 ## Remote KVM / Cloud Computer Boundary
 
@@ -389,7 +391,9 @@ Expose discovery, execution, and trace inspection APIs designed for AI agents.
 
 ### Phase 6: Mounts, Provider Discovery, and Advanced Capabilities
 
-Add FUSE/WinFsp, provider API discovery, service/port access, screen/input/audio, and richer device capabilities once the core model is stable.
+Continue OS mount adapters beyond the current Linux FUSE implementation, add
+provider API discovery, and consider screen/input/audio plus richer device
+capabilities once the core model is stable.
 
 ## Product Statement
 
