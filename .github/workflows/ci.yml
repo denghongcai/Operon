@@ -96,6 +96,7 @@ jobs:
             script: scripts/verify-v0.6.11-governance.sh
           - name: v0.6.12 Runtime Boundary Validation
             script: scripts/verify-v0.6.12-runtime-boundary.sh
+            node: true
           - name: v0.7 Service Forwarding Validation
             script: scripts/verify-v0.7-service-forwarding.sh
           - name: v0.7.1 UDP Datagram Forwarding Validation
@@ -106,6 +107,7 @@ jobs:
             script: scripts/verify-v0.8.1-integration-coverage.sh
           - name: v0.8.3 Read Range and Release Cleanup Validation
             script: scripts/verify-v0.8.3-read-range-release-cleanup.sh
+            node: true
           - name: v0.8.4 Modularization Validation
             script: scripts/verify-v0.8.4-modularization.sh
     steps:
@@ -122,6 +124,23 @@ jobs:
 
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler ripgrep
+
+      - name: Setup pnpm
+        if: ${{ matrix.node == true }}
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        if: ${{ matrix.node == true }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Node dependencies
+        if: ${{ matrix.node == true }}
+        run: pnpm install --frozen-lockfile
 
       - name: Run validation
         run: ${{ matrix.script }}
