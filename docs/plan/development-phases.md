@@ -3546,7 +3546,51 @@ Remaining:
 - Broader service datagram state-machine extraction remains a future candidate
   if UDP forwarding behavior grows.
 
-## Phase 56: Provider Discovery Contract
+## Phase 56: v0.8.13 Production Panic Cleanup
+
+Status: Completed.
+
+Goal: remove the production panic-style invariants found in daemon job-log
+handling and Linux mount remote client runtime access.
+
+Review finding:
+
+- `crates/operond/src/job_runtime.rs` used
+  `expect("just pushed job log")` after appending a job log entry.
+- `crates/operon-mount/src/remote_client.rs` used
+  `expect("remote fs runtime is only cleared during drop")` when resolving the
+  blocking runtime used by remote filesystem operations.
+- Both sites should fail as logged errors or returned errors instead of
+  panicking production processes.
+
+Done when:
+
+- job-log append handles an unexpectedly empty retained log buffer without a
+  panic.
+- mount remote runtime lookup failures return normal errors through remote fs
+  operations.
+- validation rejects reintroducing both production invariant panics.
+- daemon and mount tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.13-production-panic-cleanup.md`.
+
+Completed:
+
+- Replaced the job-log append invariant panic with an explicit logged branch.
+- Changed the mount remote runtime accessor to return `anyhow::Result`.
+- Propagated remote runtime lookup errors through remote filesystem
+  operations.
+- Added `scripts/verify-v0.8.13-production-panic-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.13 work remains.
+- CLI file upload and job stdin helpers still buffer local files before
+  sending requests. That is not a panic, but remains a future streaming-client
+  improvement candidate for very large local inputs.
+
+## Phase 57: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3565,7 +3609,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 57: Non-LAN Provider Adapters
+## Phase 58: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3585,7 +3629,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 58: v0.9 Acceptance
+## Phase 59: v0.9 Acceptance
 
 Status: Planned.
 

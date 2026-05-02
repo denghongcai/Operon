@@ -511,11 +511,15 @@ pub(crate) fn append_job_log(
             buffer.logs.pop_front();
             buffer.dropped_log_count = buffer.dropped_log_count.saturating_add(1);
         }
+        let Some(log) = buffer.logs.back().cloned() else {
+            tracing::error!("job log buffer unexpectedly empty after append");
+            return;
+        };
         (
             buffer.next_sequence,
             buffer.dropped_log_count > 0,
             buffer.dropped_log_count,
-            buffer.logs.back().expect("just pushed job log").clone(),
+            log,
         )
     };
 

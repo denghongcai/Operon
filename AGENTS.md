@@ -147,6 +147,10 @@ Operon should not own:
   - v0.8.12 cleanup scope for removing the remaining daemon UDP datagram
     forwarding session invariant panic.
 
+- `docs/plan/v0.8.13-production-panic-cleanup.md`
+  - v0.8.13 cleanup scope for removing actionable production invariant panics
+    from daemon job-log append and Linux mount remote runtime access.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -261,6 +265,8 @@ Operon should not own:
   peer-state lock panics with helper-mediated errors.
 - Completed hardening milestone: v0.8.12 replaced the daemon UDP datagram
   forwarding session invariant panic with an explicit peer close response.
+- Completed hardening milestone: v0.8.13 replaced daemon job-log and Linux
+  mount remote runtime invariant panics with logged or returned errors.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -384,3 +390,7 @@ Defer:
 - Latest phase status update: v0.8.12 completed Daemon Datagram Invariant
   Cleanup. Missing UDP datagram peer sessions now produce an explicit peer
   close response instead of a daemon panic. Nothing remains in v0.8.12.
+- Latest phase status update: v0.8.13 completed Production Panic Cleanup.
+  Daemon job-log append and Linux mount remote runtime invariant failures now
+  use logged or returned errors instead of production panics. Nothing remains
+  in v0.8.13.

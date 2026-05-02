@@ -40,17 +40,17 @@ impl GrpcRemoteFs {
         })
     }
 
-    fn runtime(&self) -> &tokio::runtime::Runtime {
+    fn runtime(&self) -> anyhow::Result<&tokio::runtime::Runtime> {
         self.runtime
             .as_ref()
-            .expect("remote fs runtime is only cleared during drop")
+            .ok_or_else(|| anyhow::anyhow!("remote fs runtime is unavailable"))
     }
 }
 
 impl RemoteFs for GrpcRemoteFs {
     fn stat(&self, path: &str) -> anyhow::Result<FsStat> {
         let path = path.to_string();
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             Ok(client
                 .stat_fs(operon_grpc_client::request(
@@ -65,7 +65,7 @@ impl RemoteFs for GrpcRemoteFs {
 
     fn list(&self, path: &str) -> anyhow::Result<FsList> {
         let path = path.to_string();
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             Ok(client
                 .list_fs(operon_grpc_client::request(
@@ -84,7 +84,7 @@ impl RemoteFs for GrpcRemoteFs {
             offset,
             size,
         };
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             Ok(client
                 .read_file_range(operon_grpc_client::request(&self.endpoint, request)?)
@@ -100,7 +100,7 @@ impl RemoteFs for GrpcRemoteFs {
             offset,
             data: data.to_vec(),
         };
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             Ok(client
                 .write_file_range(operon_grpc_client::request(&self.endpoint, request)?)
@@ -115,7 +115,7 @@ impl RemoteFs for GrpcRemoteFs {
             path: path.to_string(),
             size,
         };
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             Ok(client
                 .truncate_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -129,7 +129,7 @@ impl RemoteFs for GrpcRemoteFs {
         let request = FsPathRequest {
             path: path.to_string(),
         };
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             Ok(client
                 .mkdir_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -143,7 +143,7 @@ impl RemoteFs for GrpcRemoteFs {
         let request = FsPathRequest {
             path: path.to_string(),
         };
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             client
                 .delete_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -157,7 +157,7 @@ impl RemoteFs for GrpcRemoteFs {
             from_path: from_path.to_string(),
             to_path: to_path.to_string(),
         };
-        block_on_runtime(self.runtime(), async {
+        block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
             client
                 .rename_fs(operon_grpc_client::request(&self.endpoint, request)?)
