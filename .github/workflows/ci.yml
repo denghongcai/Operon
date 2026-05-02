@@ -120,8 +120,8 @@ jobs:
         with:
           shared-key: ci-rust
 
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler ripgrep
 
       - name: Run validation
         run: ${{ matrix.script }}
