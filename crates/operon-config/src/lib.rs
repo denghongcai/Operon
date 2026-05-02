@@ -7,6 +7,17 @@ use std::{
 
 use operon_core::PolicyConfig;
 
+mod warnings;
+
+use warnings::collect_unknown_config_fields;
+pub use warnings::ConfigWarning;
+
+#[derive(Debug, Clone)]
+pub struct LoadedOperonConfig {
+    pub config: OperonConfig,
+    pub warnings: Vec<ConfigWarning>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OperonConfig {
     pub version: u32,
@@ -80,11 +91,21 @@ impl OperonConfig {
 
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let content = fs::read_to_string(path.as_ref())?;
-        let config: Self = serde_yaml::from_str(&content)?;
+        let loaded = Self::from_str_with_warnings(&content)?;
+        for warning in &loaded.warnings {
+            eprintln!("warning: unknown config field `{}` ignored", warning.path);
+        }
+        Ok(loaded.config)
+    }
+
+    pub fn from_str_with_warnings(content: &str) -> anyhow::Result<LoadedOperonConfig> {
+        let value: serde_yaml::Value = serde_yaml::from_str(content)?;
+        let warnings = collect_unknown_config_fields(&value);
+        let config: Self = serde_yaml::from_value(value)?;
         if config.version != 1 {
             anyhow::bail!("unsupported config version `{}`", config.version);
         }
-        Ok(config)
+        Ok(LoadedOperonConfig { config, warnings })
     }
 
     pub fn config_dir(path: impl AsRef<Path>) -> PathBuf {
@@ -159,6 +180,57 @@ pub fn resolve_path(config_dir: &Path, path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reports_unknown_fields_without_blocking_config_parse() {
+        let loaded = OperonConfig::from_str_with_warnings(
+            r#"
+version: 1
+unexpected_root: true
+daemon:
+  node_id: local
+  grpc_listen: 127.0.0.1:7789
+  workspace: /workspace
+  extra_daemon: true
+client:
+  nodes:
+    gpu:
+      endpoint: grpc://100.96.18.20:7789
+      provider: tailscale
+      auth:
+        token: test-token
+        ignored_auth: true
+      extra_node: true
+secrets:
+  file: secrets.yaml
+  extra_secrets: true
+"#,
+        )
+        .expect("config should parse despite unknown fields");
+
+        let mut warning_paths: Vec<_> = loaded
+            .warnings
+            .iter()
+            .map(|warning| warning.path.as_str())
+            .collect();
+        warning_paths.sort_unstable();
+        assert_eq!(
+            warning_paths,
+            vec![
+                "client.nodes.gpu.auth.ignored_auth",
+                "client.nodes.gpu.extra_node",
+                "client.nodes.gpu.provider",
+                "daemon.extra_daemon",
+                "secrets.extra_secrets",
+                "unexpected_root",
+            ]
+        );
+        let endpoint = loaded
+            .config
+            .endpoint("gpu", Path::new("."))
+            .expect("gpu endpoint");
+        assert_eq!(endpoint.endpoint, "grpc://100.96.18.20:7789");
+    }
 
     #[test]
     fn loads_unified_config_with_client_nodes() {

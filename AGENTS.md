@@ -163,6 +163,10 @@ Operon should not own:
   - v0.8.16 cleanup scope for removing the provider abstraction from
     user-facing endpoint config, discovery output, CLI commands, and SDK types.
 
+- `docs/plan/v0.8.17-config-unknown-field-warnings.md`
+  - v0.8.17 cleanup scope for warning about unknown `config.yaml` fields
+    without blocking startup or CLI commands.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for endpoint-only config and mDNS discovery UX.
 
@@ -285,6 +289,8 @@ Operon should not own:
   panic-style `String` formatting invariant with direct hex encoding.
 - Completed model cleanup milestone: v0.8.16 removed provider from endpoint
   config, CLI output, mDNS discovery records, and SDK endpoint types.
+- Completed config cleanup milestone: v0.8.17 warns about unknown config fields
+  while continuing to load valid endpoint configuration.
 - Next planned milestone: v0.9 endpoint model acceptance and mDNS discovery UX.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -425,3 +431,6 @@ Defer:
   Simplification. User-facing config, CLI output, mDNS discovery records, and
   SDK endpoint types now use endpoint-only node records without provider
   metadata. Nothing remains in v0.8.16.
+- Latest phase status update: v0.8.17 completed Config Unknown Field
+  Warnings. Config loading now lists unknown field paths as warnings while
+  continuing to load valid endpoint configuration. Nothing remains in v0.8.17.

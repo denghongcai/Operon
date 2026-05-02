@@ -3713,7 +3713,52 @@ Remaining:
 - Future discovery work should improve endpoint import/export and mDNS UX, not
   add provider-specific runtime behavior.
 
-## Phase 60: v0.9 Endpoint Model Acceptance
+## Phase 60: v0.8.17 Config Unknown Field Warnings
+
+Status: Completed.
+
+Goal: warn about unknown `config.yaml` fields without blocking startup or CLI
+commands.
+
+Review finding:
+
+- After the endpoint model simplification, stale fields such as `provider`
+  should not be consumed, but rejecting them outright is unnecessary because
+  the endpoint entry remains usable.
+- Silent ignore is also too loose for configuration hygiene. Operators should
+  see which fields are inert.
+
+Done when:
+
+- config parsing collects unknown field paths.
+- `OperonConfig::load` warns about unknown field paths and keeps loading.
+- stale `provider` fields are reported as unknown but do not block startup or
+  CLI commands.
+- validation covers config parsing and CLI stderr behavior.
+
+Detailed plan:
+`docs/plan/v0.8.17-config-unknown-field-warnings.md`.
+
+Completed:
+
+- Added `OperonConfig::from_str_with_warnings` and config warning records.
+- Split unknown-field scanning into `crates/operon-config/src/warnings.rs`.
+- Added unknown field detection for root, daemon, daemon auth, client nodes,
+  node auth, policy, secrets, fs mounts, job policy, services, and service
+  permissions.
+- `OperonConfig::load` now prints warning lines for unknown field paths before
+  returning the parsed config.
+- Added config and CLI integration tests proving unknown fields warn without
+  blocking commands.
+- Added `scripts/verify-v0.8.17-config-unknown-field-warnings.sh`.
+
+Remaining:
+
+- No v0.8.17 work remains.
+- Future schema additions should update the unknown-field allowlist in
+  `operon-config`.
+
+## Phase 61: v0.9 Endpoint Model Acceptance
 
 Status: Planned.
 
@@ -3733,7 +3778,7 @@ Done when:
 - config and discovery validation prove that Operon consumes only endpoints.
 - docs explicitly preserve the "Operon is not a VPN" boundary.
 
-## Phase 61: Post-v0.9 Discovery UX
+## Phase 62: Post-v0.9 Discovery UX
 
 Status: Planned.
 

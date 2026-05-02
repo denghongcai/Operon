@@ -67,6 +67,37 @@ fn init_config_then_explain_json_is_machine_readable() {
 }
 
 #[test]
+fn config_unknown_fields_warn_without_blocking_command() {
+    let base = unique_temp_dir("operon-cli-config-warning");
+    let config = base.join("config.yaml");
+    fs::write(
+        &config,
+        r#"
+version: 1
+client:
+  nodes:
+    local:
+      endpoint: grpc://127.0.0.1:7789
+      provider: tailscale
+"#,
+    )
+    .expect("write config");
+
+    let output = operon()
+        .arg("--config")
+        .arg(&config)
+        .args(["node", "list"])
+        .output()
+        .expect("run node list");
+    assert!(output.status.success(), "stderr={}", stderr(&output));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("local\tgrpc://127.0.0.1:7789"));
+    assert!(stderr(&output).contains("client.nodes.local.provider"));
+
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
 fn onboard_summary_includes_completion_guidance() {
     let base = unique_temp_dir("operon-cli-onboard-integration");
 
