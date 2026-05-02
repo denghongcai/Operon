@@ -285,9 +285,9 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
     let mut nodes = BTreeMap::new();
 
     if matches!(role, OnboardRole::Daemon | OnboardRole::Both) {
-        let token = daemon_token
-            .as_ref()
-            .expect("daemon onboarding should have a token");
+        let Some(token) = daemon_token.as_ref() else {
+            anyhow::bail!("daemon onboarding token is unavailable");
+        };
         files.push(GeneratedFile {
             path: token_path.clone(),
             content: format!("{token}\n"),

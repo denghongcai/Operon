@@ -151,6 +151,10 @@ Operon should not own:
   - v0.8.13 cleanup scope for removing actionable production invariant panics
     from daemon job-log append and Linux mount remote runtime access.
 
+- `docs/plan/v0.8.14-onboard-invariant-cleanup.md`
+  - v0.8.14 cleanup scope for returning a normal CLI error instead of
+    panicking on a broken daemon onboarding token invariant.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -267,6 +271,8 @@ Operon should not own:
   forwarding session invariant panic with an explicit peer close response.
 - Completed hardening milestone: v0.8.13 replaced daemon job-log and Linux
   mount remote runtime invariant panics with logged or returned errors.
+- Completed hardening milestone: v0.8.14 replaced the daemon onboarding token
+  invariant panic with a normal CLI error.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -394,3 +400,6 @@ Defer:
   Daemon job-log append and Linux mount remote runtime invariant failures now
   use logged or returned errors instead of production panics. Nothing remains
   in v0.8.13.
+- Latest phase status update: v0.8.14 completed Onboard Invariant Cleanup.
+  Daemon onboarding token invariant failures now return a normal CLI error
+  instead of panicking. Nothing remains in v0.8.14.

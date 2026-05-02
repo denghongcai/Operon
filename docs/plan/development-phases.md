@@ -3590,7 +3590,43 @@ Remaining:
   sending requests. That is not a panic, but remains a future streaming-client
   improvement candidate for very large local inputs.
 
-## Phase 57: Provider Discovery Contract
+## Phase 57: v0.8.14 Onboard Invariant Cleanup
+
+Status: Completed.
+
+Goal: remove the production invariant panic from guided onboarding plan
+construction.
+
+Review finding:
+
+- `crates/operon-cli/src/onboard.rs` used
+  `expect("daemon onboarding should have a token")` after deriving the daemon
+  token for daemon and combined onboarding roles.
+- The token should always exist for those roles, but a broken invariant should
+  return a normal CLI error instead of panicking.
+
+Done when:
+
+- daemon onboarding token lookup returns a normal error on invariant failure.
+- validation rejects reintroducing the onboarding token panic.
+- CLI tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.14-onboard-invariant-cleanup.md`.
+
+Completed:
+
+- Replaced the daemon-token `expect` with an explicit `anyhow` error branch.
+- Added `scripts/verify-v0.8.14-onboard-invariant-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.14 work remains.
+- `operon-cli` still contains test-only assertion panics and one
+  `String` formatting invariant in token generation; those do not represent
+  user-triggered onboarding panics.
+
+## Phase 58: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3609,7 +3645,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 58: Non-LAN Provider Adapters
+## Phase 59: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3629,7 +3665,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 59: v0.9 Acceptance
+## Phase 60: v0.9 Acceptance
 
 Status: Planned.
 
