@@ -143,6 +143,10 @@ Operon should not own:
   - v0.8.11 cleanup scope for returning CLI errors instead of panicking on
     poisoned UDP datagram forwarding peer-state locks.
 
+- `docs/plan/v0.8.12-daemon-datagram-invariant-cleanup.md`
+  - v0.8.12 cleanup scope for removing the remaining daemon UDP datagram
+    forwarding session invariant panic.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -255,6 +259,8 @@ Operon should not own:
   errno responses.
 - Completed hardening milestone: v0.8.11 replaced CLI UDP datagram forwarding
   peer-state lock panics with helper-mediated errors.
+- Completed hardening milestone: v0.8.12 replaced the daemon UDP datagram
+  forwarding session invariant panic with an explicit peer close response.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -375,3 +381,6 @@ Defer:
 - Latest phase status update: v0.8.11 completed CLI Datagram Lock Hardening.
   UDP datagram forwarding peer-state lock failures now return errors or stop
   forwarding instead of panicking. Nothing remains in v0.8.11.
+- Latest phase status update: v0.8.12 completed Daemon Datagram Invariant
+  Cleanup. Missing UDP datagram peer sessions now produce an explicit peer
+  close response instead of a daemon panic. Nothing remains in v0.8.12.

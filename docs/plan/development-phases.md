@@ -3510,7 +3510,43 @@ Remaining:
 - Broader `operon-cli/src/grpc.rs` command-family split remains a future
   maintainability candidate.
 
-## Phase 55: Provider Discovery Contract
+## Phase 55: v0.8.12 Daemon Datagram Invariant Cleanup
+
+Status: Completed.
+
+Goal: remove the remaining production invariant panic from daemon UDP/datagram
+forwarding.
+
+Review finding:
+
+- `crates/operond/src/service_forward.rs` used
+  `expect("session should exist after creation")` after creating or looking up
+  a UDP peer session.
+- The condition should be handled as a tunnel close response instead of a
+  daemon panic, even if it should be unreachable in normal execution.
+
+Done when:
+
+- service datagram session lookup has an explicit missing-session branch.
+- validation rejects reintroducing the session invariant panic.
+- daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.12-daemon-datagram-invariant-cleanup.md`.
+
+Completed:
+
+- Replaced the session lookup `expect` with a close response for the affected
+  peer.
+- Added `scripts/verify-v0.8.12-daemon-datagram-invariant-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.12 work remains.
+- Broader service datagram state-machine extraction remains a future candidate
+  if UDP forwarding behavior grows.
+
+## Phase 56: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3529,7 +3565,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 56: Non-LAN Provider Adapters
+## Phase 57: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3549,7 +3585,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 57: v0.9 Acceptance
+## Phase 58: v0.9 Acceptance
 
 Status: Planned.
 

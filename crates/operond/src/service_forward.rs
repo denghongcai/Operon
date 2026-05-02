@@ -480,9 +480,14 @@ async fn handle_service_datagram_message(
                 }
             }
             let socket = {
-                let session = sessions
-                    .get_mut(&datagram.peer_id)
-                    .expect("session should exist after creation");
+                let Some(session) = sessions.get_mut(&datagram.peer_id) else {
+                    send_service_datagram_close(
+                        output_tx,
+                        &datagram.peer_id,
+                        "service datagram session is missing",
+                    );
+                    return true;
+                };
                 session.last_seen = time::Instant::now();
                 session.packets_from_client = session.packets_from_client.saturating_add(1);
                 session.bytes_from_client = session
