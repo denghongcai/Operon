@@ -3306,7 +3306,48 @@ Remaining:
   `runtime_service.rs` remains an optional future cleanup if method routing
   grows again.
 
-## Phase 50: Provider Discovery Contract
+## Phase 50: v0.8.7 Filesystem Service Reuse Cleanup
+
+Status: Completed.
+
+Goal: reduce repeated filesystem authorization, path resolution, and audit
+denial handling in the daemon filesystem service.
+
+Review finding:
+
+- `crates/operond/src/fs_service.rs` repeated the same `authorize_fs`, path
+  resolver, failed audit event, and `tonic::Status` conversion pattern across
+  most filesystem operations.
+- That repetition made the fs service harder to review and increased the risk
+  that future operations would drift in permission or audit behavior.
+
+Done when:
+
+- filesystem authorization denial handling has one helper boundary.
+- workspace path resolution failures are audited through focused helpers.
+- the existing fs operation permissions, audit action names, audit resources,
+  and success audit behavior remain unchanged.
+- validation guards the helper boundary and daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.7-fs-service-reuse-cleanup.md`.
+
+Completed:
+
+- Added `authorize_fs_action` plus focused workspace path resolver helpers in
+  `crates/operond/src/fs_service.rs`.
+- Reused those helpers across stat, list, read range, write range, truncate,
+  mkdir, delete, rename, and copy operations.
+- Added `scripts/verify-v0.8.7-fs-service-reuse-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.7 work remains.
+- Moving the full tonic `GrpcRuntime` trait implementation out of
+  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  method routing grows again.
+
+## Phase 51: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3325,7 +3366,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 51: Non-LAN Provider Adapters
+## Phase 52: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3345,7 +3386,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 52: v0.9 Acceptance
+## Phase 53: v0.9 Acceptance
 
 Status: Planned.
 

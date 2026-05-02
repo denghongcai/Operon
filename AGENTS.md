@@ -123,6 +123,10 @@ Operon should not own:
     modules, Linux mount adapter modules, daemon runtime internals, and SDK
     public API alignment.
 
+- `docs/plan/v0.8.7-fs-service-reuse-cleanup.md`
+  - v0.8.7 cleanup scope for daemon filesystem service authorization, path
+    resolution, and audit helper reuse.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -219,6 +223,9 @@ Operon should not own:
   helpers, split non-fs CLI commands, split Linux mount modules, extracted
   daemon auth/audit/state/job/service internals, added graph/workflow aliases,
   aligned the TypeScript SDK public surface, and added CI validation coverage.
+- Completed cleanup milestone: v0.8.7 reduced daemon filesystem service
+  authorization, path resolution, and failed-audit handling duplication while
+  preserving existing fs operation behavior.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -313,9 +320,13 @@ Defer:
   are split, compatibility re-exports remain in place, CI has a dedicated
   v0.8.5 validation script, and no behavior or schema work remains in this
   phase.
-- Latest phase status update: v0.8.6 is planned as the next execution phase.
-  It should finish deferred daemon job/service/audit/log extraction, non-fs CLI
-  command-family extraction, shared Rust gRPC client helpers, internal
-  `operon-mount` module boundaries, SDK public API alignment, graph/workflow
-  aliases, `fs read --output --json` summary output, and low-risk validation
-  shell helpers. No v0.8.6 implementation work has started yet.
+- Latest phase status update: v0.8.6 completed Runtime, CLI, and Client
+  Modularization. Shared Rust gRPC client helpers, non-fs CLI command modules,
+  Linux mount modules, daemon auth/audit/state/job/service internals,
+  graph/workflow aliases, SDK public API alignment, `fs read --output --json`
+  summary output, and low-risk validation shell helpers are complete. Nothing
+  remains in v0.8.6.
+- Latest phase status update: v0.8.7 completed Filesystem Service Reuse
+  Cleanup. `fs_service.rs` now uses helper boundaries for authorization,
+  workspace path resolution, and failed-audit handling. Nothing remains in
+  v0.8.7.
