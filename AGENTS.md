@@ -207,6 +207,9 @@ Operon should not own:
   filesystem handlers and pagination helpers, plus CLI output, target parsing,
   and fs command handlers. Job runtime, service forwarding, audit helpers, and
   non-fs CLI command families remain follow-up modularization work.
+- Completed core domain boundary milestone: v0.8.5 split `operon-core` into
+  runtime, fs, job, service, policy, audit, discovery, and trace modules while
+  keeping root-level public re-exports for compatibility.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -297,3 +300,7 @@ Defer:
   Modularization pass. Daemon fs and pagination logic plus CLI fs/output/target
   logic are extracted and validated. Job/service/audit and non-fs CLI command
   extraction remains future maintainability work.
+- Latest phase status update: v0.8.5 completed. `operon-core` domain modules
+  are split, compatibility re-exports remain in place, CI has a dedicated
+  v0.8.5 validation script, and no behavior or schema work remains in this
+  phase.

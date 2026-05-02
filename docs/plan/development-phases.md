@@ -3185,7 +3185,56 @@ Remaining:
   families still need follow-up extraction before major feature work in those
   areas.
 
-## Phase 48: Provider Discovery Contract
+## Phase 48: v0.8.5 Core Domain Module Boundaries
+
+Status: Completed.
+
+Goal: split `operon-core` into domain modules before provider discovery and
+policy/trace schemas grow further.
+
+Plan:
+
+- move runtime identity, capability, and health DTOs into
+  `operon_core::runtime`.
+- move filesystem DTOs into `operon_core::fs`.
+- move job DTOs into `operon_core::job`.
+- move service DTOs and service policy definitions into
+  `operon_core::service`.
+- move policy roots and fs/job policy definitions into
+  `operon_core::policy`.
+- move audit DTOs into `operon_core::audit`.
+- move discovery DTOs into `operon_core::discovery`.
+- move execution graph and trace DTOs into `operon_core::trace`.
+- keep root-level `pub use` re-exports so existing callers remain compatible.
+
+Done when:
+
+- `crates/operon-core/src/lib.rs` only wires modules, re-exports public types,
+  and keeps crate-level tests.
+- serialized YAML/JSON names, gRPC schemas, SDK APIs, CLI behavior, and daemon
+  behavior do not change.
+- full Rust validation remains green.
+
+Detailed plan: `docs/plan/v0.8.5-core-domain-module-boundaries.md`.
+
+Completed:
+
+- Split `operon-core` into `runtime`, `fs`, `job`, `service`, `policy`,
+  `audit`, `discovery`, and `trace` modules.
+- Kept root-level public re-exports so current downstream imports continue to
+  work.
+- Preserved serde formats, gRPC schemas, SDK APIs, CLI behavior, and daemon
+  behavior.
+- Added module path / root re-export coverage in `operon-core` tests.
+- Added `scripts/verify-v0.8.5-core-domain-modules.sh` and wired it into CI.
+
+Remaining:
+
+- No v0.8.5 work remains.
+- Moving policy or discovery into separate crates remains a future decision
+  only if module boundaries stop being enough.
+
+## Phase 49: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3204,7 +3253,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 49: Non-LAN Provider Adapters
+## Phase 50: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3224,7 +3273,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 50: v0.9 Acceptance
+## Phase 51: v0.9 Acceptance
 
 Status: Planned.
 
