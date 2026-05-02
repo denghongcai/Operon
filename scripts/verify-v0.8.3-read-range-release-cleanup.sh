@@ -9,7 +9,7 @@ rg -n 'message FsReadRangeRequest' proto/operon/runtime.proto
 rg -n 'async fn read_file_range' crates/operond/src/main.rs
 rg -n '^pub\(crate\) async fn read_range' crates/operond/src/fs_service.rs
 rg -n 'fs_service::read_range' crates/operond/src/main.rs
-rg -n 'read_file_range\(with_auth' crates/operon-mount/src/lib.rs
+rg -n 'read_file_range\(operon_grpc_client::request' crates/operon-mount/src/remote_client.rs
 rg -n 'readFileRangeBytes' packages/sdk-js/src/index.ts
 rg -n 'ReadFileRange' PROTOCOL.md docs/architecture/runtime-api.md docs/architecture/technology-and-protocol-decisions.md
 rg -n 'PROTOCOL_VERSION: &str = "v0.8.3"' crates/operon-protocol/src/lib.rs
@@ -17,7 +17,7 @@ rg -n 'PROTOCOL_VERSION: &str = "v0.8.3"' crates/operon-protocol/src/lib.rs
 python - <<'PY'
 from pathlib import Path
 
-text = Path("crates/operon-mount/src/lib.rs").read_text()
+text = Path("crates/operon-mount/src/remote_client.rs").read_text()
 impl_start = text.index("impl RemoteFs for GrpcRemoteFs")
 start = text.index("    fn read_range(&self, path: &str, offset: u64, size: u32)", impl_start)
 end = text.index("    fn write_range(&self, path: &str, offset: u64, data: &[u8])", start)

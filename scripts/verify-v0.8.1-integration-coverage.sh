@@ -195,7 +195,7 @@ for expected in \
   "loads_unified_config_with_client_nodes" \
   "policy_config_round_trips_from_yaml" \
   "filesystem_capability_id_is_stable" \
-  "mount_capability_id_is_stable" \
+  "mount_capability_constant_is_exported_at_crate_root" \
   "service_removed_event_removes_discovered_record" \
   "job_policy_enforces_cwd_and_timeout" \
   "protocol_version_matches_grpc_release_line" \

@@ -12,7 +12,7 @@ fi
 
 rg -n 'operon-mount = \{ path = "../operon-mount" \}' crates/operon-cli/Cargo.toml
 rg -n '\[target.'\''cfg\(target_os = "linux"\)'\''.dependencies\]' crates/operon-cli/Cargo.toml
-rg -n 'operon mount is only supported on Linux' crates/operon-cli/src/main.rs
+rg -n 'operon mount is only supported on Linux' crates/operon-cli/src/commands/mount.rs
 
 cargo test -p operond --locked locks::tests::poisoned_lock_returns_internal_status
 cargo test -p operond --locked lan_advertise::tests::unspecified_addresses_advertise_localhost
