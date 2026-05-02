@@ -1,19 +1,24 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, pin::Pin};
 
+use futures_util::{Stream, StreamExt};
 use operon_core::{FsEntry, FsList, FsStat, FsWrite};
 use operon_fs::{
     authorize_fs, join_virtual_path, resolve_create_workspace_path,
     resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
     resolve_write_workspace_path,
 };
-use operon_protocol::runtime::v1::FileChunk;
+use operon_protocol::runtime::v1::{write_file_request, FileChunk, WriteFileRequest};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio_util::io::ReaderStream;
 use tonic::Status;
 
 use crate::{
     grpc_status::{status_from_error, status_from_io_error},
     record_audit, AppState, MAX_FS_FILE_BYTES, MAX_FS_WRITE_CHUNK_BYTES,
 };
+
+pub(crate) type FileStream =
+    Pin<Box<dyn Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
 
 pub(crate) fn validate_write_chunk(data_len: usize) -> Result<(), Status> {
     if data_len > MAX_FS_WRITE_CHUNK_BYTES {
@@ -159,6 +164,23 @@ pub(crate) async fn list(state: &AppState, path: String) -> Result<FsList, Statu
     Ok(FsList { path, entries })
 }
 
+pub(crate) async fn read_stream(state: &AppState, path: String) -> Result<FileStream, Status> {
+    authorize_fs_action(state, "read-stream", &path, "read", &path)?;
+    let full_path = resolve_existing_path(state, "read-stream", &path, &path)?;
+    let file = tokio::fs::File::open(&full_path)
+        .await
+        .map_err(status_from_io_error)?;
+    record_audit(state, "read-stream", &path, true, "allowed");
+    let stream = ReaderStream::new(file).map(|chunk| {
+        chunk
+            .map(|data| FileChunk {
+                data: data.to_vec(),
+            })
+            .map_err(status_from_io_error)
+    });
+    Ok(Box::pin(stream))
+}
+
 pub(crate) async fn read_range(
     state: &AppState,
     path: String,
@@ -180,6 +202,75 @@ pub(crate) async fn read_range(
     data.truncate(bytes_read);
     record_audit(state, "read-range", &path, true, "allowed");
     Ok(FileChunk { data })
+}
+
+pub(crate) async fn write_stream(
+    state: &AppState,
+    stream: &mut tonic::Streaming<WriteFileRequest>,
+) -> Result<FsWrite, Status> {
+    let mut path = None;
+    let mut file = None;
+    let mut bytes_written = 0_u64;
+
+    while let Some(message) = stream.next().await {
+        let message = message?;
+        match message.payload {
+            Some(write_file_request::Payload::Target(target)) => {
+                if path.is_some() {
+                    return Err(Status::invalid_argument(
+                        "write stream target metadata was sent more than once",
+                    ));
+                }
+                if target.path.is_empty() {
+                    return Err(Status::invalid_argument(
+                        "write stream target path is required",
+                    ));
+                }
+                authorize_fs_action(state, "write-stream", &target.path, "write", &target.path)?;
+                let full_path =
+                    resolve_write_path(state, "write-stream", &target.path, &target.path)?;
+                if let Some(parent) = full_path.parent() {
+                    tokio::fs::create_dir_all(parent)
+                        .await
+                        .map_err(status_from_io_error)?;
+                }
+                file = Some(
+                    tokio::fs::File::create(&full_path)
+                        .await
+                        .map_err(status_from_io_error)?,
+                );
+                path = Some(target.path);
+            }
+            Some(write_file_request::Payload::Chunk(chunk)) => {
+                let Some(file) = &mut file else {
+                    return Err(Status::invalid_argument(
+                        "write stream chunk arrived before target metadata",
+                    ));
+                };
+                validate_write_chunk(chunk.data.len())?;
+                bytes_written = checked_file_end(bytes_written, chunk.data.len(), "write stream")?;
+                file.write_all(&chunk.data)
+                    .await
+                    .map_err(status_from_io_error)?;
+            }
+            None => {
+                return Err(Status::invalid_argument(
+                    "write stream message is missing payload",
+                ));
+            }
+        }
+    }
+
+    let Some(path) = path else {
+        return Err(Status::invalid_argument(
+            "write stream did not include target metadata",
+        ));
+    };
+    record_audit(state, "write-stream", &path, true, "allowed");
+    Ok(FsWrite {
+        path,
+        bytes_written,
+    })
 }
 
 pub(crate) async fn write_range(

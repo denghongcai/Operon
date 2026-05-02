@@ -3347,7 +3347,48 @@ Remaining:
   `operond/src/main.rs` remains a future maintainability candidate if runtime
   method routing grows again.
 
-## Phase 51: Provider Discovery Contract
+## Phase 51: v0.8.8 Filesystem Stream Handler Cleanup
+
+Status: Completed.
+
+Goal: keep full-file filesystem stream behavior inside the daemon filesystem
+service module instead of the tonic runtime router.
+
+Review finding:
+
+- `crates/operond/src/main.rs` still owned full-file `ReadFile` and
+  `WriteFile` authorization, workspace path resolution, audit failure handling,
+  chunk-size validation, and file IO.
+- That duplicated the filesystem service boundary improved in v0.8.7 and kept
+  filesystem business logic in the gRPC router.
+
+Done when:
+
+- `fs_service.rs` owns full-file read and write stream handlers.
+- `operond/src/main.rs` only performs gRPC auth, audit context scoping, and
+  delegation for `ReadFile` and `WriteFile`.
+- validation guards against reintroducing stream handler logic in `main.rs`.
+- daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.8-fs-stream-handler-cleanup.md`.
+
+Completed:
+
+- Added `fs_service::read_stream` and `fs_service::write_stream`.
+- Reused the v0.8.7 authorization and path resolution helpers for full-file
+  stream reads and writes.
+- Reduced the `ReadFile` and `WriteFile` runtime methods to delegation.
+- Added `scripts/verify-v0.8.8-fs-stream-handler-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.8 work remains.
+- Moving the full tonic `GrpcRuntime` trait implementation out of
+  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  method routing grows again.
+
+## Phase 52: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3366,7 +3407,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 52: Non-LAN Provider Adapters
+## Phase 53: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3386,7 +3427,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 53: v0.9 Acceptance
+## Phase 54: v0.9 Acceptance
 
 Status: Planned.
 

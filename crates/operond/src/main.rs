@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
-    AuditLog, CapabilityList, FsWrite, HealthStatus, JobList, JobRunRequest, JobStatus, JobStdin,
+    AuditLog, CapabilityList, HealthStatus, JobList, JobRunRequest, JobStatus, JobStdin,
     JobStdinClose, NodeInfo, RequestContext, ServiceList,
 };
 #[cfg(test)]
@@ -18,21 +18,20 @@ use operon_core::{
     FsMountPolicy, FsPermissions, FsPolicy, JobLog, JobPolicy, JobRecord, PolicyConfig,
     RuntimeErrorKind, ServiceDefinition, ServicePolicy,
 };
-use operon_fs::{authorize_fs, resolve_existing_workspace_path, resolve_write_workspace_path};
+#[cfg(test)]
+use operon_fs::authorize_fs;
 #[cfg(test)]
 use operon_process::{authorize_job, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    service_datagram_tunnel_request, service_tunnel_request, write_file_request, FileChunk,
-    FsCopyRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest,
-    FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest, JobLogStreamEvent,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
-    ServiceDatagramTunnelRequest, ServiceDatagramTunnelResponse, ServiceIdRequest,
-    ServiceTunnelRequest, ServiceTunnelResponse, WriteFileRequest,
+    service_datagram_tunnel_request, service_tunnel_request, FileChunk, FsCopyRequest,
+    FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest,
+    GetNodeRequest, HealthRequest, JobIdRequest, JobLogStreamEvent, ListAuditRequest,
+    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceDatagramTunnelRequest,
+    ServiceDatagramTunnelResponse, ServiceIdRequest, ServiceTunnelRequest, ServiceTunnelResponse,
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::broadcast, time};
-use tokio_util::io::ReaderStream;
+use tokio::{net::TcpStream, sync::broadcast, time};
 use tonic::{transport::Server, Request, Response as GrpcResponse, Status};
 
 mod audit;
@@ -199,8 +198,7 @@ struct GrpcRuntime {
     state: AppState,
 }
 
-type GrpcFileStream =
-    Pin<Box<dyn futures_util::Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
+type GrpcFileStream = fs_service::FileStream;
 type GrpcJobLogStream =
     Pin<Box<dyn futures_util::Stream<Item = Result<JobLogStreamEvent, Status>> + Send + 'static>>;
 type GrpcJobEventStream = Pin<
@@ -304,30 +302,8 @@ impl OperonRuntime for GrpcRuntime {
         let path = request.into_inner().path;
         AUDIT_CONTEXT
             .scope(context, async {
-                if let Err(error) = authorize_fs(&self.state.policy, "read", &path) {
-                    record_audit(&self.state, "read-stream", &path, false, &error.1);
-                    return Err(status_from_error(error));
-                }
-                let full_path = match resolve_existing_workspace_path(&self.state.workspace, &path)
-                {
-                    Ok(path) => path,
-                    Err(error) => {
-                        record_audit(&self.state, "read-stream", &path, false, &error.1);
-                        return Err(status_from_error(error));
-                    }
-                };
-                let file = tokio::fs::File::open(&full_path)
-                    .await
-                    .map_err(|error| Status::internal(error.to_string()))?;
-                record_audit(&self.state, "read-stream", &path, true, "allowed");
-                let stream = ReaderStream::new(file).map(|chunk| {
-                    chunk
-                        .map(|data| FileChunk {
-                            data: data.to_vec(),
-                        })
-                        .map_err(|error| Status::internal(error.to_string()))
-                });
-                Ok(GrpcResponse::new(Box::pin(stream) as Self::ReadFileStream))
+                let stream = fs_service::read_stream(&self.state, path).await?;
+                Ok(GrpcResponse::new(stream))
             })
             .await
     }
@@ -350,107 +326,14 @@ impl OperonRuntime for GrpcRuntime {
 
     async fn write_file(
         &self,
-        request: Request<tonic::Streaming<WriteFileRequest>>,
+        request: Request<tonic::Streaming<operon_protocol::runtime::v1::WriteFileRequest>>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsWrite>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let mut stream = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let mut path = None;
-                let mut file = None;
-                let mut bytes_written = 0_u64;
-
-                while let Some(message) = stream.next().await {
-                    let message = message?;
-                    match message.payload {
-                        Some(write_file_request::Payload::Target(target)) => {
-                            if path.is_some() {
-                                return Err(Status::invalid_argument(
-                                    "write stream target metadata was sent more than once",
-                                ));
-                            }
-                            if target.path.is_empty() {
-                                return Err(Status::invalid_argument(
-                                    "write stream target path is required",
-                                ));
-                            }
-                            if let Err(error) =
-                                authorize_fs(&self.state.policy, "write", &target.path)
-                            {
-                                record_audit(
-                                    &self.state,
-                                    "write-stream",
-                                    &target.path,
-                                    false,
-                                    &error.1,
-                                );
-                                return Err(status_from_error(error));
-                            }
-                            let full_path = match resolve_write_workspace_path(
-                                &self.state.workspace,
-                                &target.path,
-                            ) {
-                                Ok(path) => path,
-                                Err(error) => {
-                                    record_audit(
-                                        &self.state,
-                                        "write-stream",
-                                        &target.path,
-                                        false,
-                                        &error.1,
-                                    );
-                                    return Err(status_from_error(error));
-                                }
-                            };
-                            if let Some(parent) = full_path.parent() {
-                                tokio::fs::create_dir_all(parent)
-                                    .await
-                                    .map_err(|error| Status::internal(error.to_string()))?;
-                            }
-                            file = Some(
-                                tokio::fs::File::create(&full_path)
-                                    .await
-                                    .map_err(|error| Status::internal(error.to_string()))?,
-                            );
-                            path = Some(target.path);
-                        }
-                        Some(write_file_request::Payload::Chunk(chunk)) => {
-                            let Some(file) = &mut file else {
-                                return Err(Status::invalid_argument(
-                                    "write stream chunk arrived before target metadata",
-                                ));
-                            };
-                            fs_service::validate_write_chunk(chunk.data.len())?;
-                            bytes_written = fs_service::checked_file_end(
-                                bytes_written,
-                                chunk.data.len(),
-                                "write stream",
-                            )?;
-                            file.write_all(&chunk.data)
-                                .await
-                                .map_err(|error| Status::internal(error.to_string()))?;
-                        }
-                        None => {
-                            return Err(Status::invalid_argument(
-                                "write stream message is missing payload",
-                            ));
-                        }
-                    }
-                }
-
-                let Some(path) = path else {
-                    return Err(Status::invalid_argument(
-                        "write stream did not include target metadata",
-                    ));
-                };
-                record_audit(&self.state, "write-stream", &path, true, "allowed");
-                Ok(GrpcResponse::new(
-                    FsWrite {
-                        path,
-                        bytes_written,
-                    }
-                    .into(),
-                ))
+                let write = fs_service::write_stream(&self.state, &mut stream).await?;
+                Ok(GrpcResponse::new(write.into()))
             })
             .await
     }

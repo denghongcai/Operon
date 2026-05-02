@@ -127,6 +127,10 @@ Operon should not own:
   - v0.8.7 cleanup scope for daemon filesystem service authorization, path
     resolution, and audit helper reuse.
 
+- `docs/plan/v0.8.8-fs-stream-handler-cleanup.md`
+  - v0.8.8 cleanup scope for moving daemon full-file filesystem stream
+    handlers behind the filesystem service module boundary.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -226,6 +230,10 @@ Operon should not own:
 - Completed cleanup milestone: v0.8.7 reduced daemon filesystem service
   authorization, path resolution, and failed-audit handling duplication while
   preserving existing fs operation behavior.
+- Completed cleanup milestone: v0.8.8 moved daemon full-file filesystem stream
+  read/write behavior behind `fs_service.rs`, leaving `operond/src/main.rs`
+  responsible only for gRPC auth, audit context scoping, and delegation for
+  those RPCs.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -330,3 +338,7 @@ Defer:
   Cleanup. `fs_service.rs` now uses helper boundaries for authorization,
   workspace path resolution, and failed-audit handling. Nothing remains in
   v0.8.7.
+- Latest phase status update: v0.8.8 completed Filesystem Stream Handler
+  Cleanup. Full-file `ReadFile` and `WriteFile` stream behavior now lives in
+  `fs_service.rs`, and the runtime router delegates those RPCs. Nothing
+  remains in v0.8.8.
