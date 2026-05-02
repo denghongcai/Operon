@@ -32,6 +32,7 @@ const niceGrpcMock = vi.hoisted(() => {
       listAudit: vi.fn(),
       openServiceTunnel: vi.fn(),
       openServiceDatagramTunnel: vi.fn(),
+      explainCapability: vi.fn(),
     },
     metadata,
     createChannel: vi.fn(),
@@ -257,6 +258,15 @@ describe("OperonClient", () => {
       }],
       nextPageToken: "",
     });
+    niceGrpcMock.client.explainCapability.mockResolvedValueOnce({
+      subject: "local-cli",
+      capabilityId: "fs:workspace",
+      action: "read",
+      resource: "/a.txt",
+      allowed: true,
+      reasonCode: "allowed",
+      message: "allowed",
+    });
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
 
@@ -293,6 +303,23 @@ describe("OperonClient", () => {
         step_id: null,
       }],
     });
+    await expect(client.explainCapability("node-a", {
+      capability_id: "fs:workspace",
+      action: "read",
+      resource: "/a.txt",
+    })).resolves.toEqual({
+      subject: "local-cli",
+      capability_id: "fs:workspace",
+      action: "read",
+      resource: "/a.txt",
+      allowed: true,
+      reason_code: "allowed",
+      message: "allowed",
+    });
+    expect(niceGrpcMock.client.explainCapability).toHaveBeenCalledWith(
+      { capabilityId: "fs:workspace", action: "read", resource: "/a.txt", timeoutSecs: undefined },
+      expect.any(Object),
+    );
   });
 
   it("sends argv job requests without shell command text", async () => {

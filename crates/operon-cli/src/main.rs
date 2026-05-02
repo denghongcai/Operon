@@ -168,6 +168,20 @@ enum CapabilityCommand {
         /// Node id from config.yaml.
         node_id: String,
     },
+    #[command(about = "Explain why one capability action is allowed or denied")]
+    Explain {
+        /// Node id from config.yaml.
+        node_id: String,
+        /// Capability id, for example fs:workspace, job:default, secret:default, or service:web.
+        capability_id: String,
+        /// Action to diagnose, for example read, write, run, use, check, or forward.
+        action: String,
+        /// Resource to diagnose, such as a path, cwd, secret name, or service id.
+        resource: String,
+        /// Optional timeout in seconds for job run diagnostics.
+        #[arg(long)]
+        timeout_secs: Option<u64>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -442,6 +456,26 @@ async fn main() -> anyhow::Result<()> {
             CapabilityCommand::List { node_id } => {
                 commands::capability::list(config_path, &node_id, output).await
             }
+            CapabilityCommand::Explain {
+                node_id,
+                capability_id,
+                action,
+                resource,
+                timeout_secs,
+            } => {
+                commands::capability::explain(
+                    config_path,
+                    &node_id,
+                    operon_core::CapabilityDiagnosticRequest {
+                        capability_id,
+                        action,
+                        resource,
+                        timeout_secs,
+                    },
+                    output,
+                )
+                .await
+            }
         },
         Command::Fs { command } => match command {
             FsCommand::Stat { target } => commands::fs::stat(config_path, &target, output).await,
@@ -617,5 +651,16 @@ mod tests {
             .expect("workflow subcommand should exist")
             .find_subcommand_mut("run")
             .expect("workflow run subcommand should exist");
+    }
+
+    #[test]
+    fn clap_model_exposes_capability_explain_command() {
+        let mut command = Args::command();
+
+        command
+            .find_subcommand_mut("capability")
+            .expect("capability subcommand should exist")
+            .find_subcommand_mut("explain")
+            .expect("capability explain subcommand should exist");
     }
 }

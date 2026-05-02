@@ -27,9 +27,9 @@ use operon_process::{authorize_job, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    FileChunk, FsCopyRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest,
-    FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest,
-    JobLogStreamEvent, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
+    CapabilityDiagnosticRequest, FileChunk, FsCopyRequest, FsPathRequest, FsReadRangeRequest,
+    FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest,
+    JobIdRequest, JobLogStreamEvent, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
     ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest, ServiceTunnelRequest,
 };
 use tokio::sync::broadcast;
@@ -37,6 +37,7 @@ use tonic::{transport::Server, Request, Response as GrpcResponse, Status};
 
 mod audit;
 mod auth;
+mod capability_diagnostics;
 mod defaults;
 mod fs_service;
 mod grpc_status;
@@ -258,6 +259,20 @@ impl OperonRuntime for GrpcRuntime {
         .into();
         response.next_page_token = next_page_token;
         Ok(GrpcResponse::new(response))
+    }
+
+    async fn explain_capability(
+        &self,
+        request: Request<CapabilityDiagnosticRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::PolicyDecision>, Status> {
+        authorize_grpc(&self.state, request.metadata())?;
+        let request: operon_core::CapabilityDiagnosticRequest = request.into_inner().into();
+        let decision = capability_diagnostics::explain_capability_decision(
+            &self.state.policy,
+            &self.state.secrets,
+            &request,
+        );
+        Ok(GrpcResponse::new(decision.into()))
     }
 
     async fn stat_fs(

@@ -361,6 +361,9 @@ v0.9.4:
   shell-free argv job execution
   store-backed job log restart visibility
   consolidated runtime hardening validation
+
+v0.9.6:
+  capability diagnostics through daemon-owned policy decisions
 ```
 
 ## Decision 8: Distribution Strategy

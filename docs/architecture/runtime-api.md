@@ -43,6 +43,7 @@ Unary calls:
 - `Health`
 - `GetNode`
 - `ListCapabilities`
+- `ExplainCapability`
 - `StatFs`
 - `ListFs`
 - `ReadFileRange`
@@ -106,6 +107,11 @@ Reason codes are stable strings such as `fs-mount-not-allowed`,
 machine-readable view of configured capability/action/resource grants and
 disabled actions. This is the supported way for agents to inspect effective
 policy without reading daemon internals or secret values.
+
+`ExplainCapability` is the runtime diagnostic API for one capability action.
+The daemon returns the same policy decision shape used internally, so remote
+diagnostics are authoritative for that node and do not require clients to
+reimplement daemon policy locally.
 
 ## Service / Port Capability
 

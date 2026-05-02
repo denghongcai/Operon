@@ -10,9 +10,9 @@ use std::{
 use anyhow::Context;
 use futures_util::stream;
 use operon_core::{
-    AuditLog, CapabilityList, FsList, FsStat, FsWrite, HealthStatus, JobEvent, JobList, JobLogList,
-    JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose, NodeInfo, RequestContext,
-    ServiceCheck, ServiceList,
+    AuditLog, CapabilityDiagnosticRequest, CapabilityList, FsList, FsStat, FsWrite, HealthStatus,
+    JobEvent, JobList, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
+    NodeInfo, PolicyDecision, RequestContext, ServiceCheck, ServiceList,
 };
 use operon_grpc_client::{chunk_stdin_requests, chunk_write_requests};
 use operon_network::NodeEndpoint;
@@ -102,6 +102,21 @@ pub async fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<Capabi
         capabilities,
         next_page_token: String::new(),
     })
+}
+
+pub async fn explain_capability(
+    endpoint: &NodeEndpoint,
+    request: CapabilityDiagnosticRequest,
+) -> anyhow::Result<PolicyDecision> {
+    call(endpoint, |mut client, endpoint| async move {
+        client
+            .explain_capability(with_auth(&endpoint, request.into())?)
+            .await?
+            .into_inner()
+            .try_into()
+            .map_err(anyhow::Error::msg)
+    })
+    .await
 }
 
 pub async fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {

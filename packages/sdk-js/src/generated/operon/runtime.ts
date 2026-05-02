@@ -216,6 +216,23 @@ export interface CapabilityList {
   nextPageToken: string;
 }
 
+export interface CapabilityDiagnosticRequest {
+  capabilityId: string;
+  action: string;
+  resource: string;
+  timeoutSecs?: string | undefined;
+}
+
+export interface PolicyDecision {
+  subject: string;
+  capabilityId: string;
+  action: string;
+  resource: string;
+  allowed: boolean;
+  reasonCode: string;
+  message: string;
+}
+
 export interface FsPathRequest {
   path: string;
 }
@@ -1362,6 +1379,286 @@ export const CapabilityList: MessageFns<CapabilityList> = {
     const message = createBaseCapabilityList();
     message.capabilities = object.capabilities?.map((e) => Capability.fromPartial(e)) || [];
     message.nextPageToken = object.nextPageToken ?? "";
+    return message;
+  },
+};
+
+function createBaseCapabilityDiagnosticRequest(): CapabilityDiagnosticRequest {
+  return { capabilityId: "", action: "", resource: "", timeoutSecs: undefined };
+}
+
+export const CapabilityDiagnosticRequest: MessageFns<CapabilityDiagnosticRequest> = {
+  encode(message: CapabilityDiagnosticRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.capabilityId !== "") {
+      writer.uint32(10).string(message.capabilityId);
+    }
+    if (message.action !== "") {
+      writer.uint32(18).string(message.action);
+    }
+    if (message.resource !== "") {
+      writer.uint32(26).string(message.resource);
+    }
+    if (message.timeoutSecs !== undefined) {
+      writer.uint32(32).uint64(message.timeoutSecs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CapabilityDiagnosticRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCapabilityDiagnosticRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.capabilityId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.action = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.resource = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.timeoutSecs = reader.uint64().toString();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CapabilityDiagnosticRequest {
+    return {
+      capabilityId: isSet(object.capabilityId)
+        ? globalThis.String(object.capabilityId)
+        : isSet(object.capability_id)
+        ? globalThis.String(object.capability_id)
+        : "",
+      action: isSet(object.action) ? globalThis.String(object.action) : "",
+      resource: isSet(object.resource) ? globalThis.String(object.resource) : "",
+      timeoutSecs: isSet(object.timeoutSecs)
+        ? globalThis.String(object.timeoutSecs)
+        : isSet(object.timeout_secs)
+        ? globalThis.String(object.timeout_secs)
+        : undefined,
+    };
+  },
+
+  toJSON(message: CapabilityDiagnosticRequest): unknown {
+    const obj: any = {};
+    if (message.capabilityId !== "") {
+      obj.capabilityId = message.capabilityId;
+    }
+    if (message.action !== "") {
+      obj.action = message.action;
+    }
+    if (message.resource !== "") {
+      obj.resource = message.resource;
+    }
+    if (message.timeoutSecs !== undefined) {
+      obj.timeoutSecs = message.timeoutSecs;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<CapabilityDiagnosticRequest>): CapabilityDiagnosticRequest {
+    return CapabilityDiagnosticRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<CapabilityDiagnosticRequest>): CapabilityDiagnosticRequest {
+    const message = createBaseCapabilityDiagnosticRequest();
+    message.capabilityId = object.capabilityId ?? "";
+    message.action = object.action ?? "";
+    message.resource = object.resource ?? "";
+    message.timeoutSecs = object.timeoutSecs ?? undefined;
+    return message;
+  },
+};
+
+function createBasePolicyDecision(): PolicyDecision {
+  return { subject: "", capabilityId: "", action: "", resource: "", allowed: false, reasonCode: "", message: "" };
+}
+
+export const PolicyDecision: MessageFns<PolicyDecision> = {
+  encode(message: PolicyDecision, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.subject !== "") {
+      writer.uint32(10).string(message.subject);
+    }
+    if (message.capabilityId !== "") {
+      writer.uint32(18).string(message.capabilityId);
+    }
+    if (message.action !== "") {
+      writer.uint32(26).string(message.action);
+    }
+    if (message.resource !== "") {
+      writer.uint32(34).string(message.resource);
+    }
+    if (message.allowed !== false) {
+      writer.uint32(40).bool(message.allowed);
+    }
+    if (message.reasonCode !== "") {
+      writer.uint32(50).string(message.reasonCode);
+    }
+    if (message.message !== "") {
+      writer.uint32(58).string(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PolicyDecision {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePolicyDecision();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.subject = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.capabilityId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.action = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.resource = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.allowed = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.reasonCode = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PolicyDecision {
+    return {
+      subject: isSet(object.subject) ? globalThis.String(object.subject) : "",
+      capabilityId: isSet(object.capabilityId)
+        ? globalThis.String(object.capabilityId)
+        : isSet(object.capability_id)
+        ? globalThis.String(object.capability_id)
+        : "",
+      action: isSet(object.action) ? globalThis.String(object.action) : "",
+      resource: isSet(object.resource) ? globalThis.String(object.resource) : "",
+      allowed: isSet(object.allowed) ? globalThis.Boolean(object.allowed) : false,
+      reasonCode: isSet(object.reasonCode)
+        ? globalThis.String(object.reasonCode)
+        : isSet(object.reason_code)
+        ? globalThis.String(object.reason_code)
+        : "",
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+    };
+  },
+
+  toJSON(message: PolicyDecision): unknown {
+    const obj: any = {};
+    if (message.subject !== "") {
+      obj.subject = message.subject;
+    }
+    if (message.capabilityId !== "") {
+      obj.capabilityId = message.capabilityId;
+    }
+    if (message.action !== "") {
+      obj.action = message.action;
+    }
+    if (message.resource !== "") {
+      obj.resource = message.resource;
+    }
+    if (message.allowed !== false) {
+      obj.allowed = message.allowed;
+    }
+    if (message.reasonCode !== "") {
+      obj.reasonCode = message.reasonCode;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<PolicyDecision>): PolicyDecision {
+    return PolicyDecision.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<PolicyDecision>): PolicyDecision {
+    const message = createBasePolicyDecision();
+    message.subject = object.subject ?? "";
+    message.capabilityId = object.capabilityId ?? "";
+    message.action = object.action ?? "";
+    message.resource = object.resource ?? "";
+    message.allowed = object.allowed ?? false;
+    message.reasonCode = object.reasonCode ?? "";
+    message.message = object.message ?? "";
     return message;
   },
 };
@@ -6205,6 +6502,14 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
+    explainCapability: {
+      name: "ExplainCapability",
+      requestType: CapabilityDiagnosticRequest as typeof CapabilityDiagnosticRequest,
+      requestStream: false,
+      responseType: PolicyDecision as typeof PolicyDecision,
+      responseStream: false,
+      options: {},
+    },
     statFs: {
       name: "StatFs",
       requestType: FsPathRequest as typeof FsPathRequest,
@@ -6415,6 +6720,10 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
     request: ListCapabilitiesRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<CapabilityList>>;
+  explainCapability(
+    request: CapabilityDiagnosticRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<PolicyDecision>>;
   statFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsStat>>;
   listFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsList>>;
   readFile(
@@ -6470,6 +6779,10 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
     request: DeepPartial<ListCapabilitiesRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<CapabilityList>;
+  explainCapability(
+    request: DeepPartial<CapabilityDiagnosticRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<PolicyDecision>;
   statFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsStat>;
   listFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsList>;
   readFile(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<FileChunk>;

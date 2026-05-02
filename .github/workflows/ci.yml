@@ -130,6 +130,9 @@ jobs:
             node: true
           - name: v0.9.5 Policy Language Hardening Validation
             script: scripts/verify-v0.9.5-policy-language-hardening.sh
+          - name: v0.9.6 Capability Diagnostics Validation
+            script: scripts/verify-v0.9.6-capability-diagnostics.sh
+            node: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6

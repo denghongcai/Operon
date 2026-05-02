@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use operon_core::CapabilityList;
+use operon_core::{CapabilityDiagnosticRequest, CapabilityList, PolicyDecision};
 
 use crate::{
     grpc,
@@ -35,4 +35,38 @@ pub(crate) async fn list(
     }
 
     Ok(())
+}
+
+pub(crate) async fn explain(
+    config_path: PathBuf,
+    node_id: &str,
+    request: CapabilityDiagnosticRequest,
+    output: OutputMode,
+) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(config_path, node_id)?;
+
+    let decision = grpc::explain_capability(&endpoint, request).await?;
+    if output.json {
+        print_json(&decision)?;
+        return Ok(());
+    }
+    if output.quiet {
+        return Ok(());
+    }
+
+    print_policy_decision(&decision);
+    Ok(())
+}
+
+fn print_policy_decision(decision: &PolicyDecision) {
+    println!(
+        "{} {} {} allowed={} reason={} subject={} message={}",
+        decision.capability_id,
+        decision.action,
+        decision.resource,
+        decision.allowed,
+        decision.reason_code.as_str(),
+        decision.subject,
+        decision.message
+    );
 }

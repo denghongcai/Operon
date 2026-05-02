@@ -196,6 +196,10 @@ Operon should not own:
     policy explain output, authorization consistency, clearer audit denial
     reasons, and validation coverage.
 
+- `docs/plan/v0.9.6-capability-diagnostics.md`
+  - v0.9.6 scope for daemon-owned policy diagnostics through gRPC, CLI, and
+    SDK using the shared `PolicyDecision` vocabulary.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -335,7 +339,9 @@ Operon should not own:
 - Completed policy language milestone: v0.9.5 added shared policy decision
   vocabulary, stable deny reason codes, effective policy grants in
   `operon config explain`, and policy audit validation coverage.
-- Next planned milestone: choose the next policy or capability phase.
+- Completed capability diagnostics milestone: v0.9.6 added daemon-owned
+  `ExplainCapability` policy diagnostics through gRPC, CLI, and TypeScript SDK.
+- Next planned milestone: define the next phase before implementation.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.

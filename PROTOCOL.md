@@ -74,6 +74,12 @@ field remains a string for compatibility.
 `policy.effective_grants`. Each grant includes `capability_id`, `action`,
 `resource`, `allowed`, and `reason_code`. Secret values are never exposed.
 
+Use the unary `ExplainCapability` RPC to ask the daemon why one capability
+action is allowed or denied before attempting the operation. The request carries
+`capability_id`, `action`, `resource`, and optional `timeout_secs` for job
+diagnostics. The response is a `PolicyDecision` with `subject`, `capability_id`,
+`action`, `resource`, `allowed`, `reason_code`, and `message`.
+
 ## Execution Context Metadata
 
 Clients that execute an Operon graph should attach optional context metadata to
@@ -119,6 +125,7 @@ Unary calls:
 - `Health`
 - `GetNode`
 - `ListCapabilities`
+- `ExplainCapability`
 - `StatFs`
 - `ListFs`
 - `ReadFileRange`

@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.9.4";
+pub const PROTOCOL_VERSION: &str = "v0.9.6";
 
 pub mod runtime {
     pub mod v1 {
@@ -96,6 +96,65 @@ impl TryFrom<runtime::v1::CapabilityList> for operon_core::CapabilityList {
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
             next_page_token: value.next_page_token,
+        })
+    }
+}
+
+impl From<operon_core::CapabilityDiagnosticRequest> for runtime::v1::CapabilityDiagnosticRequest {
+    fn from(value: operon_core::CapabilityDiagnosticRequest) -> Self {
+        Self {
+            capability_id: value.capability_id,
+            action: value.action,
+            resource: value.resource,
+            timeout_secs: value.timeout_secs,
+        }
+    }
+}
+
+impl From<runtime::v1::CapabilityDiagnosticRequest> for operon_core::CapabilityDiagnosticRequest {
+    fn from(value: runtime::v1::CapabilityDiagnosticRequest) -> Self {
+        Self {
+            capability_id: value.capability_id,
+            action: value.action,
+            resource: value.resource,
+            timeout_secs: value.timeout_secs,
+        }
+    }
+}
+
+impl From<operon_core::PolicyDecision> for runtime::v1::PolicyDecision {
+    fn from(value: operon_core::PolicyDecision) -> Self {
+        Self {
+            subject: value.subject,
+            capability_id: value.capability_id,
+            action: value.action,
+            resource: value.resource,
+            allowed: value.allowed,
+            reason_code: value.reason_code.as_str().to_string(),
+            message: value.message,
+        }
+    }
+}
+
+impl TryFrom<runtime::v1::PolicyDecision> for operon_core::PolicyDecision {
+    type Error = String;
+
+    fn try_from(value: runtime::v1::PolicyDecision) -> Result<Self, Self::Error> {
+        let reason_code =
+            operon_core::PolicyReasonCode::from_code(&value.reason_code).ok_or_else(|| {
+                format!(
+                    "unknown policy decision reason code `{}`",
+                    value.reason_code
+                )
+            })?;
+        Ok(Self {
+            subject: value.subject,
+            capability_id: value.capability_id,
+            action: value.action,
+            resource: value.resource,
+            allowed: value.allowed,
+            reason_code,
+            message: value.message,
         })
     }
 }
@@ -626,7 +685,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.9.4");
+        assert_eq!(PROTOCOL_VERSION, "v0.9.6");
     }
 
     #[test]
@@ -666,6 +725,24 @@ mod tests {
         assert_eq!(grpc.next_page_token, "audit-next");
         let core = operon_core::AuditLog::from(grpc);
         assert_eq!(core.next_page_token, "audit-next");
+    }
+
+    #[test]
+    fn policy_decision_round_trips_through_grpc_shape() {
+        let decision = operon_core::PolicyDecision::denied(
+            "local-cli",
+            "job:default",
+            "run",
+            "/tmp",
+            operon_core::PolicyReasonCode::JobCwdDenied,
+            "job cwd denied by policy",
+        );
+
+        let grpc: runtime::v1::PolicyDecision = decision.clone().into();
+        assert_eq!(grpc.reason_code, "job-cwd-denied");
+        let core = operon_core::PolicyDecision::try_from(grpc).expect("policy decision");
+
+        assert_eq!(core, decision);
     }
 
     #[test]

@@ -155,6 +155,7 @@ scripts/verify-policy-derived-capabilities.sh
 scripts/verify-v0.9.3-store-backed-audit-visibility.sh
 scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
 scripts/verify-v0.9.5-policy-language-hardening.sh
+scripts/verify-v0.9.6-capability-diagnostics.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -221,6 +222,9 @@ version alignment.
 The v0.9.5 policy language validation checks the shared policy decision
 vocabulary, stable deny reason codes, effective `config explain` grants, and
 policy audit denial reasons.
+The v0.9.6 capability diagnostics validation checks the `ExplainCapability`
+runtime RPC, `operon capability explain`, TypeScript SDK helper coverage, and
+current protocol version alignment.
 
 ## Release Automation
 
@@ -448,6 +452,12 @@ message in audit output. `operon config explain --json` includes
 `policy.effective_grants` entries with `capability_id`, `action`, `resource`,
 `allowed`, and `reason_code` fields so agents can inspect the effective policy
 surface without reading secret values.
+
+Use `operon capability explain <node> <capability_id> <action> <resource>` to
+ask the target daemon why one capability action is allowed or denied. The JSON
+form returns the same `PolicyDecision` fields used internally by the daemon:
+`subject`, `capability_id`, `action`, `resource`, `allowed`, `reason_code`, and
+`message`.
 
 ### Common Commands
 

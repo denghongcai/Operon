@@ -6,6 +6,7 @@ import {
   ServiceProtocol as GrpcServiceProtocol,
   type AuditLog as GrpcAuditLog,
   type Capability as GrpcCapability,
+  type PolicyDecision as GrpcPolicyDecision,
   type FsList as GrpcFsList,
   type FsStat as GrpcFsStat,
   type FsWrite as GrpcFsWrite,
@@ -99,6 +100,23 @@ export type Capability = {
 
 export type CapabilityList = {
   capabilities: Capability[];
+};
+
+export type CapabilityDiagnosticRequest = {
+  capability_id: string;
+  action: string;
+  resource: string;
+  timeout_secs?: number;
+};
+
+export type PolicyDecision = {
+  subject: string;
+  capability_id: string;
+  action: string;
+  resource: string;
+  allowed: boolean;
+  reason_code: string;
+  message: string;
 };
 
 export type FsStat = ReturnType<typeof fromGrpcFsStat>;
@@ -275,6 +293,24 @@ export class OperonClient {
       pageToken = page.nextPageToken;
     } while (pageToken);
     return { capabilities };
+  }
+
+  async explainCapability(
+    nodeId: string,
+    request: CapabilityDiagnosticRequest,
+  ): Promise<PolicyDecision> {
+    const endpoint = this.endpointFor(nodeId);
+    return fromGrpcPolicyDecision(
+      await this.grpcClient(endpoint).explainCapability(
+        {
+          capabilityId: request.capability_id,
+          action: request.action,
+          resource: request.resource,
+          timeoutSecs: request.timeout_secs?.toString(),
+        },
+        this.grpcOptions(endpoint),
+      ),
+    );
   }
 
   async statFs(nodeId: string, path: string): Promise<FsStat> {
@@ -902,6 +938,18 @@ function fromGrpcCapabilityKind(kind: GrpcCapabilityKind): Capability["kind"] {
     default:
       return "unrecognized";
   }
+}
+
+function fromGrpcPolicyDecision(decision: GrpcPolicyDecision): PolicyDecision {
+  return {
+    subject: decision.subject,
+    capability_id: decision.capabilityId,
+    action: decision.action,
+    resource: decision.resource,
+    allowed: decision.allowed,
+    reason_code: decision.reasonCode,
+    message: decision.message,
+  };
 }
 
 function fromGrpcFsWrite(write: GrpcFsWrite) {

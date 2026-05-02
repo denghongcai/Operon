@@ -4032,6 +4032,56 @@ Remaining:
 
 No later candidate phases are currently planned.
 
+## Phase 68: v0.9.6 Capability Diagnostics
+
+Status: Completed.
+
+Goal: expose policy decision diagnostics through the runtime, CLI, and SDK so
+users and agents can ask why a capability action is allowed or denied before
+running it.
+
+Scope:
+
+- daemon-owned gRPC capability diagnostic RPC.
+- filesystem, job, secret, and service policy decision explanations.
+- `operon capability explain <node> <capability_id> <action> <resource>` with
+  `--json` and optional job `--timeout-secs`.
+- TypeScript SDK helper for the same diagnostic shape.
+- docs, validation script, CI, and agent guidance updates.
+
+Done when:
+
+- diagnostics return subject, capability id, action, resource, allowed,
+  reason code, and message.
+- daemon diagnostics reuse existing policy decision helpers instead of
+  reimplementing policy in the CLI.
+- unsupported capability/action pairs return a denied diagnostic with
+  `unsupported-action`.
+- `scripts/verify-v0.9.6-capability-diagnostics.sh` is added and wired into CI.
+
+Detailed plan:
+`docs/plan/v0.9.6-capability-diagnostics.md`.
+
+Remaining:
+
+Completed:
+
+- Added `ExplainCapability` to the active gRPC runtime protocol.
+- Added protocol conversions for `CapabilityDiagnosticRequest` and
+  `PolicyDecision`, and bumped `PROTOCOL_VERSION` to `v0.9.6`.
+- Implemented daemon-owned capability diagnostic dispatch for filesystem, job,
+  secret, service, and unsupported action checks.
+- Added `operon capability explain` with JSON and human output.
+- Added TypeScript SDK `explainCapability` support and regenerated protocol
+  bindings.
+- Documented capability diagnostics in README, `PROTOCOL.md`, and runtime API
+  docs.
+- Added `scripts/verify-v0.9.6-capability-diagnostics.sh` and wired it into CI.
+
+Remaining:
+
+- No v0.9.6 work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

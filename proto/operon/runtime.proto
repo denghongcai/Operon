@@ -6,6 +6,7 @@ service OperonRuntime {
   rpc Health(HealthRequest) returns (HealthStatus);
   rpc GetNode(GetNodeRequest) returns (NodeInfo);
   rpc ListCapabilities(ListCapabilitiesRequest) returns (CapabilityList);
+  rpc ExplainCapability(CapabilityDiagnosticRequest) returns (PolicyDecision);
   rpc StatFs(FsPathRequest) returns (FsStat);
   rpc ListFs(FsPathRequest) returns (FsList);
   rpc ReadFile(FsPathRequest) returns (stream FileChunk);
@@ -106,6 +107,23 @@ message Capability {
 message CapabilityList {
   repeated Capability capabilities = 1;
   string next_page_token = 2;
+}
+
+message CapabilityDiagnosticRequest {
+  string capability_id = 1;
+  string action = 2;
+  string resource = 3;
+  optional uint64 timeout_secs = 4;
+}
+
+message PolicyDecision {
+  string subject = 1;
+  string capability_id = 2;
+  string action = 3;
+  string resource = 4;
+  bool allowed = 5;
+  string reason_code = 6;
+  string message = 7;
 }
 
 message FsPathRequest {

@@ -9,6 +9,15 @@ pub struct PolicyConfig {
     pub service: ServicePolicy,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CapabilityDiagnosticRequest {
+    pub capability_id: String,
+    pub action: String,
+    pub resource: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FsPolicy {
     pub mounts: Vec<FsMountPolicy>,
@@ -128,6 +137,22 @@ impl PolicyReasonCode {
             Self::UnsupportedAction => "unsupported-action",
         }
     }
+
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "allowed" => Some(Self::Allowed),
+            "fs-mount-not-allowed" => Some(Self::FsMountNotAllowed),
+            "fs-permission-denied" => Some(Self::FsPermissionDenied),
+            "job-cwd-denied" => Some(Self::JobCwdDenied),
+            "job-timeout-exceeded" => Some(Self::JobTimeoutExceeded),
+            "secret-denied" => Some(Self::SecretDenied),
+            "secret-undefined" => Some(Self::SecretUndefined),
+            "service-unknown" => Some(Self::ServiceUnknown),
+            "service-action-denied" => Some(Self::ServiceActionDenied),
+            "unsupported-action" => Some(Self::UnsupportedAction),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -196,5 +221,22 @@ mod tests {
             PolicyReasonCode::SecretUndefined.as_str(),
             "secret-undefined"
         );
+    }
+
+    #[test]
+    fn capability_diagnostic_request_serializes_optional_timeout() {
+        let request = CapabilityDiagnosticRequest {
+            capability_id: "job:default".to_string(),
+            action: "run".to_string(),
+            resource: "/workspace".to_string(),
+            timeout_secs: Some(60),
+        };
+
+        let json = serde_json::to_value(&request).expect("request json");
+
+        assert_eq!(json["capability_id"], "job:default");
+        assert_eq!(json["action"], "run");
+        assert_eq!(json["resource"], "/workspace");
+        assert_eq!(json["timeout_secs"], 60);
     }
 }
