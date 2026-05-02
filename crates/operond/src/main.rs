@@ -1,5 +1,7 @@
+#[cfg(test)]
+use std::collections::VecDeque;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
     pin::Pin,
@@ -48,7 +50,7 @@ mod store_config;
 
 #[cfg(test)]
 use audit::now_ms;
-use audit::{record_audit, record_audit_capability};
+use audit::{bounded_audit_events, record_audit, record_audit_capability};
 use auth::authorize_grpc;
 use defaults::{capabilities_from_policy, default_policy};
 use job_runtime::{
@@ -126,6 +128,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .map(|path| resolve_path(&config_dir, path));
     let secrets = load_secrets(secrets_path.as_deref())?;
     let stored_jobs = operon_store::load_jobs(store.as_deref())?;
+    let stored_audit_events = operon_store::load_audit_events(store.as_deref())?;
     let next_job_id = next_job_sequence(&stored_jobs);
     let node = NodeInfo {
         id: daemon.node_id.clone(),
@@ -143,7 +146,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         auth_token,
         store_writer,
         secrets: Arc::new(secrets),
-        audit: Arc::new(Mutex::new(VecDeque::new())),
+        audit: Arc::new(Mutex::new(bounded_audit_events(stored_audit_events))),
         jobs,
         job_logs: Arc::new(Mutex::new(BTreeMap::new())),
         job_events: Arc::new(Mutex::new(BTreeMap::new())),

@@ -69,6 +69,14 @@ pub(crate) fn push_audit_event(
     }
 }
 
+pub(crate) fn bounded_audit_events(events: Vec<AuditEvent>) -> VecDeque<AuditEvent> {
+    let mut events = VecDeque::from(events);
+    while events.len() > MAX_IN_MEMORY_AUDIT_EVENTS {
+        events.pop_front();
+    }
+    events
+}
+
 pub(crate) fn current_request_context() -> RequestContext {
     AUDIT_CONTEXT.try_with(Clone::clone).unwrap_or_default()
 }
@@ -86,4 +94,35 @@ pub(crate) fn now_ms() -> u64 {
         .unwrap_or_default()
         .as_millis();
     u64::try_from(millis).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_audit_events_keeps_recent_persisted_events() {
+        let events = (0..MAX_IN_MEMORY_AUDIT_EVENTS + 2)
+            .map(|index| AuditEvent {
+                subject: "test-subject".to_string(),
+                timestamp_ms: index as u64,
+                node_id: "node-a".to_string(),
+                capability: "fs:workspace".to_string(),
+                action: "stat".to_string(),
+                resource: format!("/{index}"),
+                allowed: true,
+                reason: "allowed".to_string(),
+                run_id: None,
+                step_id: None,
+            })
+            .collect::<Vec<_>>();
+
+        let bounded = bounded_audit_events(events);
+
+        assert_eq!(bounded.len(), MAX_IN_MEMORY_AUDIT_EVENTS);
+        assert_eq!(
+            bounded.front().expect("first retained event").resource,
+            "/2"
+        );
+    }
 }

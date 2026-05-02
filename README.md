@@ -152,6 +152,7 @@ scripts/verify-docs-help-skills-sync.sh
 scripts/verify-v0.9-endpoint-model.sh
 scripts/verify-post-v0.9-discovery-ux.sh
 scripts/verify-policy-derived-capabilities.sh
+scripts/verify-v0.9.3-store-backed-audit-visibility.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -208,6 +209,9 @@ config generation.
 The policy-derived capability validation checks that daemon capability
 discovery reflects configured policy mounts, job roots, and services instead of
 advertising a static default capability set.
+The v0.9.3 store-backed audit validation checks that persisted audit events
+are loaded from the append-only JSONL store at daemon startup while keeping
+bounded in-memory retention.
 
 ## Release Automation
 
@@ -475,6 +479,11 @@ operon trace show ./trace.json
 operon --json trace show ./trace.json
 operon --config ./operon.config.yaml mount cloud-a:/ --to ./cloud-a
 ```
+
+When `daemon.store` is configured, audit events are appended to the JSONL store
+and loaded again on daemon startup. `audit list` and `audit show` still read
+from the bounded in-memory audit queue, seeded from the most recent persisted
+events.
 
 `operon job run` treats one argument after `--` as an explicit shell command
 string. Multiple arguments are shell-escaped before being sent to the daemon so

@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use operon_core::JobRecord;
+use operon_core::{AuditEvent, JobRecord};
 
 pub const DEFAULT_STORE_PATH: &str = "operon.db";
 
@@ -110,6 +110,27 @@ pub fn load_jobs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, JobReco
     Ok(jobs)
 }
 
+pub fn load_audit_events(path: Option<&Path>) -> anyhow::Result<Vec<AuditEvent>> {
+    let Some(path) = path else {
+        return Ok(Vec::new());
+    };
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = std::fs::read_to_string(path)?;
+    let mut events = Vec::new();
+    for line in content.lines().filter(|line| !line.trim().is_empty()) {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        if value.get("kind").and_then(serde_json::Value::as_str) != Some("audit") {
+            continue;
+        }
+        if let Some(event) = value.get("event") {
+            events.push(serde_json::from_value(event.clone())?);
+        }
+    }
+    Ok(events)
+}
+
 pub fn default_store_path() -> PathBuf {
     PathBuf::from(DEFAULT_STORE_PATH)
 }
@@ -167,6 +188,62 @@ mod tests {
         let content = std::fs::read_to_string(&store).expect("store content");
         assert_eq!(content, "{\"kind\":\"job\"}\n");
         let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn load_audit_events_reads_persisted_audit_records_in_order() {
+        let base = unique_temp_dir("operon-store-audit-load-test");
+        std::fs::create_dir_all(&base).expect("base dir");
+        let store = base.join("store.jsonl");
+        let first = test_audit_event("stat", 100);
+        let second = test_audit_event("read", 200);
+
+        append_record(
+            Some(&store),
+            &serde_json::json!({
+                "kind": "job",
+                "record": {"id": "job-1"}
+            }),
+        )
+        .expect("append non-audit");
+        append_record(
+            Some(&store),
+            &serde_json::json!({
+                "kind": "audit",
+                "event": first,
+            }),
+        )
+        .expect("append first audit");
+        append_record(
+            Some(&store),
+            &serde_json::json!({
+                "kind": "audit",
+                "event": second,
+            }),
+        )
+        .expect("append second audit");
+
+        let events = load_audit_events(Some(&store)).expect("load audit events");
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].action, "stat");
+        assert_eq!(events[1].action, "read");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    fn test_audit_event(action: &str, timestamp_ms: u64) -> AuditEvent {
+        AuditEvent {
+            subject: "test-subject".to_string(),
+            timestamp_ms,
+            node_id: "node-a".to_string(),
+            capability: "fs:workspace".to_string(),
+            action: action.to_string(),
+            resource: "/".to_string(),
+            allowed: true,
+            reason: "allowed".to_string(),
+            run_id: None,
+            step_id: None,
+        }
     }
 
     fn unique_temp_dir(name: &str) -> PathBuf {

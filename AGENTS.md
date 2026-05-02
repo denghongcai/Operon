@@ -182,6 +182,10 @@ Operon should not own:
   - v0.9.2 scope for policy-derived capability discovery instead of static
     default capability advertising.
 
+- `docs/plan/v0.9.3-store-backed-audit-visibility.md`
+  - v0.9.3 scope for restart-safe audit inspection by loading persisted audit
+    events from the append-only store.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -311,6 +315,9 @@ Operon should not own:
   optional discovery health checks, and endpoint-only external generator docs.
 - Completed capability truthfulness milestone: v0.9.2 daemon capability
   discovery is derived from `PolicyConfig`.
+- Completed runtime visibility milestone: v0.9.3 daemon audit inspection loads
+  persisted audit events from the append-only store at startup while preserving
+  bounded in-memory retention.
 - Next planned milestone: choose the next runtime hardening phase.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -482,3 +489,8 @@ Defer:
   ids use `service:<service_id>`, and
   `scripts/verify-policy-derived-capabilities.sh` covers the behavior. Nothing
   remains in v0.9.2.
+- Latest phase status update: v0.9.3 completed Store-Backed Audit Visibility.
+  Daemon startup now loads persisted audit events from the append-only JSONL
+  store into the bounded in-memory audit queue, and
+  `scripts/verify-v0.9.3-store-backed-audit-visibility.sh` covers the behavior.
+  Nothing remains in v0.9.3.

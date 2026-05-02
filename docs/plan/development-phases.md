@@ -3889,6 +3889,34 @@ Remaining:
 
 - No v0.9.2 work remains.
 
+## Phase 65: v0.9.3 Store-Backed Audit Visibility
+
+Status: Completed.
+
+Goal: make daemon audit inspection restart-safe by loading persisted audit
+events from the existing append-only JSONL store at startup.
+
+Done when:
+
+- `operon-store` can load `kind: audit` records from the JSONL store.
+- daemon startup seeds `AppState.audit` from the configured store.
+- startup audit loading keeps the existing bounded in-memory audit retention.
+- no protocol, schema, or query database change is introduced.
+
+Completed:
+
+- Added `operon_store::load_audit_events`.
+- Updated daemon startup to initialize `AppState.audit` with persisted audit
+  events.
+- Added `bounded_audit_events` to preserve `MAX_IN_MEMORY_AUDIT_EVENTS` during
+  startup reload.
+- Added focused store and daemon tests.
+- Added `scripts/verify-v0.9.3-store-backed-audit-visibility.sh`.
+
+Remaining:
+
+- No v0.9.3 work remains.
+
 ## Later Candidate Work
 
 - richer policy language.
