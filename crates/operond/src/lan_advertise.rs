@@ -24,7 +24,6 @@ pub(crate) fn advertise_lan(
     };
     let properties = [
         ("node_id", node_id),
-        ("provider", "lan"),
         ("endpoint", endpoint.as_str()),
         ("capabilities", capability_summary.as_str()),
     ];

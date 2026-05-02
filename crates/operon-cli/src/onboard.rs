@@ -8,8 +8,7 @@ use std::{
 
 use clap::ValueEnum;
 use operon_config::{
-    AuthConfig, ClientConfig, DaemonConfig, NetworkProviderKind, NodeConfig, OperonConfig,
-    SecretsConfig,
+    AuthConfig, ClientConfig, DaemonConfig, NodeConfig, OperonConfig, SecretsConfig,
 };
 use operon_core::DiscoveryList;
 
@@ -285,9 +284,9 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
     let mut nodes = BTreeMap::new();
 
     if matches!(role, OnboardRole::Daemon | OnboardRole::Both) {
-        let token = daemon_token
-            .as_ref()
-            .expect("daemon onboarding should have a token");
+        let Some(token) = daemon_token.as_ref() else {
+            anyhow::bail!("daemon onboarding token is unavailable");
+        };
         files.push(GeneratedFile {
             path: token_path.clone(),
             content: format!("{token}\n"),
@@ -324,7 +323,6 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
             node_id.clone(),
             NodeConfig {
                 endpoint: endpoint.clone(),
-                provider: NetworkProviderKind::Manual,
                 auth: client_token_auth(client_token.clone(), matches!(role, OnboardRole::Both)),
             },
         );
@@ -334,7 +332,6 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
             for node in discovered.nodes {
                 nodes.entry(node.node_id).or_insert(NodeConfig {
                     endpoint: node.endpoint,
-                    provider: NetworkProviderKind::Lan,
                     auth: client_token_auth(
                         client_token.clone(),
                         matches!(role, OnboardRole::Both),
@@ -342,7 +339,7 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
                 });
             }
             equivalent_cli.push(format!(
-                "operon node discover --provider lan --output-config {}",
+                "operon node discover --output-config {}",
                 config_path.display()
             ));
         }

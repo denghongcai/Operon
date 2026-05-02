@@ -3306,63 +3306,497 @@ Remaining:
   `runtime_service.rs` remains an optional future cleanup if method routing
   grows again.
 
-## Phase 50: Provider Discovery Contract
+## Phase 50: v0.8.7 Filesystem Service Reuse Cleanup
 
-Status: Planned.
+Status: Completed.
 
-Goal: define a common discovery result model for non-LAN providers.
+Goal: reduce repeated filesystem authorization, path resolution, and audit
+denial handling in the daemon filesystem service.
 
-Planned:
+Review finding:
 
-- define provider discovery result fields.
-- define cache, refresh, and failure behavior.
-- define how discovered endpoints merge with manual node config.
-- keep capability access separate from provider network access.
-
-Done when:
-
-- provider discovery semantics are documented.
-- manual endpoint config remains the fallback and source of override.
-- discovered nodes do not automatically receive capability authorization.
-
-## Phase 51: Non-LAN Provider Adapters
-
-Status: Planned.
-
-Goal: implement the first non-LAN discovery adapters.
-
-Planned:
-
-- add Tailscale discovery if API credentials are configured.
-- add Cloudflare discovery if API credentials are configured.
-- consider Kubernetes service discovery after the first two adapters.
-- keep SSH and WireGuard as manual endpoint providers unless a clear discovery
-  path is defined.
+- `crates/operond/src/fs_service.rs` repeated the same `authorize_fs`, path
+  resolver, failed audit event, and `tonic::Status` conversion pattern across
+  most filesystem operations.
+- That repetition made the fs service harder to review and increased the risk
+  that future operations would drift in permission or audit behavior.
 
 Done when:
 
-- at least one non-LAN provider can discover reachable Operon endpoints.
-- discovered endpoints can be inspected before being used.
-- provider errors are clear and do not affect manual endpoints.
+- filesystem authorization denial handling has one helper boundary.
+- workspace path resolution failures are audited through focused helpers.
+- the existing fs operation permissions, audit action names, audit resources,
+  and success audit behavior remain unchanged.
+- validation guards the helper boundary and daemon tests remain green.
 
-## Phase 52: v0.9 Acceptance
+Detailed plan:
+`docs/plan/v0.8.7-fs-service-reuse-cleanup.md`.
+
+Completed:
+
+- Added `authorize_fs_action` plus focused workspace path resolver helpers in
+  `crates/operond/src/fs_service.rs`.
+- Reused those helpers across stat, list, read range, write range, truncate,
+  mkdir, delete, rename, and copy operations.
+- Added `scripts/verify-v0.8.7-fs-service-reuse-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.7 work remains.
+- Moving the full tonic `GrpcRuntime` trait implementation out of
+  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  method routing grows again.
+
+## Phase 51: v0.8.8 Filesystem Stream Handler Cleanup
+
+Status: Completed.
+
+Goal: keep full-file filesystem stream behavior inside the daemon filesystem
+service module instead of the tonic runtime router.
+
+Review finding:
+
+- `crates/operond/src/main.rs` still owned full-file `ReadFile` and
+  `WriteFile` authorization, workspace path resolution, audit failure handling,
+  chunk-size validation, and file IO.
+- That duplicated the filesystem service boundary improved in v0.8.7 and kept
+  filesystem business logic in the gRPC router.
+
+Done when:
+
+- `fs_service.rs` owns full-file read and write stream handlers.
+- `operond/src/main.rs` only performs gRPC auth, audit context scoping, and
+  delegation for `ReadFile` and `WriteFile`.
+- validation guards against reintroducing stream handler logic in `main.rs`.
+- daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.8-fs-stream-handler-cleanup.md`.
+
+Completed:
+
+- Added `fs_service::read_stream` and `fs_service::write_stream`.
+- Reused the v0.8.7 authorization and path resolution helpers for full-file
+  stream reads and writes.
+- Reduced the `ReadFile` and `WriteFile` runtime methods to delegation.
+- Added `scripts/verify-v0.8.8-fs-stream-handler-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.8 work remains.
+- Moving the full tonic `GrpcRuntime` trait implementation out of
+  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  method routing grows again.
+
+## Phase 52: v0.8.9 Service Tunnel Boundary Cleanup
+
+Status: Completed.
+
+Goal: keep service tunnel target parsing, authorization, protocol checks, audit
+handling, and connection setup inside the daemon service forwarding module.
+
+Review finding:
+
+- `crates/operond/src/main.rs` still owned TCP and UDP service tunnel open
+  handshakes: target-envelope validation, service policy authorization,
+  protocol mismatch checks, audit records, TCP connection setup, and datagram
+  stream delegation.
+- That kept service forwarding business logic in the gRPC router instead of
+  behind `service_forward.rs`.
+
+Done when:
+
+- `service_forward.rs` owns TCP and UDP tunnel open/handshake logic.
+- `operond/src/main.rs` only performs gRPC auth, audit context scoping, and
+  delegation for service tunnel RPCs.
+- validation guards against reintroducing tunnel handshake logic in `main.rs`.
+- daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.9-service-tunnel-boundary-cleanup.md`.
+
+Completed:
+
+- Added `service_forward::open_service_tunnel` and
+  `service_forward::open_service_datagram_tunnel`.
+- Added service tunnel stream type aliases for the runtime trait associated
+  stream types.
+- Reduced service tunnel runtime methods to delegation.
+- Added `scripts/verify-v0.8.9-service-tunnel-boundary-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.9 work remains.
+- Moving the full tonic `GrpcRuntime` trait implementation out of
+  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  method routing grows again.
+
+## Phase 53: v0.8.10 Mount Lock Hardening
+
+Status: Completed.
+
+Goal: make Linux FUSE mount callbacks return filesystem errors instead of
+panicking when the inode table lock is poisoned.
+
+Review finding:
+
+- `crates/operon-mount/src/fuse_fs.rs` used repeated
+  `expect("inode table poisoned")` calls inside production FUSE callbacks.
+- A poisoned inode-table lock could panic the mount process instead of
+  returning a normal errno to the kernel.
+
+Done when:
+
+- inode-table write lock acquisition has a focused helper boundary.
+- FUSE callbacks convert inode-table write lock failures into errno replies or
+  propagated mount errors.
+- validation rejects reintroducing direct inode-table lock panics.
+- mount crate tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.10-mount-lock-hardening.md`.
+
+Completed:
+
+- Added `write_inodes` in `crates/operon-mount/src/fuse_fs.rs`.
+- Replaced direct write-lock `expect` calls across lookup/upsert, setattr,
+  unlink, rmdir, rename, write cache refresh, and readdir paths.
+- Added `scripts/verify-v0.8.10-mount-lock-hardening.sh`.
+
+Remaining:
+
+- No v0.8.10 work remains.
+- Broader Linux mount callback decomposition remains a future candidate if the
+  FUSE adapter grows beyond a thin adapter boundary.
+
+## Phase 54: v0.8.11 CLI Datagram Lock Hardening
+
+Status: Completed.
+
+Goal: make CLI UDP/datagram forwarding report peer-state lock failures instead
+of panicking.
+
+Review finding:
+
+- `crates/operon-cli/src/grpc.rs` used
+  `expect("datagram peer state poisoned")` in UDP datagram forwarding peer
+  state helpers.
+- A poisoned peer-state lock could panic a long-running `operon service
+  forward-udp` process instead of returning a normal CLI error.
+
+Done when:
+
+- datagram peer-state helpers return `anyhow::Result`.
+- inbound peer lookup and removal failures propagate through the forwarding
+  command path.
+- validation rejects reintroducing datagram peer-state lock panics.
+- CLI tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.11-cli-datagram-lock-hardening.md`.
+
+Completed:
+
+- Changed datagram peer-state helpers to return `anyhow::Result`.
+- Propagated inbound peer lookup and removal failures through the forwarding
+  command path.
+- Changed local UDP read task lock failures to stop forwarding instead of
+  panicking the task.
+- Added `scripts/verify-v0.8.11-cli-datagram-lock-hardening.sh`.
+
+Remaining:
+
+- No v0.8.11 work remains.
+- Broader `operon-cli/src/grpc.rs` command-family split remains a future
+  maintainability candidate.
+
+## Phase 55: v0.8.12 Daemon Datagram Invariant Cleanup
+
+Status: Completed.
+
+Goal: remove the remaining production invariant panic from daemon UDP/datagram
+forwarding.
+
+Review finding:
+
+- `crates/operond/src/service_forward.rs` used
+  `expect("session should exist after creation")` after creating or looking up
+  a UDP peer session.
+- The condition should be handled as a tunnel close response instead of a
+  daemon panic, even if it should be unreachable in normal execution.
+
+Done when:
+
+- service datagram session lookup has an explicit missing-session branch.
+- validation rejects reintroducing the session invariant panic.
+- daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.12-daemon-datagram-invariant-cleanup.md`.
+
+Completed:
+
+- Replaced the session lookup `expect` with a close response for the affected
+  peer.
+- Added `scripts/verify-v0.8.12-daemon-datagram-invariant-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.12 work remains.
+- Broader service datagram state-machine extraction remains a future candidate
+  if UDP forwarding behavior grows.
+
+## Phase 56: v0.8.13 Production Panic Cleanup
+
+Status: Completed.
+
+Goal: remove the production panic-style invariants found in daemon job-log
+handling and Linux mount remote client runtime access.
+
+Review finding:
+
+- `crates/operond/src/job_runtime.rs` used
+  `expect("just pushed job log")` after appending a job log entry.
+- `crates/operon-mount/src/remote_client.rs` used
+  `expect("remote fs runtime is only cleared during drop")` when resolving the
+  blocking runtime used by remote filesystem operations.
+- Both sites should fail as logged errors or returned errors instead of
+  panicking production processes.
+
+Done when:
+
+- job-log append handles an unexpectedly empty retained log buffer without a
+  panic.
+- mount remote runtime lookup failures return normal errors through remote fs
+  operations.
+- validation rejects reintroducing both production invariant panics.
+- daemon and mount tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.13-production-panic-cleanup.md`.
+
+Completed:
+
+- Replaced the job-log append invariant panic with an explicit logged branch.
+- Changed the mount remote runtime accessor to return `anyhow::Result`.
+- Propagated remote runtime lookup errors through remote filesystem
+  operations.
+- Added `scripts/verify-v0.8.13-production-panic-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.13 work remains.
+- CLI file upload and job stdin helpers still buffer local files before
+  sending requests. That is not a panic, but remains a future streaming-client
+  improvement candidate for very large local inputs.
+
+## Phase 57: v0.8.14 Onboard Invariant Cleanup
+
+Status: Completed.
+
+Goal: remove the production invariant panic from guided onboarding plan
+construction.
+
+Review finding:
+
+- `crates/operon-cli/src/onboard.rs` used
+  `expect("daemon onboarding should have a token")` after deriving the daemon
+  token for daemon and combined onboarding roles.
+- The token should always exist for those roles, but a broken invariant should
+  return a normal CLI error instead of panicking.
+
+Done when:
+
+- daemon onboarding token lookup returns a normal error on invariant failure.
+- validation rejects reintroducing the onboarding token panic.
+- CLI tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.14-onboard-invariant-cleanup.md`.
+
+Completed:
+
+- Replaced the daemon-token `expect` with an explicit `anyhow` error branch.
+- Added `scripts/verify-v0.8.14-onboard-invariant-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.14 work remains.
+- `operon-cli` still contains test-only assertion panics and one
+  `String` formatting invariant in token generation; those do not represent
+  user-triggered onboarding panics.
+
+## Phase 58: v0.8.15 Token Generation Panic Cleanup
+
+Status: Completed.
+
+Goal: remove the remaining production panic-style token formatting invariant
+from CLI private-file helpers.
+
+Review finding:
+
+- `crates/operon-cli/src/private_files.rs` formatted generated token bytes
+  with `write!` and `expect("writing to String should not fail")`.
+- Writing to a `String` is effectively infallible, but token generation does
+  not need a panic-style assertion for hex encoding.
+
+Done when:
+
+- generated token hex encoding does not use panic-style formatting.
+- validation rejects reintroducing the `String` write `expect`.
+- CLI tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.15-token-generation-panic-cleanup.md`.
+
+Completed:
+
+- Replaced `write!`-based hex formatting with direct nibble-to-character
+  encoding.
+- Removed the now-unused `fmt::Write` import.
+- Added `scripts/verify-v0.8.15-token-generation-panic-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.15 work remains.
+- The remaining `expect`, `unwrap`, and `panic!` scan hits in the reviewed
+  Rust surfaces are test assertions.
+- CLI file upload and job stdin helpers still buffer local files before
+  sending requests. That remains a future streaming-client improvement
+  candidate for very large local inputs.
+
+## Phase 59: v0.8.16 Endpoint Model Simplification
+
+Status: Completed.
+
+Goal: remove the provider abstraction from Operon's user-facing endpoint model.
+
+Decision:
+
+- Operon consumes explicit gRPC endpoints. It does not need to know whether an
+  endpoint is reachable through Cloudflare Mesh, Tailscale, WireGuard, SSH,
+  Kubernetes DNS, LAN, or another private network.
+- mDNS remains a convenience mechanism for discovering candidate LAN endpoints,
+  not a provider type.
+- External network systems solve reachability. Operon starts at
+  `node_id -> endpoint` and owns capability policy, execution, audit, and
+  traces.
+
+Done when:
+
+- `provider` is removed from `NodeEndpoint`, `NodeConfig`, mDNS discovery
+  records, generated config, CLI output, and the TypeScript SDK endpoint type.
+- `operon provider` and `operon node discover --provider` are removed.
+- stale `provider` fields in older client node config are ignored rather than
+  consumed as model data.
+- current docs and acceptance criteria describe endpoint-only configuration.
+
+Detailed plan:
+`docs/plan/v0.8.16-endpoint-model-simplification.md`.
+
+Completed:
+
+- Removed `NetworkProviderKind` and provider fields from endpoint/config
+  structs.
+- Removed provider output from node list/resolve/discover and config explain.
+- Removed provider metadata from mDNS advertisement and discovery records.
+- Removed the provider CLI command and discover provider flag.
+- Updated init/onboard generated config, validation scripts, README, and v0.9
+  acceptance docs.
+- Left stale `provider` config fields inert so existing endpoint entries are
+  not blocked by metadata Operon no longer consumes.
+- Added `scripts/verify-v0.8.16-endpoint-model-simplification.sh`.
+
+Remaining:
+
+- No v0.8.16 work remains.
+- Future discovery work should improve endpoint import/export and mDNS UX, not
+  add provider-specific runtime behavior.
+
+## Phase 60: v0.8.17 Config Unknown Field Warnings
+
+Status: Completed.
+
+Goal: warn about unknown `config.yaml` fields without blocking startup or CLI
+commands.
+
+Review finding:
+
+- After the endpoint model simplification, stale fields such as `provider`
+  should not be consumed, but rejecting them outright is unnecessary because
+  the endpoint entry remains usable.
+- Silent ignore is also too loose for configuration hygiene. Operators should
+  see which fields are inert.
+
+Done when:
+
+- config parsing collects unknown field paths.
+- `OperonConfig::load` warns about unknown field paths and keeps loading.
+- stale `provider` fields are reported as unknown but do not block startup or
+  CLI commands.
+- validation covers config parsing and CLI stderr behavior.
+
+Detailed plan:
+`docs/plan/v0.8.17-config-unknown-field-warnings.md`.
+
+Completed:
+
+- Added `OperonConfig::from_str_with_warnings` and config warning records.
+- Split unknown-field scanning into `crates/operon-config/src/warnings.rs`.
+- Added unknown field detection for root, daemon, daemon auth, client nodes,
+  node auth, policy, secrets, fs mounts, job policy, services, and service
+  permissions.
+- `OperonConfig::load` now prints warning lines for unknown field paths before
+  returning the parsed config.
+- Added config and CLI integration tests proving unknown fields warn without
+  blocking commands.
+- Added `scripts/verify-v0.8.17-config-unknown-field-warnings.sh`.
+
+Remaining:
+
+- No v0.8.17 work remains.
+- Future schema additions should update the unknown-field allowlist in
+  `operon-config`.
+
+## Phase 61: v0.9 Endpoint Model Acceptance
 
 Status: Planned.
 
-Goal: make provider discovery reproducible without owning connectivity.
+Goal: make endpoint-only configuration and mDNS discovery reproducible.
 
 Planned:
 
 - `docs/plan/v0.9-acceptance.md`.
-- mocked provider API tests.
-- optional live-provider validation notes.
-- README updates for provider discovery setup and limits.
+- endpoint-only config validation.
+- mDNS discovery export validation.
+- README updates for configuring endpoints reached through Cloudflare Mesh,
+  Tailscale, WireGuard, SSH, LAN, Kubernetes DNS, or manual DNS.
 
 Done when:
 
 - v0.9 has documented acceptance criteria.
-- non-LAN discovery is tested without requiring live third-party accounts in CI.
+- config and discovery validation prove that Operon consumes only endpoints.
 - docs explicitly preserve the "Operon is not a VPN" boundary.
+
+## Phase 62: Post-v0.9 Discovery UX
+
+Status: Planned.
+
+Goal: improve discovery ergonomics without reintroducing provider abstractions.
+
+Planned:
+
+- clearer conflict handling when mDNS output is exported over an existing
+  config.
+- optional endpoint health checks during discovery output.
+- docs for external scripts that can generate endpoint-only config from
+  third-party control planes.
+
+Done when:
+
+- discovery remains endpoint-only.
+- generated config never contains provider metadata.
+- third-party control-plane examples stay outside the runtime model.
 
 ## Later Candidate Work
 

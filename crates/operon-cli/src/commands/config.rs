@@ -37,7 +37,6 @@ struct ClientExplain {
 struct NodeExplain {
     node_id: String,
     endpoint: String,
-    provider: String,
     auth: String,
 }
 
@@ -120,7 +119,6 @@ impl ConfigExplain {
             .map(|(node_id, node)| NodeExplain {
                 node_id: node_id.clone(),
                 endpoint: node.endpoint.clone(),
-                provider: node.provider.as_str().to_string(),
                 auth: auth_source(&node.auth, &config_dir),
             })
             .collect();
@@ -204,8 +202,8 @@ fn print_config_explain(explain: &ConfigExplain) {
     }
     for node in &explain.client.nodes {
         println!(
-            "  {} -> {} ({}, auth: {})",
-            node.node_id, node.endpoint, node.provider, node.auth
+            "  {} -> {} (auth: {})",
+            node.node_id, node.endpoint, node.auth
         );
     }
 
@@ -309,7 +307,6 @@ mod tests {
         );
         assert!(!daemon.auth.contains("token: "));
         assert_eq!(explain.client.nodes.len(), 1);
-        assert_eq!(explain.client.nodes[0].provider, "manual");
         let policy = explain.policy.expect("policy explain");
         assert_eq!(policy.subject, "local-cli");
         assert_eq!(policy.fs_mounts[0].name, "workspace");

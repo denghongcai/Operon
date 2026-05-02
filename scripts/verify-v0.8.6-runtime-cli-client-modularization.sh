@@ -19,7 +19,7 @@ require_pattern 'operon_grpc_client::connect' crates/operon-cli/src/grpc.rs
 require_pattern 'operon_grpc_client::request_with_context' crates/operon-cli/src/grpc.rs
 require_pattern 'operon_grpc_client::request' crates/operon-mount/src/remote_client.rs
 
-for module in audit capability config init job mount node provider service trace; do
+for module in audit capability config init job mount node service trace; do
   require_file "crates/operon-cli/src/commands/${module}.rs"
   require_pattern "pub\\(crate\\) mod ${module};" crates/operon-cli/src/commands/mod.rs
 done

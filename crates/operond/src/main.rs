@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
-    AuditLog, CapabilityList, FsWrite, HealthStatus, JobList, JobRunRequest, JobStatus, JobStdin,
+    AuditLog, CapabilityList, HealthStatus, JobList, JobRunRequest, JobStatus, JobStdin,
     JobStdinClose, NodeInfo, RequestContext, ServiceList,
 };
 #[cfg(test)]
@@ -18,21 +18,19 @@ use operon_core::{
     FsMountPolicy, FsPermissions, FsPolicy, JobLog, JobPolicy, JobRecord, PolicyConfig,
     RuntimeErrorKind, ServiceDefinition, ServicePolicy,
 };
-use operon_fs::{authorize_fs, resolve_existing_workspace_path, resolve_write_workspace_path};
+#[cfg(test)]
+use operon_fs::authorize_fs;
 #[cfg(test)]
 use operon_process::{authorize_job, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    service_datagram_tunnel_request, service_tunnel_request, write_file_request, FileChunk,
-    FsCopyRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest,
-    FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest, JobLogStreamEvent,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
-    ServiceDatagramTunnelRequest, ServiceDatagramTunnelResponse, ServiceIdRequest,
-    ServiceTunnelRequest, ServiceTunnelResponse, WriteFileRequest,
+    FileChunk, FsCopyRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest,
+    FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest, JobIdRequest,
+    JobLogStreamEvent, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
+    ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest, ServiceTunnelRequest,
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::broadcast, time};
-use tokio_util::io::ReaderStream;
+use tokio::sync::broadcast;
 use tonic::{transport::Server, Request, Response as GrpcResponse, Status};
 
 mod audit;
@@ -53,7 +51,6 @@ use audit::now_ms;
 use audit::{record_audit, record_audit_capability};
 use auth::authorize_grpc;
 use defaults::{default_capabilities, default_policy};
-use grpc_status::status_from_error;
 use job_runtime::{
     get_job_record, job_event_from_record, job_log_complete, job_log_complete_event,
     job_log_entry_event, job_log_list, job_log_snapshot, job_log_snapshot_event, next_job_sequence,
@@ -62,9 +59,9 @@ use job_runtime::{
 use lan_advertise::advertise_lan;
 use locks::lock;
 use pagination::paginate_items;
-use service_forward::{
-    authorize_service, grpc_service_check, service_datagram_tunnel_stream, service_tunnel_stream,
-};
+#[cfg(test)]
+use service_forward::authorize_service;
+use service_forward::{grpc_service_check, open_service_datagram_tunnel, open_service_tunnel};
 #[cfg(test)]
 use state::MAX_IN_MEMORY_AUDIT_EVENTS;
 use state::{AppState, JobEventSender, JobLogSender};
@@ -199,8 +196,7 @@ struct GrpcRuntime {
     state: AppState,
 }
 
-type GrpcFileStream =
-    Pin<Box<dyn futures_util::Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
+type GrpcFileStream = fs_service::FileStream;
 type GrpcJobLogStream =
     Pin<Box<dyn futures_util::Stream<Item = Result<JobLogStreamEvent, Status>> + Send + 'static>>;
 type GrpcJobEventStream = Pin<
@@ -210,16 +206,8 @@ type GrpcJobEventStream = Pin<
             + 'static,
     >,
 >;
-type GrpcServiceTunnelStream = Pin<
-    Box<dyn futures_util::Stream<Item = Result<ServiceTunnelResponse, Status>> + Send + 'static>,
->;
-type GrpcServiceDatagramTunnelStream = Pin<
-    Box<
-        dyn futures_util::Stream<Item = Result<ServiceDatagramTunnelResponse, Status>>
-            + Send
-            + 'static,
-    >,
->;
+type GrpcServiceTunnelStream = service_forward::ServiceTunnelStream;
+type GrpcServiceDatagramTunnelStream = service_forward::ServiceDatagramTunnelStream;
 
 #[tonic::async_trait]
 impl OperonRuntime for GrpcRuntime {
@@ -304,30 +292,8 @@ impl OperonRuntime for GrpcRuntime {
         let path = request.into_inner().path;
         AUDIT_CONTEXT
             .scope(context, async {
-                if let Err(error) = authorize_fs(&self.state.policy, "read", &path) {
-                    record_audit(&self.state, "read-stream", &path, false, &error.1);
-                    return Err(status_from_error(error));
-                }
-                let full_path = match resolve_existing_workspace_path(&self.state.workspace, &path)
-                {
-                    Ok(path) => path,
-                    Err(error) => {
-                        record_audit(&self.state, "read-stream", &path, false, &error.1);
-                        return Err(status_from_error(error));
-                    }
-                };
-                let file = tokio::fs::File::open(&full_path)
-                    .await
-                    .map_err(|error| Status::internal(error.to_string()))?;
-                record_audit(&self.state, "read-stream", &path, true, "allowed");
-                let stream = ReaderStream::new(file).map(|chunk| {
-                    chunk
-                        .map(|data| FileChunk {
-                            data: data.to_vec(),
-                        })
-                        .map_err(|error| Status::internal(error.to_string()))
-                });
-                Ok(GrpcResponse::new(Box::pin(stream) as Self::ReadFileStream))
+                let stream = fs_service::read_stream(&self.state, path).await?;
+                Ok(GrpcResponse::new(stream))
             })
             .await
     }
@@ -350,107 +316,14 @@ impl OperonRuntime for GrpcRuntime {
 
     async fn write_file(
         &self,
-        request: Request<tonic::Streaming<WriteFileRequest>>,
+        request: Request<tonic::Streaming<operon_protocol::runtime::v1::WriteFileRequest>>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsWrite>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let mut stream = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let mut path = None;
-                let mut file = None;
-                let mut bytes_written = 0_u64;
-
-                while let Some(message) = stream.next().await {
-                    let message = message?;
-                    match message.payload {
-                        Some(write_file_request::Payload::Target(target)) => {
-                            if path.is_some() {
-                                return Err(Status::invalid_argument(
-                                    "write stream target metadata was sent more than once",
-                                ));
-                            }
-                            if target.path.is_empty() {
-                                return Err(Status::invalid_argument(
-                                    "write stream target path is required",
-                                ));
-                            }
-                            if let Err(error) =
-                                authorize_fs(&self.state.policy, "write", &target.path)
-                            {
-                                record_audit(
-                                    &self.state,
-                                    "write-stream",
-                                    &target.path,
-                                    false,
-                                    &error.1,
-                                );
-                                return Err(status_from_error(error));
-                            }
-                            let full_path = match resolve_write_workspace_path(
-                                &self.state.workspace,
-                                &target.path,
-                            ) {
-                                Ok(path) => path,
-                                Err(error) => {
-                                    record_audit(
-                                        &self.state,
-                                        "write-stream",
-                                        &target.path,
-                                        false,
-                                        &error.1,
-                                    );
-                                    return Err(status_from_error(error));
-                                }
-                            };
-                            if let Some(parent) = full_path.parent() {
-                                tokio::fs::create_dir_all(parent)
-                                    .await
-                                    .map_err(|error| Status::internal(error.to_string()))?;
-                            }
-                            file = Some(
-                                tokio::fs::File::create(&full_path)
-                                    .await
-                                    .map_err(|error| Status::internal(error.to_string()))?,
-                            );
-                            path = Some(target.path);
-                        }
-                        Some(write_file_request::Payload::Chunk(chunk)) => {
-                            let Some(file) = &mut file else {
-                                return Err(Status::invalid_argument(
-                                    "write stream chunk arrived before target metadata",
-                                ));
-                            };
-                            fs_service::validate_write_chunk(chunk.data.len())?;
-                            bytes_written = fs_service::checked_file_end(
-                                bytes_written,
-                                chunk.data.len(),
-                                "write stream",
-                            )?;
-                            file.write_all(&chunk.data)
-                                .await
-                                .map_err(|error| Status::internal(error.to_string()))?;
-                        }
-                        None => {
-                            return Err(Status::invalid_argument(
-                                "write stream message is missing payload",
-                            ));
-                        }
-                    }
-                }
-
-                let Some(path) = path else {
-                    return Err(Status::invalid_argument(
-                        "write stream did not include target metadata",
-                    ));
-                };
-                record_audit(&self.state, "write-stream", &path, true, "allowed");
-                Ok(GrpcResponse::new(
-                    FsWrite {
-                        path,
-                        bytes_written,
-                    }
-                    .into(),
-                ))
+                let write = fs_service::write_stream(&self.state, &mut stream).await?;
+                Ok(GrpcResponse::new(write.into()))
             })
             .await
     }
@@ -902,103 +775,11 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<tonic::Streaming<ServiceTunnelRequest>>,
     ) -> Result<GrpcResponse<Self::OpenServiceTunnelStream>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
-        let mut input = request.into_inner();
+        let input = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let first = input.next().await.ok_or_else(|| {
-                    Status::invalid_argument("service tunnel target metadata is required")
-                })??;
-                let service_id = match first.payload {
-                    Some(service_tunnel_request::Payload::Target(target)) => {
-                        if target.service_id.is_empty() {
-                            return Err(Status::invalid_argument(
-                                "service tunnel target service_id is required",
-                            ));
-                        }
-                        target.service_id
-                    }
-                    Some(service_tunnel_request::Payload::Data(_)) => {
-                        return Err(Status::invalid_argument(
-                            "service tunnel data arrived before target metadata",
-                        ));
-                    }
-                    Some(service_tunnel_request::Payload::Close(_)) | None => {
-                        return Err(Status::invalid_argument(
-                            "service tunnel target metadata is required",
-                        ));
-                    }
-                };
-                let service = match authorize_service(&self.state.policy, &service_id, "forward") {
-                    Ok(service) => service,
-                    Err(error) => {
-                        record_audit_capability(
-                            &self.state,
-                            "service:default",
-                            "forward",
-                            &service_id,
-                            false,
-                            &error.1,
-                        );
-                        return Err(status_from_error(error));
-                    }
-                };
-                if !matches!(service.protocol, operon_core::ServiceProtocol::Tcp) {
-                    record_audit_capability(
-                        &self.state,
-                        &format!("service:{}", service.id),
-                        "forward",
-                        &service.id,
-                        false,
-                        "only TCP services can be forwarded",
-                    );
-                    return Err(Status::failed_precondition(
-                        "only TCP services can be forwarded",
-                    ));
-                }
-                let address = format!("{}:{}", service.host, service.port);
-                let tcp = match time::timeout(
-                    std::time::Duration::from_secs(10),
-                    TcpStream::connect(&address),
-                )
-                .await
-                {
-                    Ok(Ok(stream)) => stream,
-                    Ok(Err(error)) => {
-                        let reason = format!("failed to connect to service: {error}");
-                        record_audit_capability(
-                            &self.state,
-                            &format!("service:{}", service.id),
-                            "forward",
-                            &service.id,
-                            true,
-                            &reason,
-                        );
-                        return Err(Status::unavailable(reason));
-                    }
-                    Err(_) => {
-                        record_audit_capability(
-                            &self.state,
-                            &format!("service:{}", service.id),
-                            "forward",
-                            &service.id,
-                            true,
-                            "service connection timed out",
-                        );
-                        return Err(Status::deadline_exceeded("service connection timed out"));
-                    }
-                };
-                record_audit_capability(
-                    &self.state,
-                    &format!("service:{}", service.id),
-                    "forward",
-                    &service.id,
-                    true,
-                    "allowed",
-                );
-                let stream = service_tunnel_stream(service, input, tcp);
-                Ok(GrpcResponse::new(
-                    Box::pin(stream) as Self::OpenServiceTunnelStream
-                ))
+                let stream = open_service_tunnel(&self.state, input).await?;
+                Ok(GrpcResponse::new(stream))
             })
             .await
     }
@@ -1010,71 +791,11 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<tonic::Streaming<ServiceDatagramTunnelRequest>>,
     ) -> Result<GrpcResponse<Self::OpenServiceDatagramTunnelStream>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
-        let mut input = request.into_inner();
+        let input = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let first = input.next().await.ok_or_else(|| {
-                    Status::invalid_argument("service datagram tunnel target metadata is required")
-                })??;
-                let service_id = match first.payload {
-                    Some(service_datagram_tunnel_request::Payload::Target(target)) => {
-                        if target.service_id.is_empty() {
-                            return Err(Status::invalid_argument(
-                                "service datagram tunnel target service_id is required",
-                            ));
-                        }
-                        target.service_id
-                    }
-                    Some(service_datagram_tunnel_request::Payload::Datagram(_)) => {
-                        return Err(Status::invalid_argument(
-                            "service datagram arrived before target metadata",
-                        ));
-                    }
-                    Some(service_datagram_tunnel_request::Payload::Close(_)) | None => {
-                        return Err(Status::invalid_argument(
-                            "service datagram tunnel target metadata is required",
-                        ));
-                    }
-                };
-                let service = match authorize_service(&self.state.policy, &service_id, "forward") {
-                    Ok(service) => service,
-                    Err(error) => {
-                        record_audit_capability(
-                            &self.state,
-                            "service:default",
-                            "forward-udp",
-                            &service_id,
-                            false,
-                            &error.1,
-                        );
-                        return Err(status_from_error(error));
-                    }
-                };
-                if !matches!(service.protocol, operon_core::ServiceProtocol::Udp) {
-                    record_audit_capability(
-                        &self.state,
-                        &format!("service:{}", service.id),
-                        "forward-udp",
-                        &service.id,
-                        false,
-                        "only UDP services can be forwarded with datagram tunnels",
-                    );
-                    return Err(Status::failed_precondition(
-                        "only UDP services can be forwarded with datagram tunnels",
-                    ));
-                }
-                record_audit_capability(
-                    &self.state,
-                    &format!("service:{}", service.id),
-                    "forward-udp",
-                    &service.id,
-                    true,
-                    "allowed",
-                );
-                let stream = service_datagram_tunnel_stream(service, input);
-                Ok(GrpcResponse::new(
-                    Box::pin(stream) as Self::OpenServiceDatagramTunnelStream
-                ))
+                let stream = open_service_datagram_tunnel(&self.state, input).await?;
+                Ok(GrpcResponse::new(stream))
             })
             .await
     }

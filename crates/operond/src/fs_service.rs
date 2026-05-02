@@ -1,17 +1,24 @@
+use std::{path::PathBuf, pin::Pin};
+
+use futures_util::{Stream, StreamExt};
 use operon_core::{FsEntry, FsList, FsStat, FsWrite};
 use operon_fs::{
     authorize_fs, join_virtual_path, resolve_create_workspace_path,
     resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
     resolve_write_workspace_path,
 };
-use operon_protocol::runtime::v1::FileChunk;
+use operon_protocol::runtime::v1::{write_file_request, FileChunk, WriteFileRequest};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio_util::io::ReaderStream;
 use tonic::Status;
 
 use crate::{
     grpc_status::{status_from_error, status_from_io_error},
     record_audit, AppState, MAX_FS_FILE_BYTES, MAX_FS_WRITE_CHUNK_BYTES,
 };
+
+pub(crate) type FileStream =
+    Pin<Box<dyn Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
 
 pub(crate) fn validate_write_chunk(data_len: usize) -> Result<(), Status> {
     if data_len > MAX_FS_WRITE_CHUNK_BYTES {
@@ -54,18 +61,71 @@ pub(crate) fn checked_file_end(
     Ok(end)
 }
 
-pub(crate) async fn stat(state: &AppState, path: String) -> Result<FsStat, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
-        record_audit(state, "stat", &path, false, &error.1);
+fn authorize_fs_action(
+    state: &AppState,
+    audit_action: &str,
+    audit_resource: &str,
+    permission: &str,
+    path: &str,
+) -> Result<(), Status> {
+    if let Err(error) = authorize_fs(&state.policy, permission, path) {
+        record_audit(state, audit_action, audit_resource, false, &error.1);
         return Err(status_from_error(error));
     }
-    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "stat", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    Ok(())
+}
+
+fn resolve_existing_path(
+    state: &AppState,
+    audit_action: &str,
+    audit_resource: &str,
+    path: &str,
+) -> Result<PathBuf, Status> {
+    resolve_existing_workspace_path(&state.workspace, path).map_err(|error| {
+        record_audit(state, audit_action, audit_resource, false, &error.1);
+        status_from_error(error)
+    })
+}
+
+fn resolve_existing_leaf_path(
+    state: &AppState,
+    audit_action: &str,
+    audit_resource: &str,
+    path: &str,
+) -> Result<PathBuf, Status> {
+    resolve_existing_workspace_leaf_path(&state.workspace, path).map_err(|error| {
+        record_audit(state, audit_action, audit_resource, false, &error.1);
+        status_from_error(error)
+    })
+}
+
+fn resolve_write_path(
+    state: &AppState,
+    audit_action: &str,
+    audit_resource: &str,
+    path: &str,
+) -> Result<PathBuf, Status> {
+    resolve_write_workspace_path(&state.workspace, path).map_err(|error| {
+        record_audit(state, audit_action, audit_resource, false, &error.1);
+        status_from_error(error)
+    })
+}
+
+fn resolve_create_path(
+    state: &AppState,
+    audit_action: &str,
+    audit_resource: &str,
+    path: &str,
+) -> Result<PathBuf, Status> {
+    resolve_create_workspace_path(&state.workspace, path).map_err(|error| {
+        record_audit(state, audit_action, audit_resource, false, &error.1);
+        status_from_error(error)
+    })
+}
+
+pub(crate) async fn stat(state: &AppState, path: String) -> Result<FsStat, Status> {
+    authorize_fs_action(state, "stat", &path, "read", &path)?;
+    let full_path = resolve_existing_path(state, "stat", &path, &path)?;
     let metadata = tokio::fs::metadata(&full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -79,17 +139,8 @@ pub(crate) async fn stat(state: &AppState, path: String) -> Result<FsStat, Statu
 }
 
 pub(crate) async fn list(state: &AppState, path: String) -> Result<FsList, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
-        record_audit(state, "list", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "list", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "list", &path, "read", &path)?;
+    let full_path = resolve_existing_path(state, "list", &path, &path)?;
     let mut entries = Vec::new();
     let mut reader = tokio::fs::read_dir(&full_path)
         .await
@@ -113,6 +164,23 @@ pub(crate) async fn list(state: &AppState, path: String) -> Result<FsList, Statu
     Ok(FsList { path, entries })
 }
 
+pub(crate) async fn read_stream(state: &AppState, path: String) -> Result<FileStream, Status> {
+    authorize_fs_action(state, "read-stream", &path, "read", &path)?;
+    let full_path = resolve_existing_path(state, "read-stream", &path, &path)?;
+    let file = tokio::fs::File::open(&full_path)
+        .await
+        .map_err(status_from_io_error)?;
+    record_audit(state, "read-stream", &path, true, "allowed");
+    let stream = ReaderStream::new(file).map(|chunk| {
+        chunk
+            .map(|data| FileChunk {
+                data: data.to_vec(),
+            })
+            .map_err(status_from_io_error)
+    });
+    Ok(Box::pin(stream))
+}
+
 pub(crate) async fn read_range(
     state: &AppState,
     path: String,
@@ -121,17 +189,8 @@ pub(crate) async fn read_range(
 ) -> Result<FileChunk, Status> {
     validate_read_range_size(size)?;
     checked_file_end(offset, size as usize, "read range")?;
-    if let Err(error) = authorize_fs(&state.policy, "read", &path) {
-        record_audit(state, "read-range", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_existing_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "read-range", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "read-range", &path, "read", &path)?;
+    let full_path = resolve_existing_path(state, "read-range", &path, &path)?;
     let mut file = tokio::fs::File::open(&full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -145,6 +204,75 @@ pub(crate) async fn read_range(
     Ok(FileChunk { data })
 }
 
+pub(crate) async fn write_stream(
+    state: &AppState,
+    stream: &mut tonic::Streaming<WriteFileRequest>,
+) -> Result<FsWrite, Status> {
+    let mut path = None;
+    let mut file = None;
+    let mut bytes_written = 0_u64;
+
+    while let Some(message) = stream.next().await {
+        let message = message?;
+        match message.payload {
+            Some(write_file_request::Payload::Target(target)) => {
+                if path.is_some() {
+                    return Err(Status::invalid_argument(
+                        "write stream target metadata was sent more than once",
+                    ));
+                }
+                if target.path.is_empty() {
+                    return Err(Status::invalid_argument(
+                        "write stream target path is required",
+                    ));
+                }
+                authorize_fs_action(state, "write-stream", &target.path, "write", &target.path)?;
+                let full_path =
+                    resolve_write_path(state, "write-stream", &target.path, &target.path)?;
+                if let Some(parent) = full_path.parent() {
+                    tokio::fs::create_dir_all(parent)
+                        .await
+                        .map_err(status_from_io_error)?;
+                }
+                file = Some(
+                    tokio::fs::File::create(&full_path)
+                        .await
+                        .map_err(status_from_io_error)?,
+                );
+                path = Some(target.path);
+            }
+            Some(write_file_request::Payload::Chunk(chunk)) => {
+                let Some(file) = &mut file else {
+                    return Err(Status::invalid_argument(
+                        "write stream chunk arrived before target metadata",
+                    ));
+                };
+                validate_write_chunk(chunk.data.len())?;
+                bytes_written = checked_file_end(bytes_written, chunk.data.len(), "write stream")?;
+                file.write_all(&chunk.data)
+                    .await
+                    .map_err(status_from_io_error)?;
+            }
+            None => {
+                return Err(Status::invalid_argument(
+                    "write stream message is missing payload",
+                ));
+            }
+        }
+    }
+
+    let Some(path) = path else {
+        return Err(Status::invalid_argument(
+            "write stream did not include target metadata",
+        ));
+    };
+    record_audit(state, "write-stream", &path, true, "allowed");
+    Ok(FsWrite {
+        path,
+        bytes_written,
+    })
+}
+
 pub(crate) async fn write_range(
     state: &AppState,
     path: String,
@@ -153,17 +281,8 @@ pub(crate) async fn write_range(
 ) -> Result<FsWrite, Status> {
     validate_write_chunk(data.len())?;
     checked_file_end(offset, data.len(), "write range")?;
-    if let Err(error) = authorize_fs(&state.policy, "write", &path) {
-        record_audit(state, "write-range", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_write_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "write-range", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "write-range", &path, "write", &path)?;
+    let full_path = resolve_write_path(state, "write-range", &path, &path)?;
     if let Some(parent) = full_path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -195,17 +314,8 @@ pub(crate) async fn truncate(state: &AppState, path: String, size: u64) -> Resul
             MAX_FS_FILE_BYTES
         )));
     }
-    if let Err(error) = authorize_fs(&state.policy, "write", &path) {
-        record_audit(state, "truncate", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_write_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "truncate", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "truncate", &path, "write", &path)?;
+    let full_path = resolve_write_path(state, "truncate", &path, &path)?;
     if let Some(parent) = full_path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -232,17 +342,8 @@ pub(crate) async fn truncate(state: &AppState, path: String, size: u64) -> Resul
 }
 
 pub(crate) async fn mkdir(state: &AppState, path: String) -> Result<FsStat, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "write", &path) {
-        record_audit(state, "mkdir", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_create_workspace_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "mkdir", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "mkdir", &path, "write", &path)?;
+    let full_path = resolve_create_path(state, "mkdir", &path, &path)?;
     tokio::fs::create_dir_all(&full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -259,17 +360,8 @@ pub(crate) async fn mkdir(state: &AppState, path: String) -> Result<FsStat, Stat
 }
 
 pub(crate) async fn delete(state: &AppState, path: String) -> Result<String, Status> {
-    if let Err(error) = authorize_fs(&state.policy, "delete", &path) {
-        record_audit(state, "delete", &path, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let full_path = match resolve_existing_workspace_leaf_path(&state.workspace, &path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "delete", &path, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "delete", &path, "delete", &path)?;
+    let full_path = resolve_existing_leaf_path(state, "delete", &path, &path)?;
     let metadata = tokio::fs::symlink_metadata(&full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -288,28 +380,10 @@ pub(crate) async fn delete(state: &AppState, path: String) -> Result<String, Sta
 
 pub(crate) async fn rename(state: &AppState, from_path: &str, to_path: &str) -> Result<(), Status> {
     let resource = format!("{from_path} -> {to_path}");
-    if let Err(error) = authorize_fs(&state.policy, "delete", from_path) {
-        record_audit(state, "rename", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    if let Err(error) = authorize_fs(&state.policy, "write", to_path) {
-        record_audit(state, "rename", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let from_full_path = match resolve_existing_workspace_leaf_path(&state.workspace, from_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "rename", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let to_full_path = match resolve_write_workspace_path(&state.workspace, to_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "rename", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "rename", &resource, "delete", from_path)?;
+    authorize_fs_action(state, "rename", &resource, "write", to_path)?;
+    let from_full_path = resolve_existing_leaf_path(state, "rename", &resource, from_path)?;
+    let to_full_path = resolve_write_path(state, "rename", &resource, to_path)?;
     tokio::fs::rename(&from_full_path, &to_full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -319,28 +393,10 @@ pub(crate) async fn rename(state: &AppState, from_path: &str, to_path: &str) -> 
 
 pub(crate) async fn copy(state: &AppState, from_path: &str, to_path: &str) -> Result<u64, Status> {
     let resource = format!("{from_path} -> {to_path}");
-    if let Err(error) = authorize_fs(&state.policy, "read", from_path) {
-        record_audit(state, "copy", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    if let Err(error) = authorize_fs(&state.policy, "write", to_path) {
-        record_audit(state, "copy", &resource, false, &error.1);
-        return Err(status_from_error(error));
-    }
-    let from_full_path = match resolve_existing_workspace_path(&state.workspace, from_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "copy", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
-    let to_full_path = match resolve_write_workspace_path(&state.workspace, to_path) {
-        Ok(path) => path,
-        Err(error) => {
-            record_audit(state, "copy", &resource, false, &error.1);
-            return Err(status_from_error(error));
-        }
-    };
+    authorize_fs_action(state, "copy", &resource, "read", from_path)?;
+    authorize_fs_action(state, "copy", &resource, "write", to_path)?;
+    let from_full_path = resolve_existing_path(state, "copy", &resource, from_path)?;
+    let to_full_path = resolve_write_path(state, "copy", &resource, to_path)?;
     let metadata = tokio::fs::metadata(&from_full_path)
         .await
         .map_err(status_from_io_error)?;

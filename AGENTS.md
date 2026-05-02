@@ -123,8 +123,52 @@ Operon should not own:
     modules, Linux mount adapter modules, daemon runtime internals, and SDK
     public API alignment.
 
+- `docs/plan/v0.8.7-fs-service-reuse-cleanup.md`
+  - v0.8.7 cleanup scope for daemon filesystem service authorization, path
+    resolution, and audit helper reuse.
+
+- `docs/plan/v0.8.8-fs-stream-handler-cleanup.md`
+  - v0.8.8 cleanup scope for moving daemon full-file filesystem stream
+    handlers behind the filesystem service module boundary.
+
+- `docs/plan/v0.8.9-service-tunnel-boundary-cleanup.md`
+  - v0.8.9 cleanup scope for moving daemon service tunnel open/handshake
+    logic behind the service forwarding module boundary.
+
+- `docs/plan/v0.8.10-mount-lock-hardening.md`
+  - v0.8.10 cleanup scope for returning errno from Linux FUSE mount callbacks
+    instead of panicking on poisoned inode-table locks.
+
+- `docs/plan/v0.8.11-cli-datagram-lock-hardening.md`
+  - v0.8.11 cleanup scope for returning CLI errors instead of panicking on
+    poisoned UDP datagram forwarding peer-state locks.
+
+- `docs/plan/v0.8.12-daemon-datagram-invariant-cleanup.md`
+  - v0.8.12 cleanup scope for removing the remaining daemon UDP datagram
+    forwarding session invariant panic.
+
+- `docs/plan/v0.8.13-production-panic-cleanup.md`
+  - v0.8.13 cleanup scope for removing actionable production invariant panics
+    from daemon job-log append and Linux mount remote runtime access.
+
+- `docs/plan/v0.8.14-onboard-invariant-cleanup.md`
+  - v0.8.14 cleanup scope for returning a normal CLI error instead of
+    panicking on a broken daemon onboarding token invariant.
+
+- `docs/plan/v0.8.15-token-generation-panic-cleanup.md`
+  - v0.8.15 cleanup scope for direct token hex encoding without a
+    panic-style `String` formatting invariant.
+
+- `docs/plan/v0.8.16-endpoint-model-simplification.md`
+  - v0.8.16 cleanup scope for removing the provider abstraction from
+    user-facing endpoint config, discovery output, CLI commands, and SDK types.
+
+- `docs/plan/v0.8.17-config-unknown-field-warnings.md`
+  - v0.8.17 cleanup scope for warning about unknown `config.yaml` fields
+    without blocking startup or CLI commands.
+
 - `docs/plan/v0.9-acceptance.md`
-  - v0.9 acceptance scope for non-LAN provider discovery adapters.
+  - v0.9 acceptance scope for endpoint-only config and mDNS discovery UX.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -143,7 +187,7 @@ Operon should not own:
 - `docs/architecture/technology-and-protocol-decisions.md`
   - Technical architecture decisions.
   - Covers Rust daemon core, TypeScript SDK, gRPC streaming protocol, CLI/SDK
-    interfaces, service forwarding, provider adapters, distribution targets,
+    interfaces, service forwarding, endpoint configuration, distribution targets,
     and non-goals.
 
 - `docs/dicussions/computer-mesh-operon.md`
@@ -219,12 +263,43 @@ Operon should not own:
   helpers, split non-fs CLI commands, split Linux mount modules, extracted
   daemon auth/audit/state/job/service internals, added graph/workflow aliases,
   aligned the TypeScript SDK public surface, and added CI validation coverage.
-- Next planned milestone: v0.9 non-LAN provider discovery.
+- Completed cleanup milestone: v0.8.7 reduced daemon filesystem service
+  authorization, path resolution, and failed-audit handling duplication while
+  preserving existing fs operation behavior.
+- Completed cleanup milestone: v0.8.8 moved daemon full-file filesystem stream
+  read/write behavior behind `fs_service.rs`, leaving `operond/src/main.rs`
+  responsible only for gRPC auth, audit context scoping, and delegation for
+  those RPCs.
+- Completed cleanup milestone: v0.8.9 moved daemon TCP and UDP service tunnel
+  open/handshake logic behind `service_forward.rs`, leaving
+  `operond/src/main.rs` responsible only for gRPC auth, audit context scoping,
+  and delegation for those RPCs.
+- Completed hardening milestone: v0.8.10 replaced Linux FUSE mount inode-table
+  write-lock panics with helper-mediated errors that callbacks return as
+  errno responses.
+- Completed hardening milestone: v0.8.11 replaced CLI UDP datagram forwarding
+  peer-state lock panics with helper-mediated errors.
+- Completed hardening milestone: v0.8.12 replaced the daemon UDP datagram
+  forwarding session invariant panic with an explicit peer close response.
+- Completed hardening milestone: v0.8.13 replaced daemon job-log and Linux
+  mount remote runtime invariant panics with logged or returned errors.
+- Completed hardening milestone: v0.8.14 replaced the daemon onboarding token
+  invariant panic with a normal CLI error.
+- Completed hardening milestone: v0.8.15 replaced token generation's
+  panic-style `String` formatting invariant with direct hex encoding.
+- Completed model cleanup milestone: v0.8.16 removed provider from endpoint
+  config, CLI output, mDNS discovery records, and SDK endpoint types.
+- Completed config cleanup milestone: v0.8.17 warns about unknown config fields
+  while continuing to load valid endpoint configuration.
+- Next planned milestone: v0.9 endpoint model acceptance and mDNS discovery UX.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
 - v0.1 should assume nodes are already reachable over TCP.
-- Provider adapters should resolve/discover endpoints, not implement connectivity.
+- Operon config should model reachable `grpc://` or `grpcs://` endpoints, not
+  network providers.
+- mDNS discovery is only a convenience mechanism for finding local endpoint
+  candidates.
 - Capability authorization must remain inside Operon even when network access is already allowed.
 - Service / port capability includes configured metadata, TCP health checking,
   and explicit local forwarding for policy-allowed services over existing
@@ -313,9 +388,49 @@ Defer:
   are split, compatibility re-exports remain in place, CI has a dedicated
   v0.8.5 validation script, and no behavior or schema work remains in this
   phase.
-- Latest phase status update: v0.8.6 is planned as the next execution phase.
-  It should finish deferred daemon job/service/audit/log extraction, non-fs CLI
-  command-family extraction, shared Rust gRPC client helpers, internal
-  `operon-mount` module boundaries, SDK public API alignment, graph/workflow
-  aliases, `fs read --output --json` summary output, and low-risk validation
-  shell helpers. No v0.8.6 implementation work has started yet.
+- Latest phase status update: v0.8.6 completed Runtime, CLI, and Client
+  Modularization. Shared Rust gRPC client helpers, non-fs CLI command modules,
+  Linux mount modules, daemon auth/audit/state/job/service internals,
+  graph/workflow aliases, SDK public API alignment, `fs read --output --json`
+  summary output, and low-risk validation shell helpers are complete. Nothing
+  remains in v0.8.6.
+- Latest phase status update: v0.8.7 completed Filesystem Service Reuse
+  Cleanup. `fs_service.rs` now uses helper boundaries for authorization,
+  workspace path resolution, and failed-audit handling. Nothing remains in
+  v0.8.7.
+- Latest phase status update: v0.8.8 completed Filesystem Stream Handler
+  Cleanup. Full-file `ReadFile` and `WriteFile` stream behavior now lives in
+  `fs_service.rs`, and the runtime router delegates those RPCs. Nothing
+  remains in v0.8.8.
+- Latest phase status update: v0.8.9 completed Service Tunnel Boundary
+  Cleanup. TCP and UDP service tunnel target parsing, authorization, protocol
+  checks, audit handling, and connection setup now live in
+  `service_forward.rs`, and the runtime router delegates those RPCs. Nothing
+  remains in v0.8.9.
+- Latest phase status update: v0.8.10 completed Mount Lock Hardening.
+  `operon-mount` FUSE callbacks no longer panic on poisoned inode-table write
+  locks; they return errno responses or propagated mount errors. Nothing
+  remains in v0.8.10.
+- Latest phase status update: v0.8.11 completed CLI Datagram Lock Hardening.
+  UDP datagram forwarding peer-state lock failures now return errors or stop
+  forwarding instead of panicking. Nothing remains in v0.8.11.
+- Latest phase status update: v0.8.12 completed Daemon Datagram Invariant
+  Cleanup. Missing UDP datagram peer sessions now produce an explicit peer
+  close response instead of a daemon panic. Nothing remains in v0.8.12.
+- Latest phase status update: v0.8.13 completed Production Panic Cleanup.
+  Daemon job-log append and Linux mount remote runtime invariant failures now
+  use logged or returned errors instead of production panics. Nothing remains
+  in v0.8.13.
+- Latest phase status update: v0.8.14 completed Onboard Invariant Cleanup.
+  Daemon onboarding token invariant failures now return a normal CLI error
+  instead of panicking. Nothing remains in v0.8.14.
+- Latest phase status update: v0.8.15 completed Token Generation Panic
+  Cleanup. CLI token generation now uses direct hex encoding without a
+  panic-style `String` formatting invariant. Nothing remains in v0.8.15.
+- Latest phase status update: v0.8.16 completed Endpoint Model
+  Simplification. User-facing config, CLI output, mDNS discovery records, and
+  SDK endpoint types now use endpoint-only node records without provider
+  metadata. Nothing remains in v0.8.16.
+- Latest phase status update: v0.8.17 completed Config Unknown Field
+  Warnings. Config loading now lists unknown field paths as warnings while
+  continuing to load valid endpoint configuration. Nothing remains in v0.8.17.

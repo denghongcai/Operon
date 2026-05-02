@@ -6,6 +6,5 @@ pub(crate) mod init;
 pub(crate) mod job;
 pub(crate) mod mount;
 pub(crate) mod node;
-pub(crate) mod provider;
 pub(crate) mod service;
 pub(crate) mod trace;

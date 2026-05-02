@@ -295,12 +295,10 @@ client:
   nodes:
     cloud-a:
       endpoint: grpc://100.96.12.34:7789
-      provider: tailscale
       auth:
         token_file: token
     gpu-node:
       endpoint: grpc://100.96.18.20:7789
-      provider: cloudflare-mesh
 
 policy:
   subject: local-cli
@@ -335,23 +333,13 @@ secrets:
 
 `endpoint` may be `grpc://` or `grpcs://`. The CLI uses gRPC for runtime
 operations. Use `operon --json` for scripts, and use `PROTOCOL.md` if you need
-to integrate without an SDK. `provider` is optional and defaults to `manual`.
-Auth can use `token`, `token_file`, or `token_env`; file paths are resolved
-relative to the config file directory.
+to integrate without an SDK. Auth can use `token`, `token_file`, or
+`token_env`; file paths are resolved relative to the config file directory.
 
-Provider support remains endpoint-oriented. LAN mDNS discovery can find local Operon daemons, but Operon still does not create VPNs, assign mesh IPs, or grant capability access through discovery.
-
-Supported provider values:
-
-```text
-manual
-cloudflare-mesh
-tailscale
-wireguard
-ssh
-lan
-kubernetes
-```
+Cloudflare Mesh, Tailscale, WireGuard, SSH tunnels, Kubernetes DNS, LAN IPs,
+and manual DNS names are all ordinary endpoints to Operon. LAN mDNS discovery
+can find local Operon daemons, but Operon still does not create VPNs, assign
+mesh IPs, or grant capability access through discovery.
 
 ### Policy Section
 
@@ -415,9 +403,8 @@ Secrets are only injected into jobs that request them and are allowed by policy.
 ```bash
 operon --config ./operon.config.yaml node list
 operon --config ./operon.config.yaml node resolve cloud-a
-operon node discover --provider lan --timeout-secs 3
+operon node discover --timeout-secs 3
 operon --config ./operon.config.yaml node ping cloud-a
-operon provider list
 operon --config ./operon.config.yaml capability list cloud-a
 operon --config ./operon.config.yaml service list cloud-a
 operon --config ./operon.config.yaml service check cloud-a daemon
@@ -509,10 +496,8 @@ client:
   nodes:
     cloud-a:
       endpoint: grpc://100.96.12.34:7789
-      provider: tailscale
     gpu-node:
       endpoint: grpc://100.96.18.20:7789
-      provider: cloudflare-mesh
 ```
 
 The current CLI speaks gRPC to `grpc://` daemon endpoints. There is no direct HTTP runtime API; humans and scripts should use `operon`, including `operon --json`, and programs should use SDKs or generated clients from `proto/operon/runtime.proto`. The runtime schema uses typed protobuf enums, proto3 optional presence, target/chunk request envelopes, job-log stream event envelopes, and paginated list APIs. In production-style deployments, run daemon endpoints only on an existing encrypted private network or behind a trusted local tunnel.
@@ -686,8 +671,8 @@ Policy / Secret / Audit
 Agent API
   - gRPC
         ↓
-Network Provider Adapter
-  - Cloudflare Mesh / Tailscale / WireGuard / SSH / LAN
+Configured Endpoint
+  - grpc:// or grpcs:// over an existing private network
         ↓
 Existing Secure Private Network
 ```
@@ -710,7 +695,7 @@ Roadmap:
 - [x] Token-authenticated daemon calls
 - [x] Streaming-friendly fs transfer
 - [x] Followed job logs
-- [x] Provider endpoint resolution
+- [x] Endpoint-only node resolution
 - [x] JSONL audit/job store
 - [x] Scoped job secrets
 - [x] LAN mDNS discovery
@@ -729,7 +714,7 @@ Roadmap:
 - [x] gRPC runtime schema stabilization
 - [x] UDP/datagram service forwarding
 - [ ] Agent integration
-- [ ] Non-LAN provider discovery adapters
+- [ ] Endpoint model and mDNS discovery acceptance
 
 ---
 

@@ -41,7 +41,6 @@ client:
   nodes:
     local:
       endpoint: grpc://127.0.0.1:$PORT
-      provider: manual
 
 policy:
   subject: local-cli

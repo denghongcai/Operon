@@ -26,19 +26,9 @@ import {
 
 const DEFAULT_LIST_PAGE_SIZE = 1000;
 
-export type NetworkProvider =
-  | "manual"
-  | "cloudflare-mesh"
-  | "tailscale"
-  | "wireguard"
-  | "ssh"
-  | "lan"
-  | "kubernetes";
-
 export type NodeEndpoint = {
   nodeId: string;
   endpoint: string;
-  provider?: NetworkProvider;
   token?: string;
 };
 

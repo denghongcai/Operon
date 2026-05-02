@@ -50,11 +50,6 @@ enum Command {
     },
     #[command(about = "Interactively create a usable local Operon configuration")]
     Onboard(onboard::OnboardArgs),
-    #[command(about = "Inspect supported network provider kinds")]
-    Provider {
-        #[command(subcommand)]
-        command: ProviderCommand,
-    },
     #[command(about = "Inspect policy-allowed runtime capabilities")]
     Capability {
         #[command(subcommand)]
@@ -129,9 +124,6 @@ enum NodeCommand {
     List,
     #[command(about = "Discover LAN nodes with mDNS")]
     Discover {
-        /// Discovery provider. v0.3+ supports lan.
-        #[arg(long, default_value = "lan")]
-        provider: String,
         /// Discovery timeout in seconds.
         #[arg(long, default_value_t = 3)]
         timeout_secs: u64,
@@ -164,12 +156,6 @@ enum InitCommand {
 enum ConfigCommand {
     #[command(about = "Summarize daemon, client, auth, policy, services, and secrets settings")]
     Explain,
-}
-
-#[derive(Debug, Subcommand)]
-enum ProviderCommand {
-    #[command(about = "List provider kinds accepted by config.yaml")]
-    List,
 }
 
 #[derive(Debug, Subcommand)]
@@ -423,15 +409,9 @@ async fn main() -> anyhow::Result<()> {
         Command::Node { command } => match command {
             NodeCommand::List => commands::node::list(config_path, output),
             NodeCommand::Discover {
-                provider,
                 timeout_secs,
                 output_config,
-            } => commands::node::discover(
-                &provider,
-                Duration::from_secs(timeout_secs),
-                output_config,
-                output,
-            ),
+            } => commands::node::discover(Duration::from_secs(timeout_secs), output_config, output),
             NodeCommand::Resolve { node_id } => {
                 commands::node::resolve(config_path, &node_id, output)
             }
@@ -443,9 +423,6 @@ async fn main() -> anyhow::Result<()> {
             InitCommand::Config { path } => commands::init::init_config(path, output),
         },
         Command::Onboard(args) => onboard::run(args, output),
-        Command::Provider { command } => match command {
-            ProviderCommand::List => commands::provider::list(output),
-        },
         Command::Capability { command } => match command {
             CapabilityCommand::List { node_id } => {
                 commands::capability::list(config_path, &node_id, output).await
