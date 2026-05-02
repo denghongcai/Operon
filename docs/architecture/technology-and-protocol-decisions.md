@@ -197,7 +197,7 @@ crates/
   operon-fs        # filesystem capability
   operon-process   # process/job capability
   operon-store     # SQLite registry, audit, sessions
-  operon-network   # endpoint resolution and provider adapters
+  operon-network   # mDNS endpoint discovery and service network helpers
   operon-mount     # OS mount adapters over RemoteFs
 
 packages/
@@ -327,41 +327,34 @@ nodes:
     endpoint: grpc://100.96.18.20:7789
 ```
 
-The provider abstraction should stay small:
+The endpoint abstraction should stay provider-free:
 
 ```ts
-interface NetworkProvider {
-  resolveNode(nodeId: string): Promise<NodeEndpoint>
-  healthCheck(nodeId: string): Promise<boolean>
-}
-
 type NodeEndpoint = {
   nodeId: string
-  address: string
-  port: number
-  provider: "manual" | "cloudflare-mesh" | "tailscale" | "wireguard" | "ssh" | "lan" | "kubernetes"
+  endpoint: string
+  token?: string
 }
 ```
 
-Provider adapters should resolve or discover reachable endpoints. They should not replace Operon's policy, identity, session, or audit model.
+Cloudflare Mesh, Tailscale, WireGuard, SSH, Kubernetes DNS, LAN IPs, and manual
+DNS names are all external ways to make an endpoint reachable. Operon should
+not model them as runtime providers.
 
-Planned provider progression:
+Planned endpoint progression:
 
 ```text
 v0.1:
   manual endpoint config
-  local LAN config
 
 v0.2:
-  Cloudflare Mesh adapter
-  Tailscale adapter
-  SSH endpoint adapter
+  endpoint-only config and node resolution
 
 v0.3:
-  Cloudflare API discovery
-  Tailscale API discovery
-  LAN mDNS
-  Kubernetes service discovery
+  LAN mDNS endpoint discovery
+
+v0.9:
+  endpoint model acceptance and mDNS discovery UX
 ```
 
 ## Decision 8: Distribution Strategy
@@ -448,7 +441,7 @@ v0.8.3:
   release/package/protocol version policy
 
 v0.9:
-  non-LAN provider API discovery
+  endpoint model acceptance and mDNS discovery UX
 ```
 
 ## Non-goals for v0.1
@@ -489,7 +482,7 @@ Operon should be built as:
 Rust daemon core
 + gRPC streaming node protocol
 + TypeScript SDK and Rust CLI
-+ network provider adapters over existing private networks
++ endpoint configuration over existing private networks
 + protobuf contracts as protocol source of truth
 + staged binary distribution across architectures
 ```

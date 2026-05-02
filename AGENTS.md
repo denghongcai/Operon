@@ -159,8 +159,12 @@ Operon should not own:
   - v0.8.15 cleanup scope for direct token hex encoding without a
     panic-style `String` formatting invariant.
 
+- `docs/plan/v0.8.16-endpoint-model-simplification.md`
+  - v0.8.16 cleanup scope for removing the provider abstraction from
+    user-facing endpoint config, discovery output, CLI commands, and SDK types.
+
 - `docs/plan/v0.9-acceptance.md`
-  - v0.9 acceptance scope for non-LAN provider discovery adapters.
+  - v0.9 acceptance scope for endpoint-only config and mDNS discovery UX.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -179,7 +183,7 @@ Operon should not own:
 - `docs/architecture/technology-and-protocol-decisions.md`
   - Technical architecture decisions.
   - Covers Rust daemon core, TypeScript SDK, gRPC streaming protocol, CLI/SDK
-    interfaces, service forwarding, provider adapters, distribution targets,
+    interfaces, service forwarding, endpoint configuration, distribution targets,
     and non-goals.
 
 - `docs/dicussions/computer-mesh-operon.md`
@@ -279,12 +283,17 @@ Operon should not own:
   invariant panic with a normal CLI error.
 - Completed hardening milestone: v0.8.15 replaced token generation's
   panic-style `String` formatting invariant with direct hex encoding.
-- Next planned milestone: v0.9 non-LAN provider discovery.
+- Completed model cleanup milestone: v0.8.16 removed provider from endpoint
+  config, CLI output, mDNS discovery records, and SDK endpoint types.
+- Next planned milestone: v0.9 endpoint model acceptance and mDNS discovery UX.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
 - v0.1 should assume nodes are already reachable over TCP.
-- Provider adapters should resolve/discover endpoints, not implement connectivity.
+- Operon config should model reachable `grpc://` or `grpcs://` endpoints, not
+  network providers.
+- mDNS discovery is only a convenience mechanism for finding local endpoint
+  candidates.
 - Capability authorization must remain inside Operon even when network access is already allowed.
 - Service / port capability includes configured metadata, TCP health checking,
   and explicit local forwarding for policy-allowed services over existing
@@ -412,3 +421,7 @@ Defer:
 - Latest phase status update: v0.8.15 completed Token Generation Panic
   Cleanup. CLI token generation now uses direct hex encoding without a
   panic-style `String` formatting invariant. Nothing remains in v0.8.15.
+- Latest phase status update: v0.8.16 completed Endpoint Model
+  Simplification. User-facing config, CLI output, mDNS discovery records, and
+  SDK endpoint types now use endpoint-only node records without provider
+  metadata. Nothing remains in v0.8.16.

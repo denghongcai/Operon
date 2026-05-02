@@ -76,7 +76,6 @@ client:
   nodes:
     local:
       endpoint: grpc://127.0.0.1:$DAEMON_PORT
-      provider: manual
 
 policy:
   subject: local-cli

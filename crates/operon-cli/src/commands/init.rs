@@ -34,7 +34,6 @@ client:
   nodes:
     local:
       endpoint: grpc://127.0.0.1:7789
-      provider: manual
       auth:
         token_file: token
 

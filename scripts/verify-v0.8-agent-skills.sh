@@ -63,8 +63,6 @@ help_commands=(
   "init --help"
   "init config --help"
   "onboard --help"
-  "provider --help"
-  "provider list --help"
   "capability --help"
   "capability list --help"
   "fs --help"

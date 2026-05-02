@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path, path::PathBuf, time::Duration};
 
-use operon_config::{NetworkProviderKind, NodeConfig, OperonConfig};
+use operon_config::{NodeConfig, OperonConfig};
 use operon_core::{DiscoveryList, HealthStatus, NodeInfo};
 
 use crate::{
@@ -22,10 +22,7 @@ pub(crate) fn list(config_path: PathBuf, output: OutputMode) -> anyhow::Result<(
         return Ok(());
     }
     for endpoint in endpoints {
-        println!(
-            "{}\t{}\t{:?}",
-            endpoint.node_id, endpoint.endpoint, endpoint.provider
-        );
+        println!("{}\t{}", endpoint.node_id, endpoint.endpoint);
     }
 
     Ok(())
@@ -46,12 +43,7 @@ pub(crate) fn resolve(
     if output.quiet {
         return Ok(());
     }
-    println!(
-        "{}\t{}\t{}",
-        endpoint.node_id,
-        endpoint.endpoint,
-        endpoint.provider.as_str()
-    );
+    println!("{}\t{}", endpoint.node_id, endpoint.endpoint);
     Ok(())
 }
 
@@ -80,14 +72,10 @@ pub(crate) async fn ping(
 }
 
 pub(crate) fn discover(
-    provider: &str,
     timeout: Duration,
     output_config: Option<PathBuf>,
     output: OutputMode,
 ) -> anyhow::Result<()> {
-    if provider != "lan" {
-        anyhow::bail!("v0.3 discovery only supports --provider lan");
-    }
     let list = operon_network::discover_lan_nodes(timeout)?;
     if let Some(path) = output_config {
         write_discovered_config(&path, &list)?;
@@ -100,7 +88,7 @@ pub(crate) fn discover(
         return Ok(());
     }
     for node in list.nodes {
-        println!("{}\t{}\t{}", node.node_id, node.endpoint, node.provider);
+        println!("{}\t{}", node.node_id, node.endpoint);
     }
     Ok(())
 }
@@ -112,7 +100,6 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
             node.node_id.clone(),
             NodeConfig {
                 endpoint: node.endpoint.clone(),
-                provider: NetworkProviderKind::Lan,
                 auth: operon_config::AuthConfig::default(),
             },
         );

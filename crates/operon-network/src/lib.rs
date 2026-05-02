@@ -6,7 +6,7 @@ use std::{
 use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent};
 use operon_core::{DiscoveryList, DiscoveryRecord, ServiceCheck, ServiceDefinition};
 
-pub use operon_config::{NetworkProviderKind, NodeEndpoint};
+pub use operon_config::NodeEndpoint;
 
 pub const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 
@@ -133,7 +133,6 @@ fn discovery_record_from_info(info: &ResolvedService) -> DiscoveryRecord {
     DiscoveryRecord {
         node_id,
         endpoint,
-        provider: "lan".to_string(),
         capabilities,
     }
 }
@@ -149,7 +148,6 @@ mod tests {
             DiscoveryRecord {
                 node_id: "node-a".to_string(),
                 endpoint: "grpc://127.0.0.1:7788".to_string(),
-                provider: "lan".to_string(),
                 capabilities: Vec::new(),
             },
         )]);

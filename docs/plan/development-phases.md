@@ -3665,63 +3665,90 @@ Remaining:
   sending requests. That remains a future streaming-client improvement
   candidate for very large local inputs.
 
-## Phase 59: Provider Discovery Contract
+## Phase 59: v0.8.16 Endpoint Model Simplification
 
-Status: Planned.
+Status: Completed.
 
-Goal: define a common discovery result model for non-LAN providers.
+Goal: remove the provider abstraction from Operon's user-facing endpoint model.
 
-Planned:
+Decision:
 
-- define provider discovery result fields.
-- define cache, refresh, and failure behavior.
-- define how discovered endpoints merge with manual node config.
-- keep capability access separate from provider network access.
-
-Done when:
-
-- provider discovery semantics are documented.
-- manual endpoint config remains the fallback and source of override.
-- discovered nodes do not automatically receive capability authorization.
-
-## Phase 60: Non-LAN Provider Adapters
-
-Status: Planned.
-
-Goal: implement the first non-LAN discovery adapters.
-
-Planned:
-
-- add Tailscale discovery if API credentials are configured.
-- add Cloudflare discovery if API credentials are configured.
-- consider Kubernetes service discovery after the first two adapters.
-- keep SSH and WireGuard as manual endpoint providers unless a clear discovery
-  path is defined.
+- Operon consumes explicit gRPC endpoints. It does not need to know whether an
+  endpoint is reachable through Cloudflare Mesh, Tailscale, WireGuard, SSH,
+  Kubernetes DNS, LAN, or another private network.
+- mDNS remains a convenience mechanism for discovering candidate LAN endpoints,
+  not a provider type.
+- External network systems solve reachability. Operon starts at
+  `node_id -> endpoint` and owns capability policy, execution, audit, and
+  traces.
 
 Done when:
 
-- at least one non-LAN provider can discover reachable Operon endpoints.
-- discovered endpoints can be inspected before being used.
-- provider errors are clear and do not affect manual endpoints.
+- `provider` is removed from `NodeEndpoint`, `NodeConfig`, mDNS discovery
+  records, generated config, CLI output, and the TypeScript SDK endpoint type.
+- `operon provider` and `operon node discover --provider` are removed.
+- client node config rejects `provider` as an unknown field.
+- current docs and acceptance criteria describe endpoint-only configuration.
 
-## Phase 61: v0.9 Acceptance
+Detailed plan:
+`docs/plan/v0.8.16-endpoint-model-simplification.md`.
+
+Completed:
+
+- Removed `NetworkProviderKind` and provider fields from endpoint/config
+  structs.
+- Removed provider output from node list/resolve/discover and config explain.
+- Removed provider metadata from mDNS advertisement and discovery records.
+- Removed the provider CLI command and discover provider flag.
+- Updated init/onboard generated config, validation scripts, README, and v0.9
+  acceptance docs.
+- Added `scripts/verify-v0.8.16-endpoint-model-simplification.sh`.
+
+Remaining:
+
+- No v0.8.16 work remains.
+- Future discovery work should improve endpoint import/export and mDNS UX, not
+  add provider-specific runtime behavior.
+
+## Phase 60: v0.9 Endpoint Model Acceptance
 
 Status: Planned.
 
-Goal: make provider discovery reproducible without owning connectivity.
+Goal: make endpoint-only configuration and mDNS discovery reproducible.
 
 Planned:
 
 - `docs/plan/v0.9-acceptance.md`.
-- mocked provider API tests.
-- optional live-provider validation notes.
-- README updates for provider discovery setup and limits.
+- endpoint-only config validation.
+- mDNS discovery export validation.
+- README updates for configuring endpoints reached through Cloudflare Mesh,
+  Tailscale, WireGuard, SSH, LAN, Kubernetes DNS, or manual DNS.
 
 Done when:
 
 - v0.9 has documented acceptance criteria.
-- non-LAN discovery is tested without requiring live third-party accounts in CI.
+- config and discovery validation prove that Operon consumes only endpoints.
 - docs explicitly preserve the "Operon is not a VPN" boundary.
+
+## Phase 61: Post-v0.9 Discovery UX
+
+Status: Planned.
+
+Goal: improve discovery ergonomics without reintroducing provider abstractions.
+
+Planned:
+
+- clearer conflict handling when mDNS output is exported over an existing
+  config.
+- optional endpoint health checks during discovery output.
+- docs for external scripts that can generate endpoint-only config from
+  third-party control planes.
+
+Done when:
+
+- discovery remains endpoint-only.
+- generated config never contains provider metadata.
+- third-party control-plane examples stay outside the runtime model.
 
 ## Later Candidate Work
 

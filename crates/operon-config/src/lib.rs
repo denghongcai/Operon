@@ -59,53 +59,13 @@ pub struct SecretsConfig {
 pub struct NodeEndpoint {
     pub node_id: String,
     pub endpoint: String,
-    pub provider: NetworkProviderKind,
     pub token: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum NetworkProviderKind {
-    Manual,
-    CloudflareMesh,
-    Tailscale,
-    Wireguard,
-    Ssh,
-    Lan,
-    Kubernetes,
-}
-
-impl NetworkProviderKind {
-    pub fn all() -> &'static [NetworkProviderKind] {
-        &[
-            NetworkProviderKind::Manual,
-            NetworkProviderKind::CloudflareMesh,
-            NetworkProviderKind::Tailscale,
-            NetworkProviderKind::Wireguard,
-            NetworkProviderKind::Ssh,
-            NetworkProviderKind::Lan,
-            NetworkProviderKind::Kubernetes,
-        ]
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            NetworkProviderKind::Manual => "manual",
-            NetworkProviderKind::CloudflareMesh => "cloudflare-mesh",
-            NetworkProviderKind::Tailscale => "tailscale",
-            NetworkProviderKind::Wireguard => "wireguard",
-            NetworkProviderKind::Ssh => "ssh",
-            NetworkProviderKind::Lan => "lan",
-            NetworkProviderKind::Kubernetes => "kubernetes",
-        }
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NodeConfig {
     pub endpoint: String,
-    #[serde(default = "default_provider")]
-    pub provider: NetworkProviderKind,
     #[serde(default, skip_serializing_if = "AuthConfig::is_empty")]
     pub auth: AuthConfig,
 }
@@ -159,7 +119,6 @@ impl NodeConfig {
         Ok(NodeEndpoint {
             node_id: node_id.to_string(),
             endpoint: self.endpoint.clone(),
-            provider: self.provider.clone(),
             token: self.auth.resolve(config_dir)?,
         })
     }
@@ -198,10 +157,6 @@ pub fn resolve_path(config_dir: &Path, path: &Path) -> PathBuf {
     }
 }
 
-fn default_provider() -> NetworkProviderKind {
-    NetworkProviderKind::Manual
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,13 +179,12 @@ client:
             .expect("local endpoint");
         assert_eq!(endpoint.node_id, "local");
         assert_eq!(endpoint.endpoint, "grpc://127.0.0.1:7789");
-        assert!(matches!(endpoint.provider, NetworkProviderKind::Manual));
         assert_eq!(endpoint.token, None);
     }
 
     #[test]
-    fn preserves_explicit_provider_kind() {
-        let config: OperonConfig = serde_yaml::from_str(
+    fn rejects_provider_field_in_client_node_config() {
+        let error = serde_yaml::from_str::<OperonConfig>(
             r#"
 version: 1
 client:
@@ -240,12 +194,9 @@ client:
       provider: tailscale
 "#,
         )
-        .expect("config should parse");
+        .expect_err("provider should not be accepted");
 
-        let endpoint = config
-            .endpoint("gpu", Path::new("."))
-            .expect("gpu endpoint");
-        assert!(matches!(endpoint.provider, NetworkProviderKind::Tailscale));
+        assert!(error.to_string().contains("unknown field `provider`"));
     }
 
     #[test]
@@ -301,7 +252,6 @@ client:
             "local".to_string(),
             NodeConfig {
                 endpoint: "grpc://127.0.0.1:7789".to_string(),
-                provider: NetworkProviderKind::Manual,
                 auth: AuthConfig::default(),
             },
         );

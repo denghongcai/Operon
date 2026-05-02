@@ -857,7 +857,6 @@ mod tests {
         let endpoint = NodeEndpoint {
             node_id: "node-a".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
-            provider: operon_network::NetworkProviderKind::Manual,
             token: Some("test-token".to_string()),
         };
 
