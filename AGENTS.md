@@ -174,6 +174,10 @@ Operon should not own:
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for endpoint-only config and mDNS discovery UX.
 
+- `docs/plan/v0.9.1-discovery-ux.md`
+  - v0.9.1 scope for mDNS export conflict handling, optional discovery health
+    checks, and external endpoint-only config generator guidance.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -299,7 +303,10 @@ Operon should not own:
   for docs, public CLI help paths, repo-local skills, and AGENTS.md sync rules.
 - Completed acceptance milestone: v0.9 endpoint model acceptance and mDNS
   discovery UX validation.
-- Next planned milestone: post-v0.9 discovery UX.
+- Completed discovery UX milestone: v0.9.1 mDNS export conflict handling,
+  optional discovery health checks, and endpoint-only external generator docs.
+- Next planned milestone: choose the next runtime hardening or capability
+  truthfulness phase.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -458,3 +465,9 @@ Defer:
   Endpoint-only example config, mDNS endpoint candidate records, endpoint-only
   discovery export, and no automatic policy grants are covered by
   `scripts/verify-v0.9-endpoint-model.sh`. Nothing remains in v0.9.
+- Latest phase status update: v0.9.1 completed Post-v0.9 Discovery UX.
+  Discovery export now refuses same-node endpoint conflicts, optional
+  `--check-health` reports endpoint health in discovery output, external
+  endpoint config generator guidance is documented, and
+  `scripts/verify-post-v0.9-discovery-ux.sh` covers the behavior. Nothing
+  remains in v0.9.1.

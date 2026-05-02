@@ -3827,7 +3827,7 @@ Remaining:
 
 ## Phase 63: Post-v0.9 Discovery UX
 
-Status: Planned.
+Status: Completed.
 
 Goal: improve discovery ergonomics without reintroducing provider abstractions.
 
@@ -3844,6 +3844,23 @@ Done when:
 - discovery remains endpoint-only.
 - generated config never contains provider metadata.
 - third-party control-plane examples stay outside the runtime model.
+
+Completed:
+
+- Added `operon node discover --check-health` for best-effort endpoint health
+  checks during discovery output.
+- Changed `node discover --output-config <path>` to merge new discovered nodes
+  into existing config files and reject same-node endpoint conflicts instead of
+  silently overwriting.
+- Kept discovery export endpoint-only: no provider metadata and no automatic
+  policy grants.
+- Documented third-party control-plane scripts as external generators of
+  endpoint-only config.
+- Added `scripts/verify-post-v0.9-discovery-ux.sh` and wired it into CI.
+
+Remaining:
+
+- No post-v0.9 discovery UX work remains.
 
 ## Later Candidate Work
 

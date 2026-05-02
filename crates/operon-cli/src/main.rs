@@ -127,6 +127,9 @@ enum NodeCommand {
         /// Discovery timeout in seconds.
         #[arg(long, default_value_t = 3)]
         timeout_secs: u64,
+        /// Check discovered endpoint health before printing results.
+        #[arg(long)]
+        check_health: bool,
         /// Optional YAML file to write discovered client nodes into.
         #[arg(long)]
         output_config: Option<PathBuf>,
@@ -410,8 +413,17 @@ async fn main() -> anyhow::Result<()> {
             NodeCommand::List => commands::node::list(config_path, output),
             NodeCommand::Discover {
                 timeout_secs,
+                check_health,
                 output_config,
-            } => commands::node::discover(Duration::from_secs(timeout_secs), output_config, output),
+            } => {
+                commands::node::discover(
+                    Duration::from_secs(timeout_secs),
+                    output_config,
+                    check_health,
+                    output,
+                )
+                .await
+            }
             NodeCommand::Resolve { node_id } => {
                 commands::node::resolve(config_path, &node_id, output)
             }

@@ -150,6 +150,7 @@ scripts/verify-v0.8.5-core-domain-modules.sh
 scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
 scripts/verify-docs-help-skills-sync.sh
 scripts/verify-v0.9-endpoint-model.sh
+scripts/verify-post-v0.9-discovery-ux.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -200,6 +201,9 @@ provider command examples in docs and skills.
 The v0.9 endpoint-model validation checks endpoint-only config, stale-field
 warnings, mDNS endpoint candidates, endpoint-only discovery export, and the
 absence of automatic capability grants for discovered nodes.
+The post-v0.9 discovery UX validation checks mDNS export conflict handling,
+optional endpoint health status output, and continued endpoint-only discovery
+config generation.
 
 ## Release Automation
 
@@ -349,6 +353,18 @@ and manual DNS names are all ordinary endpoints to Operon. LAN mDNS discovery
 can find local Operon daemons, but Operon still does not create VPNs, assign
 mesh IPs, or grant capability access through discovery.
 
+Discovery export is intentionally conservative. `operon node discover
+--output-config <path>` writes endpoint-only client nodes. If `<path>` already
+exists, newly discovered nodes are merged into it, but a discovered node id that
+points at a different existing endpoint is rejected instead of overwritten. Use
+`operon node discover --check-health` when you want best-effort runtime health
+status for discovered endpoint candidates before importing them.
+
+External control-plane scripts can generate the same endpoint-only YAML shape
+from Cloudflare, Tailscale, Kubernetes, inventory databases, or DNS. Those
+scripts should write `client.nodes.<node_id>.endpoint` entries and leave
+capability policy changes to normal Operon configuration review.
+
 ### Policy Section
 
 Policy shape:
@@ -412,6 +428,7 @@ Secrets are only injected into jobs that request them and are allowed by policy.
 operon --config ./operon.config.yaml node list
 operon --config ./operon.config.yaml node resolve cloud-a
 operon node discover --timeout-secs 3
+operon node discover --timeout-secs 3 --check-health
 operon --config ./operon.config.yaml node ping cloud-a
 operon --config ./operon.config.yaml capability list cloud-a
 operon --config ./operon.config.yaml service list cloud-a
