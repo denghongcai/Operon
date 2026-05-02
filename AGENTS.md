@@ -135,6 +135,10 @@ Operon should not own:
   - v0.8.9 cleanup scope for moving daemon service tunnel open/handshake
     logic behind the service forwarding module boundary.
 
+- `docs/plan/v0.8.10-mount-lock-hardening.md`
+  - v0.8.10 cleanup scope for returning errno from Linux FUSE mount callbacks
+    instead of panicking on poisoned inode-table locks.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -242,6 +246,9 @@ Operon should not own:
   open/handshake logic behind `service_forward.rs`, leaving
   `operond/src/main.rs` responsible only for gRPC auth, audit context scoping,
   and delegation for those RPCs.
+- Completed hardening milestone: v0.8.10 replaced Linux FUSE mount inode-table
+  write-lock panics with helper-mediated errors that callbacks return as
+  errno responses.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -355,3 +362,7 @@ Defer:
   checks, audit handling, and connection setup now live in
   `service_forward.rs`, and the runtime router delegates those RPCs. Nothing
   remains in v0.8.9.
+- Latest phase status update: v0.8.10 completed Mount Lock Hardening.
+  `operon-mount` FUSE callbacks no longer panic on poisoned inode-table write
+  locks; they return errno responses or propagated mount errors. Nothing
+  remains in v0.8.10.

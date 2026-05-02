@@ -3,7 +3,7 @@
 use std::{
     ffi::OsStr,
     path::Path,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockWriteGuard},
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -36,6 +36,12 @@ impl OperonFuseFs {
         self.inodes.read().ok()?.get(ino)
     }
 
+    fn write_inodes(&self) -> anyhow::Result<RwLockWriteGuard<'_, InodeTable>> {
+        self.inodes
+            .write()
+            .map_err(|_| anyhow::anyhow!("inode table poisoned"))
+    }
+
     fn lookup_child(&self, parent: fuser::INodeNo, name: &OsStr) -> anyhow::Result<InodeEntry> {
         let parent_entry = self
             .inode(parent)
@@ -46,10 +52,7 @@ impl OperonFuseFs {
         let name = validate_child_name(name)?;
         let path = join_remote_child(&parent_entry.path, name)?;
         let stat = self.remote_fs.stat(&path)?;
-        self.inodes
-            .write()
-            .expect("inode table poisoned")
-            .upsert(parent, name.to_string(), stat)
+        self.write_inodes()?.upsert(parent, name.to_string(), stat)
     }
 
     fn child_path(&self, parent: fuser::INodeNo, name: &OsStr) -> anyhow::Result<String> {
@@ -70,10 +73,7 @@ impl OperonFuseFs {
         stat: FsStat,
     ) -> anyhow::Result<InodeEntry> {
         let name = validate_child_name(name)?;
-        self.inodes
-            .write()
-            .expect("inode table poisoned")
-            .upsert(parent, name.to_string(), stat)
+        self.write_inodes()?.upsert(parent, name.to_string(), stat)
     }
 
     fn file_attr(&self, entry: &InodeEntry) -> fuser::FileAttr {
@@ -129,11 +129,9 @@ impl fuser::Filesystem for OperonFuseFs {
 
         match self.remote_fs.stat(&entry.path) {
             Ok(stat) => {
-                let refreshed = self.inodes.write().expect("inode table poisoned").upsert(
-                    entry.parent,
-                    entry.name,
-                    stat,
-                );
+                let refreshed = self
+                    .write_inodes()
+                    .and_then(|mut table| table.upsert(entry.parent, entry.name, stat));
                 match refreshed {
                     Ok(entry) => reply.attr(&TTL, &self.file_attr(&entry)),
                     Err(error) => reply.error(errno_for_error(&error)),
@@ -189,11 +187,8 @@ impl fuser::Filesystem for OperonFuseFs {
 
         if let Some(size) = size {
             match self.remote_fs.truncate(&entry.path, size).and_then(|stat| {
-                self.inodes.write().expect("inode table poisoned").upsert(
-                    entry.parent,
-                    entry.name.clone(),
-                    stat,
-                )
+                self.write_inodes()
+                    .and_then(|mut table| table.upsert(entry.parent, entry.name.clone(), stat))
             }) {
                 Ok(entry) => reply.attr(&TTL, &self.file_attr(&entry)),
                 Err(error) => reply.error(errno_for_error(&error)),
@@ -258,13 +253,13 @@ impl fuser::Filesystem for OperonFuseFs {
             }
         };
         match self.remote_fs.delete(&path) {
-            Ok(()) => {
-                self.inodes
-                    .write()
-                    .expect("inode table poisoned")
-                    .remove_subtree(&path);
-                reply.ok();
-            }
+            Ok(()) => match self.write_inodes() {
+                Ok(mut table) => {
+                    table.remove_subtree(&path);
+                    reply.ok();
+                }
+                Err(error) => reply.error(errno_for_error(&error)),
+            },
             Err(error) => reply.error(errno_for_error(&error)),
         }
     }
@@ -284,13 +279,13 @@ impl fuser::Filesystem for OperonFuseFs {
             }
         };
         match self.remote_fs.delete(&path) {
-            Ok(()) => {
-                self.inodes
-                    .write()
-                    .expect("inode table poisoned")
-                    .remove_subtree(&path);
-                reply.ok();
-            }
+            Ok(()) => match self.write_inodes() {
+                Ok(mut table) => {
+                    table.remove_subtree(&path);
+                    reply.ok();
+                }
+                Err(error) => reply.error(errno_for_error(&error)),
+            },
             Err(error) => reply.error(errno_for_error(&error)),
         }
     }
@@ -335,16 +330,17 @@ impl fuser::Filesystem for OperonFuseFs {
             }
         };
         match self.remote_fs.rename(&from_path, &to_path) {
-            Ok(()) => {
-                let mut table = self.inodes.write().expect("inode table poisoned");
-                table.remove_subtree(&from_path);
-                table.remove_subtree(&to_path);
-                reply.ok();
-            }
+            Ok(()) => match self.write_inodes() {
+                Ok(mut table) => {
+                    table.remove_subtree(&from_path);
+                    table.remove_subtree(&to_path);
+                    reply.ok();
+                }
+                Err(error) => reply.error(errno_for_error(&error)),
+            },
             Err(error) => reply.error(errno_for_error(&error)),
         }
     }
-
     fn link(
         &self,
         _req: &fuser::Request,
@@ -404,11 +400,15 @@ impl fuser::Filesystem for OperonFuseFs {
         match self.remote_fs.write_range(&entry.path, offset, data) {
             Ok(bytes_written) => {
                 if let Ok(stat) = self.remote_fs.stat(&entry.path) {
-                    let _ = self.inodes.write().expect("inode table poisoned").upsert(
-                        entry.parent,
-                        entry.name,
-                        stat,
-                    );
+                    match self.write_inodes() {
+                        Ok(mut table) => {
+                            let _ = table.upsert(entry.parent, entry.name, stat);
+                        }
+                        Err(error) => {
+                            reply.error(errno_for_error(&error));
+                            return;
+                        }
+                    }
                 }
                 reply.written(bytes_written.min(u32::MAX as u64) as u32);
             }
@@ -447,7 +447,13 @@ impl fuser::Filesystem for OperonFuseFs {
         ];
 
         {
-            let mut table = self.inodes.write().expect("inode table poisoned");
+            let mut table = match self.write_inodes() {
+                Ok(table) => table,
+                Err(error) => {
+                    reply.error(errno_for_error(&error));
+                    return;
+                }
+            };
             for item in list.entries {
                 let kind = if item.is_dir {
                     fuser::FileType::Directory

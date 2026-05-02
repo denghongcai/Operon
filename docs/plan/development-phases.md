@@ -3431,7 +3431,45 @@ Remaining:
   `operond/src/main.rs` remains a future maintainability candidate if runtime
   method routing grows again.
 
-## Phase 53: Provider Discovery Contract
+## Phase 53: v0.8.10 Mount Lock Hardening
+
+Status: Completed.
+
+Goal: make Linux FUSE mount callbacks return filesystem errors instead of
+panicking when the inode table lock is poisoned.
+
+Review finding:
+
+- `crates/operon-mount/src/fuse_fs.rs` used repeated
+  `expect("inode table poisoned")` calls inside production FUSE callbacks.
+- A poisoned inode-table lock could panic the mount process instead of
+  returning a normal errno to the kernel.
+
+Done when:
+
+- inode-table write lock acquisition has a focused helper boundary.
+- FUSE callbacks convert inode-table write lock failures into errno replies or
+  propagated mount errors.
+- validation rejects reintroducing direct inode-table lock panics.
+- mount crate tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.10-mount-lock-hardening.md`.
+
+Completed:
+
+- Added `write_inodes` in `crates/operon-mount/src/fuse_fs.rs`.
+- Replaced direct write-lock `expect` calls across lookup/upsert, setattr,
+  unlink, rmdir, rename, write cache refresh, and readdir paths.
+- Added `scripts/verify-v0.8.10-mount-lock-hardening.sh`.
+
+Remaining:
+
+- No v0.8.10 work remains.
+- Broader Linux mount callback decomposition remains a future candidate if the
+  FUSE adapter grows beyond a thin adapter boundary.
+
+## Phase 54: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3450,7 +3488,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 54: Non-LAN Provider Adapters
+## Phase 55: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3470,7 +3508,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 55: v0.9 Acceptance
+## Phase 56: v0.9 Acceptance
 
 Status: Planned.
 
