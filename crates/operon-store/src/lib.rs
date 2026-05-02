@@ -8,16 +8,11 @@ use operon_core::JobRecord;
 
 pub const DEFAULT_STORE_PATH: &str = "operon.db";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum FsyncPolicy {
+    #[default]
     Always,
     Disabled,
-}
-
-impl Default for FsyncPolicy {
-    fn default() -> Self {
-        Self::Always
-    }
 }
 
 #[derive(Debug, Clone)]
