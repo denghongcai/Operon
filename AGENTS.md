@@ -191,6 +191,11 @@ Operon should not own:
     restart visibility, workspace traversal hardening, argv job execution,
     config UX cleanup, and focused runtime maintainability cleanup.
 
+- `docs/plan/v0.9.5-policy-language-hardening.md`
+  - Planned v0.9.5 scope for shared policy decision vocabulary, effective
+    policy explain output, authorization consistency, clearer audit denial
+    reasons, and validation coverage.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -327,7 +332,7 @@ Operon should not own:
   audit semantics, store-backed job log restart visibility, workspace
   traversal fallback validation, shell-free argv job execution, config LAN
   advertisement UX, and protocol version alignment.
-- Next planned milestone: choose the next runtime or policy hardening phase.
+- Next planned milestone: v0.9.5 policy language hardening.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.

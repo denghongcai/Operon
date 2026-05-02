@@ -3975,9 +3975,45 @@ Remaining:
 
 - No v0.9.4 work remains.
 
+## Phase 67: v0.9.5 Policy Language Hardening
+
+Status: Planned.
+
+Goal: make Operon policy easier to reason about, explain, and audit before
+adding new capability surfaces.
+
+Scope:
+
+- shared internal policy decision model with stable allow/deny reason codes.
+- effective policy explanation in `operon config explain`.
+- consistent filesystem, job, service, and secret authorization vocabulary.
+- clearer audit denial reasons without breaking existing audit filters.
+- additive config/docs/validation changes only; no replacement of the current
+  `policy:` schema.
+
+Done when:
+
+- policy decisions carry subject, capability id, action, resource, and stable
+  reason code data.
+- filesystem, job, service, and secret deny paths use the shared decision
+  vocabulary or document why they are separate.
+- `operon config explain --json` exposes effective policy grants without
+  leaking secrets.
+- human `operon config explain` output remains readable and names effective
+  grants and limits.
+- unknown config field warnings remain non-blocking.
+- `scripts/verify-v0.9.5-policy-language-hardening.sh` is added and wired into
+  CI.
+
+Detailed plan:
+`docs/plan/v0.9.5-policy-language-hardening.md`.
+
+Remaining:
+
+- All v0.9.5 implementation work remains.
+
 ## Later Candidate Work
 
-- richer policy language.
 - clipboard capability.
 - screen/input feasibility spike.
 
