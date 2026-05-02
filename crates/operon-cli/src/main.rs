@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     fmt::Write as _,
     fs::{self, OpenOptions},
-    io::Write as _,
+    io::{self, Write as _},
     net::SocketAddr,
     path::{Path, PathBuf},
     time::Duration,
@@ -11,7 +11,8 @@ use std::{
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use operon_config::{resolve_path, AuthConfig, NetworkProviderKind, NodeConfig, OperonConfig};
 use operon_core::{
     AuditLog, CapabilityList, DiscoveryList, ExecutionTrace, FsList, FsRead, FsWrite, HealthStatus,
@@ -114,6 +115,11 @@ enum Command {
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
+    },
+    #[command(about = "Generate shell completion scripts")]
+    Completion {
+        /// Shell to generate completions for.
+        shell: Shell,
     },
 }
 
@@ -648,7 +654,14 @@ async fn main() -> anyhow::Result<()> {
         Command::Config { command } => match command {
             ConfigCommand::Explain => config_explain(config_path, output),
         },
+        Command::Completion { shell } => completion(shell),
     }
+}
+
+fn completion(shell: Shell) -> anyhow::Result<()> {
+    let mut command = Args::command();
+    generate(shell, &mut command, "operon", &mut io::stdout());
+    Ok(())
 }
 
 fn list_nodes(config_path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
@@ -2107,6 +2120,15 @@ mod tests {
             Some(expected_secrets.as_str())
         );
         let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn clap_model_exposes_completion_command() {
+        let mut command = Args::command();
+
+        command
+            .find_subcommand_mut("completion")
+            .expect("completion subcommand should exist");
     }
 
     fn test_job_record(status: JobStatus, exit_code: Option<i32>) -> JobRecord {

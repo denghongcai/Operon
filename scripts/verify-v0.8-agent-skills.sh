@@ -33,7 +33,7 @@ done < <(find skills -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
 
 combined="$(mktemp)"
 tmpdir=""
-trap 'rm -f "$combined"; if [[ -n "$tmpdir" ]]; then rm -f "$tmpdir/config.yaml" "$tmpdir/token" "$tmpdir/secrets.yaml"; rmdir "$tmpdir" 2>/dev/null || true; fi' EXIT
+trap 'rm -f "$combined"; if [[ -n "$tmpdir" ]]; then rm -rf "$tmpdir"; fi' EXIT
 find skills -mindepth 2 -maxdepth 2 -name SKILL.md -print0 | sort -z | xargs -0 cat > "$combined"
 
 for required in \
@@ -97,6 +97,7 @@ help_commands=(
   "trace show --help"
   "trace list --help"
   "mount --help"
+  "completion --help"
 )
 
 for command in "${help_commands[@]}"; do
@@ -127,5 +128,10 @@ assert data["policy"]["fs_mounts"][0]["name"] == "workspace"
 assert data["policy"]["services"][0]["protocol"] == "tcp"
 assert data["secrets"]["file"].endswith("secrets.yaml")
 '
+
+cargo run -q -p operon-cli -- completion bash | grep -q "complete -F"
+cargo run -q -p operon-cli -- completion zsh | grep -q "#compdef operon"
+cargo run -q -p operon-cli -- onboard --yes --output-dir "$tmpdir/onboard" \
+  | grep -q "operon completion zsh"
 
 echo "v0.8 agent skills validation passed"

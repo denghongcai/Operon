@@ -3014,7 +3014,30 @@ v0.9 should discover or resolve endpoints only. It must not implement NAT
 traversal, relays, VPN behavior, mesh IP assignment, subnet routing, or global
 routing.
 
-## Phase 43: Provider Discovery Contract
+## Phase 43: CLI Shell Completion Cleanup
+
+Status: Completed.
+
+Goal: make the CLI easier to use interactively before provider discovery work.
+
+Completed:
+
+- added `operon completion <shell>` using generated completions from the clap
+  command model.
+- supported bash and zsh completion generation, with the same command also
+  available for other clap-supported shells.
+- added completion setup guidance to the `operon onboard` flow without directly
+  mutating shell startup files.
+- extended v0.8 validation to cover completion help, bash generation, zsh
+  generation, and onboard completion guidance.
+
+Done when:
+
+- `operon completion bash` generates a bash completion script.
+- `operon completion zsh` generates a zsh completion script.
+- `operon onboard` shows the user how to install completions.
+
+## Phase 44: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3033,7 +3056,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 44: Non-LAN Provider Adapters
+## Phase 45: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3053,7 +3076,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 45: v0.9 Acceptance
+## Phase 46: v0.9 Acceptance
 
 Status: Planned.
 

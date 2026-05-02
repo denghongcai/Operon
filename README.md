@@ -99,6 +99,16 @@ daemon endpoint on an existing private network such as Cloudflare Mesh,
 Tailscale, WireGuard, SSH, LAN, or Kubernetes networking before exposing it to
 other machines.
 
+Optional shell completions:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+operon completion bash > ~/.local/share/bash-completion/completions/operon
+
+mkdir -p ~/.zfunc
+operon completion zsh > ~/.zfunc/_operon
+```
+
 ## Developer Validation
 
 Development prerequisites:

@@ -69,6 +69,7 @@ struct OnboardSummary {
     files: Vec<String>,
     daemon_command: Option<String>,
     equivalent_cli: Vec<String>,
+    completion_commands: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -136,6 +137,12 @@ pub(crate) fn run(args: OnboardArgs, output: OutputMode) -> anyhow::Result<()> {
         println!("  {command}");
     }
 
+    println!();
+    println!("Shell completion:");
+    for command in &plan.completion_commands {
+        println!("  {command}");
+    }
+
     Ok(())
 }
 
@@ -144,6 +151,7 @@ struct OnboardPlan {
     files: Vec<GeneratedFile>,
     daemon_command: Option<String>,
     equivalent_cli: Vec<String>,
+    completion_commands: Vec<String>,
     role: OnboardRole,
 }
 
@@ -159,6 +167,7 @@ impl OnboardPlan {
                 .collect(),
             daemon_command: self.daemon_command.clone(),
             equivalent_cli: self.equivalent_cli.clone(),
+            completion_commands: self.completion_commands.clone(),
         }
     }
 }
@@ -361,8 +370,16 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
         files,
         daemon_command,
         equivalent_cli,
+        completion_commands: completion_setup_commands(),
         role,
     })
+}
+
+fn completion_setup_commands() -> Vec<String> {
+    vec![
+        "mkdir -p ~/.local/share/bash-completion/completions && operon completion bash > ~/.local/share/bash-completion/completions/operon".to_string(),
+        "mkdir -p ~/.zfunc && operon completion zsh > ~/.zfunc/_operon".to_string(),
+    ]
 }
 
 fn prompt_capability_grants(prompt: &mut impl Prompt) -> anyhow::Result<CapabilityGrant> {
@@ -628,6 +645,21 @@ mod tests {
             .expect("config file");
 
         assert!(!nodes.content.contains("token:"));
+    }
+
+    #[test]
+    fn onboard_summary_includes_shell_completion_commands() {
+        let plan = build_onboard_plan(test_args(OnboardRole::Both), &mut NoopPrompt).expect("plan");
+        let summary = plan.summary();
+
+        assert!(summary
+            .completion_commands
+            .iter()
+            .any(|command| command.contains("operon completion bash")));
+        assert!(summary
+            .completion_commands
+            .iter()
+            .any(|command| command.contains("operon completion zsh")));
     }
 
     #[cfg(unix)]

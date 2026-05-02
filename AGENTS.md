@@ -180,6 +180,9 @@ Operon should not own:
 - Completed agent skills milestone: v0.8 repo-local skills, `operon config
   explain`, public CLI help validation, and CI coverage for agent usage
   guidance.
+- Completed CLI cleanup milestone: shell completion generation via
+  `operon completion <shell>` and completion setup guidance in `operon
+  onboard`.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
