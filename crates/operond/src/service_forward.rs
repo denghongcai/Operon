@@ -1,6 +1,6 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, pin::Pin, sync::Arc};
 
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use operon_core::{PolicyConfig, RuntimeErrorKind, ServiceCheck, ServiceDefinition};
 use operon_protocol::runtime::v1::{
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
@@ -22,6 +22,11 @@ use crate::{
     audit::record_audit_capability, grpc_status::status_from_error, state::AppState,
     MAX_SERVICE_DATAGRAM_BYTES, SERVICE_DATAGRAM_PEER_IDLE_SECS,
 };
+
+pub(crate) type ServiceTunnelStream =
+    Pin<Box<dyn Stream<Item = Result<ServiceTunnelResponse, Status>> + Send + 'static>>;
+pub(crate) type ServiceDatagramTunnelStream =
+    Pin<Box<dyn Stream<Item = Result<ServiceDatagramTunnelResponse, Status>> + Send + 'static>>;
 
 pub(crate) async fn grpc_service_check(
     state: &AppState,
@@ -92,6 +97,104 @@ pub(crate) fn authorize_service(
             format!("service `{service_id}` action `{action}` denied by policy"),
         ))
     }
+}
+
+pub(crate) async fn open_service_tunnel(
+    state: &AppState,
+    mut input: tonic::Streaming<ServiceTunnelRequest>,
+) -> Result<ServiceTunnelStream, Status> {
+    let first = input
+        .next()
+        .await
+        .ok_or_else(|| Status::invalid_argument("service tunnel target metadata is required"))??;
+    let service_id = match first.payload {
+        Some(service_tunnel_request::Payload::Target(target)) => {
+            if target.service_id.is_empty() {
+                return Err(Status::invalid_argument(
+                    "service tunnel target service_id is required",
+                ));
+            }
+            target.service_id
+        }
+        Some(service_tunnel_request::Payload::Data(_)) => {
+            return Err(Status::invalid_argument(
+                "service tunnel data arrived before target metadata",
+            ));
+        }
+        Some(service_tunnel_request::Payload::Close(_)) | None => {
+            return Err(Status::invalid_argument(
+                "service tunnel target metadata is required",
+            ));
+        }
+    };
+    let service = match authorize_service(&state.policy, &service_id, "forward") {
+        Ok(service) => service,
+        Err(error) => {
+            record_audit_capability(
+                state,
+                "service:default",
+                "forward",
+                &service_id,
+                false,
+                &error.1,
+            );
+            return Err(status_from_error(error));
+        }
+    };
+    if !matches!(service.protocol, operon_core::ServiceProtocol::Tcp) {
+        record_audit_capability(
+            state,
+            &format!("service:{}", service.id),
+            "forward",
+            &service.id,
+            false,
+            "only TCP services can be forwarded",
+        );
+        return Err(Status::failed_precondition(
+            "only TCP services can be forwarded",
+        ));
+    }
+    let address = format!("{}:{}", service.host, service.port);
+    let tcp = match time::timeout(
+        std::time::Duration::from_secs(10),
+        TcpStream::connect(&address),
+    )
+    .await
+    {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(error)) => {
+            let reason = format!("failed to connect to service: {error}");
+            record_audit_capability(
+                state,
+                &format!("service:{}", service.id),
+                "forward",
+                &service.id,
+                true,
+                &reason,
+            );
+            return Err(Status::unavailable(reason));
+        }
+        Err(_) => {
+            record_audit_capability(
+                state,
+                &format!("service:{}", service.id),
+                "forward",
+                &service.id,
+                true,
+                "service connection timed out",
+            );
+            return Err(Status::deadline_exceeded("service connection timed out"));
+        }
+    };
+    record_audit_capability(
+        state,
+        &format!("service:{}", service.id),
+        "forward",
+        &service.id,
+        true,
+        "allowed",
+    );
+    Ok(Box::pin(service_tunnel_stream(service, input, tcp)))
 }
 
 pub(crate) fn service_tunnel_stream(
@@ -198,6 +301,71 @@ struct ServiceDatagramPeerSession {
     last_seen: time::Instant,
     packets_from_client: u64,
     bytes_from_client: u64,
+}
+
+pub(crate) async fn open_service_datagram_tunnel(
+    state: &AppState,
+    mut input: tonic::Streaming<ServiceDatagramTunnelRequest>,
+) -> Result<ServiceDatagramTunnelStream, Status> {
+    let first = input.next().await.ok_or_else(|| {
+        Status::invalid_argument("service datagram tunnel target metadata is required")
+    })??;
+    let service_id = match first.payload {
+        Some(service_datagram_tunnel_request::Payload::Target(target)) => {
+            if target.service_id.is_empty() {
+                return Err(Status::invalid_argument(
+                    "service datagram tunnel target service_id is required",
+                ));
+            }
+            target.service_id
+        }
+        Some(service_datagram_tunnel_request::Payload::Datagram(_)) => {
+            return Err(Status::invalid_argument(
+                "service datagram arrived before target metadata",
+            ));
+        }
+        Some(service_datagram_tunnel_request::Payload::Close(_)) | None => {
+            return Err(Status::invalid_argument(
+                "service datagram tunnel target metadata is required",
+            ));
+        }
+    };
+    let service = match authorize_service(&state.policy, &service_id, "forward") {
+        Ok(service) => service,
+        Err(error) => {
+            record_audit_capability(
+                state,
+                "service:default",
+                "forward-udp",
+                &service_id,
+                false,
+                &error.1,
+            );
+            return Err(status_from_error(error));
+        }
+    };
+    if !matches!(service.protocol, operon_core::ServiceProtocol::Udp) {
+        record_audit_capability(
+            state,
+            &format!("service:{}", service.id),
+            "forward-udp",
+            &service.id,
+            false,
+            "only UDP services can be forwarded with datagram tunnels",
+        );
+        return Err(Status::failed_precondition(
+            "only UDP services can be forwarded with datagram tunnels",
+        ));
+    }
+    record_audit_capability(
+        state,
+        &format!("service:{}", service.id),
+        "forward-udp",
+        &service.id,
+        true,
+        "allowed",
+    );
+    Ok(Box::pin(service_datagram_tunnel_stream(service, input)))
 }
 
 pub(crate) fn service_datagram_tunnel_stream(

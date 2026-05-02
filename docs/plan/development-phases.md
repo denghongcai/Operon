@@ -3388,7 +3388,50 @@ Remaining:
   `operond/src/main.rs` remains a future maintainability candidate if runtime
   method routing grows again.
 
-## Phase 52: Provider Discovery Contract
+## Phase 52: v0.8.9 Service Tunnel Boundary Cleanup
+
+Status: Completed.
+
+Goal: keep service tunnel target parsing, authorization, protocol checks, audit
+handling, and connection setup inside the daemon service forwarding module.
+
+Review finding:
+
+- `crates/operond/src/main.rs` still owned TCP and UDP service tunnel open
+  handshakes: target-envelope validation, service policy authorization,
+  protocol mismatch checks, audit records, TCP connection setup, and datagram
+  stream delegation.
+- That kept service forwarding business logic in the gRPC router instead of
+  behind `service_forward.rs`.
+
+Done when:
+
+- `service_forward.rs` owns TCP and UDP tunnel open/handshake logic.
+- `operond/src/main.rs` only performs gRPC auth, audit context scoping, and
+  delegation for service tunnel RPCs.
+- validation guards against reintroducing tunnel handshake logic in `main.rs`.
+- daemon tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.9-service-tunnel-boundary-cleanup.md`.
+
+Completed:
+
+- Added `service_forward::open_service_tunnel` and
+  `service_forward::open_service_datagram_tunnel`.
+- Added service tunnel stream type aliases for the runtime trait associated
+  stream types.
+- Reduced service tunnel runtime methods to delegation.
+- Added `scripts/verify-v0.8.9-service-tunnel-boundary-cleanup.sh`.
+
+Remaining:
+
+- No v0.8.9 work remains.
+- Moving the full tonic `GrpcRuntime` trait implementation out of
+  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  method routing grows again.
+
+## Phase 53: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3407,7 +3450,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 53: Non-LAN Provider Adapters
+## Phase 54: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3427,7 +3470,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 54: v0.9 Acceptance
+## Phase 55: v0.9 Acceptance
 
 Status: Planned.
 

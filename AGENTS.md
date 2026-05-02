@@ -131,6 +131,10 @@ Operon should not own:
   - v0.8.8 cleanup scope for moving daemon full-file filesystem stream
     handlers behind the filesystem service module boundary.
 
+- `docs/plan/v0.8.9-service-tunnel-boundary-cleanup.md`
+  - v0.8.9 cleanup scope for moving daemon service tunnel open/handshake
+    logic behind the service forwarding module boundary.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -234,6 +238,10 @@ Operon should not own:
   read/write behavior behind `fs_service.rs`, leaving `operond/src/main.rs`
   responsible only for gRPC auth, audit context scoping, and delegation for
   those RPCs.
+- Completed cleanup milestone: v0.8.9 moved daemon TCP and UDP service tunnel
+  open/handshake logic behind `service_forward.rs`, leaving
+  `operond/src/main.rs` responsible only for gRPC auth, audit context scoping,
+  and delegation for those RPCs.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -342,3 +350,8 @@ Defer:
   Cleanup. Full-file `ReadFile` and `WriteFile` stream behavior now lives in
   `fs_service.rs`, and the runtime router delegates those RPCs. Nothing
   remains in v0.8.8.
+- Latest phase status update: v0.8.9 completed Service Tunnel Boundary
+  Cleanup. TCP and UDP service tunnel target parsing, authorization, protocol
+  checks, audit handling, and connection setup now live in
+  `service_forward.rs`, and the runtime router delegates those RPCs. Nothing
+  remains in v0.8.9.
