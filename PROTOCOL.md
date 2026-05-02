@@ -243,7 +243,10 @@ targets or switch jobs. Use `CloseJobStdin` to close the target job's stdin.
 `ListServices` returns services explicitly configured in daemon policy,
 including per-action service permissions. `CheckService` requires
 `permissions.check`, attempts a TCP or UDP check against one configured service,
-and records an audit event.
+and records an audit event. UDP health is connection-setup-only: a successful
+UDP socket connect is reported with `udp socket connected; datagram response
+not verified`, because UDP does not prove application reachability without a
+protocol-specific request/response.
 
 `OpenServiceTunnel` is the low-level protocol for explicit local port
 forwarding. The first client message must set `ServiceTunnelRequest.target`
@@ -290,8 +293,16 @@ transport replacement, relay networking, or arbitrary host/port forwarding.
 
 ## Job Semantics
 
-`RunJob` requires `command`. The protocol command is a shell command string
-executed by the daemon with `/bin/sh -c`.
+`RunJob` accepts either `command` or `argv`.
+
+`command` is the compatibility path. It is a shell command string executed by
+the daemon with `/bin/sh -c`. Use it when shell operators, expansion,
+redirection, or pipelines are required.
+
+`argv` is the shell-free path. The first item is the executable and later items
+are passed as process arguments without shell parsing. Prefer `argv` for agent
+and SDK calls when arguments are already structured. Do not set both `command`
+and `argv`; clients should choose one execution contract per request.
 
 `cwd` may be empty; the daemon treats an empty cwd as its policy default.
 
@@ -359,6 +370,18 @@ grpcurl -plaintext \
   -import-path proto \
   -proto operon/runtime.proto \
   -d '{"command":"echo hello","cwd":"/","secrets":[]}' \
+  127.0.0.1:17790 \
+  operon.runtime.v1.OperonRuntime/RunJob
+```
+
+Run a shell-free argv job:
+
+```bash
+grpcurl -plaintext \
+  -H "authorization: Bearer docker-token" \
+  -import-path proto \
+  -proto operon/runtime.proto \
+  -d '{"argv":["printf","hello world"],"cwd":"/","secrets":[]}' \
   127.0.0.1:17790 \
   operon.runtime.v1.OperonRuntime/RunJob
 ```

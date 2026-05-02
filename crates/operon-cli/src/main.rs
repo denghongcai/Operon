@@ -318,6 +318,9 @@ enum JobCommand {
         /// Return after the job is accepted instead of waiting for completion.
         #[arg(long)]
         detach: bool,
+        /// Execute CLI words as argv without shell parsing.
+        #[arg(long)]
+        argv: bool,
         /// Shell command to execute. Multiple CLI words are shell-escaped.
         #[arg(required = true, trailing_var_arg = true)]
         command: Vec<String>,
@@ -515,6 +518,7 @@ async fn main() -> anyhow::Result<()> {
                 timeout_secs,
                 secret,
                 detach,
+                argv,
                 command,
             } => {
                 commands::job::run(commands::job::JobRunInput {
@@ -524,6 +528,7 @@ async fn main() -> anyhow::Result<()> {
                     timeout_secs,
                     secrets: secret,
                     detach,
+                    argv,
                     command,
                     output,
                 })

@@ -186,6 +186,11 @@ Operon should not own:
   - v0.9.3 scope for restart-safe audit inspection by loading persisted audit
     events from the append-only store.
 
+- `docs/plan/v0.9.4-runtime-hardening-consolidation.md`
+  - v0.9.4 scope consolidating service health semantics, job-log
+    restart visibility, workspace traversal hardening, argv job execution,
+    config UX cleanup, and focused runtime maintainability cleanup.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -318,7 +323,11 @@ Operon should not own:
 - Completed runtime visibility milestone: v0.9.3 daemon audit inspection loads
   persisted audit events from the append-only store at startup while preserving
   bounded in-memory retention.
-- Next planned milestone: choose the next runtime hardening phase.
+- Completed runtime hardening milestone: v0.9.4 consolidated service health
+  audit semantics, store-backed job log restart visibility, workspace
+  traversal fallback validation, shell-free argv job execution, config LAN
+  advertisement UX, and protocol version alignment.
+- Next planned milestone: choose the next runtime or policy hardening phase.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.

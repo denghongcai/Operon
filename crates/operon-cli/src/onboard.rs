@@ -65,6 +65,8 @@ struct OnboardSummary {
     daemon_command: Option<String>,
     equivalent_cli: Vec<String>,
     completion_commands: Vec<String>,
+    advertise_lan_default: Option<bool>,
+    advertise_lan_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -124,6 +126,7 @@ pub(crate) fn run(args: OnboardArgs, output: OutputMode) -> anyhow::Result<()> {
         println!();
         println!("Next:");
         println!("  {command}");
+        println!("  {}", onboard_advertise_lan_note());
     }
 
     println!();
@@ -163,6 +166,10 @@ impl OnboardPlan {
             daemon_command: self.daemon_command.clone(),
             equivalent_cli: self.equivalent_cli.clone(),
             completion_commands: self.completion_commands.clone(),
+            advertise_lan_default: matches!(self.role, OnboardRole::Daemon | OnboardRole::Both)
+                .then_some(true),
+            advertise_lan_note: matches!(self.role, OnboardRole::Daemon | OnboardRole::Both)
+                .then(|| onboard_advertise_lan_note().to_string()),
         }
     }
 }
@@ -373,6 +380,10 @@ fn completion_setup_commands() -> Vec<String> {
         "mkdir -p ~/.local/share/bash-completion/completions && operon completion bash > ~/.local/share/bash-completion/completions/operon".to_string(),
         "mkdir -p ~/.zfunc && operon completion zsh > ~/.zfunc/_operon".to_string(),
     ]
+}
+
+fn onboard_advertise_lan_note() -> &'static str {
+    "advertise_lan=true: onboarding advertises daemon endpoints on LAN for first-run discovery"
 }
 
 fn prompt_capability_grants(prompt: &mut impl Prompt) -> anyhow::Result<CapabilityGrant> {
@@ -614,6 +625,20 @@ mod tests {
             .completion_commands
             .iter()
             .any(|command| command.contains("operon completion zsh")));
+    }
+
+    #[test]
+    fn onboard_summary_documents_lan_advertise_default_for_daemon() {
+        let plan =
+            build_onboard_plan(test_args(OnboardRole::Daemon), &mut NoopPrompt).expect("plan");
+        let summary = plan.summary();
+
+        assert_eq!(summary.advertise_lan_default, Some(true));
+        assert!(summary
+            .advertise_lan_note
+            .as_deref()
+            .expect("advertise note")
+            .contains("advertise_lan=true"));
     }
 
     #[cfg(unix)]

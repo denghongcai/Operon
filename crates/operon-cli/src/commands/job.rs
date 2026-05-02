@@ -20,18 +20,20 @@ pub(crate) struct JobRunInput {
     pub(crate) timeout_secs: u64,
     pub(crate) secrets: Vec<String>,
     pub(crate) detach: bool,
+    pub(crate) argv: bool,
     pub(crate) command: Vec<String>,
     pub(crate) output: OutputMode,
 }
 
 pub(crate) async fn run(input: JobRunInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
-    let request = JobRunRequest {
-        command: job_command_from_cli_args(&input.command),
-        cwd: input.cwd,
-        timeout_secs: Some(input.timeout_secs),
-        secrets: input.secrets,
-    };
+    let request = job_run_request_from_cli(
+        input.command,
+        input.argv,
+        input.cwd,
+        input.timeout_secs,
+        input.secrets,
+    );
     let record: JobRecord = grpc::run_job(&endpoint, request).await?;
     if input.detach {
         if input.output.json {
@@ -220,6 +222,26 @@ fn shell_escape_arg(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
+fn job_run_request_from_cli(
+    command: Vec<String>,
+    argv: bool,
+    cwd: Option<String>,
+    timeout_secs: u64,
+    secrets: Vec<String>,
+) -> JobRunRequest {
+    JobRunRequest {
+        command: if argv {
+            String::new()
+        } else {
+            job_command_from_cli_args(&command)
+        },
+        argv: if argv { command } else { Vec::new() },
+        cwd,
+        timeout_secs: Some(timeout_secs),
+        secrets,
+    }
+}
+
 async fn wait_for_job(
     endpoint: &operon_network::NodeEndpoint,
     job_id: &str,
@@ -287,6 +309,20 @@ mod tests {
         ]);
 
         assert_eq!(command, "printf 'hello world' 'it'\\''s ok'");
+    }
+
+    #[test]
+    fn argv_job_request_keeps_arguments_unescaped() {
+        let request = job_run_request_from_cli(
+            vec!["printf".to_string(), "hello world".to_string()],
+            true,
+            None,
+            30,
+            Vec::new(),
+        );
+
+        assert_eq!(request.command, "");
+        assert_eq!(request.argv, vec!["printf", "hello world"]);
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use operon_core::{AuditEvent, JobRecord};
+use operon_core::{AuditEvent, JobLog, JobRecord};
 
 pub const DEFAULT_STORE_PATH: &str = "operon.db";
 
@@ -131,6 +131,32 @@ pub fn load_audit_events(path: Option<&Path>) -> anyhow::Result<Vec<AuditEvent>>
     Ok(events)
 }
 
+pub fn load_job_logs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, Vec<JobLog>>> {
+    let Some(path) = path else {
+        return Ok(BTreeMap::new());
+    };
+    if !path.exists() {
+        return Ok(BTreeMap::new());
+    }
+    let content = std::fs::read_to_string(path)?;
+    let mut logs = BTreeMap::<String, Vec<JobLog>>::new();
+    for line in content.lines().filter(|line| !line.trim().is_empty()) {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        if value.get("kind").and_then(serde_json::Value::as_str) != Some("job_log") {
+            continue;
+        }
+        let Some(job_id) = value.get("job_id").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        if let Some(log) = value.get("log") {
+            logs.entry(job_id.to_string())
+                .or_default()
+                .push(serde_json::from_value(log.clone())?);
+        }
+    }
+    Ok(logs)
+}
+
 pub fn default_store_path() -> PathBuf {
     PathBuf::from(DEFAULT_STORE_PATH)
 }
@@ -231,6 +257,53 @@ mod tests {
         let _ = std::fs::remove_dir_all(base);
     }
 
+    #[test]
+    fn load_job_logs_reads_persisted_log_records_by_job() {
+        let base = unique_temp_dir("operon-store-job-log-load-test");
+        std::fs::create_dir_all(&base).expect("base dir");
+        let store = base.join("store.jsonl");
+        let first = test_job_log("stdout", b"hello".to_vec(), 0);
+        let second = test_job_log("stderr", b"warn".to_vec(), 1);
+
+        append_record(
+            Some(&store),
+            &serde_json::json!({
+                "kind": "audit",
+                "event": test_audit_event("stat", 100),
+            }),
+        )
+        .expect("append non-log");
+        append_record(
+            Some(&store),
+            &serde_json::json!({
+                "kind": "job_log",
+                "job_id": "job-1",
+                "log": first,
+                "dropped_log_count": 0,
+            }),
+        )
+        .expect("append first log");
+        append_record(
+            Some(&store),
+            &serde_json::json!({
+                "kind": "job_log",
+                "job_id": "job-1",
+                "log": second,
+                "dropped_log_count": 0,
+            }),
+        )
+        .expect("append second log");
+
+        let logs = load_job_logs(Some(&store)).expect("load job logs");
+        let job_logs = logs.get("job-1").expect("job logs");
+
+        assert_eq!(job_logs.len(), 2);
+        assert_eq!(job_logs[0].stream, "stdout");
+        assert_eq!(job_logs[0].data, b"hello");
+        assert_eq!(job_logs[1].sequence, 1);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
     fn test_audit_event(action: &str, timestamp_ms: u64) -> AuditEvent {
         AuditEvent {
             subject: "test-subject".to_string(),
@@ -243,6 +316,14 @@ mod tests {
             reason: "allowed".to_string(),
             run_id: None,
             step_id: None,
+        }
+    }
+
+    fn test_job_log(stream: &str, data: Vec<u8>, sequence: u64) -> JobLog {
+        JobLog {
+            stream: stream.to_string(),
+            data,
+            sequence,
         }
     }
 

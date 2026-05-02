@@ -110,7 +110,10 @@ service:
 
 `ListServices` returns configured services and their action permissions.
 `CheckService` requires `permissions.check`, attempts a TCP or UDP service
-check, and records an audit event.
+check, and records an audit event. TCP health records successful connect or
+connect failure. UDP health records UDP socket setup semantics explicitly:
+successful UDP connect does not prove that the remote service replied to a
+datagram.
 `OpenServiceTunnel` opens a bidirectional byte stream to a configured TCP
 service for explicit local forwarding and requires `permissions.forward`.
 Unknown service ids and denied service actions fail through policy.
@@ -126,6 +129,11 @@ UDP/datagram forwarding uses `OpenServiceDatagramTunnel` instead of
 so responses can be routed back to the original local UDP peer, and keeps the
 same policy rule: the daemon only sends to configured UDP services.
 It also requires `permissions.forward`.
+
+`RunJob` accepts the existing `command` shell string and the `argv` shell-free
+argument vector. Agents and SDK clients should prefer `argv` when arguments are
+already structured; shell strings remain available for pipelines, redirection,
+and other shell syntax.
 
 ## Interface Policy
 

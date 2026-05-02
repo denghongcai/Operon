@@ -153,6 +153,7 @@ scripts/verify-v0.9-endpoint-model.sh
 scripts/verify-post-v0.9-discovery-ux.sh
 scripts/verify-policy-derived-capabilities.sh
 scripts/verify-v0.9.3-store-backed-audit-visibility.sh
+scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
 ```
 
 The Docker validation starts two reachable `operond` nodes, exercises capabilities through the CLI, checks auth, policy, audit filters, store queries, secret use, service health checks, streaming fs, job stdin/log streams, LAN mDNS discovery, and runs the example execution graph over gRPC endpoints. The Linux mount validation adds a real FUSE mount read check when the host has `/dev/fuse`; otherwise it reports the missing host requirement and exits cleanly.
@@ -212,6 +213,10 @@ advertising a static default capability set.
 The v0.9.3 store-backed audit validation checks that persisted audit events
 are loaded from the append-only JSONL store at daemon startup while keeping
 bounded in-memory retention.
+The v0.9.4 runtime hardening validation checks service health audit semantics,
+store-backed job log restart visibility, workspace traversal hardening,
+shell-free argv job execution, config LAN advertisement UX, and protocol
+version alignment.
 
 ## Release Automation
 
@@ -459,6 +464,7 @@ operon --config ./operon.config.yaml fs copy cloud-a:/work/renamed.txt cloud-a:/
 operon --config ./operon.config.yaml fs rm cloud-a:/work/renamed.txt
 
 operon --config ./operon.config.yaml job run cloud-a -- echo hello
+operon --config ./operon.config.yaml job run cloud-a --argv -- printf "hello world"
 operon --config ./operon.config.yaml job run cloud-a --secret GITHUB_TOKEN -- 'test x$GITHUB_TOKEN = xexpected'
 operon --config ./operon.config.yaml job run cloud-a --detach -- sleep 10
 operon --config ./operon.config.yaml job status cloud-a job-1
@@ -489,6 +495,9 @@ events.
 string. Multiple arguments are shell-escaped before being sent to the daemon so
 argument boundaries are preserved. For shell operators, expansion, or pipelines,
 pass one quoted command string or call `sh -c`.
+Use `operon job run --argv -- <program> <arg>...` to send a shell-free argv
+request; this preserves arguments without shell parsing and is preferred for
+agents when no shell syntax is needed.
 
 Job stdout/stderr logs are transported as bytes. Human CLI output writes those
 bytes directly; JSON output exposes byte arrays so clients can choose their own

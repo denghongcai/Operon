@@ -3917,6 +3917,64 @@ Remaining:
 
 - No v0.9.3 work remains.
 
+## Phase 66: v0.9.4 Runtime Hardening Consolidation
+
+Status: Completed.
+
+Goal: consolidate the remaining planned runtime hardening candidates into one
+bounded phase before adding new product capability surfaces.
+
+Scope:
+
+- service health semantics for TCP/UDP checks and audit reasons.
+- restart-safe job log visibility over the existing append-only store, or a
+  documented bounded behavior with validation if full reload is not appropriate.
+- Linux workspace traversal hardening through `openat2` or fd-relative
+  traversal where it materially reduces symlink/race risk.
+- protocol-level shell-free `argv[]` job execution if it can be added without
+  breaking existing shell-command behavior.
+- config UX cleanup for the different LAN advertisement defaults in
+  `operon init config` and `operon onboard`.
+- focused maintainability cleanup only where the above work touches large
+  daemon or CLI files.
+
+Done when:
+
+- TCP and UDP service health behavior is documented, audited, and covered by
+  focused tests.
+- job log restart behavior is implemented or explicitly bounded with tests and
+  docs.
+- workspace traversal hardening has Linux-focused tests or a documented
+  cross-platform fallback.
+- shell-command and argv job execution contracts are clear across protocol,
+  CLI, SDK, docs, and tests if argv execution is implemented.
+- `init config` and `onboard` explain their LAN advertisement defaults.
+- `scripts/verify-v0.9.4-runtime-hardening-consolidation.sh` is added and
+  wired into CI.
+
+Detailed plan:
+`docs/plan/v0.9.4-runtime-hardening-consolidation.md`.
+
+Completed:
+
+- Added explicit TCP/UDP service health audit reasons, including UDP's
+  connection-setup-only semantics.
+- Added store-backed job log reload through `operon_store::load_job_logs` and
+  bounded daemon `JobLogBuffer` seeding at startup.
+- Added explicit workspace traversal hardening strategy coverage and symlink
+  parent escape validation.
+- Added shell-free job `argv[]` support in proto, Rust core/protocol, daemon,
+  CLI, TypeScript SDK, generated TypeScript bindings, and docs.
+- Bumped `PROTOCOL_VERSION` to `v0.9.4`.
+- Added LAN advertisement default notes for `operon init config` and
+  `operon onboard`.
+- Added `scripts/verify-v0.9.4-runtime-hardening-consolidation.sh` and wired
+  it into CI.
+
+Remaining:
+
+- No v0.9.4 work remains.
+
 ## Later Candidate Work
 
 - richer policy language.

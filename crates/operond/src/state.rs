@@ -55,6 +55,7 @@ pub(crate) struct JobTask {
     pub(crate) store_writer: operon_store::StoreWriter,
     pub(crate) job_id: String,
     pub(crate) command: String,
+    pub(crate) argv: Vec<String>,
     pub(crate) cwd: PathBuf,
     pub(crate) timeout_secs: u64,
     pub(crate) env: BTreeMap<String, String>,

@@ -91,6 +91,7 @@ pub(crate) fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobR
     let stdin = state.job_stdin.clone();
     let store_writer = state.store_writer.clone();
     let command = request.command;
+    let argv = request.argv;
     let timeout_secs = request
         .timeout_secs
         .unwrap_or(state.policy.job.default_timeout_secs);
@@ -113,6 +114,7 @@ pub(crate) fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobR
                     store_writer,
                     job_id,
                     command,
+                    argv,
                     cwd,
                     timeout_secs,
                     env,
@@ -251,10 +253,16 @@ fn job_status_from_wait(
 }
 
 fn build_job_command(task: &JobTask) -> TokioCommand {
-    let mut command = TokioCommand::new("/bin/sh");
+    let mut command = if task.argv.is_empty() {
+        let mut command = TokioCommand::new("/bin/sh");
+        command.arg("-c").arg(&task.command);
+        command
+    } else {
+        let mut command = TokioCommand::new(&task.argv[0]);
+        command.args(&task.argv[1..]);
+        command
+    };
     command
-        .arg("-c")
-        .arg(&task.command)
         .current_dir(&task.cwd)
         .env_clear()
         .envs(&task.env)
@@ -695,5 +703,51 @@ pub(crate) fn prune_completed_job_log_buffers(
             }
         }
         Err(_) => tracing::error!("job log mutex poisoned"),
+    }
+}
+
+pub(crate) fn job_log_buffers_from_persisted_logs(
+    persisted_logs: BTreeMap<String, Vec<JobLog>>,
+) -> BTreeMap<String, JobLogBuffer> {
+    let mut buffers = BTreeMap::new();
+    for (job_id, logs) in persisted_logs {
+        let mut buffer = JobLogBuffer::default();
+        for log in logs {
+            buffer.next_sequence = buffer.next_sequence.max(log.sequence.saturating_add(1));
+            buffer.logs.push_back(log);
+            while buffer.logs.len() > MAX_IN_MEMORY_JOB_LOGS {
+                buffer.logs.pop_front();
+                buffer.dropped_log_count = buffer.dropped_log_count.saturating_add(1);
+            }
+        }
+        buffers.insert(job_id, buffer);
+    }
+    buffers
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn persisted_job_logs_seed_bounded_log_buffers() {
+        let logs = BTreeMap::from([(
+            "job-1".to_string(),
+            (0..MAX_IN_MEMORY_JOB_LOGS + 2)
+                .map(|sequence| JobLog {
+                    stream: "stdout".to_string(),
+                    data: format!("line-{sequence}").into_bytes(),
+                    sequence: sequence as u64,
+                })
+                .collect::<Vec<_>>(),
+        )]);
+
+        let buffers = job_log_buffers_from_persisted_logs(logs);
+        let buffer = buffers.get("job-1").expect("job log buffer");
+
+        assert_eq!(buffer.logs.len(), MAX_IN_MEMORY_JOB_LOGS);
+        assert_eq!(buffer.logs.front().expect("first retained").sequence, 2);
+        assert_eq!(buffer.next_sequence, (MAX_IN_MEMORY_JOB_LOGS + 2) as u64);
+        assert_eq!(buffer.dropped_log_count, 2);
     }
 }

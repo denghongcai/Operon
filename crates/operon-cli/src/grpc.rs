@@ -818,6 +818,7 @@ fn grpc_job_run_request(value: JobRunRequest) -> operon_protocol::runtime::v1::J
         cwd: value.cwd.unwrap_or_default(),
         timeout_secs: value.timeout_secs,
         secrets: value.secrets,
+        argv: value.argv,
     }
 }
 

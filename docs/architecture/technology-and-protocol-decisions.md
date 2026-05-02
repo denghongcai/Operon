@@ -355,6 +355,11 @@ v0.3:
 
 v0.9:
   endpoint model acceptance and mDNS discovery UX
+
+v0.9.4:
+  shell-free argv job execution
+  store-backed job log restart visibility
+  consolidated runtime hardening validation
 ```
 
 ## Decision 8: Distribution Strategy

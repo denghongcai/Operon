@@ -61,7 +61,7 @@ pub(crate) async fn grpc_service_check(
         "check",
         &service.id,
         check.ok,
-        check.reason.as_deref().unwrap_or("reachable"),
+        &service_check_audit_reason(&service, &check),
     );
 
     Ok(check)
@@ -96,6 +96,23 @@ pub(crate) fn authorize_service(
             RuntimeErrorKind::Forbidden,
             format!("service `{service_id}` action `{action}` denied by policy"),
         ))
+    }
+}
+
+fn service_check_audit_reason(service: &ServiceDefinition, check: &ServiceCheck) -> String {
+    let protocol = match service.protocol {
+        operon_core::ServiceProtocol::Tcp => "tcp",
+        operon_core::ServiceProtocol::Udp => "udp",
+    };
+    if check.ok {
+        return match &check.reason {
+            Some(reason) => format!("{protocol} service reachable: {reason}"),
+            None => format!("{protocol} service reachable"),
+        };
+    }
+    match &check.reason {
+        Some(reason) => format!("{protocol} service unreachable: {reason}"),
+        None => format!("{protocol} service unreachable"),
     }
 }
 
@@ -623,4 +640,73 @@ fn send_service_datagram_close(
             },
         )),
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use operon_core::{ServicePermissions, ServiceProtocol};
+
+    #[test]
+    fn service_check_audit_reason_names_tcp_success() {
+        let service = test_service(ServiceProtocol::Tcp);
+        let check = ServiceCheck {
+            id: service.id.clone(),
+            ok: true,
+            latency_ms: 1,
+            reason: None,
+        };
+
+        assert_eq!(
+            service_check_audit_reason(&service, &check),
+            "tcp service reachable"
+        );
+    }
+
+    #[test]
+    fn service_check_audit_reason_names_udp_limited_reachability() {
+        let service = test_service(ServiceProtocol::Udp);
+        let check = ServiceCheck {
+            id: service.id.clone(),
+            ok: true,
+            latency_ms: 1,
+            reason: Some("udp socket connected; datagram response not verified".to_string()),
+        };
+
+        assert_eq!(
+            service_check_audit_reason(&service, &check),
+            "udp service reachable: udp socket connected; datagram response not verified"
+        );
+    }
+
+    #[test]
+    fn service_check_audit_reason_names_protocol_failure() {
+        let service = test_service(ServiceProtocol::Tcp);
+        let check = ServiceCheck {
+            id: service.id.clone(),
+            ok: false,
+            latency_ms: 1,
+            reason: Some("connection refused".to_string()),
+        };
+
+        assert_eq!(
+            service_check_audit_reason(&service, &check),
+            "tcp service unreachable: connection refused"
+        );
+    }
+
+    fn test_service(protocol: ServiceProtocol) -> ServiceDefinition {
+        ServiceDefinition {
+            id: "svc".to_string(),
+            name: "svc".to_string(),
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            protocol,
+            description: String::new(),
+            permissions: ServicePermissions {
+                check: true,
+                forward: true,
+            },
+        }
+    }
 }

@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.8.3";
+pub const PROTOCOL_VERSION: &str = "v0.9.4";
 
 pub mod runtime {
     pub mod v1 {
@@ -218,6 +218,30 @@ impl From<runtime::v1::JobLog> for operon_core::JobLog {
             stream: value.stream,
             data: value.data,
             sequence: value.sequence,
+        }
+    }
+}
+
+impl From<operon_core::JobRunRequest> for runtime::v1::JobRunRequest {
+    fn from(value: operon_core::JobRunRequest) -> Self {
+        Self {
+            command: value.command,
+            cwd: value.cwd.unwrap_or_default(),
+            timeout_secs: value.timeout_secs,
+            secrets: value.secrets,
+            argv: value.argv,
+        }
+    }
+}
+
+impl From<runtime::v1::JobRunRequest> for operon_core::JobRunRequest {
+    fn from(value: runtime::v1::JobRunRequest) -> Self {
+        Self {
+            command: value.command,
+            argv: value.argv,
+            cwd: (!value.cwd.is_empty()).then_some(value.cwd),
+            timeout_secs: value.timeout_secs,
+            secrets: value.secrets,
         }
     }
 }
@@ -602,7 +626,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.8.3");
+        assert_eq!(PROTOCOL_VERSION, "v0.9.4");
     }
 
     #[test]
@@ -682,6 +706,26 @@ mod tests {
         assert_eq!(grpc.timestamp_ms, event.timestamp_ms);
         let core = operon_core::AuditEvent::from(grpc);
         assert_eq!(core.timestamp_ms, event.timestamp_ms);
+    }
+
+    #[test]
+    fn job_run_request_preserves_argv_execution_fields() {
+        let request = operon_core::JobRunRequest {
+            command: String::new(),
+            argv: vec!["printf".to_string(), "hello world".to_string()],
+            cwd: Some("/work".to_string()),
+            timeout_secs: Some(10),
+            secrets: vec!["TOKEN".to_string()],
+        };
+
+        let grpc: runtime::v1::JobRunRequest = request.clone().into();
+        let core: operon_core::JobRunRequest = grpc.into();
+
+        assert_eq!(core.command, "");
+        assert_eq!(core.argv, request.argv);
+        assert_eq!(core.cwd, Some("/work".to_string()));
+        assert_eq!(core.timeout_secs, Some(10));
+        assert_eq!(core.secrets, vec!["TOKEN".to_string()]);
     }
 
     #[test]

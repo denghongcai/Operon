@@ -41,6 +41,7 @@ export type OperonStep = {
   toPath?: string;
   content?: string;
   command?: string;
+  argv?: string[];
   cwd?: string;
   timeoutSecs?: number;
   secrets?: string[];
@@ -340,13 +341,14 @@ export class OperonClient {
 
   async runJob(
     nodeId: string,
-    request: { command: string; cwd?: string; timeoutSecs?: number; secrets?: string[] },
+    request: { command?: string; argv?: string[]; cwd?: string; timeoutSecs?: number; secrets?: string[] },
   ): Promise<JobRecord> {
     const endpoint = this.endpointFor(nodeId);
     return fromGrpcJobRecord(
       await this.grpcClient(endpoint).runJob(
         {
-          command: request.command,
+          command: request.command ?? "",
+          argv: request.argv ?? [],
           cwd: request.cwd ?? "",
           timeoutSecs: request.timeoutSecs === undefined ? undefined : String(request.timeoutSecs),
           secrets: request.secrets ?? [],
@@ -598,10 +600,12 @@ export class OperonClient {
   private async runGrpcJob(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<JobRecord> {
     const client = this.grpcClient(endpoint);
     const options = this.grpcOptions(endpoint, context);
+    const argv = step.argv ?? [];
     const job = fromGrpcJobRecord(
       await client.runJob(
         {
-          command: required(step.command, "command"),
+          command: argv.length > 0 ? "" : required(step.command, "command"),
+          argv,
           cwd: step.cwd ?? "",
           timeoutSecs: step.timeoutSecs === undefined ? undefined : String(step.timeoutSecs),
           secrets: step.secrets ?? [],

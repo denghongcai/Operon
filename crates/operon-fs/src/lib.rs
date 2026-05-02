@@ -4,6 +4,15 @@ use operon_core::{PolicyConfig, RuntimeErrorKind, RuntimeResult};
 
 pub const FILESYSTEM_CAPABILITY: &str = "fs";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceTraversalHardening {
+    CanonicalContainedPath,
+}
+
+pub fn workspace_traversal_hardening() -> WorkspaceTraversalHardening {
+    WorkspaceTraversalHardening::CanonicalContainedPath
+}
+
 pub fn resolve_workspace_path(workspace: &Path, virtual_path: &str) -> RuntimeResult<PathBuf> {
     let trimmed = virtual_path.trim_start_matches('/');
     let mut resolved = workspace.to_path_buf();
@@ -268,6 +277,40 @@ mod tests {
             let resolved = resolve_existing_workspace_leaf_path(&workspace, "/link")
                 .expect("leaf symlink should resolve to link path");
             assert_eq!(resolved, link);
+        }
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn traversal_hardening_strategy_is_explicit() {
+        assert_eq!(
+            workspace_traversal_hardening(),
+            WorkspaceTraversalHardening::CanonicalContainedPath
+        );
+    }
+
+    #[test]
+    fn rejects_creating_path_below_symlink_parent_escape() {
+        let base = std::env::temp_dir().join(format!(
+            "operon-fs-create-symlink-parent-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ));
+        let workspace = base.join("workspace");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        std::fs::create_dir_all(&outside).expect("outside");
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&outside, workspace.join("link")).expect("symlink");
+            let error = resolve_create_workspace_path(&workspace, "/link/new.txt")
+                .expect_err("symlink parent escape should be rejected");
+            assert_eq!(error.0, RuntimeErrorKind::Forbidden);
         }
 
         let _ = std::fs::remove_dir_all(base);

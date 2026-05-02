@@ -273,6 +273,10 @@ describe("OperonClient", () => {
     await expect(client.statFs("node-a", "/a.txt")).resolves.toMatchObject({ path: "/a.txt", size: 3 });
     await expect(client.listFs("node-a", "/")).resolves.toMatchObject({ path: "/", entries: [] });
     await expect(client.runJob("node-a", { command: "true", timeoutSecs: 5 })).resolves.toMatchObject({ id: "job-1", status: "running" });
+    expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({ command: "true", argv: [], timeoutSecs: "5" }),
+      expect.any(Object),
+    );
     await expect(client.getJob("node-a", "job-1")).resolves.toMatchObject({ id: "job-1", status: "succeeded" });
     await expect(client.cancelJob("node-a", "job-1")).resolves.toMatchObject({ id: "job-1", status: "cancelled" });
     await expect(client.listAudit("node-a")).resolves.toEqual({
@@ -289,6 +293,30 @@ describe("OperonClient", () => {
         step_id: null,
       }],
     });
+  });
+
+  it("sends argv job requests without shell command text", async () => {
+    niceGrpcMock.client.runJob.mockResolvedValue({
+      id: "job-argv",
+      nodeId: "node-a",
+      command: "printf hello world",
+      cwd: "/",
+      status: JobStatus.JOB_STATUS_RUNNING,
+      logCount: "0",
+      logsTruncated: false,
+    });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    await client.runJob("node-a", { argv: ["printf", "hello world"], timeoutSecs: 5 });
+
+    expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "",
+        argv: ["printf", "hello world"],
+        timeoutSecs: "5",
+      }),
+      expect.any(Object),
+    );
   });
 
   it("copies files through daemon-side fs copy", async () => {

@@ -201,6 +201,7 @@ message JobRunRequest {
   repeated string secrets = 4;
   reserved 5;
   reserved "has_timeout_secs";
+  repeated string argv = 6;
 }
 
 message JobIdRequest {

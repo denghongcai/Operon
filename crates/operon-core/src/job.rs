@@ -3,6 +3,8 @@ use crate::NodeId;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct JobRunRequest {
     pub command: String,
+    #[serde(default)]
+    pub argv: Vec<String>,
     pub cwd: Option<String>,
     pub timeout_secs: Option<u64>,
     #[serde(default)]

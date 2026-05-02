@@ -305,6 +305,7 @@ export interface JobRunRequest {
   cwd: string;
   timeoutSecs?: string | undefined;
   secrets: string[];
+  argv: string[];
 }
 
 export interface JobIdRequest {
@@ -2698,7 +2699,7 @@ export const FsCopy: MessageFns<FsCopy> = {
 };
 
 function createBaseJobRunRequest(): JobRunRequest {
-  return { command: "", cwd: "", timeoutSecs: undefined, secrets: [] };
+  return { command: "", cwd: "", timeoutSecs: undefined, secrets: [], argv: [] };
 }
 
 export const JobRunRequest: MessageFns<JobRunRequest> = {
@@ -2714,6 +2715,9 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     }
     for (const v of message.secrets) {
       writer.uint32(34).string(v!);
+    }
+    for (const v of message.argv) {
+      writer.uint32(50).string(v!);
     }
     return writer;
   },
@@ -2757,6 +2761,14 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
           message.secrets.push(reader.string());
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.argv.push(reader.string());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2776,6 +2788,7 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
         ? globalThis.String(object.timeout_secs)
         : undefined,
       secrets: globalThis.Array.isArray(object?.secrets) ? object.secrets.map((e: any) => globalThis.String(e)) : [],
+      argv: globalThis.Array.isArray(object?.argv) ? object.argv.map((e: any) => globalThis.String(e)) : [],
     };
   },
 
@@ -2793,6 +2806,9 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     if (message.secrets?.length) {
       obj.secrets = message.secrets;
     }
+    if (message.argv?.length) {
+      obj.argv = message.argv;
+    }
     return obj;
   },
 
@@ -2805,6 +2821,7 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     message.cwd = object.cwd ?? "";
     message.timeoutSecs = object.timeoutSecs ?? undefined;
     message.secrets = object.secrets?.map((e) => e) || [];
+    message.argv = object.argv?.map((e) => e) || [];
     return message;
   },
 };

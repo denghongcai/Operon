@@ -54,9 +54,9 @@ use audit::{bounded_audit_events, record_audit, record_audit_capability};
 use auth::authorize_grpc;
 use defaults::{capabilities_from_policy, default_policy};
 use job_runtime::{
-    get_job_record, job_event_from_record, job_log_complete, job_log_complete_event,
-    job_log_entry_event, job_log_list, job_log_snapshot, job_log_snapshot_event, next_job_sequence,
-    start_job,
+    get_job_record, job_event_from_record, job_log_buffers_from_persisted_logs, job_log_complete,
+    job_log_complete_event, job_log_entry_event, job_log_list, job_log_snapshot,
+    job_log_snapshot_event, next_job_sequence, start_job,
 };
 use lan_advertise::advertise_lan;
 use locks::lock;
@@ -129,6 +129,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
     let secrets = load_secrets(secrets_path.as_deref())?;
     let stored_jobs = operon_store::load_jobs(store.as_deref())?;
     let stored_audit_events = operon_store::load_audit_events(store.as_deref())?;
+    let stored_job_logs = operon_store::load_job_logs(store.as_deref())?;
     let next_job_id = next_job_sequence(&stored_jobs);
     let node = NodeInfo {
         id: daemon.node_id.clone(),
@@ -148,7 +149,9 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(bounded_audit_events(stored_audit_events))),
         jobs,
-        job_logs: Arc::new(Mutex::new(BTreeMap::new())),
+        job_logs: Arc::new(Mutex::new(job_log_buffers_from_persisted_logs(
+            stored_job_logs,
+        ))),
         job_events: Arc::new(Mutex::new(BTreeMap::new())),
         job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
         job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
@@ -443,6 +446,7 @@ impl OperonRuntime for GrpcRuntime {
                     &self.state,
                     JobRunRequest {
                         command: request.command,
+                        argv: request.argv,
                         cwd: (!request.cwd.is_empty()).then_some(request.cwd),
                         timeout_secs: request.timeout_secs,
                         secrets: request.secrets,

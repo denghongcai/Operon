@@ -129,6 +129,7 @@ async fn run_job_step(
     let endpoint = load_endpoint(config_path.clone(), &step.node)?;
     let request = JobRunRequest {
         command: required_field(step.command.as_deref(), "command")?.to_string(),
+        argv: Vec::new(),
         cwd: step.cwd.clone(),
         timeout_secs: step.timeout_secs,
         secrets: step.secrets.clone(),

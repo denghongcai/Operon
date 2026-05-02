@@ -50,7 +50,10 @@ pub async fn check_tcp_service(service: &ServiceDefinition, timeout: Duration) -
     .await;
     let latency_ms = started.elapsed().as_millis();
     let (ok, reason) = match result {
-        Ok(Ok(_)) => (true, None),
+        Ok(Ok(_)) => (
+            true,
+            Some("udp socket connected; datagram response not verified".to_string()),
+        ),
         Ok(Err(error)) => (false, Some(error.to_string())),
         Err(_) => (false, Some("service check timed out".to_string())),
     };

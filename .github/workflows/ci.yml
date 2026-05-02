@@ -125,6 +125,9 @@ jobs:
             script: scripts/verify-policy-derived-capabilities.sh
           - name: v0.9.3 Store-Backed Audit Visibility Validation
             script: scripts/verify-v0.9.3-store-backed-audit-visibility.sh
+          - name: v0.9.4 Runtime Hardening Consolidation Validation
+            script: scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
+            node: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6

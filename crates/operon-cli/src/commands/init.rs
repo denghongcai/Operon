@@ -12,6 +12,8 @@ struct InitConfigSummary {
     config: String,
     token: String,
     secrets: String,
+    advertise_lan_default: bool,
+    advertise_lan_note: String,
 }
 
 pub(crate) fn init_config(path: PathBuf, output: OutputMode) -> anyhow::Result<()> {
@@ -81,13 +83,20 @@ secrets:
             config: path.display().to_string(),
             token: token_path.display().to_string(),
             secrets: secrets_path.display().to_string(),
+            advertise_lan_default: false,
+            advertise_lan_note: init_advertise_lan_note().to_string(),
         })?;
         return Ok(());
     }
     if !output.quiet {
         println!("{}", path.display());
+        println!("{}", init_advertise_lan_note());
     }
     Ok(())
+}
+
+fn init_advertise_lan_note() -> &'static str {
+    "advertise_lan=false: starter config stays loopback/local until explicitly changed"
 }
 
 #[cfg(test)]
@@ -131,6 +140,12 @@ mod tests {
         assert_eq!(endpoint.token.as_deref(), Some(token.as_str()));
         assert!(secrets.is_empty());
         let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn init_config_documents_loopback_lan_advertise_default() {
+        assert!(init_advertise_lan_note().contains("advertise_lan=false"));
+        assert!(init_advertise_lan_note().contains("loopback/local"));
     }
 
     fn unique_temp_dir(name: &str) -> PathBuf {
