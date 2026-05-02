@@ -142,7 +142,12 @@ pub(crate) async fn stat(state: &AppState, path: String) -> Result<FsStat, Statu
     })
 }
 
-pub(crate) async fn list(state: &AppState, path: String) -> Result<FsList, Status> {
+pub(crate) async fn list_page(
+    state: &AppState,
+    path: String,
+    page_size: u32,
+    page_token: &str,
+) -> Result<FsList, Status> {
     authorize_fs_action(state, "list", &path, "read", &path)?;
     let full_path = resolve_existing_path(state, "list", &path, &path)?;
     let mut entries = Vec::new();
@@ -164,8 +169,14 @@ pub(crate) async fn list(state: &AppState, path: String) -> Result<FsList, Statu
         });
     }
     entries.sort_by(|a, b| a.name.cmp(&b.name));
+    let (entries, next_page_token) =
+        crate::pagination::paginate_items(&entries, page_size, page_token)?;
     record_audit(state, "list", &path, true, "allowed");
-    Ok(FsList { path, entries })
+    Ok(FsList {
+        path,
+        entries,
+        next_page_token,
+    })
 }
 
 pub(crate) async fn read_stream(state: &AppState, path: String) -> Result<FileStream, Status> {

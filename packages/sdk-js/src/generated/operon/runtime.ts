@@ -237,6 +237,12 @@ export interface FsPathRequest {
   path: string;
 }
 
+export interface FsListRequest {
+  path: string;
+  pageSize: number;
+  pageToken: string;
+}
+
 export interface FsStat {
   path: string;
   isFile: boolean;
@@ -255,6 +261,7 @@ export interface FsEntry {
 export interface FsList {
   path: string;
   entries: FsEntry[];
+  nextPageToken: string;
 }
 
 export interface FileChunk {
@@ -1721,6 +1728,106 @@ export const FsPathRequest: MessageFns<FsPathRequest> = {
   },
 };
 
+function createBaseFsListRequest(): FsListRequest {
+  return { path: "", pageSize: 0, pageToken: "" };
+}
+
+export const FsListRequest: MessageFns<FsListRequest> = {
+  encode(message: FsListRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    if (message.pageSize !== 0) {
+      writer.uint32(16).uint32(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      writer.uint32(26).string(message.pageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsListRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsListRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pageSize = reader.uint32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsListRequest {
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : "",
+    };
+  },
+
+  toJSON(message: FsListRequest): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== "") {
+      obj.pageToken = message.pageToken;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsListRequest>): FsListRequest {
+    return FsListRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsListRequest>): FsListRequest {
+    const message = createBaseFsListRequest();
+    message.path = object.path ?? "";
+    message.pageSize = object.pageSize ?? 0;
+    message.pageToken = object.pageToken ?? "";
+    return message;
+  },
+};
+
 function createBaseFsStat(): FsStat {
   return { path: "", isFile: false, isDir: false, size: "0" };
 }
@@ -1970,7 +2077,7 @@ export const FsEntry: MessageFns<FsEntry> = {
 };
 
 function createBaseFsList(): FsList {
-  return { path: "", entries: [] };
+  return { path: "", entries: [], nextPageToken: "" };
 }
 
 export const FsList: MessageFns<FsList> = {
@@ -1980,6 +2087,9 @@ export const FsList: MessageFns<FsList> = {
     }
     for (const v of message.entries) {
       FsEntry.encode(v!, writer.uint32(18).fork()).join();
+    }
+    if (message.nextPageToken !== "") {
+      writer.uint32(26).string(message.nextPageToken);
     }
     return writer;
   },
@@ -2007,6 +2117,14 @@ export const FsList: MessageFns<FsList> = {
           message.entries.push(FsEntry.decode(reader, reader.uint32()));
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2020,6 +2138,11 @@ export const FsList: MessageFns<FsList> = {
     return {
       path: isSet(object.path) ? globalThis.String(object.path) : "",
       entries: globalThis.Array.isArray(object?.entries) ? object.entries.map((e: any) => FsEntry.fromJSON(e)) : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : "",
     };
   },
 
@@ -2031,6 +2154,9 @@ export const FsList: MessageFns<FsList> = {
     if (message.entries?.length) {
       obj.entries = message.entries.map((e) => FsEntry.toJSON(e));
     }
+    if (message.nextPageToken !== "") {
+      obj.nextPageToken = message.nextPageToken;
+    }
     return obj;
   },
 
@@ -2041,6 +2167,7 @@ export const FsList: MessageFns<FsList> = {
     const message = createBaseFsList();
     message.path = object.path ?? "";
     message.entries = object.entries?.map((e) => FsEntry.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? "";
     return message;
   },
 };
@@ -6520,7 +6647,7 @@ export const OperonRuntimeDefinition = {
     },
     listFs: {
       name: "ListFs",
-      requestType: FsPathRequest as typeof FsPathRequest,
+      requestType: FsListRequest as typeof FsListRequest,
       requestStream: false,
       responseType: FsList as typeof FsList,
       responseStream: false,
@@ -6725,7 +6852,7 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<PolicyDecision>>;
   statFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsStat>>;
-  listFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsList>>;
+  listFs(request: FsListRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsList>>;
   readFile(
     request: FsPathRequest,
     context: CallContext & CallContextExt,
@@ -6784,7 +6911,7 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
     options?: CallOptions & CallOptionsExt,
   ): Promise<PolicyDecision>;
   statFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsStat>;
-  listFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsList>;
+  listFs(request: DeepPartial<FsListRequest>, options?: CallOptions & CallOptionsExt): Promise<FsList>;
   readFile(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<FileChunk>;
   readFileRange(request: DeepPartial<FsReadRangeRequest>, options?: CallOptions & CallOptionsExt): Promise<FileChunk>;
   writeFile(

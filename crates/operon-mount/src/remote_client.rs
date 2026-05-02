@@ -3,10 +3,12 @@ use std::{future::Future, panic};
 use operon_core::{FsList, FsStat};
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    operon_runtime_client::OperonRuntimeClient, FsPathRequest, FsReadRangeRequest, FsRenameRequest,
-    FsTruncateRequest, FsWriteRangeRequest,
+    operon_runtime_client::OperonRuntimeClient, FsListRequest, FsPathRequest, FsReadRangeRequest,
+    FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest,
 };
 use tonic::transport::Channel;
+
+const DEFAULT_LIST_PAGE_SIZE: u32 = 1000;
 
 pub trait RemoteFs: Send + Sync {
     fn stat(&self, path: &str) -> anyhow::Result<FsStat>;
@@ -67,14 +69,31 @@ impl RemoteFs for GrpcRemoteFs {
         let path = path.to_string();
         block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
-            Ok(client
-                .list_fs(operon_grpc_client::request(
-                    &self.endpoint,
-                    FsPathRequest { path },
-                )?)
-                .await?
-                .into_inner()
-                .into())
+            let mut entries = Vec::new();
+            let mut page_token = String::new();
+            loop {
+                let response = client
+                    .list_fs(operon_grpc_client::request(
+                        &self.endpoint,
+                        FsListRequest {
+                            path: path.clone(),
+                            page_size: DEFAULT_LIST_PAGE_SIZE,
+                            page_token,
+                        },
+                    )?)
+                    .await?
+                    .into_inner();
+                entries.extend(response.entries.into_iter().map(Into::into));
+                if response.next_page_token.is_empty() {
+                    break;
+                }
+                page_token = response.next_page_token;
+            }
+            Ok(FsList {
+                path,
+                entries,
+                next_page_token: String::new(),
+            })
         })
     }
 

@@ -225,6 +225,11 @@ policy audit denial reasons.
 The v0.9.6 capability diagnostics validation checks the `ExplainCapability`
 runtime RPC, `operon capability explain`, TypeScript SDK helper coverage, and
 current protocol version alignment.
+The v0.9.7 runtime API hardening validation is covered by the workspace Rust
+and TypeScript checks. It verifies paginated `ListFs` protocol behavior,
+complete-list CLI/mount/SDK helpers, SDK streaming writes without full
+pre-buffering, empty daemon job request rejection, and runtime API docs for
+bidirectional service tunnel RPCs.
 
 ## Release Automation
 

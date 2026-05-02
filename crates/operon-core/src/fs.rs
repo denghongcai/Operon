@@ -19,6 +19,7 @@ pub struct FsEntry {
 pub struct FsList {
     pub path: String,
     pub entries: Vec<FsEntry>,
+    pub next_page_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

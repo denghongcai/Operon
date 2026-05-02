@@ -364,6 +364,9 @@ v0.9.4:
 
 v0.9.6:
   capability diagnostics through daemon-owned policy decisions
+
+v0.9.7:
+  paginated filesystem listing and runtime API hardening
 ```
 
 ## Decision 8: Distribution Strategy

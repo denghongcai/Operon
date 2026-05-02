@@ -27,10 +27,11 @@ use operon_process::{authorize_job, resolve_job_secrets};
 use operon_protocol::runtime::v1::{
     job_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    CapabilityDiagnosticRequest, FileChunk, FsCopyRequest, FsPathRequest, FsReadRangeRequest,
-    FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest, HealthRequest,
-    JobIdRequest, JobLogStreamEvent, ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest,
-    ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest, ServiceTunnelRequest,
+    CapabilityDiagnosticRequest, FileChunk, FsCopyRequest, FsListRequest, FsPathRequest,
+    FsReadRangeRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest,
+    HealthRequest, JobIdRequest, JobLogStreamEvent, ListAuditRequest, ListCapabilitiesRequest,
+    ListJobsRequest, ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest,
+    ServiceTunnelRequest,
 };
 use tokio::sync::broadcast;
 use tonic::{transport::Server, Request, Response as GrpcResponse, Status};
@@ -291,13 +292,19 @@ impl OperonRuntime for GrpcRuntime {
 
     async fn list_fs(
         &self,
-        request: Request<FsPathRequest>,
+        request: Request<FsListRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsList>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
-        let path = request.into_inner().path;
+        let request = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let list = fs_service::list(&self.state, path).await?;
+                let list = fs_service::list_page(
+                    &self.state,
+                    request.path,
+                    request.page_size,
+                    &request.page_token,
+                )
+                .await?;
                 Ok(GrpcResponse::new(list.into()))
             })
             .await
@@ -934,6 +941,29 @@ mod tests {
         assert_eq!(too_large_end.code(), tonic::Code::InvalidArgument);
     }
 
+    #[test]
+    fn empty_job_request_is_rejected_before_spawn() {
+        let base = unique_temp_dir("operond-empty-job-test");
+        let workspace = base.join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let state = test_state(test_policy(), workspace);
+        let error = start_job(
+            &state,
+            JobRunRequest {
+                command: String::new(),
+                argv: Vec::new(),
+                cwd: Some("/".to_string()),
+                timeout_secs: Some(5),
+                secrets: Vec::new(),
+            },
+        )
+        .expect_err("empty job should be invalid");
+
+        assert_eq!(error.code(), tonic::Code::InvalidArgument);
+        assert!(error.message().contains("requires command or argv"));
+        let _ = fs::remove_dir_all(base);
+    }
+
     #[tokio::test]
     async fn read_range_reads_only_requested_bytes() {
         let base = unique_temp_dir("operond-read-range-test");
@@ -947,6 +977,50 @@ mod tests {
             .expect("read range");
 
         assert_eq!(chunk.data, b"3456");
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[tokio::test]
+    async fn list_fs_returns_deterministic_pages() {
+        let base = unique_temp_dir("operond-list-fs-page-test");
+        let workspace = base.join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::write(workspace.join("b.txt"), "b").expect("b");
+        fs::write(workspace.join("a.txt"), "a").expect("a");
+        fs::write(workspace.join("c.txt"), "c").expect("c");
+        let state = test_state(default_policy(), workspace);
+
+        let first = fs_service::list_page(&state, "/".to_string(), 2, "")
+            .await
+            .expect("first page");
+        assert_eq!(
+            first
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a.txt", "b.txt"]
+        );
+        assert_eq!(first.next_page_token, "2");
+
+        let second = fs_service::list_page(&state, "/".to_string(), 2, &first.next_page_token)
+            .await
+            .expect("second page");
+        assert_eq!(
+            second
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["c.txt"]
+        );
+        assert!(second.next_page_token.is_empty());
+
+        let invalid = fs_service::list_page(&state, "/".to_string(), 2, "not-a-number")
+            .await
+            .expect_err("invalid token");
+        assert_eq!(invalid.code(), tonic::Code::InvalidArgument);
+
         let _ = fs::remove_dir_all(base);
     }
 

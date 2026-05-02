@@ -322,9 +322,7 @@ export class OperonClient {
 
   async listFs(nodeId: string, path: string): Promise<FsList> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcFsList(
-      await this.grpcClient(endpoint).listFs({ path }, this.grpcOptions(endpoint)),
-    );
+    return this.listFsWithEndpoint(endpoint, path);
   }
 
   async readFileRangeBytes(
@@ -344,9 +342,8 @@ export class OperonClient {
 
   async writeFileBytes(nodeId: string, path: string, body: BodyInit): Promise<unknown> {
     const endpoint = this.endpointFor(nodeId);
-    const bytes = await bodyToBytes(body);
     return fromGrpcFsWrite(
-      await this.grpcClient(endpoint).writeFile(grpcFileChunks(path, bytes), this.grpcOptions(endpoint)),
+      await this.grpcClient(endpoint).writeFile(grpcFileChunksFromBody(path, body), this.grpcOptions(endpoint)),
     );
   }
 
@@ -598,7 +595,7 @@ export class OperonClient {
       case "fs.stat":
         return fromGrpcFsStat(await client.statFs({ path: required(step.path, "path") }, options));
       case "fs.list":
-        return fromGrpcFsList(await client.listFs({ path: required(step.path, "path") }, options));
+        return this.listFsWithEndpoint(endpoint, required(step.path, "path"), context);
       case "fs.read": {
         return {
           path: required(step.path, "path"),
@@ -700,6 +697,24 @@ export class OperonClient {
     );
     return response.data;
   }
+
+  private async listFsWithEndpoint(
+    endpoint: NodeEndpoint,
+    path: string,
+    context?: RequestContext,
+  ): Promise<FsList> {
+    const entries: ReturnType<typeof fromGrpcFsList>["entries"] = [];
+    let pageToken = "";
+    do {
+      const page = await this.grpcClient(endpoint).listFs(
+        { path, pageSize: DEFAULT_LIST_PAGE_SIZE, pageToken },
+        this.grpcOptions(endpoint, context),
+      );
+      entries.push(...fromGrpcFsList(page).entries);
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return { path, entries, next_page_token: "" };
+  }
 }
 
 function required(value: string | undefined, field: string): string {
@@ -750,6 +765,21 @@ async function bodyToBytes(body: BodyInit): Promise<Uint8Array> {
   throw new Error("unsupported BodyInit for gRPC streaming request");
 }
 
+async function* bodyToByteChunks(body: BodyInit): AsyncIterable<Uint8Array> {
+  if (body instanceof ReadableStream) {
+    const reader = body.getReader();
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        return;
+      }
+      yield next.value;
+    }
+  } else {
+    yield await bodyToBytes(body);
+  }
+}
+
 function concatChunks(chunks: Uint8Array[]): Uint8Array {
   const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
   const merged = new Uint8Array(total);
@@ -790,6 +820,25 @@ async function* grpcFileChunks(path: string, bytes: Uint8Array): AsyncIterable<{
     yield {
       chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
     };
+  }
+}
+
+async function* grpcFileChunksFromBody(path: string, body: BodyInit): AsyncIterable<{ target?: { path: string }; chunk?: { data: Uint8Array } }> {
+  yield { target: { path } };
+  let emitted = false;
+  for await (const bytes of bodyToByteChunks(body)) {
+    if (bytes.byteLength === 0) {
+      continue;
+    }
+    emitted = true;
+    for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
+      yield {
+        chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
+      };
+    }
+  }
+  if (!emitted) {
+    yield { chunk: { data: new Uint8Array() } };
   }
 }
 
@@ -907,6 +956,7 @@ function fromGrpcFsList(list: GrpcFsList) {
       is_dir: entry.isDir,
       size: Number(entry.size),
     })),
+    next_page_token: list.nextPageToken,
   };
 }
 

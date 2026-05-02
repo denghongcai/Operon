@@ -200,6 +200,10 @@ Operon should not own:
   - v0.9.6 scope for daemon-owned policy diagnostics through gRPC, CLI, and
     SDK using the shared `PolicyDecision` vocabulary.
 
+- `docs/plan/v0.9.7-runtime-api-hardening.md`
+  - v0.9.7 scope for filesystem list pagination, runtime API documentation
+    alignment, SDK streaming write behavior, and empty job validation.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -517,3 +521,9 @@ Defer:
   store into the bounded in-memory audit queue, and
   `scripts/verify-v0.9.3-store-backed-audit-visibility.sh` covers the behavior.
   Nothing remains in v0.9.3.
+- Latest phase status update: v0.9.7 completed Runtime API Hardening.
+  `ListFs` now uses paginated request/response metadata, CLI/mount/SDK helpers
+  preserve complete-list behavior by walking pages, SDK file writes stream
+  `ReadableStream` bodies without full pre-buffering, empty daemon job requests
+  are rejected, and runtime API docs list bidirectional tunnel RPCs explicitly.
+  Nothing remains in v0.9.7.

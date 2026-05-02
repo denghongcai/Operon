@@ -282,6 +282,10 @@ describe("OperonClient", () => {
     });
     await expect(client.statFs("node-a", "/a.txt")).resolves.toMatchObject({ path: "/a.txt", size: 3 });
     await expect(client.listFs("node-a", "/")).resolves.toMatchObject({ path: "/", entries: [] });
+    expect(niceGrpcMock.client.listFs).toHaveBeenCalledWith(
+      { path: "/", pageSize: 1000, pageToken: "" },
+      expect.any(Object),
+    );
     await expect(client.runJob("node-a", { command: "true", timeoutSecs: 5 })).resolves.toMatchObject({ id: "job-1", status: "running" });
     expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
       expect.objectContaining({ command: "true", argv: [], timeoutSecs: "5" }),
@@ -375,6 +379,33 @@ describe("OperonClient", () => {
       { path: "/large.bin", offset: "1024", size: 2 },
       expect.any(Object),
     );
+  });
+
+  it("passes readable stream bodies to writeFile without pre-reading them", async () => {
+    niceGrpcMock.client.writeFile.mockImplementation(async (requests: AsyncIterable<unknown>) => {
+      const iterator = requests[Symbol.asyncIterator]();
+      await expect(iterator.next()).resolves.toEqual({
+        done: false,
+        value: { target: { path: "/stream.bin" } },
+      });
+      return { path: "/stream.bin", bytesWritten: "0" };
+    });
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls <= 3) {
+          controller.enqueue(new Uint8Array([pulls]));
+        } else {
+          controller.close();
+        }
+      },
+    });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    await client.writeFileBytes("node-a", "/stream.bin", body);
+
+    expect(pulls).toBeLessThan(3);
   });
 
   it("opens service tunnels as binary streams", async () => {

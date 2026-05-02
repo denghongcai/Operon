@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.9.6";
+pub const PROTOCOL_VERSION: &str = "v0.9.7";
 
 pub mod runtime {
     pub mod v1 {
@@ -210,6 +210,7 @@ impl From<operon_core::FsList> for runtime::v1::FsList {
         Self {
             path: value.path,
             entries: value.entries.into_iter().map(Into::into).collect(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -219,6 +220,7 @@ impl From<runtime::v1::FsList> for operon_core::FsList {
         Self {
             path: value.path,
             entries: value.entries.into_iter().map(Into::into).collect(),
+            next_page_token: value.next_page_token,
         }
     }
 }
@@ -685,11 +687,21 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.9.6");
+        assert_eq!(PROTOCOL_VERSION, "v0.9.7");
     }
 
     #[test]
     fn list_conversions_preserve_page_tokens() {
+        let fs_list = operon_core::FsList {
+            path: "/".to_string(),
+            entries: Vec::new(),
+            next_page_token: "fs-next".to_string(),
+        };
+        let grpc: runtime::v1::FsList = fs_list.into();
+        assert_eq!(grpc.next_page_token, "fs-next");
+        let core = operon_core::FsList::from(grpc);
+        assert_eq!(core.next_page_token, "fs-next");
+
         let capabilities = operon_core::CapabilityList {
             capabilities: Vec::new(),
             next_page_token: "cap-next".to_string(),

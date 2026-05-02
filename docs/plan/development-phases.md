@@ -4082,6 +4082,62 @@ Remaining:
 
 - No v0.9.6 work remains.
 
+## Phase 69: v0.9.7 Runtime API Hardening
+
+Status: Completed.
+
+Goal: close review findings around runtime API pagination, streaming API
+documentation, SDK memory behavior, and daemon-side job validation.
+
+Scope:
+
+- filesystem list pagination in the active gRPC protocol.
+- complete-list compatibility in Rust CLI, Linux mount adapter, and TypeScript
+  SDK helpers.
+- runtime API documentation alignment for bidirectional service tunnel RPCs.
+- TypeScript SDK file writes that do not pre-buffer `ReadableStream` bodies.
+- daemon-side rejection of job requests with neither `command` nor `argv`.
+
+Done when:
+
+- `ListFs` accepts `page_size` and `page_token`, and `FsList` exposes
+  `next_page_token`.
+- protocol conversions preserve fs list pagination metadata.
+- daemon fs listing returns deterministic pages and rejects invalid page tokens.
+- public CLI/mount/SDK helpers preserve existing full-list behavior by walking
+  pages internally.
+- TypeScript SDK file writes stream readable bodies into gRPC chunks without
+  concatenating the whole body first.
+- daemon job startup rejects empty command/argv requests before spawning a
+  shell.
+- README, `PROTOCOL.md`, runtime API docs, AGENTS.md, and this phase tracker
+  are updated.
+
+Detailed plan:
+`docs/plan/v0.9.7-runtime-api-hardening.md`.
+
+Remaining:
+
+Completed:
+
+- Added paginated `FsListRequest` and `FsList.next_page_token` to the active
+  gRPC runtime protocol, and bumped `PROTOCOL_VERSION` to `v0.9.7`.
+- Preserved fs list pagination metadata through Rust core/protocol
+  conversions.
+- Implemented daemon fs list pagination with deterministic sorted pages and
+  invalid-token errors.
+- Updated Rust CLI, Linux mount adapter, and TypeScript SDK list helpers to
+  walk all pages for their existing public complete-list behavior.
+- Updated TypeScript SDK file writes to stream `ReadableStream` bodies lazily
+  into gRPC chunks.
+- Added daemon validation for empty job requests before spawning a shell.
+- Documented the runtime API hardening in README, `PROTOCOL.md`, runtime API
+  docs, AGENTS.md, and this tracker.
+
+Remaining:
+
+- No v0.9.7 work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

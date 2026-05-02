@@ -74,6 +74,11 @@ Client-streaming calls:
 - `WriteFile`
 - `WriteJobStdin`
 
+Bidirectional-streaming calls:
+
+- `OpenServiceTunnel`
+- `OpenServiceDatagramTunnel`
+
 Runtime schema constraints:
 
 - enum-like fields are protobuf enums, not arbitrary strings.
@@ -87,8 +92,8 @@ Runtime schema constraints:
 - `StreamJobLogs` uses an explicit event envelope with snapshot, entry, and
   complete variants; raw `JobLog` remains a payload type, not the stream
   response type.
-- list calls accept `page_size` and `page_token`; responses expose
-  `next_page_token`.
+- `ListCapabilities`, `ListFs`, `ListJobs`, `ListServices`, and `ListAudit`
+  accept `page_size` and `page_token`; responses expose `next_page_token`.
 
 ## Policy Decisions
 

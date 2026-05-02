@@ -19,10 +19,10 @@ use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     job_log_stream_event, operon_runtime_client::OperonRuntimeClient,
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
-    service_tunnel_response, FsCopyRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest,
-    GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest, ListAuditRequest,
-    ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest, ServiceDatagram,
-    ServiceDatagramTunnelRequest, ServiceDatagramTunnelTarget, ServiceIdRequest,
+    service_tunnel_response, FsCopyRequest, FsListRequest, FsPathRequest, FsRenameRequest,
+    FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest,
+    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
+    ServiceDatagram, ServiceDatagramTunnelRequest, ServiceDatagramTunnelTarget, ServiceIdRequest,
     ServiceTunnelClose, ServiceTunnelData, ServiceTunnelRequest, ServiceTunnelTarget,
 };
 use tokio::{
@@ -133,14 +133,38 @@ pub async fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsSt
 
 pub async fn fs_list(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsList> {
     let path = path.to_string();
-    call(endpoint, |mut client, endpoint| async move {
-        Ok(client
-            .list_fs(with_auth(&endpoint, FsPathRequest { path })?)
-            .await?
-            .into_inner()
-            .into())
+    let mut entries = Vec::new();
+    let mut page_token = String::new();
+    loop {
+        let response = call(endpoint, |mut client, endpoint| {
+            let path = path.clone();
+            let page_token = page_token.clone();
+            async move {
+                Ok(client
+                    .list_fs(with_auth(
+                        &endpoint,
+                        FsListRequest {
+                            path,
+                            page_size: DEFAULT_LIST_PAGE_SIZE,
+                            page_token,
+                        },
+                    )?)
+                    .await?
+                    .into_inner())
+            }
+        })
+        .await?;
+        entries.extend(response.entries.into_iter().map(Into::into));
+        if response.next_page_token.is_empty() {
+            break;
+        }
+        page_token = response.next_page_token;
+    }
+    Ok(FsList {
+        path,
+        entries,
+        next_page_token: String::new(),
     })
-    .await
 }
 
 pub async fn read_file_to_writer(

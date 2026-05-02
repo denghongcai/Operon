@@ -387,7 +387,7 @@ grpcurl -plaintext \
   -H "authorization: Bearer docker-token" \
   -import-path proto \
   -proto operon/runtime.proto \
-  -d '{"path":"/"}' \
+  -d '{"path":"/","page_size":100,"page_token":""}' \
   127.0.0.1:17790 \
   operon.runtime.v1.OperonRuntime/ListFs
 ```

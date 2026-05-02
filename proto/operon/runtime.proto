@@ -8,7 +8,7 @@ service OperonRuntime {
   rpc ListCapabilities(ListCapabilitiesRequest) returns (CapabilityList);
   rpc ExplainCapability(CapabilityDiagnosticRequest) returns (PolicyDecision);
   rpc StatFs(FsPathRequest) returns (FsStat);
-  rpc ListFs(FsPathRequest) returns (FsList);
+  rpc ListFs(FsListRequest) returns (FsList);
   rpc ReadFile(FsPathRequest) returns (stream FileChunk);
   rpc ReadFileRange(FsReadRangeRequest) returns (FileChunk);
   rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
@@ -130,6 +130,12 @@ message FsPathRequest {
   string path = 1;
 }
 
+message FsListRequest {
+  string path = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
 message FsStat {
   string path = 1;
   bool is_file = 2;
@@ -148,6 +154,7 @@ message FsEntry {
 message FsList {
   string path = 1;
   repeated FsEntry entries = 2;
+  string next_page_token = 3;
 }
 
 message FileChunk {

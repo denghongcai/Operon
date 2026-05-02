@@ -33,6 +33,9 @@ use crate::{
     AUDIT_CONTEXT,
 };
 pub(crate) fn start_job(state: &AppState, request: JobRunRequest) -> Result<JobRecord, Status> {
+    if request.command.is_empty() && request.argv.is_empty() {
+        return Err(Status::invalid_argument("job run requires command or argv"));
+    }
     let cwd_virtual = request.cwd.clone().unwrap_or_else(|| "/".to_string());
     let decision = authorize_job_decision(
         &state.policy.subject,
