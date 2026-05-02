@@ -675,14 +675,14 @@ pub async fn forward_service_datagrams(
         let request = match with_auth(&endpoint, outbound) {
             Ok(request) => request,
             Err(error) => {
-                local_read_task.abort();
+                abort_and_wait(local_read_task).await;
                 return Err(error);
             }
         };
         let response = match client.open_service_datagram_tunnel(request).await {
             Ok(response) => response,
             Err(error) => {
-                local_read_task.abort();
+                abort_and_wait(local_read_task).await;
                 return Err(error.into());
             }
         };
@@ -705,10 +705,15 @@ pub async fn forward_service_datagrams(
                 None => {}
             }
         }
-        local_read_task.abort();
+        abort_and_wait(local_read_task).await;
         Ok(())
     })
     .await
+}
+
+async fn abort_and_wait<T>(task: tokio::task::JoinHandle<T>) {
+    task.abort();
+    let _ = task.await;
 }
 
 fn datagram_peer_id(peer_state: &Arc<Mutex<DatagramPeerState>>, peer_addr: SocketAddr) -> String {

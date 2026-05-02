@@ -3063,7 +3063,37 @@ Done when:
 - a real daemon integration smoke validates the core user-facing flows.
 - test coverage expectations are documented for future phases.
 
-## Phase 45: Provider Discovery Contract
+## Phase 45: Runtime Cleanup and Hardening Triage
+
+Status: Completed.
+
+Goal: resolve concrete cleanup findings from code review and record larger
+policy/protocol hardening items for later phases.
+
+Completed:
+
+- changed audit timestamps to use `u64` end-to-end across `operon-core` and
+  `operon-protocol`, matching the gRPC `uint64` schema.
+- extracted shared CLI private-file and token helpers used by `init config` and
+  `onboard`.
+- updated UDP service forwarding cleanup so the local socket read task is
+  aborted and awaited.
+- added explicit service action permissions and enforced `check` / `forward`
+  authorization separately.
+- documented deferred config default plus protocol empty chunk, tunnel close
+  semantics, and daemon state ownership items in
+  `docs/plan/v0.8.2-runtime-cleanup.md`.
+
+Done when:
+
+- review findings for timestamp conversion, duplicate token generation,
+  duplicate private-file handling, and UDP abort cleanup are resolved.
+- service check and forwarding are authorized through explicit action
+  permissions.
+- deferred hardening items are explicit and not hidden as incidental TODOs.
+- focused tests cover the changed conversion and helper behavior.
+
+## Phase 46: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3082,7 +3112,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 46: Non-LAN Provider Adapters
+## Phase 47: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3102,7 +3132,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 47: v0.9 Acceptance
+## Phase 48: v0.9 Acceptance
 
 Status: Planned.
 

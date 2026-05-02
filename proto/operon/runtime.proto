@@ -309,6 +309,12 @@ message ServiceDefinition {
   uint32 port = 4;
   ServiceProtocol protocol = 5;
   string description = 6;
+  ServicePermissions permissions = 7;
+}
+
+message ServicePermissions {
+  bool check = 1;
+  bool forward = 2;
 }
 
 message ServiceList {

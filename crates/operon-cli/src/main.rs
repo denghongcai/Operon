@@ -1,15 +1,11 @@
 use std::{
     collections::BTreeMap,
-    fmt::Write as _,
-    fs::{self, OpenOptions},
+    fs,
     io::{self, Write as _},
     net::SocketAddr,
     path::{Path, PathBuf},
     time::Duration,
 };
-
-#[cfg(unix)]
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
@@ -23,6 +19,7 @@ use operon_core::{
 mod graph;
 mod grpc;
 mod onboard;
+mod private_files;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -499,6 +496,8 @@ struct ServiceExplain {
     endpoint: String,
     protocol: String,
     description: String,
+    check: bool,
+    forward: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -816,6 +815,8 @@ impl ConfigExplain {
                     endpoint: format!("{}:{}", service.host, service.port),
                     protocol: format_service_protocol(&service.protocol).to_string(),
                     description: service.description.clone(),
+                    check: service.permissions.check,
+                    forward: service.permissions.forward,
                 })
                 .collect(),
         });
@@ -896,11 +897,13 @@ fn print_config_explain(explain: &ConfigExplain) {
             }
             for service in &policy.services {
                 println!(
-                    "    {} {} {} {} - {}",
+                    "    {} {} {} {} check={} forward={} - {}",
                     service.id,
                     service.protocol,
                     service.endpoint,
                     service.name,
+                    service.check,
+                    service.forward,
                     service.description
                 );
             }
@@ -1748,13 +1751,19 @@ policy:
         port: 7789
         protocol: tcp
         description: Operon gRPC daemon listener
+        permissions:
+          check: true
+          forward: true
 
 secrets:
   file: secrets.yaml
 "#;
     fs::write(&path, content)?;
-    write_private_file(&token_path, &format!("{}\n", generate_token()?))?;
-    write_private_file(&secrets_path, "{}\n")?;
+    private_files::write_private_file(
+        &token_path,
+        &format!("{}\n", private_files::generate_token()?),
+    )?;
+    private_files::write_private_file(&secrets_path, "{}\n")?;
     if output.json {
         print_json(&InitConfigSummary {
             config: path.display().to_string(),
@@ -1767,50 +1776,6 @@ secrets:
         println!("{}", path.display());
     }
     Ok(())
-}
-
-#[cfg(unix)]
-fn write_private_file(path: &Path, content: &str) -> anyhow::Result<()> {
-    if path.exists() {
-        let metadata = fs::symlink_metadata(path)?;
-        anyhow::ensure!(
-            !metadata.file_type().is_symlink(),
-            "refusing to write private file {} because it is a symlink",
-            path.display()
-        );
-        let mode = metadata.permissions().mode() & 0o777;
-        anyhow::ensure!(
-            mode & 0o077 == 0,
-            "refusing to write private file {} with permissions {:03o}; set permissions to 600 first",
-            path.display(),
-            mode
-        );
-    }
-    let mut handle = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .mode(0o600)
-        .open(path)?;
-    handle.write_all(content.as_bytes())?;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn write_private_file(path: &Path, content: &str) -> anyhow::Result<()> {
-    fs::write(path, content)?;
-    Ok(())
-}
-
-fn generate_token() -> anyhow::Result<String> {
-    let mut bytes = [0_u8; 32];
-    getrandom::fill(&mut bytes)?;
-    let mut token = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        write!(&mut token, "{byte:02x}").expect("writing to String should not fail");
-    }
-    Ok(token)
 }
 
 fn discover_nodes(
@@ -2114,6 +2079,8 @@ mod tests {
         assert_eq!(policy.subject, "local-cli");
         assert_eq!(policy.fs_mounts[0].name, "workspace");
         assert_eq!(policy.services[0].protocol, "tcp");
+        assert!(policy.services[0].check);
+        assert!(policy.services[0].forward);
         let expected_secrets = base.join("secrets.yaml").display().to_string();
         assert_eq!(
             explain.secrets.expect("secrets").file.as_deref(),

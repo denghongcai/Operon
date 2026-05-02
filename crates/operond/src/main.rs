@@ -951,7 +951,7 @@ impl OperonRuntime for GrpcRuntime {
                         ));
                     }
                 };
-                let service = match authorize_service(&self.state.policy, &service_id) {
+                let service = match authorize_service(&self.state.policy, &service_id, "forward") {
                     Ok(service) => service,
                     Err(error) => {
                         record_audit_capability(
@@ -1059,7 +1059,7 @@ impl OperonRuntime for GrpcRuntime {
                         ));
                     }
                 };
-                let service = match authorize_service(&self.state.policy, &service_id) {
+                let service = match authorize_service(&self.state.policy, &service_id, "forward") {
                     Ok(service) => service,
                     Err(error) => {
                         record_audit_capability(
@@ -1582,7 +1582,7 @@ fn get_job_record(state: &AppState, job_id: &str) -> Result<JobRecord, Status> {
 }
 
 async fn grpc_service_check(state: &AppState, service_id: String) -> Result<ServiceCheck, Status> {
-    let service = match authorize_service(&state.policy, &service_id) {
+    let service = match authorize_service(&state.policy, &service_id, "check") {
         Ok(service) => service,
         Err(error) => {
             record_audit_capability(
@@ -1646,8 +1646,9 @@ fn job_sequence_number(job_id: &str) -> Option<u64> {
 fn authorize_service(
     policy: &PolicyConfig,
     service_id: &str,
+    action: &str,
 ) -> Result<ServiceDefinition, (RuntimeErrorKind, String)> {
-    policy
+    let service = policy
         .service
         .services
         .iter()
@@ -1658,7 +1659,20 @@ fn authorize_service(
                 RuntimeErrorKind::Forbidden,
                 format!("service `{service_id}` denied by policy"),
             )
-        })
+        })?;
+    let allowed = match action {
+        "check" => service.permissions.check,
+        "forward" => service.permissions.forward,
+        _ => false,
+    };
+    if allowed {
+        Ok(service)
+    } else {
+        Err((
+            RuntimeErrorKind::Forbidden,
+            format!("service `{service_id}` action `{action}` denied by policy"),
+        ))
+    }
 }
 
 fn service_tunnel_stream(
@@ -2083,11 +2097,12 @@ fn append_store_record(
     writer.append_json_value(record)
 }
 
-fn now_ms() -> u128 {
-    std::time::SystemTime::now()
+fn now_ms() -> u64 {
+    let millis = std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis()
+        .as_millis();
+    u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
 async fn run_job_task(task: JobTask) {
@@ -2666,6 +2681,7 @@ mod tests {
                     port: 7789,
                     protocol: operon_core::ServiceProtocol::Tcp,
                     description: "local daemon".to_string(),
+                    permissions: operon_core::ServicePermissions::default(),
                 }],
             },
         }
@@ -2798,7 +2814,8 @@ mod tests {
 
     #[test]
     fn authorize_service_returns_allowed_service() {
-        let service = authorize_service(&test_policy(), "daemon").expect("service should resolve");
+        let service =
+            authorize_service(&test_policy(), "daemon", "check").expect("service should resolve");
 
         assert_eq!(service.id, "daemon");
         assert_eq!(service.port, 7789);
@@ -2806,11 +2823,23 @@ mod tests {
 
     #[test]
     fn authorize_service_rejects_unknown_service() {
-        let error =
-            authorize_service(&test_policy(), "missing").expect_err("service should be denied");
+        let error = authorize_service(&test_policy(), "missing", "check")
+            .expect_err("service should be denied");
 
         assert_eq!(error.0, RuntimeErrorKind::Forbidden);
         assert!(error.1.contains("denied by policy"));
+    }
+
+    #[test]
+    fn authorize_service_enforces_action_permissions() {
+        let mut policy = test_policy();
+        policy.service.services[0].permissions.forward = false;
+
+        let error = authorize_service(&policy, "daemon", "forward")
+            .expect_err("service forward should be denied");
+
+        assert_eq!(error.0, RuntimeErrorKind::Forbidden);
+        assert!(error.1.contains("action `forward` denied"));
     }
 
     #[cfg(unix)]

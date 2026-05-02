@@ -99,12 +99,17 @@ service:
       port: 7789
       protocol: tcp
       description: Operon gRPC daemon listener
+      permissions:
+        check: true
+        forward: true
 ```
 
-`ListServices` returns configured services. `CheckService` attempts a TCP
-connection to one configured service and records an audit event.
+`ListServices` returns configured services and their action permissions.
+`CheckService` requires `permissions.check`, attempts a TCP or UDP service
+check, and records an audit event.
 `OpenServiceTunnel` opens a bidirectional byte stream to a configured TCP
-service for explicit local forwarding. Unknown service ids fail through policy.
+service for explicit local forwarding and requires `permissions.forward`.
+Unknown service ids and denied service actions fail through policy.
 
 Forwarding is intentionally local and explicit. The CLI can bind a local port
 and open one service tunnel per accepted connection, but the daemon only
@@ -116,6 +121,7 @@ UDP/datagram forwarding uses `OpenServiceDatagramTunnel` instead of
 `OpenServiceTunnel`. It preserves packet boundaries, carries a stable `peer_id`
 so responses can be routed back to the original local UDP peer, and keeps the
 same policy rule: the daemon only sends to configured UDP services.
+It also requires `permissions.forward`.
 
 ## Interface Policy
 

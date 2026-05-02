@@ -116,7 +116,7 @@ pub struct FsWrite {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuditEvent {
     pub subject: String,
-    pub timestamp_ms: u128,
+    pub timestamp_ms: u64,
     pub node_id: NodeId,
     pub capability: String,
     pub action: String,
@@ -196,6 +196,14 @@ pub struct ServiceDefinition {
     pub port: u16,
     pub protocol: ServiceProtocol,
     pub description: String,
+    #[serde(default)]
+    pub permissions: ServicePermissions,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ServicePermissions {
+    pub check: bool,
+    pub forward: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -203,6 +211,15 @@ pub struct ServiceDefinition {
 pub enum ServiceProtocol {
     Tcp,
     Udp,
+}
+
+impl Default for ServicePermissions {
+    fn default() -> Self {
+        Self {
+            check: true,
+            forward: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -435,12 +452,18 @@ service:
       port: 8080
       protocol: tcp
       description: local app
+      permissions:
+        check: true
+        forward: true
     - id: dns
       name: dns
       host: 127.0.0.1
       port: 5353
       protocol: udp
       description: local dns
+      permissions:
+        check: true
+        forward: false
 "#,
         )
         .expect("policy should parse");
@@ -455,6 +478,8 @@ service:
             policy.service.services[1].protocol,
             ServiceProtocol::Udp
         ));
+        assert!(policy.service.services[0].permissions.forward);
+        assert!(!policy.service.services[1].permissions.forward);
     }
 
     #[test]

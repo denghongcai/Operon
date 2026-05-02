@@ -160,6 +160,8 @@ Service forwarding should use the same boundary. The CLI or SDK opens a local
 listener, then uses `OpenServiceTunnel` to stream bytes to a policy-configured
 service on the remote node. The daemon must only connect to services declared in
 `policy.service.services`; clients do not send arbitrary host/port targets.
+Service entries carry explicit action permissions for health checks and
+forwarding.
 
 This keeps the daemon surface smaller and avoids maintaining two runtime API
 contracts. Direct HTTP runtime calls would duplicate:

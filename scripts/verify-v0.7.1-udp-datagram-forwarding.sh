@@ -112,6 +112,9 @@ policy:
         port: $SERVICE_PORT
         protocol: udp
         description: local UDP echo service
+        permissions:
+          check: true
+          forward: true
 YAML
 
 cargo run -q -p operond -- start --config "$CONFIG_PATH" >"$TMP_DIR/operond.log" 2>&1 &

@@ -351,6 +351,7 @@ impl From<operon_core::ServiceDefinition> for runtime::v1::ServiceDefinition {
             port: value.port as u32,
             protocol: grpc_service_protocol(&value.protocol) as i32,
             description: value.description,
+            permissions: Some(value.permissions.into()),
         }
     }
 }
@@ -366,7 +367,26 @@ impl TryFrom<runtime::v1::ServiceDefinition> for operon_core::ServiceDefinition 
             port: u16::try_from(value.port).map_err(|_| "service port out of range")?,
             protocol: parse_grpc_service_protocol(value.protocol)?,
             description: value.description,
+            permissions: value.permissions.map(Into::into).unwrap_or_default(),
         })
+    }
+}
+
+impl From<operon_core::ServicePermissions> for runtime::v1::ServicePermissions {
+    fn from(value: operon_core::ServicePermissions) -> Self {
+        Self {
+            check: value.check,
+            forward: value.forward,
+        }
+    }
+}
+
+impl From<runtime::v1::ServicePermissions> for operon_core::ServicePermissions {
+    fn from(value: runtime::v1::ServicePermissions) -> Self {
+        Self {
+            check: value.check,
+            forward: value.forward,
+        }
     }
 }
 
@@ -420,7 +440,7 @@ impl From<operon_core::AuditEvent> for runtime::v1::AuditEvent {
     fn from(value: operon_core::AuditEvent) -> Self {
         Self {
             subject: value.subject,
-            timestamp_ms: value.timestamp_ms as u64,
+            timestamp_ms: value.timestamp_ms,
             node_id: value.node_id,
             capability: value.capability,
             action: value.action,
@@ -437,7 +457,7 @@ impl From<runtime::v1::AuditEvent> for operon_core::AuditEvent {
     fn from(value: runtime::v1::AuditEvent) -> Self {
         Self {
             subject: value.subject,
-            timestamp_ms: value.timestamp_ms as u128,
+            timestamp_ms: value.timestamp_ms,
             node_id: value.node_id,
             capability: value.capability,
             action: value.action,
@@ -602,5 +622,52 @@ mod tests {
         assert_eq!(grpc.next_page_token, "audit-next");
         let core = operon_core::AuditLog::from(grpc);
         assert_eq!(core.next_page_token, "audit-next");
+    }
+
+    #[test]
+    fn audit_event_timestamp_round_trips_without_casting() {
+        let event = operon_core::AuditEvent {
+            subject: "subject".to_string(),
+            timestamp_ms: u64::MAX - 1,
+            node_id: "node-a".to_string(),
+            capability: "fs:workspace".to_string(),
+            action: "read".to_string(),
+            resource: "/file.txt".to_string(),
+            allowed: true,
+            reason: "allowed".to_string(),
+            run_id: Some("run-1".to_string()),
+            step_id: Some("step-1".to_string()),
+        };
+
+        let grpc: runtime::v1::AuditEvent = event.clone().into();
+        assert_eq!(grpc.timestamp_ms, event.timestamp_ms);
+        let core = operon_core::AuditEvent::from(grpc);
+        assert_eq!(core.timestamp_ms, event.timestamp_ms);
+    }
+
+    #[test]
+    fn service_definition_permissions_round_trip() {
+        let service = operon_core::ServiceDefinition {
+            id: "web".to_string(),
+            name: "web".to_string(),
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            protocol: operon_core::ServiceProtocol::Tcp,
+            description: "test service".to_string(),
+            permissions: operon_core::ServicePermissions {
+                check: true,
+                forward: false,
+            },
+        };
+
+        let grpc: runtime::v1::ServiceDefinition = service.clone().into();
+        assert_eq!(grpc.permissions.as_ref().expect("permissions").check, true);
+        assert_eq!(
+            grpc.permissions.as_ref().expect("permissions").forward,
+            false
+        );
+        let core = operon_core::ServiceDefinition::try_from(grpc).expect("service definition");
+        assert!(core.permissions.check);
+        assert!(!core.permissions.forward);
     }
 }

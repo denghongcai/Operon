@@ -360,6 +360,9 @@ service:
       port: 7789
       protocol: tcp
       description: Operon gRPC daemon listener
+      permissions:
+        check: true
+        forward: true
 ```
 
 Policy paths are virtual paths inside the daemon workspace. If the daemon

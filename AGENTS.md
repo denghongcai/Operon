@@ -186,6 +186,11 @@ Operon should not own:
 - Completed test coverage milestone: unit coverage audit, compiled-binary CLI
   integration tests, real-daemon integration coverage script, and CI validation
   for the core config/node/capability/fs/job/service/audit/graph/trace flows.
+- Completed runtime cleanup milestone: audit timestamps are `u64` end-to-end,
+  CLI private-file/token helpers are shared, UDP service forwarding awaits
+  aborted local read tasks, service check/forward are explicitly authorized,
+  and larger policy/protocol hardening items are recorded in
+  `docs/plan/v0.8.2-runtime-cleanup.md`.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.

@@ -141,7 +141,9 @@ receive order.
 `WriteFile` accepts ordered `WriteFileRequest` messages. The first message must
 set the `target` variant with `WriteFileTarget.path`. Later messages must set
 the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
-targets or switch paths. It replaces the file content.
+targets or switch paths. It replaces the file content. An empty file write is
+encoded as target metadata followed by a single empty `FileChunk.data`; clients
+should not treat that as an omitted write.
 
 `WriteFileRange` writes one byte range at `offset`. It is intended for OS mount
 adapters and other clients that need write-through random write behavior. The
@@ -229,9 +231,10 @@ targets or switch jobs. Use `CloseJobStdin` to close the target job's stdin.
 
 ## Service Forwarding
 
-`ListServices` returns services explicitly configured in daemon policy.
-`CheckService` attempts a TCP connection to one configured service and records
-an audit event.
+`ListServices` returns services explicitly configured in daemon policy,
+including per-action service permissions. `CheckService` requires
+`permissions.check`, attempts a TCP or UDP check against one configured service,
+and records an audit event.
 
 `OpenServiceTunnel` is the low-level protocol for explicit local port
 forwarding. The first client message must set `ServiceTunnelRequest.target`
@@ -239,7 +242,7 @@ with the policy service id. Later client messages set `data` to send bytes to
 that service or `close` to half-close the client side. The server first returns
 `opened` after connecting to the configured service, then returns `data` chunks
 from the service, and finally returns `close` when the remote service closes or
-the tunnel fails.
+the tunnel fails. TCP forwarding requires `permissions.forward`.
 
 The daemon only connects to `host:port` values present in its own
 `policy.service.services`. It does not accept arbitrary destination host/port
@@ -266,7 +269,9 @@ first client message must set `ServiceDatagramTunnelRequest.target` with the
 policy service id. Later client messages set `datagram` with a stable `peer_id`
 and packet bytes. The server returns datagrams with the same `peer_id`, allowing
 the client-side forwarder to route each response to the original local UDP peer.
-The server can send `close` for one peer or for the whole tunnel.
+The server can send `close` for one peer or for the whole tunnel. A peer close
+has `peer_id`; a whole-tunnel close uses an empty `peer_id`. UDP forwarding also
+requires `permissions.forward`.
 
 Datagram forwarding preserves packet boundaries. It uses idle peer-session
 cleanup and daemon-side packet size checks. It is still local and explicit: the

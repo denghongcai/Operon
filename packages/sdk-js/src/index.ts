@@ -154,6 +154,12 @@ export type ServiceDefinition = {
   port: number;
   protocol: "tcp" | "udp";
   description: string;
+  permissions: ServicePermissions;
+};
+
+export type ServicePermissions = {
+  check: boolean;
+  forward: boolean;
 };
 
 export type ServiceList = {
@@ -886,6 +892,7 @@ function fromGrpcServiceDefinition(service: GrpcServiceList["services"][number])
     port: service.port,
     protocol: fromGrpcServiceProtocol(service.protocol),
     description: service.description,
+    permissions: service.permissions ?? { check: true, forward: true },
   };
 }
 

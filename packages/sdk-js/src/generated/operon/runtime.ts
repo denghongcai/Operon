@@ -405,6 +405,12 @@ export interface ServiceDefinition {
   port: number;
   protocol: ServiceProtocol;
   description: string;
+  permissions: ServicePermissions | undefined;
+}
+
+export interface ServicePermissions {
+  check: boolean;
+  forward: boolean;
 }
 
 export interface ServiceList {
@@ -4329,7 +4335,7 @@ export const ServiceIdRequest: MessageFns<ServiceIdRequest> = {
 };
 
 function createBaseServiceDefinition(): ServiceDefinition {
-  return { id: "", name: "", host: "", port: 0, protocol: 0, description: "" };
+  return { id: "", name: "", host: "", port: 0, protocol: 0, description: "", permissions: undefined };
 }
 
 export const ServiceDefinition: MessageFns<ServiceDefinition> = {
@@ -4351,6 +4357,9 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
     }
     if (message.description !== "") {
       writer.uint32(50).string(message.description);
+    }
+    if (message.permissions !== undefined) {
+      ServicePermissions.encode(message.permissions, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -4410,6 +4419,14 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
           message.description = reader.string();
           continue;
         }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.permissions = ServicePermissions.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4427,6 +4444,7 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
       port: isSet(object.port) ? globalThis.Number(object.port) : 0,
       protocol: isSet(object.protocol) ? serviceProtocolFromJSON(object.protocol) : 0,
       description: isSet(object.description) ? globalThis.String(object.description) : "",
+      permissions: isSet(object.permissions) ? ServicePermissions.fromJSON(object.permissions) : undefined,
     };
   },
 
@@ -4450,6 +4468,9 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
     if (message.description !== "") {
       obj.description = message.description;
     }
+    if (message.permissions !== undefined) {
+      obj.permissions = ServicePermissions.toJSON(message.permissions);
+    }
     return obj;
   },
 
@@ -4464,6 +4485,85 @@ export const ServiceDefinition: MessageFns<ServiceDefinition> = {
     message.port = object.port ?? 0;
     message.protocol = object.protocol ?? 0;
     message.description = object.description ?? "";
+    message.permissions = (object.permissions !== undefined && object.permissions !== null)
+      ? ServicePermissions.fromPartial(object.permissions)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseServicePermissions(): ServicePermissions {
+  return { check: false, forward: false };
+}
+
+export const ServicePermissions: MessageFns<ServicePermissions> = {
+  encode(message: ServicePermissions, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.check !== false) {
+      writer.uint32(8).bool(message.check);
+    }
+    if (message.forward !== false) {
+      writer.uint32(16).bool(message.forward);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServicePermissions {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServicePermissions();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.check = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.forward = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServicePermissions {
+    return {
+      check: isSet(object.check) ? globalThis.Boolean(object.check) : false,
+      forward: isSet(object.forward) ? globalThis.Boolean(object.forward) : false,
+    };
+  },
+
+  toJSON(message: ServicePermissions): unknown {
+    const obj: any = {};
+    if (message.check !== false) {
+      obj.check = message.check;
+    }
+    if (message.forward !== false) {
+      obj.forward = message.forward;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ServicePermissions>): ServicePermissions {
+    return ServicePermissions.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ServicePermissions>): ServicePermissions {
+    const message = createBaseServicePermissions();
+    message.check = object.check ?? false;
+    message.forward = object.forward ?? false;
     return message;
   },
 };

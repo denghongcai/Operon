@@ -162,6 +162,7 @@ describe("OperonClient", () => {
           port: 7789,
           protocol: ServiceProtocol.SERVICE_PROTOCOL_TCP,
           description: "Operon gRPC daemon",
+          permissions: { check: true, forward: true },
         },
       ],
       nextPageToken: "1",
@@ -174,6 +175,7 @@ describe("OperonClient", () => {
           port: 3000,
           protocol: ServiceProtocol.SERVICE_PROTOCOL_UDP,
           description: "application",
+          permissions: { check: true, forward: false },
         },
       ],
       nextPageToken: "",
@@ -188,6 +190,8 @@ describe("OperonClient", () => {
     expect(services.services[1].id).toBe("app");
     expect(services.services[1].protocol).toBe("udp");
     expect(services.services[0].port).toBe(7789);
+    expect(services.services[0].permissions.forward).toBe(true);
+    expect(services.services[1].permissions.forward).toBe(false);
     expect(check.ok).toBe(true);
     expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "" }, expect.any(Object));
     expect(niceGrpcMock.client.listServices).toHaveBeenCalledWith({ pageSize: 1000, pageToken: "1" }, expect.any(Object));

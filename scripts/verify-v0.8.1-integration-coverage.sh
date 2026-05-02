@@ -80,6 +80,9 @@ policy:
         port: $DAEMON_PORT
         protocol: tcp
         description: Operon daemon under integration test
+        permissions:
+          check: true
+          forward: true
 YAML
 
 cargo build --workspace --locked

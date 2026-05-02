@@ -1,14 +1,10 @@
 use std::{
     collections::BTreeMap,
-    fmt::Write as _,
-    fs::{self, OpenOptions},
+    fs,
     io::{self, Write},
     path::PathBuf,
     time::Duration,
 };
-
-#[cfg(unix)]
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use clap::ValueEnum;
 use operon_config::{
@@ -17,7 +13,7 @@ use operon_config::{
 };
 use operon_core::DiscoveryList;
 
-use crate::OutputMode;
+use crate::{private_files, OutputMode};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum OnboardRole {
@@ -243,7 +239,7 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
     let daemon_token = if matches!(role, OnboardRole::Daemon | OnboardRole::Both) {
         Some(match provided_token.clone() {
             Some(token) => token,
-            None => generate_token()?,
+            None => private_files::generate_token()?,
         })
     } else {
         None
@@ -469,6 +465,9 @@ fn render_services(grant: &CapabilityGrant, service_port: u16) -> String {
       port: {service_port}
       protocol: tcp
       description: Operon gRPC daemon listener
+      permissions:
+        check: true
+        forward: true
 "#
         )
     } else {
@@ -501,55 +500,10 @@ fn listen_port(listen: &str) -> Option<&str> {
 
 fn write_generated_file(file: &GeneratedFile) -> anyhow::Result<()> {
     if file.private {
-        return write_private_file(file);
+        return private_files::write_private_file(&file.path, &file.content);
     }
     fs::write(&file.path, &file.content)?;
     Ok(())
-}
-
-#[cfg(unix)]
-fn write_private_file(file: &GeneratedFile) -> anyhow::Result<()> {
-    if file.path.exists() {
-        let metadata = fs::symlink_metadata(&file.path)?;
-        anyhow::ensure!(
-            !metadata.file_type().is_symlink(),
-            "refusing to write private file {} because it is a symlink",
-            file.path.display()
-        );
-        let mode = metadata.permissions().mode() & 0o777;
-        anyhow::ensure!(
-            mode & 0o077 == 0,
-            "refusing to write private file {} with permissions {:03o}; set permissions to 600 first",
-            file.path.display(),
-            mode
-        );
-    }
-
-    let mut handle = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .mode(0o600)
-        .open(&file.path)?;
-    handle.write_all(file.content.as_bytes())?;
-    fs::set_permissions(&file.path, fs::Permissions::from_mode(0o600))?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn write_private_file(file: &GeneratedFile) -> anyhow::Result<()> {
-    fs::write(&file.path, &file.content)?;
-    Ok(())
-}
-
-fn generate_token() -> anyhow::Result<String> {
-    let mut bytes = [0_u8; 32];
-    getrandom::fill(&mut bytes)?;
-    let mut token = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        write!(&mut token, "{byte:02x}").expect("writing to String should not fail");
-    }
-    Ok(token)
 }
 
 fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
@@ -559,6 +513,9 @@ fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     struct NoopPrompt;
 
@@ -629,7 +586,7 @@ mod tests {
 
     #[test]
     fn generated_token_is_hex_encoded() {
-        let token = generate_token().expect("token");
+        let token = private_files::generate_token().expect("token");
         assert_eq!(token.len(), 64);
         assert!(token.chars().all(|value| value.is_ascii_hexdigit()));
     }
