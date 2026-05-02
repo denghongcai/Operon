@@ -3469,7 +3469,48 @@ Remaining:
 - Broader Linux mount callback decomposition remains a future candidate if the
   FUSE adapter grows beyond a thin adapter boundary.
 
-## Phase 54: Provider Discovery Contract
+## Phase 54: v0.8.11 CLI Datagram Lock Hardening
+
+Status: Completed.
+
+Goal: make CLI UDP/datagram forwarding report peer-state lock failures instead
+of panicking.
+
+Review finding:
+
+- `crates/operon-cli/src/grpc.rs` used
+  `expect("datagram peer state poisoned")` in UDP datagram forwarding peer
+  state helpers.
+- A poisoned peer-state lock could panic a long-running `operon service
+  forward-udp` process instead of returning a normal CLI error.
+
+Done when:
+
+- datagram peer-state helpers return `anyhow::Result`.
+- inbound peer lookup and removal failures propagate through the forwarding
+  command path.
+- validation rejects reintroducing datagram peer-state lock panics.
+- CLI tests remain green.
+
+Detailed plan:
+`docs/plan/v0.8.11-cli-datagram-lock-hardening.md`.
+
+Completed:
+
+- Changed datagram peer-state helpers to return `anyhow::Result`.
+- Propagated inbound peer lookup and removal failures through the forwarding
+  command path.
+- Changed local UDP read task lock failures to stop forwarding instead of
+  panicking the task.
+- Added `scripts/verify-v0.8.11-cli-datagram-lock-hardening.sh`.
+
+Remaining:
+
+- No v0.8.11 work remains.
+- Broader `operon-cli/src/grpc.rs` command-family split remains a future
+  maintainability candidate.
+
+## Phase 55: Provider Discovery Contract
 
 Status: Planned.
 
@@ -3488,7 +3529,7 @@ Done when:
 - manual endpoint config remains the fallback and source of override.
 - discovered nodes do not automatically receive capability authorization.
 
-## Phase 55: Non-LAN Provider Adapters
+## Phase 56: Non-LAN Provider Adapters
 
 Status: Planned.
 
@@ -3508,7 +3549,7 @@ Done when:
 - discovered endpoints can be inspected before being used.
 - provider errors are clear and do not affect manual endpoints.
 
-## Phase 56: v0.9 Acceptance
+## Phase 57: v0.9 Acceptance
 
 Status: Planned.
 

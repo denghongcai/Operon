@@ -650,7 +650,10 @@ pub async fn forward_service_datagrams(
                 let Ok((bytes_read, peer_addr)) = local_reader.recv_from(&mut buffer).await else {
                     break;
                 };
-                let peer_id = datagram_peer_id(&local_peer_state, peer_addr);
+                let peer_id = match datagram_peer_id(&local_peer_state, peer_addr) {
+                    Ok(peer_id) => peer_id,
+                    Err(_) => break,
+                };
                 if local_request_tx
                     .send(ServiceDatagramTunnelRequest {
                         payload: Some(service_datagram_tunnel_request::Payload::Datagram(
@@ -691,7 +694,7 @@ pub async fn forward_service_datagrams(
             match message.payload {
                 Some(service_datagram_tunnel_response::Payload::Opened(_)) => {}
                 Some(service_datagram_tunnel_response::Payload::Datagram(datagram)) => {
-                    let peer_addr = peer_addr_for_id(&peer_state, &datagram.peer_id);
+                    let peer_addr = peer_addr_for_id(&peer_state, &datagram.peer_id)?;
                     if let Some(peer_addr) = peer_addr {
                         socket.send_to(&datagram.data, peer_addr).await?;
                     }
@@ -700,7 +703,7 @@ pub async fn forward_service_datagrams(
                     if close.peer_id.is_empty() {
                         break;
                     }
-                    remove_datagram_peer(&peer_state, &close.peer_id);
+                    remove_datagram_peer(&peer_state, &close.peer_id)?;
                 }
                 None => {}
             }
@@ -716,35 +719,46 @@ async fn abort_and_wait<T>(task: tokio::task::JoinHandle<T>) {
     let _ = task.await;
 }
 
-fn datagram_peer_id(peer_state: &Arc<Mutex<DatagramPeerState>>, peer_addr: SocketAddr) -> String {
-    let mut state = peer_state.lock().expect("datagram peer state poisoned");
+fn datagram_peer_id(
+    peer_state: &Arc<Mutex<DatagramPeerState>>,
+    peer_addr: SocketAddr,
+) -> anyhow::Result<String> {
+    let mut state = peer_state
+        .lock()
+        .map_err(|_| anyhow::anyhow!("datagram peer state poisoned"))?;
     if let Some(peer_id) = state.addr_to_peer.get(&peer_addr) {
-        return peer_id.clone();
+        return Ok(peer_id.clone());
     }
     state.next_peer_id = state.next_peer_id.saturating_add(1);
     let peer_id = format!("peer-{}", state.next_peer_id);
     state.addr_to_peer.insert(peer_addr, peer_id.clone());
     state.peer_to_addr.insert(peer_id.clone(), peer_addr);
-    peer_id
+    Ok(peer_id)
 }
 
 fn peer_addr_for_id(
     peer_state: &Arc<Mutex<DatagramPeerState>>,
     peer_id: &str,
-) -> Option<SocketAddr> {
-    peer_state
+) -> anyhow::Result<Option<SocketAddr>> {
+    Ok(peer_state
         .lock()
-        .expect("datagram peer state poisoned")
+        .map_err(|_| anyhow::anyhow!("datagram peer state poisoned"))?
         .peer_to_addr
         .get(peer_id)
-        .copied()
+        .copied())
 }
 
-fn remove_datagram_peer(peer_state: &Arc<Mutex<DatagramPeerState>>, peer_id: &str) {
-    let mut state = peer_state.lock().expect("datagram peer state poisoned");
+fn remove_datagram_peer(
+    peer_state: &Arc<Mutex<DatagramPeerState>>,
+    peer_id: &str,
+) -> anyhow::Result<()> {
+    let mut state = peer_state
+        .lock()
+        .map_err(|_| anyhow::anyhow!("datagram peer state poisoned"))?;
     if let Some(peer_addr) = state.peer_to_addr.remove(peer_id) {
         state.addr_to_peer.remove(&peer_addr);
     }
+    Ok(())
 }
 
 pub async fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {

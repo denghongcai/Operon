@@ -139,6 +139,10 @@ Operon should not own:
   - v0.8.10 cleanup scope for returning errno from Linux FUSE mount callbacks
     instead of panicking on poisoned inode-table locks.
 
+- `docs/plan/v0.8.11-cli-datagram-lock-hardening.md`
+  - v0.8.11 cleanup scope for returning CLI errors instead of panicking on
+    poisoned UDP datagram forwarding peer-state locks.
+
 - `docs/plan/v0.9-acceptance.md`
   - v0.9 acceptance scope for non-LAN provider discovery adapters.
 
@@ -249,6 +253,8 @@ Operon should not own:
 - Completed hardening milestone: v0.8.10 replaced Linux FUSE mount inode-table
   write-lock panics with helper-mediated errors that callbacks return as
   errno responses.
+- Completed hardening milestone: v0.8.11 replaced CLI UDP datagram forwarding
+  peer-state lock panics with helper-mediated errors.
 - Next planned milestone: v0.9 non-LAN provider discovery.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -366,3 +372,6 @@ Defer:
   `operon-mount` FUSE callbacks no longer panic on poisoned inode-table write
   locks; they return errno responses or propagated mount errors. Nothing
   remains in v0.8.10.
+- Latest phase status update: v0.8.11 completed CLI Datagram Lock Hardening.
+  UDP datagram forwarding peer-state lock failures now return errors or stop
+  forwarding instead of panicking. Nothing remains in v0.8.11.
