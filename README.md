@@ -1,4 +1,10 @@
-# Operon
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/operon-full-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/operon-full-logo-light.svg">
+    <img alt="Operon" src="assets/operon-full-logo-light.svg" width="420">
+  </picture>
+</h1>
 
 [![Latest Release](https://img.shields.io/github/v/release/denghongcai/Operon?sort=semver&display_name=tag)](https://github.com/denghongcai/Operon/releases/latest)
 
