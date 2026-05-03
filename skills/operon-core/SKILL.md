@@ -27,7 +27,7 @@ Core workflow:
 1. Explain config.
 2. Inspect nodes with `operon node list`, `operon node resolve`, or `operon node ping`.
 3. Inspect allowed capabilities with `operon capability list <node>`.
-4. Choose the narrowest command family: `fs`, `job`, `service`, `audit`, `trace`, or `run`.
+4. Choose the narrowest command family: `fs`, `exec`, `service`, `audit`, `trace`, or `run`.
 5. Confirm destructive or externally visible operations before running them.
 6. Verify mutating work with `operon audit show <node>` and, for graphs, `operon trace show <trace.json>`.
 

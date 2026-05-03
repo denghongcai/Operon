@@ -60,7 +60,7 @@ pub struct Capability {
 pub enum CapabilityKind {
     Fs,
     Process,
-    Job,
+    Exec,
     DeviceInfo,
     Service,
 }

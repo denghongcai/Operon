@@ -55,15 +55,15 @@ for node in node-a node-b; do
   cargo run -q -p operon-cli -- --config examples/docker-config.yaml fs read "$node:/stream-grpc.txt" --output /tmp/operon-"${node}"-grpc-stream-output.txt
   cmp /tmp/operon-"${node}"-grpc-stream-input.txt /tmp/operon-"${node}"-grpc-stream-output.txt
 
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" -- echo "job from ${node} grpc"
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" --secret OPERON_TEST_SECRET -- 'test "x$OPERON_TEST_SECRET" = xdocker-secret'
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec run "$node" -- echo "exec from ${node} grpc"
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec run "$node" --secret OPERON_TEST_SECRET -- 'test "x$OPERON_TEST_SECRET" = xdocker-secret'
 
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" --detach --timeout-secs 10 -- "cat > stdin-grpc.txt" >/tmp/operon-"${node}"-grpc-stdin-job.log
-  stdin_job_id="$(awk '{print $2}' /tmp/operon-"${node}"-grpc-stdin-job.log | head -n1)"
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job stdin "$node" "$stdin_job_id" --content "stdin from ${node} grpc"
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job stdin "$node" "$stdin_job_id" --close
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec run "$node" --detach --timeout-secs 10 -- "cat > stdin-grpc.txt" >/tmp/operon-"${node}"-grpc-stdin-exec.log
+  stdin_exec_id="$(awk '{print $2}' /tmp/operon-"${node}"-grpc-stdin-exec.log | head -n1)"
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec stdin "$node" "$stdin_exec_id" --content "stdin from ${node} grpc"
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec stdin "$node" "$stdin_exec_id" --close
   for _ in $(seq 1 30); do
-    cargo run -q -p operon-cli -- --config examples/docker-config.yaml job status "$node" "$stdin_job_id" >/tmp/operon-"${node}"-grpc-stdin-status.log
+    cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec status "$node" "$stdin_exec_id" >/tmp/operon-"${node}"-grpc-stdin-status.log
     cat /tmp/operon-"${node}"-grpc-stdin-status.log
     if grep -q "Succeeded" /tmp/operon-"${node}"-grpc-stdin-status.log; then
       break
@@ -73,14 +73,14 @@ for node in node-a node-b; do
   cargo run -q -p operon-cli -- --config examples/docker-config.yaml fs read "$node:/stdin-grpc.txt" --output /tmp/operon-"${node}"-grpc-stdin-output.txt
   grep -q "stdin from ${node} grpc" /tmp/operon-"${node}"-grpc-stdin-output.txt
 
-  if cargo run -q -p operon-cli -- --config examples/docker-config.yaml job run "$node" --secret DENIED_SECRET -- echo denied >/tmp/operon-"${node}"-grpc-secret-deny.log 2>&1; then
+  if cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec run "$node" --secret DENIED_SECRET -- echo denied >/tmp/operon-"${node}"-grpc-secret-deny.log 2>&1; then
     echo "expected denied gRPC secret policy failure for ${node}" >&2
     exit 1
   fi
   cat /tmp/operon-"${node}"-grpc-secret-deny.log
 
   cargo run -q -p operon-cli -- --config examples/docker-config.yaml audit list "$node"
-  cargo run -q -p operon-cli -- --config examples/docker-config.yaml job list "$node"
+  cargo run -q -p operon-cli -- --config examples/docker-config.yaml exec list "$node"
 done
 
 cargo run -q -p operon-cli -- --config examples/docker-config.yaml node ping node-a

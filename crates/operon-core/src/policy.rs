@@ -4,7 +4,7 @@ use crate::{RuntimeErrorKind, ServicePolicy};
 pub struct PolicyConfig {
     pub subject: String,
     pub fs: FsPolicy,
-    pub job: JobPolicy,
+    pub exec: ExecPolicy,
     #[serde(default)]
     pub service: ServicePolicy,
 }
@@ -38,7 +38,7 @@ pub struct FsPermissions {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct JobPolicy {
+pub struct ExecPolicy {
     pub allowed_cwds: Vec<String>,
     pub default_timeout_secs: u64,
     pub max_timeout_secs: u64,
@@ -113,8 +113,8 @@ pub enum PolicyReasonCode {
     Allowed,
     FsMountNotAllowed,
     FsPermissionDenied,
-    JobCwdDenied,
-    JobTimeoutExceeded,
+    ExecCwdDenied,
+    ExecTimeoutExceeded,
     SecretDenied,
     SecretUndefined,
     ServiceUnknown,
@@ -128,8 +128,8 @@ impl PolicyReasonCode {
             Self::Allowed => "allowed",
             Self::FsMountNotAllowed => "fs-mount-not-allowed",
             Self::FsPermissionDenied => "fs-permission-denied",
-            Self::JobCwdDenied => "job-cwd-denied",
-            Self::JobTimeoutExceeded => "job-timeout-exceeded",
+            Self::ExecCwdDenied => "exec-cwd-denied",
+            Self::ExecTimeoutExceeded => "exec-timeout-exceeded",
             Self::SecretDenied => "secret-denied",
             Self::SecretUndefined => "secret-undefined",
             Self::ServiceUnknown => "service-unknown",
@@ -143,8 +143,8 @@ impl PolicyReasonCode {
             "allowed" => Some(Self::Allowed),
             "fs-mount-not-allowed" => Some(Self::FsMountNotAllowed),
             "fs-permission-denied" => Some(Self::FsPermissionDenied),
-            "job-cwd-denied" => Some(Self::JobCwdDenied),
-            "job-timeout-exceeded" => Some(Self::JobTimeoutExceeded),
+            "exec-cwd-denied" => Some(Self::ExecCwdDenied),
+            "exec-timeout-exceeded" => Some(Self::ExecTimeoutExceeded),
             "secret-denied" => Some(Self::SecretDenied),
             "secret-undefined" => Some(Self::SecretUndefined),
             "service-unknown" => Some(Self::ServiceUnknown),
@@ -185,18 +185,18 @@ mod tests {
     fn denied_policy_decision_converts_to_forbidden_runtime_error() {
         let decision = PolicyDecision::denied(
             "local-cli",
-            "job:default",
+            "exec:default",
             "run",
             "/tmp",
-            PolicyReasonCode::JobCwdDenied,
-            "job cwd denied by policy",
+            PolicyReasonCode::ExecCwdDenied,
+            "exec cwd denied by policy",
         );
 
         assert_eq!(
             decision.runtime_error(),
             (
                 RuntimeErrorKind::Forbidden,
-                "job cwd denied by policy".to_string()
+                "exec cwd denied by policy".to_string()
             )
         );
     }
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn capability_diagnostic_request_serializes_optional_timeout() {
         let request = CapabilityDiagnosticRequest {
-            capability_id: "job:default".to_string(),
+            capability_id: "exec:default".to_string(),
             action: "run".to_string(),
             resource: "/workspace".to_string(),
             timeout_secs: Some(60),
@@ -234,7 +234,7 @@ mod tests {
 
         let json = serde_json::to_value(&request).expect("request json");
 
-        assert_eq!(json["capability_id"], "job:default");
+        assert_eq!(json["capability_id"], "exec:default");
         assert_eq!(json["action"], "run");
         assert_eq!(json["resource"], "/workspace");
         assert_eq!(json["timeout_secs"], 60);

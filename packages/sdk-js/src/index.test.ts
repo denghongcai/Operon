@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CapabilityKind, JobStatus, ServiceProtocol } from "./generated/operon/runtime";
+import { CapabilityKind, ExecStatus, ServiceProtocol } from "./generated/operon/runtime";
 import { OperonClient } from "./index";
 
 const niceGrpcMock = vi.hoisted(() => {
@@ -18,17 +18,17 @@ const niceGrpcMock = vi.hoisted(() => {
       readFileRange: vi.fn(),
       writeFile: vi.fn(),
       copyFs: vi.fn(),
-      runJob: vi.fn(),
-      getJob: vi.fn(),
-      listJobs: vi.fn(),
-      watchJob: vi.fn(),
-      listJobLogs: vi.fn(),
-      streamJobLogs: vi.fn(),
-      writeJobStdin: vi.fn(),
-      closeJobStdin: vi.fn(),
+      runExec: vi.fn(),
+      getExec: vi.fn(),
+      listExecs: vi.fn(),
+      watchExec: vi.fn(),
+      listExecLogs: vi.fn(),
+      streamExecLogs: vi.fn(),
+      writeExecStdin: vi.fn(),
+      closeExecStdin: vi.fn(),
       listServices: vi.fn(),
       checkService: vi.fn(),
-      cancelJob: vi.fn(),
+      cancelExec: vi.fn(),
       listAudit: vi.fn(),
       openServiceTunnel: vi.fn(),
       openServiceDatagramTunnel: vi.fn(),
@@ -63,38 +63,38 @@ afterEach(() => {
 });
 
 describe("OperonClient", () => {
-  it("runs fs and job steps sequentially over gRPC and returns a successful trace", async () => {
+  it("runs fs and exec steps sequentially over gRPC and returns a successful trace", async () => {
     niceGrpcMock.client.writeFile.mockResolvedValue({ path: "/input.txt", bytesWritten: 5 });
-    niceGrpcMock.client.runJob.mockResolvedValue({
-      id: "job-1",
+    niceGrpcMock.client.runExec.mockResolvedValue({
+      id: "exec-1",
       nodeId: "node-a",
       command: "cat input.txt",
       cwd: "/",
-      status: JobStatus.JOB_STATUS_RUNNING,
+      status: ExecStatus.EXEC_STATUS_RUNNING,
       logCount: "0",
       logsTruncated: false,
     });
-    niceGrpcMock.client.watchJob.mockReturnValue(asyncIterable([
+    niceGrpcMock.client.watchExec.mockReturnValue(asyncIterable([
       {
-        jobId: "job-1",
-        status: JobStatus.JOB_STATUS_RUNNING,
+        execId: "exec-1",
+        status: ExecStatus.EXEC_STATUS_RUNNING,
         logCount: "0",
         logsTruncated: false,
       },
       {
-        jobId: "job-1",
-        status: JobStatus.JOB_STATUS_SUCCEEDED,
+        execId: "exec-1",
+        status: ExecStatus.EXEC_STATUS_SUCCEEDED,
         exitCode: 0,
         logCount: "1",
         logsTruncated: false,
       },
     ]));
-    niceGrpcMock.client.getJob.mockResolvedValueOnce({
-      id: "job-1",
+    niceGrpcMock.client.getExec.mockResolvedValueOnce({
+      id: "exec-1",
       nodeId: "node-a",
       command: "cat input.txt",
       cwd: "/",
-      status: JobStatus.JOB_STATUS_SUCCEEDED,
+      status: ExecStatus.EXEC_STATUS_SUCCEEDED,
       exitCode: 0,
       logCount: "1",
       logsTruncated: false,
@@ -106,7 +106,7 @@ describe("OperonClient", () => {
       name: "copy-and-run",
       steps: [
         { id: "write", node: "node-a", action: "fs.write", path: "/input.txt", content: "hello" },
-        { id: "run", node: "node-a", action: "job.run", command: "cat input.txt", secrets: ["GITHUB_TOKEN"] },
+        { id: "run", node: "node-a", action: "exec.run", command: "cat input.txt", secrets: ["GITHUB_TOKEN"] },
         { id: "read", node: "node-a", action: "fs.read", path: "/output.txt" },
       ],
     });
@@ -119,7 +119,7 @@ describe("OperonClient", () => {
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "write");
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "run");
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "read");
-    expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
+    expect(niceGrpcMock.client.runExec).toHaveBeenCalledWith(
       expect.objectContaining({ command: "cat input.txt", secrets: ["GITHUB_TOKEN"] }),
       expect.any(Object),
     );
@@ -217,31 +217,31 @@ describe("OperonClient", () => {
     });
     niceGrpcMock.client.statFs.mockResolvedValue({ path: "/a.txt", isFile: true, isDir: false, size: "3" });
     niceGrpcMock.client.listFs.mockResolvedValue({ path: "/", entries: [], nextPageToken: "" });
-    niceGrpcMock.client.runJob.mockResolvedValue({
-      id: "job-1",
+    niceGrpcMock.client.runExec.mockResolvedValue({
+      id: "exec-1",
       nodeId: "node-a",
       command: "true",
       cwd: "/",
-      status: JobStatus.JOB_STATUS_RUNNING,
+      status: ExecStatus.EXEC_STATUS_RUNNING,
       logCount: "0",
       logsTruncated: false,
     });
-    niceGrpcMock.client.getJob.mockResolvedValue({
-      id: "job-1",
+    niceGrpcMock.client.getExec.mockResolvedValue({
+      id: "exec-1",
       nodeId: "node-a",
       command: "true",
       cwd: "/",
-      status: JobStatus.JOB_STATUS_SUCCEEDED,
+      status: ExecStatus.EXEC_STATUS_SUCCEEDED,
       exitCode: 0,
       logCount: "0",
       logsTruncated: false,
     });
-    niceGrpcMock.client.cancelJob.mockResolvedValue({
-      id: "job-1",
+    niceGrpcMock.client.cancelExec.mockResolvedValue({
+      id: "exec-1",
       nodeId: "node-a",
       command: "true",
       cwd: "/",
-      status: JobStatus.JOB_STATUS_CANCELLED,
+      status: ExecStatus.EXEC_STATUS_CANCELLED,
       logCount: "0",
       logsTruncated: false,
     });
@@ -286,13 +286,13 @@ describe("OperonClient", () => {
       { path: "/", pageSize: 1000, pageToken: "" },
       expect.any(Object),
     );
-    await expect(client.runJob("node-a", { command: "true", timeoutSecs: 5 })).resolves.toMatchObject({ id: "job-1", status: "running" });
-    expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
+    await expect(client.runExec("node-a", { command: "true", timeoutSecs: 5 })).resolves.toMatchObject({ id: "exec-1", status: "running" });
+    expect(niceGrpcMock.client.runExec).toHaveBeenCalledWith(
       expect.objectContaining({ command: "true", argv: [], timeoutSecs: "5" }),
       expect.any(Object),
     );
-    await expect(client.getJob("node-a", "job-1")).resolves.toMatchObject({ id: "job-1", status: "succeeded" });
-    await expect(client.cancelJob("node-a", "job-1")).resolves.toMatchObject({ id: "job-1", status: "cancelled" });
+    await expect(client.getExec("node-a", "exec-1")).resolves.toMatchObject({ id: "exec-1", status: "succeeded" });
+    await expect(client.cancelExec("node-a", "exec-1")).resolves.toMatchObject({ id: "exec-1", status: "cancelled" });
     await expect(client.listAudit("node-a")).resolves.toEqual({
       events: [{
         subject: "local-cli",
@@ -326,21 +326,21 @@ describe("OperonClient", () => {
     );
   });
 
-  it("sends argv job requests without shell command text", async () => {
-    niceGrpcMock.client.runJob.mockResolvedValue({
-      id: "job-argv",
+  it("sends argv exec requests without shell command text", async () => {
+    niceGrpcMock.client.runExec.mockResolvedValue({
+      id: "exec-argv",
       nodeId: "node-a",
       command: "printf hello world",
       cwd: "/",
-      status: JobStatus.JOB_STATUS_RUNNING,
+      status: ExecStatus.EXEC_STATUS_RUNNING,
       logCount: "0",
       logsTruncated: false,
     });
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
-    await client.runJob("node-a", { argv: ["printf", "hello world"], timeoutSecs: 5 });
+    await client.runExec("node-a", { argv: ["printf", "hello world"], timeoutSecs: 5 });
 
-    expect(niceGrpcMock.client.runJob).toHaveBeenCalledWith(
+    expect(niceGrpcMock.client.runExec).toHaveBeenCalledWith(
       expect.objectContaining({
         command: "",
         argv: ["printf", "hello world"],
@@ -464,24 +464,24 @@ describe("OperonClient", () => {
     expect(requests[2]).toEqual({ close: { peerId: "", reason: "client input ended" } });
   });
 
-  it("streams job logs as bytes without string re-encoding", async () => {
+  it("streams exec logs as bytes without string re-encoding", async () => {
     const first = new Uint8Array([0xff, 0x00, 0x41]);
     const second = new Uint8Array([0x42]);
-    niceGrpcMock.client.streamJobLogs.mockReturnValue(asyncIterable([
+    niceGrpcMock.client.streamExecLogs.mockReturnValue(asyncIterable([
       {
         snapshot: {
-          jobId: "job-1",
+          execId: "exec-1",
           logs: [{ stream: "stdout", data: first, sequence: "0" }],
           truncated: false,
           droppedLogCount: "0",
           nextSequence: "1",
         },
       },
-      { entry: { jobId: "job-1", log: { stream: "stderr", data: second, sequence: "1" } } },
+      { entry: { execId: "exec-1", log: { stream: "stderr", data: second, sequence: "1" } } },
       {
         complete: {
-          jobId: "job-1",
-          status: JobStatus.JOB_STATUS_SUCCEEDED,
+          execId: "exec-1",
+          status: ExecStatus.EXEC_STATUS_SUCCEEDED,
           exitCode: 0,
           logCount: "2",
           logsTruncated: false,
@@ -492,19 +492,19 @@ describe("OperonClient", () => {
     ]));
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
-    const reader = (await client.streamJobLogs("node-a", "job-1")).getReader();
+    const reader = (await client.streamExecLogs("node-a", "exec-1")).getReader();
 
     await expect(reader.read()).resolves.toEqual({ done: false, value: first });
     await expect(reader.read()).resolves.toEqual({ done: false, value: second });
     await expect(reader.read()).resolves.toEqual({ done: true, value: undefined });
   });
 
-  it("exposes typed job log stream envelope events", async () => {
+  it("exposes typed exec log stream envelope events", async () => {
     const data = new Uint8Array([0x41]);
-    niceGrpcMock.client.streamJobLogs.mockReturnValue(asyncIterable([
+    niceGrpcMock.client.streamExecLogs.mockReturnValue(asyncIterable([
       {
         snapshot: {
-          jobId: "job-1",
+          execId: "exec-1",
           logs: [{ stream: "stdout", data, sequence: "3" }],
           truncated: true,
           droppedLogCount: "3",
@@ -515,7 +515,7 @@ describe("OperonClient", () => {
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
     const events = [];
-    for await (const event of await client.streamJobLogEvents("node-a", "job-1")) {
+    for await (const event of await client.streamExecLogEvents("node-a", "exec-1")) {
       events.push(event);
     }
 
@@ -523,7 +523,7 @@ describe("OperonClient", () => {
       {
         type: "snapshot",
         snapshot: {
-          job_id: "job-1",
+          exec_id: "exec-1",
           logs: [{ stream: "stdout", data, sequence: 3 }],
           truncated: true,
           dropped_log_count: 3,

@@ -716,7 +716,7 @@ mod tests {
         let mut policy = PolicyConfig {
             subject: "local-cli".to_string(),
             fs: operon_core::FsPolicy { mounts: Vec::new() },
-            job: operon_core::JobPolicy {
+            exec: operon_core::ExecPolicy {
                 allowed_cwds: Vec::new(),
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,

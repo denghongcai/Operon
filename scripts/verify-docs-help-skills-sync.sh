@@ -36,6 +36,8 @@ require_pattern 'mDNS discovery is only a convenience mechanism' AGENTS.md
 require_pattern 'Skills explain scenarios and command choice; CLI help is the source of truth' AGENTS.md
 require_pattern 'scripts/verify-docs-help-skills-sync.sh' AGENTS.md
 require_pattern 'v0.8.18 Docs, Help, and Skills Synchronization' docs/plan/development-phases.md
+require_pattern 'v0.10 Execution Capability Unification' docs/plan/development-phases.md
+require_pattern 'scripts/verify-v0.10-exec-unification.sh' DEVELOPMENT.md
 
 for skill in skills/*/SKILL.md; do
   require_pattern 'operon .*--help|operon <command> --help|CLI help is the source of truth' "$skill"
@@ -73,13 +75,13 @@ help_commands=(
   "service check --help"
   "service forward --help"
   "service forward-udp --help"
-  "job --help"
-  "job run --help"
-  "job list --help"
-  "job status --help"
-  "job logs --help"
-  "job stdin --help"
-  "job cancel --help"
+  "exec --help"
+  "exec run --help"
+  "exec list --help"
+  "exec status --help"
+  "exec logs --help"
+  "exec stdin --help"
+  "exec cancel --help"
   "run --help"
   "graph --help"
   "graph run --help"

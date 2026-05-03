@@ -74,12 +74,13 @@ scripts/verify-v0.9.3-store-backed-audit-visibility.sh
 scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
 scripts/verify-v0.9.5-policy-language-hardening.sh
 scripts/verify-v0.9.6-capability-diagnostics.sh
+scripts/verify-v0.10-exec-unification.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
 fresh Ubuntu 20.04 environment, runs the user-facing Quickstart, installs the
 repo-local skills through the Vercel Skills CLI with Node.js 20, and exercises
-the README file, job, service, audit, trace, and config examples.
+the README file, exec, service, audit, trace, and config examples.
 
 The release glibc baseline validation keeps Linux release builds on an Ubuntu
 20.04 / glibc 2.31 baseline, pins a modern `protoc` because Ubuntu 20.04's
@@ -88,7 +89,7 @@ for accidental newer GLIBC symbol requirements.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store
-queries, secret use, service health checks, streaming fs, job stdin/log streams,
+queries, secret use, service health checks, streaming fs, exec stdin/log streams,
 LAN mDNS discovery, and runs the example execution graph over gRPC endpoints.
 The Linux mount validation adds a real FUSE mount read check when the host has
 `/dev/fuse`; otherwise it reports the missing host requirement and exits
@@ -107,14 +108,14 @@ The v0.6.4 onboard validation checks generated unified config, token auth,
 daemon startup, CLI ping, capability inspection, fs operation, and audit.
 
 The v0.6.7/v0.6.8/v0.6.12 runtime validation checks process-group
-cancellation, binary-safe job logs, streaming file writes, job stdin streaming,
+cancellation, binary-safe exec logs, streaming file writes, exec stdin streaming,
 and current paginated list API callers.
 
 The v0.6.9 CLI contract validation checks script-facing JSON output, quiet
-output, job failure exit status, audit JSON filters, health version reporting,
+output, exec failure exit status, audit JSON filters, health version reporting,
 and starter config file generation.
 
-The v0.6.12 runtime-boundary validation checks job-log streaming envelopes,
+The v0.6.12 runtime-boundary validation checks exec-log streaming envelopes,
 append-only store writer APIs, Linux-only mount adapter dependency boundaries,
 and the current public protocol version.
 
@@ -131,7 +132,7 @@ help paths, `operon config explain`, current service forwarding command names,
 and safety guidance for agent workflows.
 
 The v0.8.1 integration coverage validation starts a real daemon and exercises
-config, node, capability, filesystem, job, service, audit, execution graph,
+config, node, capability, filesystem, exec, service, audit, execution graph,
 trace, and completion flows. The current coverage audit is in
 `docs/quality/test-coverage-audit.md`.
 
@@ -147,7 +148,7 @@ The v0.8.5 core-domain validation checks that [`operon-core`](crates/operon-core
 policies live in focused modules with compatible root re-exports.
 
 The v0.8.6 modularization validation checks shared Rust gRPC client helpers,
-non-fs CLI command modules, Linux mount adapter modules, daemon job/service/audit
+non-fs CLI command modules, Linux mount adapter modules, daemon exec/service/audit
 modules, graph/workflow aliases, and TypeScript SDK public API alignment.
 
 The docs/help/skills synchronization validation checks current public CLI help
@@ -163,7 +164,7 @@ optional endpoint health status output, and continued endpoint-only discovery
 config generation.
 
 The policy-derived capability validation checks that daemon capability
-discovery reflects configured policy mounts, job roots, and services instead of
+discovery reflects configured policy mounts, exec roots, and services instead of
 advertising a static default capability set.
 
 The v0.9.3 store-backed audit validation checks that persisted audit events are
@@ -171,8 +172,8 @@ loaded from the append-only JSONL store at daemon startup while keeping bounded
 in-memory retention.
 
 The v0.9.4 runtime hardening validation checks service health audit semantics,
-store-backed job log restart visibility, workspace traversal hardening,
-shell-free argv job execution, config LAN advertisement UX, and protocol
+store-backed exec log restart visibility, workspace traversal hardening,
+shell-free argv execution, config LAN advertisement UX, and protocol
 version alignment.
 
 The v0.9.5 policy language validation checks the shared policy decision
@@ -186,8 +187,13 @@ current protocol version alignment.
 The v0.9.7 runtime API hardening validation is covered by the workspace Rust and
 TypeScript checks. It verifies paginated `ListFs` protocol behavior,
 complete-list CLI/mount/SDK helpers, SDK streaming writes without full
-pre-buffering, empty daemon job request rejection, and runtime API docs for
+pre-buffering, empty daemon exec request rejection, and runtime API docs for
 bidirectional service tunnel RPCs.
+
+The v0.10 exec unification validation checks that the active protocol, CLI,
+SDK, docs, examples, validation scripts, and repo-local skills use the unified
+`exec` capability vocabulary and that the legacy job command group is not
+supported.
 
 ## Release Automation
 
@@ -281,7 +287,7 @@ policy:
           read: true
           write: true
           delete: false
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30
@@ -326,7 +332,8 @@ capability policy changes to normal Operon configuration review.
 
 ## Policy Reference
 
-Policy shape:
+Policy shape. In config paths and generated config diagnostics, this execution
+policy is referred to as `policy.exec`:
 
 ```yaml
 subject: local-cli
@@ -340,7 +347,7 @@ fs:
         write: true
         delete: false
 
-job:
+exec:
   allowed_cwds:
     - /
   default_timeout_secs: 30
@@ -367,10 +374,10 @@ Policy paths are virtual paths inside the daemon workspace. If the daemon
 config sets `workspace: /home/ubuntu/workspace`, policy path `/` means that
 workspace root, not the host root.
 
-`preserve_env: false` keeps job process environments isolated. With this
+`preserve_env: false` keeps exec process environments isolated. With this
 default, the daemon clears inherited environment variables and injects only
 `env_allowlist` variables plus authorized requested secrets. Set
-`preserve_env: true` only when jobs need the full daemon environment, including
+`preserve_env: true` only when execs need the full daemon environment, including
 values such as `HOME`, `PATH`, proxy settings, or toolchain variables.
 
 Secret file shape:
@@ -379,14 +386,14 @@ Secret file shape:
 GITHUB_TOKEN: ghp_example
 ```
 
-Secrets are only injected into jobs that request them and are allowed by policy.
+Secrets are only injected into execs that request them and are allowed by policy.
 The daemon does not expose a secret read API; audit output records secret names,
 not values.
 
-Policy decisions use a small shared policy vocabulary across filesystem, job,
+Policy decisions use a small shared policy vocabulary across filesystem, exec,
 service, and secret checks. Denials carry a stable reason code such as
-`fs-mount-not-allowed`, `fs-permission-denied`, `job-cwd-denied`,
-`job-timeout-exceeded`, `secret-denied`, `secret-undefined`,
+`fs-mount-not-allowed`, `fs-permission-denied`, `exec-cwd-denied`,
+`exec-timeout-exceeded`, `secret-denied`, `secret-undefined`,
 `service-unknown`, or `service-action-denied`, followed by a human-readable
 message in audit output. `operon config explain --json` includes
 `policy.effective_grants` entries with `capability_id`, `action`, `resource`,
@@ -428,18 +435,18 @@ operon --config ./operon.config.yaml fs rename cloud-a:/work/file.txt cloud-a:/w
 operon --config ./operon.config.yaml fs copy cloud-a:/work/renamed.txt cloud-a:/work/copied.txt
 operon --config ./operon.config.yaml fs rm cloud-a:/work/renamed.txt
 
-operon --config ./operon.config.yaml job run cloud-a -- echo hello
-operon --config ./operon.config.yaml job run cloud-a --argv -- printf "hello world"
-operon --config ./operon.config.yaml job run cloud-a --secret GITHUB_TOKEN -- 'test x$GITHUB_TOKEN = xexpected'
-operon --config ./operon.config.yaml job run cloud-a --detach -- sleep 10
-operon --config ./operon.config.yaml job status cloud-a job-1
-operon --config ./operon.config.yaml job list cloud-a
-operon --config ./operon.config.yaml job logs cloud-a job-1
-operon --config ./operon.config.yaml job logs cloud-a job-1 --follow
-operon --config ./operon.config.yaml job logs cloud-a job-1 --stream
-operon --config ./operon.config.yaml job stdin cloud-a job-1 --content "input"
-operon --config ./operon.config.yaml job stdin cloud-a job-1 --close
-operon --config ./operon.config.yaml job cancel cloud-a job-1
+operon --config ./operon.config.yaml exec run cloud-a -- echo hello
+operon --config ./operon.config.yaml exec run cloud-a --argv -- printf "hello world"
+operon --config ./operon.config.yaml exec run cloud-a --secret GITHUB_TOKEN -- 'test x$GITHUB_TOKEN = xexpected'
+operon --config ./operon.config.yaml exec run cloud-a --detach -- sleep 10
+operon --config ./operon.config.yaml exec status cloud-a exec-1
+operon --config ./operon.config.yaml exec list cloud-a
+operon --config ./operon.config.yaml exec logs cloud-a exec-1
+operon --config ./operon.config.yaml exec logs cloud-a exec-1 --follow
+operon --config ./operon.config.yaml exec logs cloud-a exec-1 --stream
+operon --config ./operon.config.yaml exec stdin cloud-a exec-1 --content "input"
+operon --config ./operon.config.yaml exec stdin cloud-a exec-1 --close
+operon --config ./operon.config.yaml exec cancel cloud-a exec-1
 
 operon --config ./operon.config.yaml audit list cloud-a
 operon --config ./operon.config.yaml audit show cloud-a --limit 20
@@ -456,16 +463,16 @@ and loaded again on daemon startup. `audit list` and `audit show` still read
 from the bounded in-memory audit queue, seeded from the most recent persisted
 events.
 
-`operon job run` treats one argument after `--` as an explicit shell command
+`operon exec run` treats one argument after `--` as an explicit shell command
 string. Multiple arguments are shell-escaped before being sent to the daemon so
 argument boundaries are preserved. For shell operators, expansion, or pipelines,
 pass one quoted command string or call `sh -c`.
 
-Use `operon job run --argv -- <program> <arg>...` to send a shell-free argv
+Use `operon exec run --argv -- <program> <arg>...` to send a shell-free argv
 request; this preserves arguments without shell parsing and is preferred for
 agents when no shell syntax is needed.
 
-Job stdout/stderr logs are transported as bytes. Human CLI output writes those
+Exec stdout/stderr logs are transported as bytes. Human CLI output writes those
 bytes directly; JSON output exposes byte arrays so clients can choose their own
 decoding.
 
@@ -496,7 +503,7 @@ HTTP runtime API; humans and scripts should use `operon`, including
 [`proto/operon/runtime.proto`](proto/operon/runtime.proto).
 
 The runtime schema uses typed protobuf enums, proto3 optional presence,
-target/chunk request envelopes, job-log stream event envelopes, bidirectional
+target/chunk request envelopes, exec-log stream event envelopes, bidirectional
 service tunnel RPCs, and paginated list APIs.
 
 See [PROTOCOL.md](PROTOCOL.md) and
@@ -517,7 +524,7 @@ const trace = await operon.run({
   name: "train-model",
   steps: [
     { node: "cloud-a", action: "fs.read", path: "/data" },
-    { node: "gpu-node", action: "job.run", command: "train.py", secrets: ["WANDB_API_KEY"] }
+    { node: "gpu-node", action: "exec.run", command: "train.py", secrets: ["WANDB_API_KEY"] }
   ]
 });
 ```
@@ -531,7 +538,7 @@ scripts/verify-v0.5-docker.sh
 ```
 
 This starts two `operond` containers with gRPC listeners, validates capability
-discovery, token auth, fs operations, streaming file transfer, job execution,
+discovery, token auth, fs operations, streaming file transfer, command execution,
 stdin/log streams, service checks, policy denial, scoped secrets, audit output,
 trace summaries, and runs:
 
@@ -561,7 +568,7 @@ Operon Runtime
   - Execution Trace
         |
 Capability Layer
-  - fs / job / service / secret
+  - fs / exec / service / secret
         |
 Policy / Secret / Audit
         |

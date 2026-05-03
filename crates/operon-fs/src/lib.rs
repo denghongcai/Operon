@@ -266,7 +266,7 @@ mod tests {
                     },
                 }],
             },
-            job: operon_core::JobPolicy {
+            exec: operon_core::ExecPolicy {
                 allowed_cwds: Vec::new(),
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,

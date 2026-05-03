@@ -135,6 +135,9 @@ jobs:
           - name: v0.9.6 Capability Diagnostics Validation
             script: scripts/verify-v0.9.6-capability-diagnostics.sh
             node: true
+          - name: v0.10 Exec Unification Validation
+            script: scripts/verify-v0.10-exec-unification.sh
+            node: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6

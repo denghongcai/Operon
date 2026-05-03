@@ -20,12 +20,12 @@ Current Rust crate coverage by responsibility:
 | [`operon-core`](../../crates/operon-core) | DTO serialization, policy YAML, service policy, graph YAML | keep enum and wire-name tests when protocol evolves |
 | [`operon-config`](../../crates/operon-config) | unified config loading, endpoint resolution, auth serialization, unknown-field warnings | keep endpoint-only config tests aligned with v0.9 acceptance |
 | [`operon-fs`](../../crates/operon-fs) | workspace path containment, symlink behavior, policy scope, stable ids | add more Linux fd/openat2 tests if containment moves lower |
-| [`operon-process`](../../crates/operon-process) | job policy, environment allowlist, preserve-env mode | add more process-group tests around platform differences |
+| [`operon-process`](../../crates/operon-process) | exec policy, environment allowlist, preserve-env mode | add more process-group tests around platform differences |
 | [`operon-store`](../../crates/operon-store) | append-only JSONL writer, fsync toggle, symlink rejection | add corruption/recovery tests if a richer store is added |
 | [`operon-network`](../../crates/operon-network) | LAN mDNS discovery removal handling | add endpoint export/import tests if discovery UX grows |
 | [`operon-protocol`](../../crates/operon-protocol) | page tokens and protocol version | keep conversion tests aligned with proto changes |
 | [`operon-mount`](../../crates/operon-mount) | inode table, path validation, runtime wrapper, Linux mount boundaries | real FUSE behavior remains in Linux validation scripts |
-| [`operond`](../../crates/operond) | daemon policy, fs, job lifecycle, audit, pagination, store path, locks | keep high-risk runtime behavior here instead of only scripts |
+| [`operond`](../../crates/operond) | daemon policy, fs, exec lifecycle, audit, pagination, store path, locks | keep high-risk runtime behavior here instead of only scripts |
 | [`operon-cli`](../../crates/operon-cli) | command parsing helpers, config explain, onboard, completion command model | integration tests now cover binary behavior |
 
 ## Integration Coverage
@@ -38,7 +38,7 @@ The repository now includes two additional integration checks:
 - [`scripts/verify-v0.8.1-integration-coverage.sh`](../../scripts/verify-v0.8.1-integration-coverage.sh)
   - starts a real `operond`.
   - exercises `config explain`, node ping, capability list, service health,
-    completion generation, fs write/read/copy/truncate/rm, job run/log
+    completion generation, fs write/read/copy/truncate/rm, exec run/log
     retrieval, execution graph run, trace inspection, and filtered audit.
   - lists workspace tests and ensures the core crates have registered tests.
 

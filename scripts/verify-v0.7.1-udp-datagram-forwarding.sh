@@ -95,7 +95,7 @@ policy:
           read: true
           write: true
           delete: true
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30

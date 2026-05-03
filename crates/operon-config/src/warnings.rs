@@ -78,7 +78,7 @@ fn collect_auth(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<Config
 }
 
 fn collect_policy(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<ConfigWarning>) {
-    collect_object(value, path, &["subject", "fs", "job", "service"], warnings);
+    collect_object(value, path, &["subject", "fs", "exec", "service"], warnings);
     collect_object(
         value.get("fs").unwrap_or(&serde_yaml::Value::Null),
         &format!("{path}.fs"),
@@ -104,8 +104,8 @@ fn collect_policy(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<Conf
         );
     }
     collect_object(
-        value.get("job").unwrap_or(&serde_yaml::Value::Null),
-        &format!("{path}.job"),
+        value.get("exec").unwrap_or(&serde_yaml::Value::Null),
+        &format!("{path}.exec"),
         &[
             "allowed_cwds",
             "default_timeout_secs",

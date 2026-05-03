@@ -1,11 +1,11 @@
 use std::{path::PathBuf, time::SystemTime};
 
 use operon_core::{
-    ExecutionGraph, ExecutionStatus, ExecutionStep, ExecutionStepTrace, ExecutionTrace, FsRead,
-    JobRecord, JobRunRequest, JobStatus, RequestContext,
+    ExecRecord, ExecRunRequest, ExecStatus, ExecutionGraph, ExecutionStatus, ExecutionStep,
+    ExecutionStepTrace, ExecutionTrace, FsRead, RequestContext,
 };
 
-use crate::{commands::job::load as load_job, grpc, target::load_endpoint};
+use crate::{commands::exec::load as load_exec, grpc, target::load_endpoint};
 
 pub(crate) async fn run_graph(
     config_path: PathBuf,
@@ -117,32 +117,34 @@ async fn execute_step_action(
             let write = grpc::write_file_bytes(&endpoint, path, content.as_bytes()).await?;
             Ok(serde_json::to_value(write)?)
         }
-        "job.run" => run_job_step(config_path, step).await,
+        "exec.run" => run_exec_step(config_path, step).await,
         action => anyhow::bail!("unsupported graph action `{action}`"),
     }
 }
 
-async fn run_job_step(
+async fn run_exec_step(
     config_path: PathBuf,
     step: &ExecutionStep,
 ) -> anyhow::Result<serde_json::Value> {
     let endpoint = load_endpoint(config_path.clone(), &step.node)?;
-    let request = JobRunRequest {
+    let request = ExecRunRequest {
         command: required_field(step.command.as_deref(), "command")?.to_string(),
         argv: Vec::new(),
         cwd: step.cwd.clone(),
         timeout_secs: step.timeout_secs,
         secrets: step.secrets.clone(),
     };
-    let record: JobRecord = grpc::run_job(&endpoint, request).await?;
+    let record: ExecRecord = grpc::run_exec(&endpoint, request).await?;
 
-    let event = grpc::watch_job_to_terminal(&endpoint, &record.id).await?;
-    let record = load_job(config_path, &step.node, &record.id).await?;
+    let event = grpc::watch_exec_to_terminal(&endpoint, &record.id).await?;
+    let record = load_exec(config_path, &step.node, &record.id).await?;
     match event.status {
-        JobStatus::Succeeded => Ok(serde_json::to_value(record)?),
-        JobStatus::Running => anyhow::bail!("job `{}` watch ended while still running", record.id),
-        JobStatus::Failed | JobStatus::Cancelled | JobStatus::TimedOut => {
-            anyhow::bail!("job `{}` ended with status {:?}", record.id, event.status)
+        ExecStatus::Succeeded => Ok(serde_json::to_value(record)?),
+        ExecStatus::Running => {
+            anyhow::bail!("exec `{}` watch ended while still running", record.id)
+        }
+        ExecStatus::Failed | ExecStatus::Cancelled | ExecStatus::TimedOut => {
+            anyhow::bail!("exec `{}` ended with status {:?}", record.id, event.status)
         }
     }
 }

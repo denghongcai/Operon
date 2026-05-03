@@ -53,18 +53,18 @@ Missing or invalid metadata returns gRPC `Unauthenticated`.
 
 ## Policy Decision Vocabulary
 
-The daemon owns capability authorization. Filesystem, job, service, and secret
+The daemon owns capability authorization. Filesystem, exec, service, and secret
 checks use a shared policy decision vocabulary internally and in audit reasons.
 Denied policy decisions include a stable reason code before the human-readable
 message, for example:
 
 ```text
-job-cwd-denied: job cwd denied by policy
+exec-cwd-denied: exec cwd denied by policy
 service-action-denied: service `web` action `forward` denied by policy
 ```
 
 Current reason codes include `fs-mount-not-allowed`,
-`fs-permission-denied`, `job-cwd-denied`, `job-timeout-exceeded`,
+`fs-permission-denied`, `exec-cwd-denied`, `exec-timeout-exceeded`,
 `secret-denied`, `secret-undefined`, `service-unknown`,
 `service-action-denied`, and `unsupported-action`. Existing audit filters still
 filter by subject, capability, action, resource, and allowed state; the reason
@@ -76,7 +76,7 @@ field remains a string for compatibility.
 
 Use the unary `ExplainCapability` RPC to ask the daemon why one capability
 action is allowed or denied before attempting the operation. The request carries
-`capability_id`, `action`, `resource`, and optional `timeout_secs` for job
+`capability_id`, `action`, `resource`, and optional `timeout_secs` for exec
 diagnostics. The response is a `PolicyDecision` with `subject`, `capability_id`,
 `action`, `resource`, `allowed`, `reason_code`, and `message`.
 
@@ -98,15 +98,15 @@ run graphs can omit them.
 Runtime enum fields are protobuf enums on the wire:
 
 - `Capability.kind`: `CAPABILITY_KIND_FS`, `CAPABILITY_KIND_PROCESS`,
-  `CAPABILITY_KIND_JOB`, `CAPABILITY_KIND_DEVICE_INFO`,
+  `CAPABILITY_KIND_EXEC`, `CAPABILITY_KIND_DEVICE_INFO`,
   `CAPABILITY_KIND_SERVICE`.
-- `JobRecord.status` and `JobEvent.status`: `JOB_STATUS_RUNNING`,
-  `JOB_STATUS_SUCCEEDED`, `JOB_STATUS_FAILED`, `JOB_STATUS_CANCELLED`,
-  `JOB_STATUS_TIMED_OUT`.
+- `ExecRecord.status` and `ExecEvent.status`: `EXEC_STATUS_RUNNING`,
+  `EXEC_STATUS_SUCCEEDED`, `EXEC_STATUS_FAILED`, `EXEC_STATUS_CANCELLED`,
+  `EXEC_STATUS_TIMED_OUT`.
 - `ServiceDefinition.protocol`: `SERVICE_PROTOCOL_TCP`.
 
 Fields whose absence is meaningful use proto3 `optional`, not paired `has_*`
-booleans. This applies to job timeout, job exit code, service check reason, and
+booleans. This applies to exec timeout, exec exit code, service check reason, and
 audit run/step context. Generated clients should leave the optional field unset
 when the value is absent.
 
@@ -135,12 +135,12 @@ Unary calls:
 - `DeleteFs`
 - `RenameFs`
 - `CopyFs`
-- `RunJob`
-- `GetJob`
-- `ListJobs`
-- `ListJobLogs`
-- `CloseJobStdin`
-- `CancelJob`
+- `RunExec`
+- `GetExec`
+- `ListExecs`
+- `ListExecLogs`
+- `CloseExecStdin`
+- `CancelExec`
 - `ListServices`
 - `CheckService`
 - `ListAudit`
@@ -148,13 +148,13 @@ Unary calls:
 Server-streaming calls:
 
 - `ReadFile`
-- `WatchJob`
-- `StreamJobLogs`
+- `WatchExec`
+- `StreamExecLogs`
 
 Client-streaming calls:
 
 - `WriteFile`
-- `WriteJobStdin`
+- `WriteExecStdin`
 
 Bidirectional-streaming calls:
 
@@ -242,31 +242,31 @@ Current containment checks are path-based and do not yet use Linux
 processes to concurrently mutate the daemon workspace until fd-relative
 resolution is added.
 
-`WatchJob` returns ordered `JobEvent` messages for the requested job. The first
-event is the current job state. Later events are status changes, including the
-terminal state. Clients that need to wait for a job should prefer `WatchJob`
-over polling `GetJob`.
+`WatchExec` returns ordered `ExecEvent` messages for the requested execution.
+The first event is the current execution state. Later events are status changes,
+including the terminal state. Clients that need to wait for an execution should
+prefer `WatchExec` over polling `GetExec`.
 
-`ListJobLogs` returns the daemon's current in-memory log ring for a job.
-`StreamJobLogs` returns `JobLogStreamEvent` envelope messages and stays open
-while the job is running. The stream can carry:
+`ListExecLogs` returns the daemon's current in-memory log ring for an execution.
+`StreamExecLogs` returns `ExecLogStreamEvent` envelope messages and stays open
+while the exec is running. The stream can carry:
 
 - `snapshot`: the current retained log window plus `truncated`,
   `dropped_log_count`, and `next_sequence`.
-- `entry`: a single ordered stdout/stderr `JobLog` chunk.
-- `complete`: terminal job status plus final log truncation metadata.
+- `entry`: a single ordered stdout/stderr `ExecLog` chunk.
+- `complete`: terminal exec status plus final log truncation metadata.
 
-Each `JobLog` has `stream` (`stdout` or `stderr`), binary `data`, and a
-monotonic `sequence` number. Job logs are not embedded in `JobRecord`; they are
+Each `ExecLog` has `stream` (`stdout` or `stderr`), binary `data`, and a
+monotonic `sequence` number. Exec logs are not embedded in `ExecRecord`; they are
 stored as separate append-only log records and retained in a bounded in-memory
-ring. `JobRecord` only reports `log_count` and `logs_truncated`. Clients should
+ring. `ExecRecord` only reports `log_count` and `logs_truncated`. Clients should
 decode `data` only at presentation boundaries; the protocol preserves
 stdout/stderr bytes, including non-UTF-8 output.
 
-`WriteJobStdin` accepts ordered `JobStdinRequest` messages. The first message
-must set the `target` variant with `JobStdinTarget.job_id`. Later messages must
+`WriteExecStdin` accepts ordered `ExecStdinRequest` messages. The first message
+must set the `target` variant with `ExecStdinTarget.exec_id`. Later messages must
 set the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
-targets or switch jobs. Use `CloseJobStdin` to close the target job's stdin.
+targets or switch execs. Use `CloseExecStdin` to close the target exec's stdin.
 
 ## Service Forwarding
 
@@ -321,9 +321,11 @@ CLI binds a local UDP socket, and the daemon sends only to the configured UDP
 service. It does not provide UDP hole punching, mDNS relay behavior, QUIC
 transport replacement, relay networking, or arbitrary host/port forwarding.
 
-## Job Semantics
+## Exec Semantics
 
-`RunJob` accepts either `command` or `argv`.
+The default execution capability id is `exec:default`.
+
+`RunExec` accepts either `command` or `argv`.
 
 `command` is the compatibility path. It is a shell command string executed by
 the daemon with `/bin/sh -c`. Use it when shell operators, expansion,
@@ -336,20 +338,20 @@ and `argv`; clients should choose one execution contract per request.
 
 `cwd` may be empty; the daemon treats an empty cwd as its policy default.
 
-Set optional `timeout_secs` to request a per-job timeout. Leave it unset to use
+Set optional `timeout_secs` to request a per-exec timeout. Leave it unset to use
 daemon policy defaults.
 
 `secrets` is a list of secret names requested for the process environment.
 Policy decides which names are allowed.
 
-The daemon clears the inherited process environment before spawning jobs. It
-then injects only variables named by `job.env_allowlist` from the daemon
+The daemon clears the inherited process environment before spawning execs. It
+then injects only variables named by `exec.env_allowlist` from the daemon
 environment and authorized requested secrets.
 
-Set `policy.job.preserve_env: true` to preserve the daemon's complete
-environment for spawned jobs. This is useful when commands need normal process
+Set `policy.exec.preserve_env: true` to preserve the daemon's complete
+environment for spawned execs. This is useful when commands need normal process
 context such as `HOME`, `PATH`, proxy variables, or toolchain variables, but it
-also grants jobs access to every environment variable visible to `operond`.
+also grants execs access to every environment variable visible to `operond`.
 
 ## Errors
 
@@ -357,7 +359,7 @@ Clients should handle normal gRPC status codes:
 
 - `Unauthenticated`: missing or invalid bearer token.
 - `PermissionDenied`: policy denied a capability operation.
-- `NotFound`: path, job, service, or other resource was not found.
+- `NotFound`: path, exec, service, or other resource was not found.
 - `InvalidArgument`: malformed request, invalid stream ordering, or missing
   required fields.
 - `FailedPrecondition`: operation is valid but the current runtime state cannot
@@ -392,7 +394,7 @@ grpcurl -plaintext \
   operon.runtime.v1.OperonRuntime/ListFs
 ```
 
-Run a job:
+Run a exec:
 
 ```bash
 grpcurl -plaintext \
@@ -401,10 +403,10 @@ grpcurl -plaintext \
   -proto operon/runtime.proto \
   -d '{"command":"echo hello","cwd":"/","secrets":[]}' \
   127.0.0.1:17790 \
-  operon.runtime.v1.OperonRuntime/RunJob
+  operon.runtime.v1.OperonRuntime/RunExec
 ```
 
-Run a shell-free argv job:
+Run a shell-free argv exec:
 
 ```bash
 grpcurl -plaintext \
@@ -413,7 +415,7 @@ grpcurl -plaintext \
   -proto operon/runtime.proto \
   -d '{"argv":["printf","hello world"],"cwd":"/","secrets":[]}' \
   127.0.0.1:17790 \
-  operon.runtime.v1.OperonRuntime/RunJob
+  operon.runtime.v1.OperonRuntime/RunExec
 ```
 
 For streaming methods, use a generated gRPC client and send or receive the
@@ -444,7 +446,7 @@ for await (const chunk of client.readFile({ path: "/hello.txt" }, { metadata }))
 }
 
 let nextSequence = 0;
-for await (const event of client.streamJobLogs({ jobId: "job-1" }, { metadata })) {
+for await (const event of client.streamExecLogs({ execId: "exec-1" }, { metadata })) {
   if (event.snapshot) {
     for (const log of event.snapshot.logs) {
       if (Number(log.sequence) >= nextSequence) {

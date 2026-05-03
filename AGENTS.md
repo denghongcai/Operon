@@ -66,12 +66,12 @@ Operon should not own:
   - v0.6.5 acceptance scope for unified `config.yaml`.
 
 - `docs/plan/v0.6.6-acceptance.md`
-  - v0.6.6 acceptance scope for release hardening, job environment isolation,
+  - v0.6.6 acceptance scope for release hardening, exec environment isolation,
     graph audit context, streaming clients, and runtime crate boundaries.
 
 - `docs/plan/v0.6.7-acceptance.md`
-  - v0.6.7 acceptance scope for Linux job process-group termination,
-    binary-safe job logs, and explicit async CLI runtime ownership.
+  - v0.6.7 acceptance scope for Linux exec process-group termination,
+    binary-safe exec logs, and explicit async CLI runtime ownership.
 
 - `docs/plan/v0.6.8-acceptance.md`
   - v0.6.8 acceptance scope for gRPC schema-level protocol stabilization.
@@ -81,11 +81,11 @@ Operon should not own:
     config docs, and protocol version alignment.
 
 - `docs/plan/v0.6.9-cli-contract-cleanup.md`
-  - v0.6.9 cleanup scope for CLI script contracts, job failure exits, JSON and
+  - v0.6.9 cleanup scope for CLI script contracts, exec failure exits, JSON and
     quiet output behavior, health version reporting, and starter config files.
 
 - `docs/plan/v0.6.10-runtime-hardening.md`
-  - v0.6.10 hardening scope for store durability, terminal job audit, fs range
+  - v0.6.10 hardening scope for store durability, terminal exec audit, fs range
     validation, pagination metadata, spawn errors, and LAN discovery removal
     handling.
 
@@ -95,7 +95,7 @@ Operon should not own:
     validation.
 
 - `docs/plan/v0.6.12-runtime-boundary-stabilization.md`
-  - v0.6.12 runtime boundary scope for job-log streaming envelopes, store
+  - v0.6.12 runtime boundary scope for exec-log streaming envelopes, store
     writer boundaries, daemon persistence visibility, and Linux mount adapter
     crate boundaries.
 
@@ -149,7 +149,7 @@ Operon should not own:
 
 - `docs/plan/v0.8.13-production-panic-cleanup.md`
   - v0.8.13 cleanup scope for removing actionable production invariant panics
-    from daemon job-log append and Linux mount remote runtime access.
+    from daemon exec-log append and Linux mount remote runtime access.
 
 - `docs/plan/v0.8.14-onboard-invariant-cleanup.md`
   - v0.8.14 cleanup scope for returning a normal CLI error instead of
@@ -187,8 +187,8 @@ Operon should not own:
     events from the append-only store.
 
 - `docs/plan/v0.9.4-runtime-hardening-consolidation.md`
-  - v0.9.4 scope consolidating service health semantics, job-log
-    restart visibility, workspace traversal hardening, argv job execution,
+  - v0.9.4 scope consolidating service health semantics, exec-log
+    restart visibility, workspace traversal hardening, argv execution,
     config UX cleanup, and focused runtime maintainability cleanup.
 
 - `docs/plan/v0.9.5-policy-language-hardening.md`
@@ -202,7 +202,12 @@ Operon should not own:
 
 - `docs/plan/v0.9.7-runtime-api-hardening.md`
   - v0.9.7 scope for filesystem list pagination, runtime API documentation
-    alignment, SDK streaming write behavior, and empty job validation.
+    alignment, SDK streaming write behavior, and empty exec validation.
+
+- `docs/plan/v0.10-exec-unification.md`
+  - v0.10 scope for replacing the active `job` surface with the unified
+    `exec` capability across protocol, daemon, CLI, SDK, docs, skills, and
+    validation.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -245,10 +250,10 @@ Operon should not own:
 - Completed fs milestone: v0.6.3 same-node fs copy for protocol, CLI, and SDK.
 - Completed onboarding milestone: v0.6.4 guided first-run setup through `operon onboard`.
 - Completed config milestone: v0.6.5 unified `config.yaml` through [`operon-config`](crates/operon-config).
-- Completed hardening milestone: v0.6.6 workspace containment, isolated job
+- Completed hardening milestone: v0.6.6 workspace containment, isolated exec
   environment construction, graph audit context, streaming client cleanup, and
   runtime helper crate boundaries.
-- Completed runtime cleanup milestone: v0.6.7 process lifecycle, binary job
+- Completed runtime cleanup milestone: v0.6.7 process lifecycle, binary exec
   logs, and explicit async CLI runtime.
 - Completed protocol stabilization milestone: v0.6.8 typed runtime enums,
   proto3 optional presence, streaming request envelopes, paginated list APIs,
@@ -276,7 +281,7 @@ Operon should not own:
   onboard`.
 - Completed test coverage milestone: unit coverage audit, compiled-binary CLI
   integration tests, real-daemon integration coverage script, and CI validation
-  for the core config/node/capability/fs/job/service/audit/graph/trace flows.
+  for the core config/node/capability/fs/exec/service/audit/graph/trace flows.
 - Completed runtime cleanup milestone: audit timestamps are `u64` end-to-end,
   CLI private-file/token helpers are shared, UDP service forwarding awaits
   aborted local read tasks, service check/forward are explicitly authorized,
@@ -288,14 +293,14 @@ Operon should not own:
   `PROTOCOL_VERSION` to `v0.8.3`.
 - Completed maintainability cleanup milestone: v0.8.4 extracted daemon
   filesystem handlers and pagination helpers, plus CLI output, target parsing,
-  and fs command handlers. Job runtime, service forwarding, audit helpers, and
+  and fs command handlers. Exec runtime, service forwarding, audit helpers, and
   non-fs CLI command families remain follow-up modularization work.
 - Completed core domain boundary milestone: v0.8.5 split [`operon-core`](crates/operon-core) into
-  runtime, fs, job, service, policy, audit, discovery, and trace modules while
+  runtime, fs, exec, service, policy, audit, discovery, and trace modules while
   keeping root-level public re-exports for compatibility.
 - Completed maintainability milestone: v0.8.6 added shared Rust gRPC client
   helpers, split non-fs CLI commands, split Linux mount modules, extracted
-  daemon auth/audit/state/job/service internals, added graph/workflow aliases,
+  daemon auth/audit/state/exec/service internals, added graph/workflow aliases,
   aligned the TypeScript SDK public surface, and added CI validation coverage.
 - Completed cleanup milestone: v0.8.7 reduced daemon filesystem service
   authorization, path resolution, and failed-audit handling duplication while
@@ -315,7 +320,7 @@ Operon should not own:
   peer-state lock panics with helper-mediated errors.
 - Completed hardening milestone: v0.8.12 replaced the daemon UDP datagram
   forwarding session invariant panic with an explicit peer close response.
-- Completed hardening milestone: v0.8.13 replaced daemon job-log and Linux
+- Completed hardening milestone: v0.8.13 replaced daemon exec-log and Linux
   mount remote runtime invariant panics with logged or returned errors.
 - Completed hardening milestone: v0.8.14 replaced the daemon onboarding token
   invariant panic with a normal CLI error.
@@ -337,15 +342,20 @@ Operon should not own:
   persisted audit events from the append-only store at startup while preserving
   bounded in-memory retention.
 - Completed runtime hardening milestone: v0.9.4 consolidated service health
-  audit semantics, store-backed job log restart visibility, workspace
-  traversal fallback validation, shell-free argv job execution, config LAN
+  audit semantics, store-backed exec log restart visibility, workspace
+  traversal fallback validation, shell-free argv execution, config LAN
   advertisement UX, and protocol version alignment.
 - Completed policy language milestone: v0.9.5 added shared policy decision
   vocabulary, stable deny reason codes, effective policy grants in
   `operon config explain`, and policy audit validation coverage.
 - Completed capability diagnostics milestone: v0.9.6 added daemon-owned
   `ExplainCapability` policy diagnostics through gRPC, CLI, and TypeScript SDK.
-- Next planned milestone: define the next phase before implementation.
+- Completed execution model milestone: v0.10 replaced the active `job` surface
+  with the unified `exec` capability across gRPC protocol, daemon runtime, CLI,
+  TypeScript SDK, policy, audit, examples, docs, skills, and validation. The
+  legacy job command group is intentionally not retained as a compatibility
+  alias.
+- Next planned milestone: define the next phase after v0.10.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -388,7 +398,7 @@ Prioritize:
 - manually configured reachable endpoints
 - capability discovery
 - filesystem read/write
-- process/job execution
+- command execution
 - execution trace
 - permission policy
 - CLI
@@ -439,7 +449,7 @@ Defer:
   poisoned-lock handling, Linux-only mount dependency gating, and CI governance
   validation. Larger domain splits remain future work.
 - Latest phase status update: v0.6.12 completed Runtime Boundary Stabilization.
-  `StreamJobLogs` now uses event envelopes, [`operon-store`](crates/operon-store) exposes an
+  `StreamExecLogs` now uses event envelopes, [`operon-store`](crates/operon-store) exposes an
   append-only writer boundary, daemon persistence failures surface at runtime
   boundaries, [`operon-mount`](crates/operon-mount) is a Linux FUSE adapter crate boundary, CI
   includes the v0.6.12 validation script, and the post-release documentation
@@ -450,7 +460,7 @@ Defer:
   CI validation. Nothing remains in v0.8.3.
 - Latest phase status update: v0.8.4 completed the first Runtime and CLI
   Modularization pass. Daemon fs and pagination logic plus CLI fs/output/target
-  logic are extracted and validated. Job/service/audit and non-fs CLI command
+  logic are extracted and validated. Exec/service/audit and non-fs CLI command
   extraction remains future maintainability work.
 - Latest phase status update: v0.8.5 completed. [`operon-core`](crates/operon-core) domain modules
   are split, compatibility re-exports remain in place, CI has a dedicated
@@ -458,7 +468,7 @@ Defer:
   phase.
 - Latest phase status update: v0.8.6 completed Runtime, CLI, and Client
   Modularization. Shared Rust gRPC client helpers, non-fs CLI command modules,
-  Linux mount modules, daemon auth/audit/state/job/service internals,
+  Linux mount modules, daemon auth/audit/state/exec/service internals,
   graph/workflow aliases, SDK public API alignment, `fs read --output --json`
   summary output, and low-risk validation shell helpers are complete. Nothing
   remains in v0.8.6.
@@ -486,7 +496,7 @@ Defer:
   Cleanup. Missing UDP datagram peer sessions now produce an explicit peer
   close response instead of a daemon panic. Nothing remains in v0.8.12.
 - Latest phase status update: v0.8.13 completed Production Panic Cleanup.
-  Daemon job-log append and Linux mount remote runtime invariant failures now
+  Daemon exec-log append and Linux mount remote runtime invariant failures now
   use logged or returned errors instead of production panics. Nothing remains
   in v0.8.13.
 - Latest phase status update: v0.8.14 completed Onboard Invariant Cleanup.
@@ -518,7 +528,7 @@ Defer:
   [`scripts/verify-post-v0.9-discovery-ux.sh`](scripts/verify-post-v0.9-discovery-ux.sh) covers the behavior. Nothing
   remains in v0.9.1.
 - Latest phase status update: v0.9.2 completed Policy-Derived Capability
-  Discovery. Daemon capability lists now come from `PolicyConfig`; fs, job, and
+  Discovery. Daemon capability lists now come from `PolicyConfig`; fs, exec, and
   service capabilities are advertised only when configured, service denial audit
   ids use `service:<service_id>`, and
   [`scripts/verify-policy-derived-capabilities.sh`](scripts/verify-policy-derived-capabilities.sh) covers the behavior. Nothing
@@ -531,8 +541,15 @@ Defer:
 - Latest phase status update: v0.9.7 completed Runtime API Hardening.
   `ListFs` now uses paginated request/response metadata, CLI/mount/SDK helpers
   preserve complete-list behavior by walking pages, SDK file writes stream
-  `ReadableStream` bodies without full pre-buffering, empty daemon job requests
+  `ReadableStream` bodies without full pre-buffering, empty daemon exec requests
   are rejected, runtime API docs list bidirectional tunnel RPCs explicitly,
-  release/version surfaces are aligned to v0.9.9, and the follow-up
+  release/version surfaces were aligned to v0.9.9, and the follow-up
   documentation link audit linked source, crate, protocol, script, workflow,
   example, and skill references. Nothing remains in v0.9.7.
+- Latest phase status update: v0.10 completed Execution Capability
+  Unification. Active protocol RPCs/messages/enums, Rust core/daemon/CLI,
+  TypeScript SDK helpers, policy and audit vocabulary, examples, docs,
+  repo-local skills, and validation scripts now use `exec`. The legacy job
+  command group is not retained as a supported command, and
+  [`scripts/verify-v0.10-exec-unification.sh`](scripts/verify-v0.10-exec-unification.sh)
+  covers the active-surface migration. Nothing remains in v0.10.

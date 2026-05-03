@@ -32,8 +32,8 @@ PORT="18869"
 
 mkdir -p "$WORKSPACE_DIR"
 
-cargo run -q -p operon-cli -- --version | grep -q "0.9.9"
-cargo run -q -p operond -- --version | grep -q "0.9.9"
+cargo run -q -p operon-cli -- --version | grep -q "0.10.0"
+cargo run -q -p operond -- --version | grep -q "0.10.0"
 
 cat >"$CONFIG_PATH" <<YAML
 version: 1
@@ -60,7 +60,7 @@ policy:
           read: true
           write: true
           delete: true
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30
@@ -83,14 +83,14 @@ for _ in $(seq 1 50); do
 done
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" node ping local \
-  | grep -q "version=v0.9.9"
+  | grep -q "version=v0.10.0"
 
-json_job_output="$TMP_DIR/job-run.json"
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json job run local \
+json_exec_output="$TMP_DIR/exec-run.json"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json exec run local \
   --timeout-secs 10 \
   -- "printf json-contract" \
-  >"$json_job_output"
-python3 - "$json_job_output" <<'PY'
+  >"$json_exec_output"
+python3 - "$json_exec_output" <<'PY'
 import json
 import sys
 
@@ -101,38 +101,38 @@ assert record["exit_code"] == 0, record
 PY
 
 set +e
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec run local \
   --timeout-secs 10 \
   -- false \
-  >"$TMP_DIR/job-failed.out" 2>"$TMP_DIR/job-failed.err"
+  >"$TMP_DIR/exec-failed.out" 2>"$TMP_DIR/exec-failed.err"
 failed_status="$?"
 set -e
 if [[ "$failed_status" -eq 0 ]]; then
-  echo "expected failed remote job to produce non-zero CLI exit" >&2
+  echo "expected failed remote exec to produce non-zero CLI exit" >&2
   exit 1
 fi
-grep -q "Failed" "$TMP_DIR/job-failed.out"
-grep -q "ended with status Failed" "$TMP_DIR/job-failed.err"
+grep -q "Failed" "$TMP_DIR/exec-failed.out"
+grep -q "ended with status Failed" "$TMP_DIR/exec-failed.err"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec run local \
   --detach \
   --timeout-secs 10 \
   -- "printf log-contract" \
-  >"$TMP_DIR/log-job.txt"
-log_job_id="$(awk '{print $2}' "$TMP_DIR/log-job.txt" | head -n1)"
+  >"$TMP_DIR/log-exec.txt"
+log_exec_id="$(awk '{print $2}' "$TMP_DIR/log-exec.txt" | head -n1)"
 for _ in $(seq 1 50); do
-  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job status local "$log_job_id" \
-    >"$TMP_DIR/log-job-status.txt"
-  if grep -q "Succeeded" "$TMP_DIR/log-job-status.txt"; then
+  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec status local "$log_exec_id" \
+    >"$TMP_DIR/log-exec-status.txt"
+  if grep -q "Succeeded" "$TMP_DIR/log-exec-status.txt"; then
     break
   fi
   sleep 0.1
 done
-grep -q "Succeeded" "$TMP_DIR/log-job-status.txt"
+grep -q "Succeeded" "$TMP_DIR/log-exec-status.txt"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json job logs local "$log_job_id" \
-  >"$TMP_DIR/job-logs.json"
-python3 - "$TMP_DIR/job-logs.json" <<'PY'
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json exec logs local "$log_exec_id" \
+  >"$TMP_DIR/exec-logs.json"
+python3 - "$TMP_DIR/exec-logs.json" <<'PY'
 import json
 import sys
 
@@ -142,9 +142,9 @@ payload = b"".join(bytes(log["data"]) for log in logs["logs"])
 assert payload == b"log-contract", payload
 PY
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --quiet job logs local "$log_job_id" \
-  >"$TMP_DIR/job-logs-quiet.out"
-test ! -s "$TMP_DIR/job-logs-quiet.out"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --quiet exec logs local "$log_exec_id" \
+  >"$TMP_DIR/exec-logs-quiet.out"
+test ! -s "$TMP_DIR/exec-logs-quiet.out"
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" fs stat local:/ >/dev/null
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json audit show local \

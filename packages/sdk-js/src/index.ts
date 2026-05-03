@@ -1,7 +1,7 @@
 import { createChannel, createClient, Metadata, type Channel, type CallOptions } from "nice-grpc";
 import {
   CapabilityKind as GrpcCapabilityKind,
-  JobStatus as GrpcJobStatus,
+  ExecStatus as GrpcExecStatus,
   OperonRuntimeDefinition,
   ServiceProtocol as GrpcServiceProtocol,
   type AuditLog as GrpcAuditLog,
@@ -10,14 +10,14 @@ import {
   type FsList as GrpcFsList,
   type FsStat as GrpcFsStat,
   type FsWrite as GrpcFsWrite,
-  type JobEvent as GrpcJobEvent,
-  type JobList as GrpcJobList,
-  type JobLog as GrpcJobLog,
-  type JobLogList as GrpcJobLogList,
-  type JobLogStreamEvent as GrpcJobLogStreamEvent,
-  type JobRecord as GrpcJobRecord,
-  type JobStdin as GrpcJobStdin,
-  type JobStdinClose as GrpcJobStdinClose,
+  type ExecEvent as GrpcExecEvent,
+  type ExecList as GrpcExecList,
+  type ExecLog as GrpcExecLog,
+  type ExecLogList as GrpcExecLogList,
+  type ExecLogStreamEvent as GrpcExecLogStreamEvent,
+  type ExecRecord as GrpcExecRecord,
+  type ExecStdin as GrpcExecStdin,
+  type ExecStdinClose as GrpcExecStdinClose,
   type OperonRuntimeClient,
   type ServiceCheck as GrpcServiceCheck,
   type ServiceDatagramTunnelResponse as GrpcServiceDatagramTunnelResponse,
@@ -36,7 +36,7 @@ export type NodeEndpoint = {
 export type OperonStep = {
   id?: string;
   node: string;
-  action: "fs.stat" | "fs.list" | "fs.read" | "fs.write" | "fs.copy" | "job.run";
+  action: "fs.stat" | "fs.list" | "fs.read" | "fs.write" | "fs.copy" | "exec.run";
   path?: string;
   fromPath?: string;
   toPath?: string;
@@ -78,7 +78,7 @@ type RequestContext = {
   stepId?: string;
 };
 
-export type JobRecord = {
+export type ExecRecord = {
   id: string;
   node_id: string;
   command: string;
@@ -91,7 +91,7 @@ export type JobRecord = {
 
 export type Capability = {
   id: string;
-  kind: "fs" | "process" | "job" | "device-info" | "service" | "unspecified" | "unrecognized";
+  kind: "fs" | "process" | "exec" | "device-info" | "service" | "unspecified" | "unrecognized";
   node_id: string;
   name: string;
   permissions: string[];
@@ -123,34 +123,34 @@ export type FsStat = ReturnType<typeof fromGrpcFsStat>;
 
 export type FsList = ReturnType<typeof fromGrpcFsList>;
 
-export type JobList = {
-  jobs: JobRecord[];
+export type ExecList = {
+  execs: ExecRecord[];
 };
 
-export type JobLog = {
+export type ExecLog = {
   stream: string;
   data: Uint8Array;
   sequence: number;
 };
 
-export type JobLogList = {
-  job_id: string;
-  logs: JobLog[];
+export type ExecLogList = {
+  exec_id: string;
+  logs: ExecLog[];
   truncated: boolean;
   dropped_log_count: number;
 };
 
-export type JobLogSnapshot = JobLogList & {
+export type ExecLogSnapshot = ExecLogList & {
   next_sequence: number;
 };
 
-export type JobLogStreamEvent =
-  | { type: "snapshot"; snapshot: JobLogSnapshot }
-  | { type: "entry"; job_id: string; log: JobLog }
+export type ExecLogStreamEvent =
+  | { type: "snapshot"; snapshot: ExecLogSnapshot }
+  | { type: "entry"; exec_id: string; log: ExecLog }
   | {
       type: "complete";
-      job_id: string;
-      status: JobRecord["status"];
+      exec_id: string;
+      status: ExecRecord["status"];
       exit_code?: number | null;
       log_count: number;
       logs_truncated: boolean;
@@ -158,21 +158,21 @@ export type JobLogStreamEvent =
       dropped_log_count: number;
     };
 
-export type JobEvent = {
-  job_id: string;
-  status: JobRecord["status"];
+export type ExecEvent = {
+  exec_id: string;
+  status: ExecRecord["status"];
   exit_code?: number | null;
   log_count: number;
   logs_truncated: boolean;
 };
 
-export type JobStdinResult = {
-  job_id: string;
+export type ExecStdinResult = {
+  exec_id: string;
   bytes_written: number;
 };
 
-export type JobStdinCloseResult = {
-  job_id: string;
+export type ExecStdinCloseResult = {
+  exec_id: string;
   closed: boolean;
 };
 
@@ -357,28 +357,28 @@ export class OperonClient {
     };
   }
 
-  async listJobs(nodeId: string): Promise<JobList> {
+  async listExecs(nodeId: string): Promise<ExecList> {
     const endpoint = this.endpointFor(nodeId);
-    const jobs: JobRecord[] = [];
+    const execs: ExecRecord[] = [];
     let pageToken = "";
     do {
-      const page = await this.grpcClient(endpoint).listJobs(
+      const page = await this.grpcClient(endpoint).listExecs(
         { pageSize: DEFAULT_LIST_PAGE_SIZE, pageToken },
         this.grpcOptions(endpoint),
       );
-      jobs.push(...page.jobs.map(fromGrpcJobRecord));
+      execs.push(...page.execs.map(fromGrpcExecRecord));
       pageToken = page.nextPageToken;
     } while (pageToken);
-    return { jobs };
+    return { execs };
   }
 
-  async runJob(
+  async runExec(
     nodeId: string,
     request: { command?: string; argv?: string[]; cwd?: string; timeoutSecs?: number; secrets?: string[] },
-  ): Promise<JobRecord> {
+  ): Promise<ExecRecord> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcJobRecord(
-      await this.grpcClient(endpoint).runJob(
+    return fromGrpcExecRecord(
+      await this.grpcClient(endpoint).runExec(
         {
           command: request.command ?? "",
           argv: request.argv ?? [],
@@ -391,33 +391,33 @@ export class OperonClient {
     );
   }
 
-  async getJob(nodeId: string, jobId: string): Promise<JobRecord> {
+  async getExec(nodeId: string, execId: string): Promise<ExecRecord> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcJobRecord(
-      await this.grpcClient(endpoint).getJob({ jobId }, this.grpcOptions(endpoint)),
+    return fromGrpcExecRecord(
+      await this.grpcClient(endpoint).getExec({ execId }, this.grpcOptions(endpoint)),
     );
   }
 
-  async cancelJob(nodeId: string, jobId: string): Promise<JobRecord> {
+  async cancelExec(nodeId: string, execId: string): Promise<ExecRecord> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcJobRecord(
-      await this.grpcClient(endpoint).cancelJob({ jobId }, this.grpcOptions(endpoint)),
+    return fromGrpcExecRecord(
+      await this.grpcClient(endpoint).cancelExec({ execId }, this.grpcOptions(endpoint)),
     );
   }
 
-  async listJobLogs(nodeId: string, jobId: string): Promise<JobLogList> {
+  async listExecLogs(nodeId: string, execId: string): Promise<ExecLogList> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcJobLogList(await this.grpcClient(endpoint).listJobLogs({ jobId }, this.grpcOptions(endpoint)));
+    return fromGrpcExecLogList(await this.grpcClient(endpoint).listExecLogs({ execId }, this.grpcOptions(endpoint)));
   }
 
-  async watchJob(nodeId: string, jobId: string): Promise<AsyncIterable<JobEvent>> {
+  async watchExec(nodeId: string, execId: string): Promise<AsyncIterable<ExecEvent>> {
     const endpoint = this.endpointFor(nodeId);
-    const events = this.grpcClient(endpoint).watchJob({ jobId }, this.grpcOptions(endpoint));
-    return mapGrpcJobEvents(events);
+    const events = this.grpcClient(endpoint).watchExec({ execId }, this.grpcOptions(endpoint));
+    return mapGrpcExecEvents(events);
   }
 
-  async streamJobLogs(nodeId: string, jobId: string): Promise<ReadableStream<Uint8Array>> {
-    const iterator = streamEventLogs(await this.streamJobLogEvents(nodeId, jobId))[Symbol.asyncIterator]();
+  async streamExecLogs(nodeId: string, execId: string): Promise<ReadableStream<Uint8Array>> {
+    const iterator = streamEventLogs(await this.streamExecLogEvents(nodeId, execId))[Symbol.asyncIterator]();
     return new ReadableStream<Uint8Array>({
       async pull(controller) {
         const next = await iterator.next();
@@ -435,24 +435,24 @@ export class OperonClient {
     });
   }
 
-  async streamJobLogEvents(nodeId: string, jobId: string): Promise<AsyncIterable<JobLogStreamEvent>> {
+  async streamExecLogEvents(nodeId: string, execId: string): Promise<AsyncIterable<ExecLogStreamEvent>> {
     const endpoint = this.endpointFor(nodeId);
-    const events = this.grpcClient(endpoint).streamJobLogs({ jobId }, this.grpcOptions(endpoint));
-    return mapGrpcJobLogStreamEvents(events);
+    const events = this.grpcClient(endpoint).streamExecLogs({ execId }, this.grpcOptions(endpoint));
+    return mapGrpcExecLogStreamEvents(events);
   }
 
-  async writeJobStdin(nodeId: string, jobId: string, body: BodyInit): Promise<JobStdinResult> {
+  async writeExecStdin(nodeId: string, execId: string, body: BodyInit): Promise<ExecStdinResult> {
     const endpoint = this.endpointFor(nodeId);
     const bytes = await bodyToBytes(body);
-    return fromGrpcJobStdin(
-      await this.grpcClient(endpoint).writeJobStdin(grpcStdinChunks(jobId, bytes), this.grpcOptions(endpoint)),
+    return fromGrpcExecStdin(
+      await this.grpcClient(endpoint).writeExecStdin(grpcStdinChunks(execId, bytes), this.grpcOptions(endpoint)),
     );
   }
 
-  async closeJobStdin(nodeId: string, jobId: string): Promise<JobStdinCloseResult> {
+  async closeExecStdin(nodeId: string, execId: string): Promise<ExecStdinCloseResult> {
     const endpoint = this.endpointFor(nodeId);
-    return fromGrpcJobStdinClose(
-      await this.grpcClient(endpoint).closeJobStdin({ jobId }, this.grpcOptions(endpoint)),
+    return fromGrpcExecStdinClose(
+      await this.grpcClient(endpoint).closeExecStdin({ execId }, this.grpcOptions(endpoint)),
     );
   }
 
@@ -625,17 +625,17 @@ export class OperonClient {
           bytes_copied: Number(copy.bytesCopied),
         };
       }
-      case "job.run":
-        return this.runGrpcJob(endpoint, step, context);
+      case "exec.run":
+        return this.runGrpcExec(endpoint, step, context);
     }
   }
 
-  private async runGrpcJob(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<JobRecord> {
+  private async runGrpcExec(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<ExecRecord> {
     const client = this.grpcClient(endpoint);
     const options = this.grpcOptions(endpoint, context);
     const argv = step.argv ?? [];
-    const job = fromGrpcJobRecord(
-      await client.runJob(
+    const exec = fromGrpcExecRecord(
+      await client.runExec(
         {
           command: argv.length > 0 ? "" : required(step.command, "command"),
           argv,
@@ -647,18 +647,18 @@ export class OperonClient {
       ),
     );
 
-    for await (const event of client.watchJob({ jobId: job.id }, options)) {
-      const jobEvent = fromGrpcJobEvent(event);
-      if (jobEvent.status === "running") {
+    for await (const event of client.watchExec({ execId: exec.id }, options)) {
+      const execEvent = fromGrpcExecEvent(event);
+      if (execEvent.status === "running") {
         continue;
       }
-      const record = fromGrpcJobRecord(await client.getJob({ jobId: job.id }, options));
-      if (jobEvent.status === "succeeded") {
+      const record = fromGrpcExecRecord(await client.getExec({ execId: exec.id }, options));
+      if (execEvent.status === "succeeded") {
         return record;
       }
-      throw new Error(`job ${record.id} ended with status ${jobEvent.status}`);
+      throw new Error(`exec ${record.id} ended with status ${execEvent.status}`);
     }
-    throw new Error(`job ${job.id} watch stream ended without a terminal event`);
+    throw new Error(`exec ${exec.id} watch stream ended without a terminal event`);
   }
 
   private async readFileStreamWithEndpoint(
@@ -842,8 +842,8 @@ async function* grpcFileChunksFromBody(path: string, body: BodyInit): AsyncItera
   }
 }
 
-async function* grpcStdinChunks(jobId: string, bytes: Uint8Array): AsyncIterable<{ target?: { jobId: string }; chunk?: { data: Uint8Array } }> {
-  yield { target: { jobId } };
+async function* grpcStdinChunks(execId: string, bytes: Uint8Array): AsyncIterable<{ target?: { execId: string }; chunk?: { data: Uint8Array } }> {
+  yield { target: { execId } };
   if (bytes.byteLength === 0) {
     yield { chunk: { data: new Uint8Array() } };
     return;
@@ -977,8 +977,8 @@ function fromGrpcCapabilityKind(kind: GrpcCapabilityKind): Capability["kind"] {
       return "fs";
     case GrpcCapabilityKind.CAPABILITY_KIND_PROCESS:
       return "process";
-    case GrpcCapabilityKind.CAPABILITY_KIND_JOB:
-      return "job";
+    case GrpcCapabilityKind.CAPABILITY_KIND_EXEC:
+      return "exec";
     case GrpcCapabilityKind.CAPABILITY_KIND_DEVICE_INFO:
       return "device-info";
     case GrpcCapabilityKind.CAPABILITY_KIND_SERVICE:
@@ -1009,20 +1009,20 @@ function fromGrpcFsWrite(write: GrpcFsWrite) {
   };
 }
 
-function fromGrpcJobRecord(record: GrpcJobRecord): JobRecord {
+function fromGrpcExecRecord(record: GrpcExecRecord): ExecRecord {
   return {
     id: record.id,
     node_id: record.nodeId,
     command: record.command,
     cwd: record.cwd,
-    status: fromGrpcJobStatus(record.status),
+    status: fromGrpcExecStatus(record.status),
     exit_code: record.exitCode ?? null,
     log_count: Number(record.logCount),
     logs_truncated: record.logsTruncated,
   };
 }
 
-function fromGrpcJobLog(log: GrpcJobLog): JobLog {
+function fromGrpcExecLog(log: GrpcExecLog): ExecLog {
   return {
     stream: log.stream,
     data: log.data,
@@ -1030,22 +1030,22 @@ function fromGrpcJobLog(log: GrpcJobLog): JobLog {
   };
 }
 
-function fromGrpcJobLogList(list: GrpcJobLogList): JobLogList {
+function fromGrpcExecLogList(list: GrpcExecLogList): ExecLogList {
   return {
-    job_id: list.jobId,
-    logs: list.logs.map(fromGrpcJobLog),
+    exec_id: list.execId,
+    logs: list.logs.map(fromGrpcExecLog),
     truncated: list.truncated,
     dropped_log_count: Number(list.droppedLogCount),
   };
 }
 
-function fromGrpcJobLogStreamEvent(event: GrpcJobLogStreamEvent): JobLogStreamEvent | undefined {
+function fromGrpcExecLogStreamEvent(event: GrpcExecLogStreamEvent): ExecLogStreamEvent | undefined {
   if (event.snapshot) {
     return {
       type: "snapshot",
       snapshot: {
-        job_id: event.snapshot.jobId,
-        logs: event.snapshot.logs.map(fromGrpcJobLog),
+        exec_id: event.snapshot.execId,
+        logs: event.snapshot.logs.map(fromGrpcExecLog),
         truncated: event.snapshot.truncated,
         dropped_log_count: Number(event.snapshot.droppedLogCount),
         next_sequence: Number(event.snapshot.nextSequence),
@@ -1055,15 +1055,15 @@ function fromGrpcJobLogStreamEvent(event: GrpcJobLogStreamEvent): JobLogStreamEv
   if (event.entry?.log) {
     return {
       type: "entry",
-      job_id: event.entry.jobId,
-      log: fromGrpcJobLog(event.entry.log),
+      exec_id: event.entry.execId,
+      log: fromGrpcExecLog(event.entry.log),
     };
   }
   if (event.complete) {
     return {
       type: "complete",
-      job_id: event.complete.jobId,
-      status: fromGrpcJobStatus(event.complete.status),
+      exec_id: event.complete.execId,
+      status: fromGrpcExecStatus(event.complete.status),
       exit_code: event.complete.exitCode ?? null,
       log_count: Number(event.complete.logCount),
       logs_truncated: event.complete.logsTruncated,
@@ -1074,10 +1074,10 @@ function fromGrpcJobLogStreamEvent(event: GrpcJobLogStreamEvent): JobLogStreamEv
   return undefined;
 }
 
-function fromGrpcJobEvent(event: GrpcJobEvent): JobEvent {
+function fromGrpcExecEvent(event: GrpcExecEvent): ExecEvent {
   return {
-    job_id: event.jobId,
-    status: fromGrpcJobStatus(event.status),
+    exec_id: event.execId,
+    status: fromGrpcExecStatus(event.status),
     exit_code: event.exitCode ?? null,
     log_count: Number(event.logCount),
     logs_truncated: event.logsTruncated,
@@ -1099,22 +1099,22 @@ function fromGrpcAuditEvent(event: GrpcAuditLog["events"][number]): AuditEvent {
   };
 }
 
-async function* mapGrpcJobEvents(events: AsyncIterable<GrpcJobEvent>): AsyncIterable<JobEvent> {
+async function* mapGrpcExecEvents(events: AsyncIterable<GrpcExecEvent>): AsyncIterable<ExecEvent> {
   for await (const event of events) {
-    yield fromGrpcJobEvent(event);
+    yield fromGrpcExecEvent(event);
   }
 }
 
-async function* mapGrpcJobLogStreamEvents(events: AsyncIterable<GrpcJobLogStreamEvent>): AsyncIterable<JobLogStreamEvent> {
+async function* mapGrpcExecLogStreamEvents(events: AsyncIterable<GrpcExecLogStreamEvent>): AsyncIterable<ExecLogStreamEvent> {
   for await (const event of events) {
-    const mapped = fromGrpcJobLogStreamEvent(event);
+    const mapped = fromGrpcExecLogStreamEvent(event);
     if (mapped) {
       yield mapped;
     }
   }
 }
 
-async function* streamEventLogs(events: AsyncIterable<JobLogStreamEvent>): AsyncIterable<Uint8Array> {
+async function* streamEventLogs(events: AsyncIterable<ExecLogStreamEvent>): AsyncIterable<Uint8Array> {
   let nextSequence = 0;
   for await (const event of events) {
     if (event.type === "snapshot") {
@@ -1132,22 +1132,22 @@ async function* streamEventLogs(events: AsyncIterable<JobLogStreamEvent>): Async
   }
 }
 
-function fromGrpcJobList(list: GrpcJobList): JobList {
+function fromGrpcExecList(list: GrpcExecList): ExecList {
   return {
-    jobs: list.jobs.map(fromGrpcJobRecord),
+    execs: list.execs.map(fromGrpcExecRecord),
   };
 }
 
-function fromGrpcJobStdin(result: GrpcJobStdin): JobStdinResult {
+function fromGrpcExecStdin(result: GrpcExecStdin): ExecStdinResult {
   return {
-    job_id: result.jobId,
+    exec_id: result.execId,
     bytes_written: Number(result.bytesWritten),
   };
 }
 
-function fromGrpcJobStdinClose(result: GrpcJobStdinClose): JobStdinCloseResult {
+function fromGrpcExecStdinClose(result: GrpcExecStdinClose): ExecStdinCloseResult {
   return {
-    job_id: result.jobId,
+    exec_id: result.execId,
     closed: result.closed,
   };
 }
@@ -1179,20 +1179,20 @@ function fromGrpcServiceCheck(check: GrpcServiceCheck): ServiceCheck {
   };
 }
 
-function fromGrpcJobStatus(status: GrpcJobStatus): JobRecord["status"] {
+function fromGrpcExecStatus(status: GrpcExecStatus): ExecRecord["status"] {
   switch (status) {
-    case GrpcJobStatus.JOB_STATUS_RUNNING:
+    case GrpcExecStatus.EXEC_STATUS_RUNNING:
       return "running";
-    case GrpcJobStatus.JOB_STATUS_SUCCEEDED:
+    case GrpcExecStatus.EXEC_STATUS_SUCCEEDED:
       return "succeeded";
-    case GrpcJobStatus.JOB_STATUS_FAILED:
+    case GrpcExecStatus.EXEC_STATUS_FAILED:
       return "failed";
-    case GrpcJobStatus.JOB_STATUS_CANCELLED:
+    case GrpcExecStatus.EXEC_STATUS_CANCELLED:
       return "cancelled";
-    case GrpcJobStatus.JOB_STATUS_TIMED_OUT:
+    case GrpcExecStatus.EXEC_STATUS_TIMED_OUT:
       return "timed-out";
     default:
-      throw new Error(`unknown job status ${status}`);
+      throw new Error(`unknown exec status ${status}`);
   }
 }
 

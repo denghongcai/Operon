@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.9.9";
+pub const PROTOCOL_VERSION: &str = "v0.10.0";
 
 pub mod runtime {
     pub mod v1 {
@@ -263,8 +263,8 @@ impl From<runtime::v1::FsWrite> for operon_core::FsWrite {
     }
 }
 
-impl From<operon_core::JobLog> for runtime::v1::JobLog {
-    fn from(value: operon_core::JobLog) -> Self {
+impl From<operon_core::ExecLog> for runtime::v1::ExecLog {
+    fn from(value: operon_core::ExecLog) -> Self {
         Self {
             stream: value.stream,
             data: value.data,
@@ -273,8 +273,8 @@ impl From<operon_core::JobLog> for runtime::v1::JobLog {
     }
 }
 
-impl From<runtime::v1::JobLog> for operon_core::JobLog {
-    fn from(value: runtime::v1::JobLog) -> Self {
+impl From<runtime::v1::ExecLog> for operon_core::ExecLog {
+    fn from(value: runtime::v1::ExecLog) -> Self {
         Self {
             stream: value.stream,
             data: value.data,
@@ -283,8 +283,8 @@ impl From<runtime::v1::JobLog> for operon_core::JobLog {
     }
 }
 
-impl From<operon_core::JobRunRequest> for runtime::v1::JobRunRequest {
-    fn from(value: operon_core::JobRunRequest) -> Self {
+impl From<operon_core::ExecRunRequest> for runtime::v1::ExecRunRequest {
+    fn from(value: operon_core::ExecRunRequest) -> Self {
         Self {
             command: value.command,
             cwd: value.cwd.unwrap_or_default(),
@@ -295,8 +295,8 @@ impl From<operon_core::JobRunRequest> for runtime::v1::JobRunRequest {
     }
 }
 
-impl From<runtime::v1::JobRunRequest> for operon_core::JobRunRequest {
-    fn from(value: runtime::v1::JobRunRequest) -> Self {
+impl From<runtime::v1::ExecRunRequest> for operon_core::ExecRunRequest {
+    fn from(value: runtime::v1::ExecRunRequest) -> Self {
         Self {
             command: value.command,
             argv: value.argv,
@@ -307,14 +307,14 @@ impl From<runtime::v1::JobRunRequest> for operon_core::JobRunRequest {
     }
 }
 
-impl From<operon_core::JobRecord> for runtime::v1::JobRecord {
-    fn from(value: operon_core::JobRecord) -> Self {
+impl From<operon_core::ExecRecord> for runtime::v1::ExecRecord {
+    fn from(value: operon_core::ExecRecord) -> Self {
         Self {
             id: value.id,
             node_id: value.node_id,
             command: value.command,
             cwd: value.cwd,
-            status: grpc_job_status(&value.status) as i32,
+            status: grpc_exec_status(&value.status) as i32,
             exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
@@ -322,16 +322,16 @@ impl From<operon_core::JobRecord> for runtime::v1::JobRecord {
     }
 }
 
-impl TryFrom<runtime::v1::JobRecord> for operon_core::JobRecord {
+impl TryFrom<runtime::v1::ExecRecord> for operon_core::ExecRecord {
     type Error = String;
 
-    fn try_from(value: runtime::v1::JobRecord) -> Result<Self, Self::Error> {
+    fn try_from(value: runtime::v1::ExecRecord) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
             node_id: value.node_id,
             command: value.command,
             cwd: value.cwd,
-            status: parse_grpc_job_status(value.status)?,
+            status: parse_grpc_exec_status(value.status)?,
             exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
@@ -339,10 +339,10 @@ impl TryFrom<runtime::v1::JobRecord> for operon_core::JobRecord {
     }
 }
 
-impl From<operon_core::JobLogList> for runtime::v1::JobLogList {
-    fn from(value: operon_core::JobLogList) -> Self {
+impl From<operon_core::ExecLogList> for runtime::v1::ExecLogList {
+    fn from(value: operon_core::ExecLogList) -> Self {
         Self {
-            job_id: value.job_id,
+            exec_id: value.exec_id,
             logs: value.logs.into_iter().map(Into::into).collect(),
             truncated: value.truncated,
             dropped_log_count: value.dropped_log_count,
@@ -350,10 +350,10 @@ impl From<operon_core::JobLogList> for runtime::v1::JobLogList {
     }
 }
 
-impl From<runtime::v1::JobLogList> for operon_core::JobLogList {
-    fn from(value: runtime::v1::JobLogList) -> Self {
+impl From<runtime::v1::ExecLogList> for operon_core::ExecLogList {
+    fn from(value: runtime::v1::ExecLogList) -> Self {
         Self {
-            job_id: value.job_id,
+            exec_id: value.exec_id,
             logs: value.logs.into_iter().map(Into::into).collect(),
             truncated: value.truncated,
             dropped_log_count: value.dropped_log_count,
@@ -361,11 +361,11 @@ impl From<runtime::v1::JobLogList> for operon_core::JobLogList {
     }
 }
 
-impl From<operon_core::JobEvent> for runtime::v1::JobEvent {
-    fn from(value: operon_core::JobEvent) -> Self {
+impl From<operon_core::ExecEvent> for runtime::v1::ExecEvent {
+    fn from(value: operon_core::ExecEvent) -> Self {
         Self {
-            job_id: value.job_id,
-            status: grpc_job_status(&value.status) as i32,
+            exec_id: value.exec_id,
+            status: grpc_exec_status(&value.status) as i32,
             exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
@@ -373,13 +373,13 @@ impl From<operon_core::JobEvent> for runtime::v1::JobEvent {
     }
 }
 
-impl TryFrom<runtime::v1::JobEvent> for operon_core::JobEvent {
+impl TryFrom<runtime::v1::ExecEvent> for operon_core::ExecEvent {
     type Error = String;
 
-    fn try_from(value: runtime::v1::JobEvent) -> Result<Self, Self::Error> {
+    fn try_from(value: runtime::v1::ExecEvent) -> Result<Self, Self::Error> {
         Ok(Self {
-            job_id: value.job_id,
-            status: parse_grpc_job_status(value.status)?,
+            exec_id: value.exec_id,
+            status: parse_grpc_exec_status(value.status)?,
             exit_code: value.exit_code,
             log_count: value.log_count,
             logs_truncated: value.logs_truncated,
@@ -387,22 +387,22 @@ impl TryFrom<runtime::v1::JobEvent> for operon_core::JobEvent {
     }
 }
 
-impl From<operon_core::JobList> for runtime::v1::JobList {
-    fn from(value: operon_core::JobList) -> Self {
+impl From<operon_core::ExecList> for runtime::v1::ExecList {
+    fn from(value: operon_core::ExecList) -> Self {
         Self {
-            jobs: value.jobs.into_iter().map(Into::into).collect(),
+            execs: value.execs.into_iter().map(Into::into).collect(),
             next_page_token: value.next_page_token,
         }
     }
 }
 
-impl TryFrom<runtime::v1::JobList> for operon_core::JobList {
+impl TryFrom<runtime::v1::ExecList> for operon_core::ExecList {
     type Error = String;
 
-    fn try_from(value: runtime::v1::JobList) -> Result<Self, Self::Error> {
+    fn try_from(value: runtime::v1::ExecList) -> Result<Self, Self::Error> {
         Ok(Self {
-            jobs: value
-                .jobs
+            execs: value
+                .execs
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
@@ -411,37 +411,37 @@ impl TryFrom<runtime::v1::JobList> for operon_core::JobList {
     }
 }
 
-impl From<operon_core::JobStdin> for runtime::v1::JobStdin {
-    fn from(value: operon_core::JobStdin) -> Self {
+impl From<operon_core::ExecStdin> for runtime::v1::ExecStdin {
+    fn from(value: operon_core::ExecStdin) -> Self {
         Self {
-            job_id: value.job_id,
+            exec_id: value.exec_id,
             bytes_written: value.bytes_written,
         }
     }
 }
 
-impl From<runtime::v1::JobStdin> for operon_core::JobStdin {
-    fn from(value: runtime::v1::JobStdin) -> Self {
+impl From<runtime::v1::ExecStdin> for operon_core::ExecStdin {
+    fn from(value: runtime::v1::ExecStdin) -> Self {
         Self {
-            job_id: value.job_id,
+            exec_id: value.exec_id,
             bytes_written: value.bytes_written,
         }
     }
 }
 
-impl From<operon_core::JobStdinClose> for runtime::v1::JobStdinClose {
-    fn from(value: operon_core::JobStdinClose) -> Self {
+impl From<operon_core::ExecStdinClose> for runtime::v1::ExecStdinClose {
+    fn from(value: operon_core::ExecStdinClose) -> Self {
         Self {
-            job_id: value.job_id,
+            exec_id: value.exec_id,
             closed: value.closed,
         }
     }
 }
 
-impl From<runtime::v1::JobStdinClose> for operon_core::JobStdinClose {
-    fn from(value: runtime::v1::JobStdinClose) -> Self {
+impl From<runtime::v1::ExecStdinClose> for operon_core::ExecStdinClose {
+    fn from(value: runtime::v1::ExecStdinClose) -> Self {
         Self {
-            job_id: value.job_id,
+            exec_id: value.exec_id,
             closed: value.closed,
         }
     }
@@ -593,24 +593,24 @@ impl From<runtime::v1::AuditLog> for operon_core::AuditLog {
     }
 }
 
-pub fn format_job_status(status: &operon_core::JobStatus) -> &'static str {
+pub fn format_exec_status(status: &operon_core::ExecStatus) -> &'static str {
     match status {
-        operon_core::JobStatus::Running => "running",
-        operon_core::JobStatus::Succeeded => "succeeded",
-        operon_core::JobStatus::Failed => "failed",
-        operon_core::JobStatus::Cancelled => "cancelled",
-        operon_core::JobStatus::TimedOut => "timed-out",
+        operon_core::ExecStatus::Running => "running",
+        operon_core::ExecStatus::Succeeded => "succeeded",
+        operon_core::ExecStatus::Failed => "failed",
+        operon_core::ExecStatus::Cancelled => "cancelled",
+        operon_core::ExecStatus::TimedOut => "timed-out",
     }
 }
 
-pub fn parse_job_status(value: &str) -> Result<operon_core::JobStatus, String> {
+pub fn parse_exec_status(value: &str) -> Result<operon_core::ExecStatus, String> {
     match value {
-        "running" => Ok(operon_core::JobStatus::Running),
-        "succeeded" => Ok(operon_core::JobStatus::Succeeded),
-        "failed" => Ok(operon_core::JobStatus::Failed),
-        "cancelled" => Ok(operon_core::JobStatus::Cancelled),
-        "timed-out" => Ok(operon_core::JobStatus::TimedOut),
-        _ => Err(format!("unknown job status `{value}`")),
+        "running" => Ok(operon_core::ExecStatus::Running),
+        "succeeded" => Ok(operon_core::ExecStatus::Succeeded),
+        "failed" => Ok(operon_core::ExecStatus::Failed),
+        "cancelled" => Ok(operon_core::ExecStatus::Cancelled),
+        "timed-out" => Ok(operon_core::ExecStatus::TimedOut),
+        _ => Err(format!("unknown exec status `{value}`")),
     }
 }
 
@@ -618,7 +618,7 @@ fn grpc_capability_kind(kind: &operon_core::CapabilityKind) -> runtime::v1::Capa
     match kind {
         operon_core::CapabilityKind::Fs => runtime::v1::CapabilityKind::Fs,
         operon_core::CapabilityKind::Process => runtime::v1::CapabilityKind::Process,
-        operon_core::CapabilityKind::Job => runtime::v1::CapabilityKind::Job,
+        operon_core::CapabilityKind::Exec => runtime::v1::CapabilityKind::Exec,
         operon_core::CapabilityKind::DeviceInfo => runtime::v1::CapabilityKind::DeviceInfo,
         operon_core::CapabilityKind::Service => runtime::v1::CapabilityKind::Service,
     }
@@ -630,7 +630,7 @@ fn parse_grpc_capability_kind(value: i32) -> Result<operon_core::CapabilityKind,
     {
         runtime::v1::CapabilityKind::Fs => Ok(operon_core::CapabilityKind::Fs),
         runtime::v1::CapabilityKind::Process => Ok(operon_core::CapabilityKind::Process),
-        runtime::v1::CapabilityKind::Job => Ok(operon_core::CapabilityKind::Job),
+        runtime::v1::CapabilityKind::Exec => Ok(operon_core::CapabilityKind::Exec),
         runtime::v1::CapabilityKind::DeviceInfo => Ok(operon_core::CapabilityKind::DeviceInfo),
         runtime::v1::CapabilityKind::Service => Ok(operon_core::CapabilityKind::Service),
         runtime::v1::CapabilityKind::Unspecified => {
@@ -639,26 +639,26 @@ fn parse_grpc_capability_kind(value: i32) -> Result<operon_core::CapabilityKind,
     }
 }
 
-fn grpc_job_status(status: &operon_core::JobStatus) -> runtime::v1::JobStatus {
+fn grpc_exec_status(status: &operon_core::ExecStatus) -> runtime::v1::ExecStatus {
     match status {
-        operon_core::JobStatus::Running => runtime::v1::JobStatus::Running,
-        operon_core::JobStatus::Succeeded => runtime::v1::JobStatus::Succeeded,
-        operon_core::JobStatus::Failed => runtime::v1::JobStatus::Failed,
-        operon_core::JobStatus::Cancelled => runtime::v1::JobStatus::Cancelled,
-        operon_core::JobStatus::TimedOut => runtime::v1::JobStatus::TimedOut,
+        operon_core::ExecStatus::Running => runtime::v1::ExecStatus::Running,
+        operon_core::ExecStatus::Succeeded => runtime::v1::ExecStatus::Succeeded,
+        operon_core::ExecStatus::Failed => runtime::v1::ExecStatus::Failed,
+        operon_core::ExecStatus::Cancelled => runtime::v1::ExecStatus::Cancelled,
+        operon_core::ExecStatus::TimedOut => runtime::v1::ExecStatus::TimedOut,
     }
 }
 
-fn parse_grpc_job_status(value: i32) -> Result<operon_core::JobStatus, String> {
-    match runtime::v1::JobStatus::try_from(value)
-        .map_err(|_| format!("unknown job status `{value}`"))?
+fn parse_grpc_exec_status(value: i32) -> Result<operon_core::ExecStatus, String> {
+    match runtime::v1::ExecStatus::try_from(value)
+        .map_err(|_| format!("unknown exec status `{value}`"))?
     {
-        runtime::v1::JobStatus::Running => Ok(operon_core::JobStatus::Running),
-        runtime::v1::JobStatus::Succeeded => Ok(operon_core::JobStatus::Succeeded),
-        runtime::v1::JobStatus::Failed => Ok(operon_core::JobStatus::Failed),
-        runtime::v1::JobStatus::Cancelled => Ok(operon_core::JobStatus::Cancelled),
-        runtime::v1::JobStatus::TimedOut => Ok(operon_core::JobStatus::TimedOut),
-        runtime::v1::JobStatus::Unspecified => Err("job status is unspecified".to_string()),
+        runtime::v1::ExecStatus::Running => Ok(operon_core::ExecStatus::Running),
+        runtime::v1::ExecStatus::Succeeded => Ok(operon_core::ExecStatus::Succeeded),
+        runtime::v1::ExecStatus::Failed => Ok(operon_core::ExecStatus::Failed),
+        runtime::v1::ExecStatus::Cancelled => Ok(operon_core::ExecStatus::Cancelled),
+        runtime::v1::ExecStatus::TimedOut => Ok(operon_core::ExecStatus::TimedOut),
+        runtime::v1::ExecStatus::Unspecified => Err("exec status is unspecified".to_string()),
     }
 }
 
@@ -687,7 +687,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.9.9");
+        assert_eq!(PROTOCOL_VERSION, "v0.10.0");
     }
 
     #[test]
@@ -711,14 +711,14 @@ mod tests {
         let core = operon_core::CapabilityList::try_from(grpc).expect("capability list");
         assert_eq!(core.next_page_token, "cap-next");
 
-        let jobs = operon_core::JobList {
-            jobs: Vec::new(),
-            next_page_token: "job-next".to_string(),
+        let execs = operon_core::ExecList {
+            execs: Vec::new(),
+            next_page_token: "exec-next".to_string(),
         };
-        let grpc: runtime::v1::JobList = jobs.into();
-        assert_eq!(grpc.next_page_token, "job-next");
-        let core = operon_core::JobList::try_from(grpc).expect("job list");
-        assert_eq!(core.next_page_token, "job-next");
+        let grpc: runtime::v1::ExecList = execs.into();
+        assert_eq!(grpc.next_page_token, "exec-next");
+        let core = operon_core::ExecList::try_from(grpc).expect("exec list");
+        assert_eq!(core.next_page_token, "exec-next");
 
         let services = operon_core::ServiceList {
             services: Vec::new(),
@@ -743,15 +743,15 @@ mod tests {
     fn policy_decision_round_trips_through_grpc_shape() {
         let decision = operon_core::PolicyDecision::denied(
             "local-cli",
-            "job:default",
+            "exec:default",
             "run",
             "/tmp",
-            operon_core::PolicyReasonCode::JobCwdDenied,
-            "job cwd denied by policy",
+            operon_core::PolicyReasonCode::ExecCwdDenied,
+            "exec cwd denied by policy",
         );
 
         let grpc: runtime::v1::PolicyDecision = decision.clone().into();
-        assert_eq!(grpc.reason_code, "job-cwd-denied");
+        assert_eq!(grpc.reason_code, "exec-cwd-denied");
         let core = operon_core::PolicyDecision::try_from(grpc).expect("policy decision");
 
         assert_eq!(core, decision);
@@ -798,8 +798,8 @@ mod tests {
     }
 
     #[test]
-    fn job_run_request_preserves_argv_execution_fields() {
-        let request = operon_core::JobRunRequest {
+    fn exec_run_request_preserves_argv_execution_fields() {
+        let request = operon_core::ExecRunRequest {
             command: String::new(),
             argv: vec!["printf".to_string(), "hello world".to_string()],
             cwd: Some("/work".to_string()),
@@ -807,8 +807,8 @@ mod tests {
             secrets: vec!["TOKEN".to_string()],
         };
 
-        let grpc: runtime::v1::JobRunRequest = request.clone().into();
-        let core: operon_core::JobRunRequest = grpc.into();
+        let grpc: runtime::v1::ExecRunRequest = request.clone().into();
+        let core: operon_core::ExecRunRequest = grpc.into();
 
         assert_eq!(core.command, "");
         assert_eq!(core.argv, request.argv);

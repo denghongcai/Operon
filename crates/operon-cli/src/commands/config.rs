@@ -44,7 +44,7 @@ struct NodeExplain {
 struct PolicyExplain {
     subject: String,
     fs_mounts: Vec<FsMountExplain>,
-    job: JobPolicyExplain,
+    exec: ExecPolicyExplain,
     services: Vec<ServiceExplain>,
     effective_grants: Vec<PolicyGrantExplain>,
 }
@@ -59,7 +59,7 @@ struct FsMountExplain {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct JobPolicyExplain {
+struct ExecPolicyExplain {
     allowed_cwds: Vec<String>,
     default_timeout_secs: u64,
     max_timeout_secs: u64,
@@ -148,13 +148,13 @@ impl ConfigExplain {
                         delete: mount.permissions.delete,
                     })
                     .collect(),
-                job: JobPolicyExplain {
-                    allowed_cwds: policy.job.allowed_cwds.clone(),
-                    default_timeout_secs: policy.job.default_timeout_secs,
-                    max_timeout_secs: policy.job.max_timeout_secs,
-                    preserve_env: policy.job.preserve_env,
-                    env_allowlist: policy.job.env_allowlist.clone(),
-                    allowed_secrets: policy.job.allowed_secrets.clone(),
+                exec: ExecPolicyExplain {
+                    allowed_cwds: policy.exec.allowed_cwds.clone(),
+                    default_timeout_secs: policy.exec.default_timeout_secs,
+                    max_timeout_secs: policy.exec.max_timeout_secs,
+                    preserve_env: policy.exec.preserve_env,
+                    env_allowlist: policy.exec.env_allowlist.clone(),
+                    allowed_secrets: policy.exec.allowed_secrets.clone(),
                 },
                 services: policy
                     .service
@@ -236,13 +236,13 @@ fn print_config_explain(explain: &ConfigExplain) {
                 );
             }
             println!(
-                "  job: allowed_cwds={} default_timeout={} max_timeout={} preserve_env={} env_allowlist={} allowed_secrets={}",
-                policy.job.allowed_cwds.join(","),
-                policy.job.default_timeout_secs,
-                policy.job.max_timeout_secs,
-                policy.job.preserve_env,
-                policy.job.env_allowlist.join(","),
-                policy.job.allowed_secrets.join(",")
+                "  exec: allowed_cwds={} default_timeout={} max_timeout={} preserve_env={} env_allowlist={} allowed_secrets={}",
+                policy.exec.allowed_cwds.join(","),
+                policy.exec.default_timeout_secs,
+                policy.exec.max_timeout_secs,
+                policy.exec.preserve_env,
+                policy.exec.env_allowlist.join(","),
+                policy.exec.allowed_secrets.join(",")
             );
             println!("  services:");
             if policy.services.is_empty() {
@@ -340,16 +340,16 @@ fn effective_policy_grants(policy: &operon_core::PolicyConfig) -> Vec<PolicyGran
             },
         ));
     }
-    for cwd in &policy.job.allowed_cwds {
+    for cwd in &policy.exec.allowed_cwds {
         grants.push(policy_grant(
-            "job:default",
+            "exec:default",
             "run",
             cwd,
             true,
             operon_core::PolicyReasonCode::Allowed,
         ));
     }
-    for secret in &policy.job.allowed_secrets {
+    for secret in &policy.exec.allowed_secrets {
         grants.push(policy_grant(
             "secret:default",
             "use",
@@ -454,7 +454,7 @@ mod tests {
                 && grant.reason_code == "fs-permission-denied"
         }));
         assert!(policy.effective_grants.iter().any(|grant| {
-            grant.capability_id == "job:default"
+            grant.capability_id == "exec:default"
                 && grant.action == "run"
                 && grant.resource == "/"
                 && grant.allowed

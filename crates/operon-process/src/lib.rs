@@ -1,25 +1,25 @@
 use std::collections::BTreeMap;
 
-use operon_core::{JobPolicy, PolicyDecision, PolicyReasonCode, RuntimeResult};
+use operon_core::{ExecPolicy, PolicyDecision, PolicyReasonCode, RuntimeResult};
 
 pub const PROCESS_CAPABILITY: &str = "process";
-pub const JOB_CAPABILITY: &str = "job";
+pub const EXEC_CAPABILITY: &str = "exec";
 
-pub fn authorize_job(
-    policy: &JobPolicy,
+pub fn authorize_exec(
+    policy: &ExecPolicy,
     cwd: &str,
     timeout_secs: Option<u64>,
 ) -> RuntimeResult<()> {
-    let decision = authorize_job_decision("", policy, cwd, timeout_secs);
+    let decision = authorize_exec_decision("", policy, cwd, timeout_secs);
     if decision.allowed {
         return Ok(());
     }
     Err(decision.runtime_error())
 }
 
-pub fn authorize_job_decision(
+pub fn authorize_exec_decision(
     subject: &str,
-    policy: &JobPolicy,
+    policy: &ExecPolicy,
     cwd: &str,
     timeout_secs: Option<u64>,
 ) -> PolicyDecision {
@@ -30,43 +30,43 @@ pub fn authorize_job_decision(
     {
         return PolicyDecision::denied(
             subject,
-            "job:default",
+            "exec:default",
             "run",
             cwd,
-            PolicyReasonCode::JobCwdDenied,
-            "job cwd denied by policy",
+            PolicyReasonCode::ExecCwdDenied,
+            "exec cwd denied by policy",
         );
     }
     if let Some(timeout_secs) = timeout_secs {
         if timeout_secs > policy.max_timeout_secs {
             return PolicyDecision::denied(
                 subject,
-                "job:default",
+                "exec:default",
                 "run",
                 cwd,
-                PolicyReasonCode::JobTimeoutExceeded,
+                PolicyReasonCode::ExecTimeoutExceeded,
                 format!(
-                    "job timeout {timeout_secs}s exceeds policy maximum {}s",
+                    "exec timeout {timeout_secs}s exceeds policy maximum {}s",
                     policy.max_timeout_secs
                 ),
             );
         }
     }
-    PolicyDecision::allowed(subject, "job:default", "run", cwd, "allowed")
+    PolicyDecision::allowed(subject, "exec:default", "run", cwd, "allowed")
 }
 
-pub fn resolve_job_secrets(
-    policy: &JobPolicy,
+pub fn resolve_exec_secrets(
+    policy: &ExecPolicy,
     secrets: &BTreeMap<String, String>,
     requested: &[String],
 ) -> RuntimeResult<BTreeMap<String, String>> {
-    resolve_job_secrets_decision("", policy, secrets, requested)
+    resolve_exec_secrets_decision("", policy, secrets, requested)
         .map_err(|decision| decision.runtime_error())
 }
 
-pub fn resolve_job_secrets_decision(
+pub fn resolve_exec_secrets_decision(
     subject: &str,
-    policy: &JobPolicy,
+    policy: &ExecPolicy,
     secrets: &BTreeMap<String, String>,
     requested: &[String],
 ) -> Result<BTreeMap<String, String>, Box<PolicyDecision>> {
@@ -97,8 +97,8 @@ pub fn resolve_job_secrets_decision(
     Ok(env)
 }
 
-pub fn job_environment(
-    policy: &JobPolicy,
+pub fn exec_environment(
+    policy: &ExecPolicy,
     secrets: BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
     let mut env = if policy.preserve_env {
@@ -141,12 +141,12 @@ mod tests {
     #[test]
     fn process_capability_ids_are_stable() {
         assert_eq!(PROCESS_CAPABILITY, "process");
-        assert_eq!(JOB_CAPABILITY, "job");
+        assert_eq!(EXEC_CAPABILITY, "exec");
     }
 
     #[test]
-    fn job_policy_enforces_cwd_and_timeout() {
-        let policy = JobPolicy {
+    fn exec_policy_enforces_cwd_and_timeout() {
+        let policy = ExecPolicy {
             allowed_cwds: vec!["/workspace".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
@@ -154,20 +154,22 @@ mod tests {
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
         };
-        assert!(authorize_job(&policy, "/workspace/project", Some(30)).is_ok());
+        assert!(authorize_exec(&policy, "/workspace/project", Some(30)).is_ok());
         assert_eq!(
-            authorize_job(&policy, "/tmp", Some(30)).expect_err("cwd").1,
-            "job cwd denied by policy"
+            authorize_exec(&policy, "/tmp", Some(30))
+                .expect_err("cwd")
+                .1,
+            "exec cwd denied by policy"
         );
-        assert!(authorize_job(&policy, "/workspace", Some(61))
+        assert!(authorize_exec(&policy, "/workspace", Some(61))
             .expect_err("timeout")
             .1
             .contains("exceeds policy maximum"));
     }
 
     #[test]
-    fn job_authorization_decision_names_reason_codes() {
-        let policy = JobPolicy {
+    fn exec_authorization_decision_names_reason_codes() {
+        let policy = ExecPolicy {
             allowed_cwds: vec!["/workspace".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
@@ -176,26 +178,29 @@ mod tests {
             allowed_secrets: Vec::new(),
         };
 
-        let allowed = authorize_job_decision("local-cli", &policy, "/workspace", Some(60));
+        let allowed = authorize_exec_decision("local-cli", &policy, "/workspace", Some(60));
         assert!(allowed.allowed);
-        assert_eq!(allowed.capability_id, "job:default");
+        assert_eq!(allowed.capability_id, "exec:default");
         assert_eq!(allowed.reason_code, operon_core::PolicyReasonCode::Allowed);
 
-        let cwd = authorize_job_decision("local-cli", &policy, "/tmp", Some(30));
+        let cwd = authorize_exec_decision("local-cli", &policy, "/tmp", Some(30));
         assert!(!cwd.allowed);
-        assert_eq!(cwd.reason_code, operon_core::PolicyReasonCode::JobCwdDenied);
+        assert_eq!(
+            cwd.reason_code,
+            operon_core::PolicyReasonCode::ExecCwdDenied
+        );
 
-        let timeout = authorize_job_decision("local-cli", &policy, "/workspace", Some(61));
+        let timeout = authorize_exec_decision("local-cli", &policy, "/workspace", Some(61));
         assert!(!timeout.allowed);
         assert_eq!(
             timeout.reason_code,
-            operon_core::PolicyReasonCode::JobTimeoutExceeded
+            operon_core::PolicyReasonCode::ExecTimeoutExceeded
         );
     }
 
     #[test]
     fn secret_authorization_decision_names_denied_and_missing_secrets() {
-        let policy = JobPolicy {
+        let policy = ExecPolicy {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
@@ -207,12 +212,12 @@ mod tests {
         secrets.insert("TOKEN".to_string(), "value".to_string());
 
         let env =
-            resolve_job_secrets_decision("local-cli", &policy, &secrets, &["TOKEN".to_string()])
+            resolve_exec_secrets_decision("local-cli", &policy, &secrets, &["TOKEN".to_string()])
                 .expect("allowed secret");
         assert_eq!(env.get("TOKEN").map(String::as_str), Some("value"));
 
         let denied =
-            resolve_job_secrets_decision("local-cli", &policy, &secrets, &["OTHER".to_string()])
+            resolve_exec_secrets_decision("local-cli", &policy, &secrets, &["OTHER".to_string()])
                 .expect_err("denied secret");
         assert_eq!(denied.capability_id, "secret:default");
         assert_eq!(
@@ -220,7 +225,7 @@ mod tests {
             operon_core::PolicyReasonCode::SecretDenied
         );
 
-        let missing = resolve_job_secrets_decision(
+        let missing = resolve_exec_secrets_decision(
             "local-cli",
             &policy,
             &BTreeMap::new(),
@@ -235,8 +240,8 @@ mod tests {
     }
 
     #[test]
-    fn job_environment_uses_allowlist_and_secrets() {
-        let policy = JobPolicy {
+    fn exec_environment_uses_allowlist_and_secrets() {
+        let policy = ExecPolicy {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
@@ -246,14 +251,14 @@ mod tests {
         };
         let mut secrets = BTreeMap::new();
         secrets.insert("TOKEN".to_string(), "secret".to_string());
-        let env = job_environment(&policy, secrets);
+        let env = exec_environment(&policy, secrets);
         assert!(env.contains_key("PATH"));
         assert_eq!(env.get("TOKEN").map(String::as_str), Some("secret"));
     }
 
     #[test]
-    fn job_environment_can_preserve_parent_environment() {
-        let policy = JobPolicy {
+    fn exec_environment_can_preserve_parent_environment() {
+        let policy = ExecPolicy {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
@@ -264,7 +269,7 @@ mod tests {
         let mut secrets = BTreeMap::new();
         secrets.insert("TOKEN".to_string(), "secret".to_string());
 
-        let env = job_environment(&policy, secrets);
+        let env = exec_environment(&policy, secrets);
 
         assert!(env.contains_key("PATH"));
         assert_eq!(env.get("TOKEN").map(String::as_str), Some("secret"));

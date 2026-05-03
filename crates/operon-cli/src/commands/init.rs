@@ -49,7 +49,7 @@ policy:
           read: true
           write: true
           delete: false
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30

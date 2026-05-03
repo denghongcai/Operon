@@ -110,7 +110,7 @@ mod tests {
         let audit = AuditLog {
             events: vec![
                 test_audit_event("fs:workspace", "stat", true, "/a"),
-                test_audit_event("job:default", "run", true, "/"),
+                test_audit_event("exec:default", "run", true, "/"),
                 test_audit_event("fs:workspace", "read", false, "/secret"),
             ],
             next_page_token: String::new(),

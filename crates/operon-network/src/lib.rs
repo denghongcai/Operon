@@ -176,7 +176,7 @@ mod tests {
             &[
                 ("node_id", "gpu"),
                 ("endpoint", "grpc://10.0.0.8:7789"),
-                ("capabilities", "fs:workspace,job:default"),
+                ("capabilities", "fs:workspace,exec:default"),
                 ("provider", "tailscale"),
             ][..],
         )
@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(record.endpoint, "grpc://10.0.0.8:7789");
         assert_eq!(
             record.capabilities,
-            vec!["fs:workspace".to_string(), "job:default".to_string()]
+            vec!["fs:workspace".to_string(), "exec:default".to_string()]
         );
     }
 }

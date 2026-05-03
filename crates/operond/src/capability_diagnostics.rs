@@ -9,7 +9,7 @@ pub(crate) fn explain_capability_decision(
 ) -> PolicyDecision {
     match capability_family(&request.capability_id) {
         "fs" => explain_fs(policy, request),
-        "job" => explain_job(policy, request),
+        "exec" => explain_exec(policy, request),
         "secret" => explain_secret(policy, secrets, request),
         "service" => explain_service(policy, request),
         _ => unsupported(policy, request),
@@ -30,13 +30,13 @@ fn explain_fs(policy: &PolicyConfig, request: &CapabilityDiagnosticRequest) -> P
     operon_fs::authorize_fs_decision(policy, &request.action, &request.resource)
 }
 
-fn explain_job(policy: &PolicyConfig, request: &CapabilityDiagnosticRequest) -> PolicyDecision {
+fn explain_exec(policy: &PolicyConfig, request: &CapabilityDiagnosticRequest) -> PolicyDecision {
     if request.action != "run" {
         return unsupported(policy, request);
     }
-    operon_process::authorize_job_decision(
+    operon_process::authorize_exec_decision(
         &policy.subject,
-        &policy.job,
+        &policy.exec,
         &request.resource,
         request.timeout_secs,
     )
@@ -50,9 +50,9 @@ fn explain_secret(
     if request.action != "use" {
         return unsupported(policy, request);
     }
-    match operon_process::resolve_job_secrets_decision(
+    match operon_process::resolve_exec_secrets_decision(
         &policy.subject,
-        &policy.job,
+        &policy.exec,
         secrets,
         std::slice::from_ref(&request.resource),
     ) {
@@ -97,7 +97,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use operon_core::{
-        CapabilityDiagnosticRequest, FsMountPolicy, FsPermissions, FsPolicy, JobPolicy,
+        CapabilityDiagnosticRequest, ExecPolicy, FsMountPolicy, FsPermissions, FsPolicy,
         PolicyConfig, PolicyReasonCode, ServiceDefinition, ServicePermissions, ServicePolicy,
         ServiceProtocol,
     };
@@ -118,7 +118,7 @@ mod tests {
                     },
                 }],
             },
-            job: JobPolicy {
+            exec: ExecPolicy {
                 allowed_cwds: vec!["/workspace".to_string()],
                 default_timeout_secs: 30,
                 max_timeout_secs: 60,
@@ -162,12 +162,12 @@ mod tests {
     }
 
     #[test]
-    fn capability_diagnostics_explain_job_timeout_denial() {
+    fn capability_diagnostics_explain_exec_timeout_denial() {
         let decision = explain_capability_decision(
             &test_policy(),
             &BTreeMap::new(),
             &CapabilityDiagnosticRequest {
-                capability_id: "job:default".to_string(),
+                capability_id: "exec:default".to_string(),
                 action: "run".to_string(),
                 resource: "/workspace".to_string(),
                 timeout_secs: Some(61),
@@ -175,8 +175,8 @@ mod tests {
         );
 
         assert!(!decision.allowed);
-        assert_eq!(decision.capability_id, "job:default");
-        assert_eq!(decision.reason_code, PolicyReasonCode::JobTimeoutExceeded);
+        assert_eq!(decision.capability_id, "exec:default");
+        assert_eq!(decision.reason_code, PolicyReasonCode::ExecTimeoutExceeded);
     }
 
     #[test]

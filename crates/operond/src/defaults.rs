@@ -1,5 +1,5 @@
 use operon_core::{
-    Capability, CapabilityKind, CapabilityList, FsMountPolicy, FsPermissions, FsPolicy, JobPolicy,
+    Capability, CapabilityKind, CapabilityList, ExecPolicy, FsMountPolicy, FsPermissions, FsPolicy,
     PolicyConfig, ServicePolicy,
 };
 
@@ -17,7 +17,7 @@ pub(crate) fn default_policy() -> PolicyConfig {
                 },
             }],
         },
-        job: JobPolicy {
+        exec: ExecPolicy {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 300,
@@ -53,14 +53,14 @@ pub(crate) fn capabilities_from_policy(node_id: &str, policy: &PolicyConfig) -> 
         });
     }
 
-    if !policy.job.allowed_cwds.is_empty() {
+    if !policy.exec.allowed_cwds.is_empty() {
         capabilities.push(Capability {
-            id: "job:default".to_string(),
-            kind: CapabilityKind::Job,
+            id: "exec:default".to_string(),
+            kind: CapabilityKind::Exec,
             node_id: node_id.to_string(),
             name: "default".to_string(),
             permissions: vec!["run".to_string(), "cancel".to_string(), "logs".to_string()],
-            description: "Policy-scoped job execution".to_string(),
+            description: "Policy-scoped exec execution".to_string(),
         });
     }
 
@@ -106,7 +106,7 @@ mod tests {
         PolicyConfig {
             subject: "local-cli".to_string(),
             fs: FsPolicy { mounts: Vec::new() },
-            job: JobPolicy {
+            exec: ExecPolicy {
                 allowed_cwds: Vec::new(),
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,
@@ -128,13 +128,13 @@ mod tests {
             .collect();
 
         assert!(!ids.contains(&"fs:workspace"));
-        assert!(!ids.contains(&"job:default"));
+        assert!(!ids.contains(&"exec:default"));
         assert!(!ids.contains(&"service:default"));
         assert!(ids.contains(&"device-info:default"));
     }
 
     #[test]
-    fn policy_capabilities_reflect_configured_mounts_jobs_and_services() {
+    fn policy_capabilities_reflect_configured_mounts_execs_and_services() {
         let mut policy = empty_policy();
         policy.fs.mounts.push(FsMountPolicy {
             name: "project".to_string(),
@@ -145,7 +145,7 @@ mod tests {
                 delete: true,
             },
         });
-        policy.job.allowed_cwds.push("/project".to_string());
+        policy.exec.allowed_cwds.push("/project".to_string());
         policy.service.services.push(ServiceDefinition {
             id: "web".to_string(),
             name: "web".to_string(),
@@ -169,13 +169,13 @@ mod tests {
             fs.permissions,
             vec!["read".to_string(), "delete".to_string()]
         );
-        let job = capabilities
+        let exec = capabilities
             .capabilities
             .iter()
-            .find(|capability| capability.id == "job:default")
-            .expect("job capability");
+            .find(|capability| capability.id == "exec:default")
+            .expect("exec capability");
         assert_eq!(
-            job.permissions,
+            exec.permissions,
             vec!["run".to_string(), "cancel".to_string(), "logs".to_string()]
         );
         let service = capabilities

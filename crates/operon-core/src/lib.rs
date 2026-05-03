@@ -1,7 +1,7 @@
 pub mod audit;
 pub mod discovery;
+pub mod exec;
 pub mod fs;
-pub mod job;
 pub mod policy;
 pub mod runtime;
 pub mod service;
@@ -9,8 +9,8 @@ pub mod trace;
 
 pub use audit::*;
 pub use discovery::*;
+pub use exec::*;
 pub use fs::*;
-pub use job::*;
 pub use policy::*;
 pub use runtime::*;
 pub use service::*;
@@ -21,9 +21,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn job_status_uses_kebab_case_wire_names() {
+    fn exec_status_uses_kebab_case_wire_names() {
         assert_eq!(
-            serde_json::to_string(&JobStatus::TimedOut).expect("serialize"),
+            serde_json::to_string(&ExecStatus::TimedOut).expect("serialize"),
             "\"timed-out\""
         );
     }
@@ -41,7 +41,7 @@ fs:
         read: true
         write: true
         delete: false
-job:
+exec:
   allowed_cwds:
     - /
   default_timeout_secs: 30
@@ -57,9 +57,9 @@ job:
         assert_eq!(policy.fs.mounts[0].name, "workspace");
         assert!(policy.fs.mounts[0].permissions.read);
         assert!(!policy.fs.mounts[0].permissions.delete);
-        assert_eq!(policy.job.max_timeout_secs, 300);
-        assert!(!policy.job.preserve_env);
-        assert_eq!(policy.job.env_allowlist, vec!["GITHUB_TOKEN"]);
+        assert_eq!(policy.exec.max_timeout_secs, 300);
+        assert!(!policy.exec.preserve_env);
+        assert_eq!(policy.exec.env_allowlist, vec!["GITHUB_TOKEN"]);
         assert!(policy.service.services.is_empty());
     }
 
@@ -70,7 +70,7 @@ job:
 subject: local-cli
 fs:
   mounts: []
-job:
+exec:
   allowed_cwds:
     - /
   default_timeout_secs: 30
@@ -127,7 +127,7 @@ steps:
     content: hello
   - id: run-command
     node: node-a
-    action: job.run
+    action: exec.run
     cwd: /
     timeout_secs: 5
     command: cat input.txt
@@ -143,8 +143,8 @@ steps:
 
     #[test]
     fn domain_module_paths_and_root_reexports_match() {
-        let root_status = JobStatus::TimedOut;
-        let module_status = job::JobStatus::TimedOut;
+        let root_status = ExecStatus::TimedOut;
+        let module_status = exec::ExecStatus::TimedOut;
 
         assert_eq!(
             serde_json::to_string(&root_status).expect("serialize root"),
@@ -154,7 +154,7 @@ steps:
         let policy = policy::PolicyConfig {
             subject: "local-cli".to_string(),
             fs: FsPolicy { mounts: vec![] },
-            job: JobPolicy {
+            exec: ExecPolicy {
                 allowed_cwds: vec!["/tmp".to_string()],
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,

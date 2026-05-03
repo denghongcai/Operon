@@ -19,12 +19,12 @@ require_pattern 'service-action-denied' crates/operon-core/src/policy.rs
 require_pattern 'policy_decision_serializes_stable_reason_code' crates/operon-core/src/policy.rs
 
 require_pattern 'authorize_fs_decision' crates/operon-fs/src/lib.rs
-require_pattern 'authorize_job_decision' crates/operon-process/src/lib.rs
-require_pattern 'resolve_job_secrets_decision' crates/operon-process/src/lib.rs
+require_pattern 'authorize_exec_decision' crates/operon-process/src/lib.rs
+require_pattern 'resolve_exec_secrets_decision' crates/operon-process/src/lib.rs
 require_pattern 'authorize_service_decision' crates/operond/src/service_forward.rs
 require_pattern 'record_policy_decision' crates/operond/src/audit.rs
 require_pattern 'policy_decision_audit_reason_includes_reason_code' crates/operond/src/audit.rs
-require_pattern 'denied_job_policy_audit_uses_reason_code' crates/operond/src/main.rs
+require_pattern 'denied_exec_policy_audit_uses_reason_code' crates/operond/src/main.rs
 
 require_pattern 'effective_grants' crates/operon-cli/src/commands/config.rs
 require_pattern 'effective grants' crates/operon-cli/src/commands/config.rs
@@ -38,7 +38,7 @@ cargo test -p operon-fs --locked fs_authorization_decision
 cargo test -p operon-process --locked authorization_decision
 cargo test -p operond --locked service_authorization_decision
 cargo test -p operond --locked policy_decision_audit_reason
-cargo test -p operond --locked denied_job_policy_audit_uses_reason_code
+cargo test -p operond --locked denied_exec_policy_audit_uses_reason_code
 cargo test -p operon-cli --locked config_explain_summarizes_unified_config_without_secret_values
 bash scripts/verify-docs-help-skills-sync.sh
 

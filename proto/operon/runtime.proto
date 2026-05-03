@@ -18,15 +18,15 @@ service OperonRuntime {
   rpc DeleteFs(FsPathRequest) returns (FsDelete);
   rpc RenameFs(FsRenameRequest) returns (FsRename);
   rpc CopyFs(FsCopyRequest) returns (FsCopy);
-  rpc RunJob(JobRunRequest) returns (JobRecord);
-  rpc GetJob(JobIdRequest) returns (JobRecord);
-  rpc ListJobs(ListJobsRequest) returns (JobList);
-  rpc WatchJob(JobIdRequest) returns (stream JobEvent);
-  rpc ListJobLogs(JobIdRequest) returns (JobLogList);
-  rpc StreamJobLogs(JobIdRequest) returns (stream JobLogStreamEvent);
-  rpc WriteJobStdin(stream JobStdinRequest) returns (JobStdin);
-  rpc CloseJobStdin(JobIdRequest) returns (JobStdinClose);
-  rpc CancelJob(JobCancelRequest) returns (JobRecord);
+  rpc RunExec(ExecRunRequest) returns (ExecRecord);
+  rpc GetExec(ExecIdRequest) returns (ExecRecord);
+  rpc ListExecs(ListExecsRequest) returns (ExecList);
+  rpc WatchExec(ExecIdRequest) returns (stream ExecEvent);
+  rpc ListExecLogs(ExecIdRequest) returns (ExecLogList);
+  rpc StreamExecLogs(ExecIdRequest) returns (stream ExecLogStreamEvent);
+  rpc WriteExecStdin(stream ExecStdinRequest) returns (ExecStdin);
+  rpc CloseExecStdin(ExecIdRequest) returns (ExecStdinClose);
+  rpc CancelExec(ExecCancelRequest) returns (ExecRecord);
   rpc ListServices(ListServicesRequest) returns (ServiceList);
   rpc CheckService(ServiceIdRequest) returns (ServiceCheck);
   rpc OpenServiceTunnel(stream ServiceTunnelRequest) returns (stream ServiceTunnelResponse);
@@ -43,7 +43,7 @@ message ListCapabilitiesRequest {
   string page_token = 2;
 }
 
-message ListJobsRequest {
+message ListExecsRequest {
   uint32 page_size = 1;
   string page_token = 2;
 }
@@ -62,18 +62,18 @@ enum CapabilityKind {
   CAPABILITY_KIND_UNSPECIFIED = 0;
   CAPABILITY_KIND_FS = 1;
   CAPABILITY_KIND_PROCESS = 2;
-  CAPABILITY_KIND_JOB = 3;
+  CAPABILITY_KIND_EXEC = 3;
   CAPABILITY_KIND_DEVICE_INFO = 4;
   CAPABILITY_KIND_SERVICE = 5;
 }
 
-enum JobStatus {
-  JOB_STATUS_UNSPECIFIED = 0;
-  JOB_STATUS_RUNNING = 1;
-  JOB_STATUS_SUCCEEDED = 2;
-  JOB_STATUS_FAILED = 3;
-  JOB_STATUS_CANCELLED = 4;
-  JOB_STATUS_TIMED_OUT = 5;
+enum ExecStatus {
+  EXEC_STATUS_UNSPECIFIED = 0;
+  EXEC_STATUS_RUNNING = 1;
+  EXEC_STATUS_SUCCEEDED = 2;
+  EXEC_STATUS_FAILED = 3;
+  EXEC_STATUS_CANCELLED = 4;
+  EXEC_STATUS_TIMED_OUT = 5;
 }
 
 enum ServiceProtocol {
@@ -219,7 +219,7 @@ message FsCopy {
   uint64 bytes_copied = 3;
 }
 
-message JobRunRequest {
+message ExecRunRequest {
   string command = 1;
   string cwd = 2;
   optional uint64 timeout_secs = 3;
@@ -229,26 +229,26 @@ message JobRunRequest {
   repeated string argv = 6;
 }
 
-message JobIdRequest {
-  string job_id = 1;
+message ExecIdRequest {
+  string exec_id = 1;
 }
 
-message JobCancelRequest {
-  string job_id = 1;
+message ExecCancelRequest {
+  string exec_id = 1;
 }
 
-message JobLog {
+message ExecLog {
   string stream = 1;
   bytes data = 2;
   uint64 sequence = 3;
 }
 
-message JobRecord {
+message ExecRecord {
   string id = 1;
   string node_id = 2;
   string command = 3;
   string cwd = 4;
-  JobStatus status = 5;
+  ExecStatus status = 5;
   optional int32 exit_code = 6;
   reserved 7;
   reserved 8;
@@ -257,34 +257,34 @@ message JobRecord {
   bool logs_truncated = 10;
 }
 
-message JobList {
-  repeated JobRecord jobs = 1;
+message ExecList {
+  repeated ExecRecord execs = 1;
   string next_page_token = 2;
 }
 
-message JobLogList {
-  string job_id = 1;
-  repeated JobLog logs = 2;
+message ExecLogList {
+  string exec_id = 1;
+  repeated ExecLog logs = 2;
   bool truncated = 3;
   uint64 dropped_log_count = 4;
 }
 
-message JobLogSnapshot {
-  string job_id = 1;
-  repeated JobLog logs = 2;
+message ExecLogSnapshot {
+  string exec_id = 1;
+  repeated ExecLog logs = 2;
   bool truncated = 3;
   uint64 dropped_log_count = 4;
   uint64 next_sequence = 5;
 }
 
-message JobLogEntry {
-  string job_id = 1;
-  JobLog log = 2;
+message ExecLogEntry {
+  string exec_id = 1;
+  ExecLog log = 2;
 }
 
-message JobLogComplete {
-  string job_id = 1;
-  JobStatus status = 2;
+message ExecLogComplete {
+  string exec_id = 1;
+  ExecStatus status = 2;
   optional int32 exit_code = 3;
   uint64 log_count = 4;
   bool logs_truncated = 5;
@@ -292,17 +292,17 @@ message JobLogComplete {
   uint64 dropped_log_count = 7;
 }
 
-message JobLogStreamEvent {
+message ExecLogStreamEvent {
   oneof event {
-    JobLogSnapshot snapshot = 1;
-    JobLogEntry entry = 2;
-    JobLogComplete complete = 3;
+    ExecLogSnapshot snapshot = 1;
+    ExecLogEntry entry = 2;
+    ExecLogComplete complete = 3;
   }
 }
 
-message JobEvent {
-  string job_id = 1;
-  JobStatus status = 2;
+message ExecEvent {
+  string exec_id = 1;
+  ExecStatus status = 2;
   optional int32 exit_code = 3;
   reserved 4;
   reserved "has_exit_code";
@@ -310,24 +310,24 @@ message JobEvent {
   bool logs_truncated = 6;
 }
 
-message JobStdinRequest {
+message ExecStdinRequest {
   oneof payload {
-    JobStdinTarget target = 1;
+    ExecStdinTarget target = 1;
     FileChunk chunk = 2;
   }
 }
 
-message JobStdinTarget {
-  string job_id = 1;
+message ExecStdinTarget {
+  string exec_id = 1;
 }
 
-message JobStdin {
-  string job_id = 1;
+message ExecStdin {
+  string exec_id = 1;
   uint64 bytes_written = 2;
 }
 
-message JobStdinClose {
-  string job_id = 1;
+message ExecStdinClose {
+  string exec_id = 1;
   bool closed = 2;
 }
 

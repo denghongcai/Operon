@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use operon_core::{AuditEvent, JobLog, JobRecord};
+use operon_core::{AuditEvent, ExecLog, ExecRecord};
 
 pub const DEFAULT_STORE_PATH: &str = "operon.db";
 
@@ -88,7 +88,7 @@ fn open_store_file(path: &Path) -> std::io::Result<std::fs::File> {
     Ok(file)
 }
 
-pub fn load_jobs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, JobRecord>> {
+pub fn load_execs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, ExecRecord>> {
     let Some(path) = path else {
         return Ok(BTreeMap::new());
     };
@@ -96,18 +96,18 @@ pub fn load_jobs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, JobReco
         return Ok(BTreeMap::new());
     }
     let content = std::fs::read_to_string(path)?;
-    let mut jobs = BTreeMap::new();
+    let mut execs = BTreeMap::new();
     for line in content.lines().filter(|line| !line.trim().is_empty()) {
         let value: serde_json::Value = serde_json::from_str(line)?;
-        if value.get("kind").and_then(serde_json::Value::as_str) != Some("job") {
+        if value.get("kind").and_then(serde_json::Value::as_str) != Some("exec") {
             continue;
         }
         if let Some(record) = value.get("record") {
-            let record: JobRecord = serde_json::from_value(record.clone())?;
-            jobs.insert(record.id.clone(), record);
+            let record: ExecRecord = serde_json::from_value(record.clone())?;
+            execs.insert(record.id.clone(), record);
         }
     }
-    Ok(jobs)
+    Ok(execs)
 }
 
 pub fn load_audit_events(path: Option<&Path>) -> anyhow::Result<Vec<AuditEvent>> {
@@ -131,7 +131,7 @@ pub fn load_audit_events(path: Option<&Path>) -> anyhow::Result<Vec<AuditEvent>>
     Ok(events)
 }
 
-pub fn load_job_logs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, Vec<JobLog>>> {
+pub fn load_exec_logs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, Vec<ExecLog>>> {
     let Some(path) = path else {
         return Ok(BTreeMap::new());
     };
@@ -139,17 +139,17 @@ pub fn load_job_logs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, Vec
         return Ok(BTreeMap::new());
     }
     let content = std::fs::read_to_string(path)?;
-    let mut logs = BTreeMap::<String, Vec<JobLog>>::new();
+    let mut logs = BTreeMap::<String, Vec<ExecLog>>::new();
     for line in content.lines().filter(|line| !line.trim().is_empty()) {
         let value: serde_json::Value = serde_json::from_str(line)?;
-        if value.get("kind").and_then(serde_json::Value::as_str) != Some("job_log") {
+        if value.get("kind").and_then(serde_json::Value::as_str) != Some("exec_log") {
             continue;
         }
-        let Some(job_id) = value.get("job_id").and_then(serde_json::Value::as_str) else {
+        let Some(exec_id) = value.get("exec_id").and_then(serde_json::Value::as_str) else {
             continue;
         };
         if let Some(log) = value.get("log") {
-            logs.entry(job_id.to_string())
+            logs.entry(exec_id.to_string())
                 .or_default()
                 .push(serde_json::from_value(log.clone())?);
         }
@@ -208,11 +208,11 @@ mod tests {
         let writer = StoreWriter::new(Some(store.clone())).with_fsync_policy(FsyncPolicy::Disabled);
 
         writer
-            .append_json_value(&serde_json::json!({"kind": "job"}))
+            .append_json_value(&serde_json::json!({"kind": "exec"}))
             .expect("append record");
 
         let content = std::fs::read_to_string(&store).expect("store content");
-        assert_eq!(content, "{\"kind\":\"job\"}\n");
+        assert_eq!(content, "{\"kind\":\"exec\"}\n");
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -227,8 +227,8 @@ mod tests {
         append_record(
             Some(&store),
             &serde_json::json!({
-                "kind": "job",
-                "record": {"id": "job-1"}
+                "kind": "exec",
+                "record": {"id": "exec-1"}
             }),
         )
         .expect("append non-audit");
@@ -258,12 +258,12 @@ mod tests {
     }
 
     #[test]
-    fn load_job_logs_reads_persisted_log_records_by_job() {
-        let base = unique_temp_dir("operon-store-job-log-load-test");
+    fn load_exec_logs_reads_persisted_log_records_by_exec() {
+        let base = unique_temp_dir("operon-store-exec-log-load-test");
         std::fs::create_dir_all(&base).expect("base dir");
         let store = base.join("store.jsonl");
-        let first = test_job_log("stdout", b"hello".to_vec(), 0);
-        let second = test_job_log("stderr", b"warn".to_vec(), 1);
+        let first = test_exec_log("stdout", b"hello".to_vec(), 0);
+        let second = test_exec_log("stderr", b"warn".to_vec(), 1);
 
         append_record(
             Some(&store),
@@ -276,8 +276,8 @@ mod tests {
         append_record(
             Some(&store),
             &serde_json::json!({
-                "kind": "job_log",
-                "job_id": "job-1",
+                "kind": "exec_log",
+                "exec_id": "exec-1",
                 "log": first,
                 "dropped_log_count": 0,
             }),
@@ -286,21 +286,21 @@ mod tests {
         append_record(
             Some(&store),
             &serde_json::json!({
-                "kind": "job_log",
-                "job_id": "job-1",
+                "kind": "exec_log",
+                "exec_id": "exec-1",
                 "log": second,
                 "dropped_log_count": 0,
             }),
         )
         .expect("append second log");
 
-        let logs = load_job_logs(Some(&store)).expect("load job logs");
-        let job_logs = logs.get("job-1").expect("job logs");
+        let logs = load_exec_logs(Some(&store)).expect("load exec logs");
+        let exec_logs = logs.get("exec-1").expect("exec logs");
 
-        assert_eq!(job_logs.len(), 2);
-        assert_eq!(job_logs[0].stream, "stdout");
-        assert_eq!(job_logs[0].data, b"hello");
-        assert_eq!(job_logs[1].sequence, 1);
+        assert_eq!(exec_logs.len(), 2);
+        assert_eq!(exec_logs[0].stream, "stdout");
+        assert_eq!(exec_logs[0].data, b"hello");
+        assert_eq!(exec_logs[1].sequence, 1);
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -319,8 +319,8 @@ mod tests {
         }
     }
 
-    fn test_job_log(stream: &str, data: Vec<u8>, sequence: u64) -> JobLog {
-        JobLog {
+    fn test_exec_log(stream: &str, data: Vec<u8>, sequence: u64) -> ExecLog {
+        ExecLog {
             stream: stream.to_string(),
             data,
             sequence,

@@ -5,22 +5,23 @@ use std::{
 };
 
 use operon_core::{
-    AuditEvent, CapabilityList, JobEvent, JobLog, JobRecord, NodeInfo, PolicyConfig, RequestContext,
+    AuditEvent, CapabilityList, ExecEvent, ExecLog, ExecRecord, NodeInfo, PolicyConfig,
+    RequestContext,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub(crate) const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 10_000;
-pub(crate) const MAX_IN_MEMORY_JOB_LOGS: usize = 10_000;
-pub(crate) const MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS: usize = 512;
+pub(crate) const MAX_IN_MEMORY_EXEC_LOGS: usize = 10_000;
+pub(crate) const MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS: usize = 512;
 
-pub(crate) type JobStdinSender = mpsc::UnboundedSender<Vec<u8>>;
-pub(crate) type JobStdinRegistry = Arc<Mutex<BTreeMap<String, JobStdinSender>>>;
-pub(crate) type JobEventSender = broadcast::Sender<JobEvent>;
-pub(crate) type JobLogSender = broadcast::Sender<JobLog>;
+pub(crate) type ExecStdinSender = mpsc::UnboundedSender<Vec<u8>>;
+pub(crate) type ExecStdinRegistry = Arc<Mutex<BTreeMap<String, ExecStdinSender>>>;
+pub(crate) type ExecEventSender = broadcast::Sender<ExecEvent>;
+pub(crate) type ExecLogSender = broadcast::Sender<ExecLog>;
 
 #[derive(Debug, Default)]
-pub(crate) struct JobLogBuffer {
-    pub(crate) logs: VecDeque<JobLog>,
+pub(crate) struct ExecLogBuffer {
+    pub(crate) logs: VecDeque<ExecLog>,
     pub(crate) next_sequence: u64,
     pub(crate) dropped_log_count: u64,
 }
@@ -35,25 +36,25 @@ pub(crate) struct AppState {
     pub(crate) store_writer: operon_store::StoreWriter,
     pub(crate) secrets: Arc<BTreeMap<String, String>>,
     pub(crate) audit: Arc<Mutex<VecDeque<AuditEvent>>>,
-    pub(crate) jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
-    pub(crate) job_logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
-    pub(crate) job_events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
-    pub(crate) job_log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
-    pub(crate) job_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
-    pub(crate) job_stdin: JobStdinRegistry,
-    pub(crate) next_job_id: Arc<AtomicU64>,
+    pub(crate) execs: Arc<Mutex<BTreeMap<String, ExecRecord>>>,
+    pub(crate) exec_logs: Arc<Mutex<BTreeMap<String, ExecLogBuffer>>>,
+    pub(crate) exec_events: Arc<Mutex<BTreeMap<String, ExecEventSender>>>,
+    pub(crate) exec_log_events: Arc<Mutex<BTreeMap<String, ExecLogSender>>>,
+    pub(crate) exec_cancel: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
+    pub(crate) exec_stdin: ExecStdinRegistry,
+    pub(crate) next_exec_id: Arc<AtomicU64>,
 }
 
-pub(crate) struct JobTask {
+pub(crate) struct ExecTask {
     pub(crate) audit: Arc<Mutex<VecDeque<AuditEvent>>>,
-    pub(crate) jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
-    pub(crate) logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
-    pub(crate) events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
-    pub(crate) log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
+    pub(crate) execs: Arc<Mutex<BTreeMap<String, ExecRecord>>>,
+    pub(crate) logs: Arc<Mutex<BTreeMap<String, ExecLogBuffer>>>,
+    pub(crate) events: Arc<Mutex<BTreeMap<String, ExecEventSender>>>,
+    pub(crate) log_events: Arc<Mutex<BTreeMap<String, ExecLogSender>>>,
     pub(crate) cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
-    pub(crate) stdin: JobStdinRegistry,
+    pub(crate) stdin: ExecStdinRegistry,
     pub(crate) store_writer: operon_store::StoreWriter,
-    pub(crate) job_id: String,
+    pub(crate) exec_id: String,
     pub(crate) command: String,
     pub(crate) argv: Vec<String>,
     pub(crate) cwd: PathBuf,
@@ -66,16 +67,16 @@ pub(crate) struct JobTask {
     pub(crate) stdin_rx: mpsc::UnboundedReceiver<Vec<u8>>,
 }
 
-pub(crate) struct JobCompletion {
+pub(crate) struct ExecCompletion {
     pub(crate) audit: Arc<Mutex<VecDeque<AuditEvent>>>,
-    pub(crate) jobs: Arc<Mutex<BTreeMap<String, JobRecord>>>,
-    pub(crate) logs: Arc<Mutex<BTreeMap<String, JobLogBuffer>>>,
-    pub(crate) events: Arc<Mutex<BTreeMap<String, JobEventSender>>>,
-    pub(crate) log_events: Arc<Mutex<BTreeMap<String, JobLogSender>>>,
+    pub(crate) execs: Arc<Mutex<BTreeMap<String, ExecRecord>>>,
+    pub(crate) logs: Arc<Mutex<BTreeMap<String, ExecLogBuffer>>>,
+    pub(crate) events: Arc<Mutex<BTreeMap<String, ExecEventSender>>>,
+    pub(crate) log_events: Arc<Mutex<BTreeMap<String, ExecLogSender>>>,
     pub(crate) cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
-    pub(crate) stdin: JobStdinRegistry,
+    pub(crate) stdin: ExecStdinRegistry,
     pub(crate) store_writer: operon_store::StoreWriter,
-    pub(crate) job_id: String,
+    pub(crate) exec_id: String,
     pub(crate) subject: String,
     pub(crate) node_id: String,
     pub(crate) audit_context: RequestContext,

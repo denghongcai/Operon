@@ -1,8 +1,8 @@
 use operon_core::RequestContext;
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    job_stdin_request, operon_runtime_client::OperonRuntimeClient, write_file_request, FileChunk,
-    JobStdinRequest, JobStdinTarget, WriteFileRequest, WriteFileTarget,
+    exec_stdin_request, operon_runtime_client::OperonRuntimeClient, write_file_request,
+    ExecStdinRequest, ExecStdinTarget, FileChunk, WriteFileRequest, WriteFileTarget,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -88,15 +88,15 @@ pub fn chunk_write_requests(path: String, body: &[u8]) -> Vec<WriteFileRequest> 
     chunks
 }
 
-pub fn chunk_stdin_requests(job_id: String, body: &[u8]) -> Vec<JobStdinRequest> {
-    let mut chunks = vec![JobStdinRequest {
-        payload: Some(job_stdin_request::Payload::Target(JobStdinTarget {
-            job_id,
+pub fn chunk_stdin_requests(exec_id: String, body: &[u8]) -> Vec<ExecStdinRequest> {
+    let mut chunks = vec![ExecStdinRequest {
+        payload: Some(exec_stdin_request::Payload::Target(ExecStdinTarget {
+            exec_id,
         })),
     }];
     if body.is_empty() {
-        chunks.push(JobStdinRequest {
-            payload: Some(job_stdin_request::Payload::Chunk(FileChunk {
+        chunks.push(ExecStdinRequest {
+            payload: Some(exec_stdin_request::Payload::Chunk(FileChunk {
                 data: Vec::new(),
             })),
         });
@@ -104,8 +104,8 @@ pub fn chunk_stdin_requests(job_id: String, body: &[u8]) -> Vec<JobStdinRequest>
     }
     chunks.extend(
         body.chunks(STREAM_CHUNK_BYTES)
-            .map(|chunk| JobStdinRequest {
-                payload: Some(job_stdin_request::Payload::Chunk(FileChunk {
+            .map(|chunk| ExecStdinRequest {
+                payload: Some(exec_stdin_request::Payload::Chunk(FileChunk {
                     data: chunk.to_vec(),
                 })),
             }),
@@ -168,6 +168,6 @@ mod tests {
     #[test]
     fn chunks_empty_streams_with_explicit_empty_chunk() {
         assert_eq!(chunk_write_requests("/empty".to_string(), &[]).len(), 2);
-        assert_eq!(chunk_stdin_requests("job-1".to_string(), &[]).len(), 2);
+        assert_eq!(chunk_stdin_requests("exec-1".to_string(), &[]).len(), 2);
     }
 }

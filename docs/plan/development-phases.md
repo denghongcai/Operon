@@ -4028,10 +4028,6 @@ Remaining:
 
 - No v0.9.5 work remains.
 
-## Later Candidate Work
-
-No later candidate phases are currently planned.
-
 ## Phase 68: v0.9.6 Capability Diagnostics
 
 Status: Completed.
@@ -4157,6 +4153,151 @@ Completed:
 Remaining:
 
 - No v0.9.7 work remains.
+
+## Phase 70: v0.10 Execution Capability Unification
+
+Status: Completed.
+
+Purpose: replace the historical `job` concept with a unified `exec` capability
+that covers non-interactive command execution and leaves a clear future slot
+for PTY-backed interactive sessions.
+
+Scope:
+
+- remove user-facing `job` terminology from active CLI, SDK, protocol, policy,
+  capability, audit, graph, docs, examples, validation scripts, and repo-local
+  skills.
+- replace it with `exec.run` for non-interactive execution records, logs,
+  status, cancellation, timeout, stdin piping, environment policy, and audit.
+- document `exec.session` as the future PTY/TTY execution mode without adding
+  an unimplemented RPC in v0.10.
+- avoid a conservative compatibility alias: the active pre-1.0 surface moves
+  directly to `exec` instead of preserving `operon job` as a supported command.
+- keep shell-string execution and shell-free `argv[]` execution as modes under
+  `exec.run`, with agents and SDK clients preferring `argv[]`.
+- update execution graph action names from `job.run` to `exec.run`.
+- bump Rust crate versions, the TypeScript SDK package version, and
+  `PROTOCOL_VERSION` to `v0.10.0` / `0.10.0`.
+
+Detailed plan:
+`docs/plan/v0.10-exec-unification.md`.
+
+Completed:
+
+- Replaced active gRPC runtime execution RPCs, messages, enums, and capability
+  kind with `Exec*` / `CAPABILITY_KIND_EXEC`.
+- Replaced daemon runtime, core DTOs, process helpers, store persistence
+  helpers, CLI command modules, graph actions, policy, audit, examples, and
+  TypeScript SDK helpers with exec vocabulary.
+- Removed `operon job` from the active CLI instead of keeping a compatibility
+  alias.
+- Updated README, `PROTOCOL.md`, runtime API docs, DEVELOPMENT.md, AGENTS.md,
+  repo-local skills, examples, validation scripts, and CI validation.
+- Added [`scripts/verify-v0.10-exec-unification.sh`](../../scripts/verify-v0.10-exec-unification.sh)
+  to validate the active exec surface and stale job command removal.
+
+Remaining:
+
+- Nothing remains in v0.10.
+
+## Later Candidate Work
+
+Status: Candidate backlog. The next post-v0.10 phase has not been approved yet.
+
+These candidates capture the current development directions to evaluate before
+opening the next implementation phase. They are intentionally not marked as
+committed scope until the next phase is selected.
+
+### Candidate A: Filesystem Consistency and Workspace Hardening
+
+Recommended next now that the execution model has been settled.
+
+Purpose: close correctness and workspace-safety gaps before adding more
+high-level filesystem features.
+
+Possible scope:
+
+- define the filesystem consistency contract for concurrent clients.
+- evaluate file versions, etags, leases, or compare-and-swap style write
+  preconditions.
+- add optional write preconditions to protocol, CLI, SDK, and audit behavior if
+  the selected contract needs them.
+- harden Linux workspace containment with fd-relative resolution such as
+  `openat2(RESOLVE_BENEATH)` where practical.
+- validate concurrent write behavior and workspace traversal behavior with
+  focused daemon and integration coverage.
+- align `PROTOCOL.md`, runtime API docs, CLI/SDK error wording, and audit
+  semantics with the chosen contract.
+
+Why this matters: `PROTOCOL.md` currently documents that filesystem mutation
+requests do not carry versions, etags, lock tokens, leases, or compare-and-swap
+preconditions, and that workspace containment is still path-based rather than
+fd-relative on Linux.
+
+### Candidate B: Operator Diagnostics / `operon doctor`
+
+Purpose: provide one operator-facing diagnostic entrypoint that explains common
+setup and runtime problems without requiring users or agents to stitch together
+multiple commands manually.
+
+Possible scope:
+
+- add `operon doctor` or `operon node diagnose`.
+- report config unknown-field warnings, endpoint health, auth/token failures,
+  protocol version mismatches, discovery export conflicts, capability
+  diagnostics, and service health.
+- support human output and `--json` for scripts and agents.
+- reuse daemon-owned policy diagnostics from `ExplainCapability` instead of
+  duplicating authorization logic in the CLI.
+- document when to use doctor output versus lower-level commands.
+
+Why this matters: v0.9.6 added capability diagnostics, but there is not yet a
+single workflow for diagnosing configuration, endpoint, auth, discovery,
+policy, and service readiness together.
+
+### Candidate C: Release / Distribution Readiness
+
+Purpose: make the public release surface match the architecture decision, or
+explicitly narrow the pre-1.0 supported target set.
+
+Possible scope:
+
+- decide whether pre-1.0 releases remain Linux-only or expand to macOS and
+  Windows CLI/daemon binaries.
+- if expanding, add release matrix jobs, packaging, checksum, and smoke
+  validation for selected macOS and Windows targets.
+- if staying Linux-only for now, update architecture and release docs so the
+  target set is explicit rather than aspirational.
+- keep release tag, Rust crate versions, TypeScript SDK version, CLI version,
+  daemon version, and runtime health version aligned.
+- keep README Quickstart and release validation scripts in sync with the
+  supported target set.
+
+Why this matters: the architecture decisions list macOS and Windows as initial
+binary targets, while the current draft release workflow builds Linux
+`x86_64`, `aarch64`, and `armv7` archives.
+
+### Candidate D: Maintainability Cleanup Phase
+
+Purpose: continue behavior-preserving modularization around the remaining large
+runtime and CLI files so future feature work stays cheap and localized.
+
+Possible scope:
+
+- split remaining runtime routing and request delegation out of
+  `crates/operond/src/main.rs` if the entrypoint continues to grow.
+- extract clearer command-family or transport helpers from
+  `crates/operon-cli/src/grpc.rs`.
+- split onboarding plan construction, prompt handling, and file writes inside
+  `crates/operon-cli/src/onboard.rs`.
+- keep service forwarding and current execution runtime state-machine modules
+  focused if new behavior touches them.
+- add validation that checks the intended module ownership without changing
+  runtime behavior.
+
+Why this matters: earlier modularization phases reduced several hotspots, but
+`operond/src/main.rs`, `operon-cli/src/grpc.rs`, service forwarding, current
+execution runtime, and onboarding remain the main maintenance surfaces to watch.
 
 ## Planning Principle
 

@@ -10,18 +10,18 @@ use std::{
 use anyhow::Context;
 use futures_util::stream;
 use operon_core::{
-    AuditLog, CapabilityDiagnosticRequest, CapabilityList, FsList, FsStat, FsWrite, HealthStatus,
-    JobEvent, JobList, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
-    NodeInfo, PolicyDecision, RequestContext, ServiceCheck, ServiceList,
+    AuditLog, CapabilityDiagnosticRequest, CapabilityList, ExecEvent, ExecList, ExecLogList,
+    ExecRecord, ExecRunRequest, ExecStatus, ExecStdin, ExecStdinClose, FsList, FsStat, FsWrite,
+    HealthStatus, NodeInfo, PolicyDecision, RequestContext, ServiceCheck, ServiceList,
 };
 use operon_grpc_client::{chunk_stdin_requests, chunk_write_requests};
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
-    job_log_stream_event, operon_runtime_client::OperonRuntimeClient,
+    exec_log_stream_event, operon_runtime_client::OperonRuntimeClient,
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
-    service_tunnel_response, FsCopyRequest, FsListRequest, FsPathRequest, FsRenameRequest,
-    FsTruncateRequest, GetNodeRequest, HealthRequest, JobCancelRequest, JobIdRequest,
-    ListAuditRequest, ListCapabilitiesRequest, ListJobsRequest, ListServicesRequest,
+    service_tunnel_response, ExecCancelRequest, ExecIdRequest, FsCopyRequest, FsListRequest,
+    FsPathRequest, FsRenameRequest, FsTruncateRequest, GetNodeRequest, HealthRequest,
+    ListAuditRequest, ListCapabilitiesRequest, ListExecsRequest, ListServicesRequest,
     ServiceDatagram, ServiceDatagramTunnelRequest, ServiceDatagramTunnelTarget, ServiceIdRequest,
     ServiceTunnelClose, ServiceTunnelData, ServiceTunnelRequest, ServiceTunnelTarget,
 };
@@ -292,10 +292,13 @@ pub async fn fs_truncate(endpoint: &NodeEndpoint, path: &str, size: u64) -> anyh
     .await
 }
 
-pub async fn run_job(endpoint: &NodeEndpoint, request: JobRunRequest) -> anyhow::Result<JobRecord> {
+pub async fn run_exec(
+    endpoint: &NodeEndpoint,
+    request: ExecRunRequest,
+) -> anyhow::Result<ExecRecord> {
     call(endpoint, |mut client, endpoint| async move {
         client
-            .run_job(with_auth(&endpoint, grpc_job_run_request(request))?)
+            .run_exec(with_auth(&endpoint, grpc_exec_run_request(request))?)
             .await?
             .into_inner()
             .try_into()
@@ -304,11 +307,11 @@ pub async fn run_job(endpoint: &NodeEndpoint, request: JobRunRequest) -> anyhow:
     .await
 }
 
-pub async fn get_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecord> {
-    let job_id = job_id.to_string();
+pub async fn get_exec(endpoint: &NodeEndpoint, exec_id: &str) -> anyhow::Result<ExecRecord> {
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
         client
-            .get_job(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .get_exec(with_auth(&endpoint, ExecIdRequest { exec_id })?)
             .await?
             .into_inner()
             .try_into()
@@ -317,17 +320,17 @@ pub async fn get_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<Jo
     .await
 }
 
-pub async fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
-    let mut jobs = Vec::new();
+pub async fn list_execs(endpoint: &NodeEndpoint) -> anyhow::Result<ExecList> {
+    let mut execs = Vec::new();
     let mut page_token = String::new();
     loop {
         let response = call(endpoint, |mut client, endpoint| {
             let page_token = page_token.clone();
             async move {
                 Ok(client
-                    .list_jobs(with_auth(
+                    .list_execs(with_auth(
                         &endpoint,
-                        ListJobsRequest {
+                        ListExecsRequest {
                             page_size: DEFAULT_LIST_PAGE_SIZE,
                             page_token,
                         },
@@ -337,9 +340,9 @@ pub async fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
             }
         })
         .await?;
-        jobs.extend(
+        execs.extend(
             response
-                .jobs
+                .execs
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<Vec<_>, _>>()
@@ -350,41 +353,41 @@ pub async fn list_jobs(endpoint: &NodeEndpoint) -> anyhow::Result<JobList> {
         }
         page_token = response.next_page_token;
     }
-    Ok(JobList {
-        jobs,
+    Ok(ExecList {
+        execs,
         next_page_token: String::new(),
     })
 }
 
-pub async fn watch_job_to_terminal(
+pub async fn watch_exec_to_terminal(
     endpoint: &NodeEndpoint,
-    job_id: &str,
-) -> anyhow::Result<JobEvent> {
-    let job_id = job_id.to_string();
+    exec_id: &str,
+) -> anyhow::Result<ExecEvent> {
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
         let mut stream = client
-            .watch_job(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .watch_exec(with_auth(&endpoint, ExecIdRequest { exec_id })?)
             .await?
             .into_inner();
         let mut latest = None;
         while let Some(event) = stream.message().await? {
-            let event: JobEvent = event.try_into().map_err(anyhow::Error::msg)?;
-            let terminal = !matches!(event.status, JobStatus::Running);
+            let event: ExecEvent = event.try_into().map_err(anyhow::Error::msg)?;
+            let terminal = !matches!(event.status, ExecStatus::Running);
             latest = Some(event);
             if terminal {
                 break;
             }
         }
-        latest.ok_or_else(|| anyhow::anyhow!("job watch stream ended without an event"))
+        latest.ok_or_else(|| anyhow::anyhow!("exec watch stream ended without an event"))
     })
     .await
 }
 
-pub async fn list_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobLogList> {
-    let job_id = job_id.to_string();
+pub async fn list_exec_logs(endpoint: &NodeEndpoint, exec_id: &str) -> anyhow::Result<ExecLogList> {
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
-            .list_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .list_exec_logs(with_auth(&endpoint, ExecIdRequest { exec_id })?)
             .await?
             .into_inner()
             .into())
@@ -392,21 +395,21 @@ pub async fn list_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Res
     .await
 }
 
-pub async fn stream_job_logs_to_writer(
+pub async fn stream_exec_logs_to_writer(
     endpoint: &NodeEndpoint,
-    job_id: &str,
+    exec_id: &str,
     writer: &mut impl Write,
 ) -> anyhow::Result<()> {
-    let job_id = job_id.to_string();
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
         let mut stream = client
-            .stream_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .stream_exec_logs(with_auth(&endpoint, ExecIdRequest { exec_id })?)
             .await?
             .into_inner();
         let mut next_sequence = 0;
         while let Some(event) = stream.message().await? {
             match event.event {
-                Some(job_log_stream_event::Event::Snapshot(snapshot)) => {
+                Some(exec_log_stream_event::Event::Snapshot(snapshot)) => {
                     for log in snapshot.logs {
                         if log.sequence >= next_sequence {
                             next_sequence = log.sequence.saturating_add(1);
@@ -415,7 +418,7 @@ pub async fn stream_job_logs_to_writer(
                     }
                     next_sequence = next_sequence.max(snapshot.next_sequence);
                 }
-                Some(job_log_stream_event::Event::Entry(entry)) => {
+                Some(exec_log_stream_event::Event::Entry(entry)) => {
                     let Some(log) = entry.log else {
                         continue;
                     };
@@ -424,7 +427,7 @@ pub async fn stream_job_logs_to_writer(
                         writer.write_all(&log.data)?;
                     }
                 }
-                Some(job_log_stream_event::Event::Complete(_)) | None => {}
+                Some(exec_log_stream_event::Event::Complete(_)) | None => {}
             }
         }
         Ok(())
@@ -432,12 +435,15 @@ pub async fn stream_job_logs_to_writer(
     .await
 }
 
-pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobLogList> {
-    let job_id = job_id.to_string();
+pub async fn stream_exec_logs(
+    endpoint: &NodeEndpoint,
+    exec_id: &str,
+) -> anyhow::Result<ExecLogList> {
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
-        let response_job_id = job_id.clone();
+        let response_exec_id = exec_id.clone();
         let mut stream = client
-            .stream_job_logs(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .stream_exec_logs(with_auth(&endpoint, ExecIdRequest { exec_id })?)
             .await?
             .into_inner();
         let mut logs = Vec::new();
@@ -446,7 +452,7 @@ pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::R
         let mut next_sequence = 0;
         while let Some(event) = stream.message().await? {
             match event.event {
-                Some(job_log_stream_event::Event::Snapshot(snapshot)) => {
+                Some(exec_log_stream_event::Event::Snapshot(snapshot)) => {
                     truncated = snapshot.truncated;
                     dropped_log_count = snapshot.dropped_log_count;
                     for log in snapshot.logs {
@@ -457,7 +463,7 @@ pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::R
                     }
                     next_sequence = next_sequence.max(snapshot.next_sequence);
                 }
-                Some(job_log_stream_event::Event::Entry(entry)) => {
+                Some(exec_log_stream_event::Event::Entry(entry)) => {
                     let Some(log) = entry.log else {
                         continue;
                     };
@@ -466,15 +472,15 @@ pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::R
                         logs.push(log.into());
                     }
                 }
-                Some(job_log_stream_event::Event::Complete(complete)) => {
+                Some(exec_log_stream_event::Event::Complete(complete)) => {
                     truncated = complete.truncated;
                     dropped_log_count = complete.dropped_log_count;
                 }
                 None => {}
             }
         }
-        Ok(JobLogList {
-            job_id: response_job_id,
+        Ok(ExecLogList {
+            exec_id: response_exec_id,
             logs,
             truncated,
             dropped_log_count,
@@ -483,15 +489,15 @@ pub async fn stream_job_logs(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::R
     .await
 }
 
-pub async fn write_job_stdin_bytes(
+pub async fn write_exec_stdin_bytes(
     endpoint: &NodeEndpoint,
-    job_id: &str,
+    exec_id: &str,
     body: &[u8],
-) -> anyhow::Result<JobStdin> {
-    let chunks = chunk_stdin_requests(job_id.to_string(), body);
+) -> anyhow::Result<ExecStdin> {
+    let chunks = chunk_stdin_requests(exec_id.to_string(), body);
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
-            .write_job_stdin(with_auth(&endpoint, stream::iter(chunks))?)
+            .write_exec_stdin(with_auth(&endpoint, stream::iter(chunks))?)
             .await?
             .into_inner()
             .into())
@@ -499,26 +505,26 @@ pub async fn write_job_stdin_bytes(
     .await
 }
 
-pub async fn write_job_stdin_file(
+pub async fn write_exec_stdin_file(
     endpoint: &NodeEndpoint,
-    job_id: &str,
+    exec_id: &str,
     file: &Path,
-) -> anyhow::Result<JobStdin> {
+) -> anyhow::Result<ExecStdin> {
     let mut data = Vec::new();
     fs::File::open(file)
         .with_context(|| format!("failed to open {}", file.display()))?
         .read_to_end(&mut data)?;
-    write_job_stdin_bytes(endpoint, job_id, &data).await
+    write_exec_stdin_bytes(endpoint, exec_id, &data).await
 }
 
-pub async fn close_job_stdin(
+pub async fn close_exec_stdin(
     endpoint: &NodeEndpoint,
-    job_id: &str,
-) -> anyhow::Result<JobStdinClose> {
-    let job_id = job_id.to_string();
+    exec_id: &str,
+) -> anyhow::Result<ExecStdinClose> {
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
-            .close_job_stdin(with_auth(&endpoint, JobIdRequest { job_id })?)
+            .close_exec_stdin(with_auth(&endpoint, ExecIdRequest { exec_id })?)
             .await?
             .into_inner()
             .into())
@@ -526,11 +532,11 @@ pub async fn close_job_stdin(
     .await
 }
 
-pub async fn cancel_job(endpoint: &NodeEndpoint, job_id: &str) -> anyhow::Result<JobRecord> {
-    let job_id = job_id.to_string();
+pub async fn cancel_exec(endpoint: &NodeEndpoint, exec_id: &str) -> anyhow::Result<ExecRecord> {
+    let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
         client
-            .cancel_job(with_auth(&endpoint, JobCancelRequest { job_id })?)
+            .cancel_exec(with_auth(&endpoint, ExecCancelRequest { exec_id })?)
             .await?
             .into_inner()
             .try_into()
@@ -851,8 +857,8 @@ fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<tonic::Re
     operon_grpc_client::request(endpoint, message)
 }
 
-fn grpc_job_run_request(value: JobRunRequest) -> operon_protocol::runtime::v1::JobRunRequest {
-    operon_protocol::runtime::v1::JobRunRequest {
+fn grpc_exec_run_request(value: ExecRunRequest) -> operon_protocol::runtime::v1::ExecRunRequest {
+    operon_protocol::runtime::v1::ExecRunRequest {
         command: value.command,
         cwd: value.cwd.unwrap_or_default(),
         timeout_secs: value.timeout_secs,

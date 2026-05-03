@@ -123,7 +123,7 @@ policy:
           read: $read
           write: $write
           delete: $delete
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30

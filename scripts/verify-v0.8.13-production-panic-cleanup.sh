@@ -8,10 +8,10 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.8.13-production-panic-cleanup.md
-require_file crates/operond/src/job_runtime.rs
+require_file crates/operond/src/exec_runtime.rs
 require_file crates/operon-mount/src/remote_client.rs
-require_pattern 'job log buffer unexpectedly empty after append' crates/operond/src/job_runtime.rs
-reject_pattern 'expect\("just pushed job log"\)' crates/operond/src/job_runtime.rs
+require_pattern 'exec log buffer unexpectedly empty after append' crates/operond/src/exec_runtime.rs
+reject_pattern 'expect\("just pushed exec log"\)' crates/operond/src/exec_runtime.rs
 require_pattern 'remote fs runtime is unavailable' crates/operon-mount/src/remote_client.rs
 reject_pattern 'expect\("remote fs runtime is only cleared during drop"\)' crates/operon-mount/src/remote_client.rs
 require_pattern 'v0.8.13 Production Panic Cleanup' docs/plan/development-phases.md

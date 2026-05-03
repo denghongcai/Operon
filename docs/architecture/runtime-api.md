@@ -22,7 +22,7 @@ later hardening work.
   precondition failures, and internal failures.
 - Policy decisions use a shared vocabulary for subject, capability id, action,
   resource, allow/deny state, stable reason code, and human-readable message.
-- Long-running execution remains job-based with explicit status calls or
+- Long-running execution remains exec-based with explicit status calls or
   streaming log/stdin methods.
 
 There is no HTTP runtime facade. A gRPC client library may internally use an
@@ -53,12 +53,12 @@ Unary calls:
 - `DeleteFs`
 - `RenameFs`
 - `CopyFs`
-- `RunJob`
-- `GetJob`
-- `ListJobs`
-- `ListJobLogs`
-- `CloseJobStdin`
-- `CancelJob`
+- `RunExec`
+- `GetExec`
+- `ListExecs`
+- `ListExecLogs`
+- `CloseExecStdin`
+- `CancelExec`
 - `ListServices`
 - `CheckService`
 - `ListAudit`
@@ -66,13 +66,13 @@ Unary calls:
 Server-streaming calls:
 
 - `ReadFile`
-- `WatchJob`
-- `StreamJobLogs`
+- `WatchExec`
+- `StreamExecLogs`
 
 Client-streaming calls:
 
 - `WriteFile`
-- `WriteJobStdin`
+- `WriteExecStdin`
 
 Bidirectional-streaming calls:
 
@@ -84,27 +84,27 @@ Runtime schema constraints:
 - enum-like fields are protobuf enums, not arbitrary strings.
 - optional timeout, exit code, reason, run id, and step id use proto3 optional
   presence rather than paired `has_*` booleans.
-- `WriteFile` and `WriteJobStdin` use explicit target and chunk envelope
+- `WriteFile` and `WriteExecStdin` use explicit target and chunk envelope
   variants.
 - `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
   unary random-read API for mount adapters and generated clients that need
   offset/size reads.
-- `StreamJobLogs` uses an explicit event envelope with snapshot, entry, and
-  complete variants; raw `JobLog` remains a payload type, not the stream
+- `StreamExecLogs` uses an explicit event envelope with snapshot, entry, and
+  complete variants; raw `ExecLog` remains a payload type, not the stream
   response type.
-- `ListCapabilities`, `ListFs`, `ListJobs`, `ListServices`, and `ListAudit`
+- `ListCapabilities`, `ListFs`, `ListExecs`, `ListServices`, and `ListAudit`
   accept `page_size` and `page_token`; responses expose `next_page_token`.
 
 ## Policy Decisions
 
-Filesystem, job, service, and secret authorization paths produce a shared
+Filesystem, exec, service, and secret authorization paths produce a shared
 policy decision internally. The decision records the policy subject, capability
 id, action, resource, allow/deny state, stable reason code, and human-readable
 message. Denied decisions are converted to gRPC policy errors and recorded in
 audit output with the reason code prefix preserved.
 
 Reason codes are stable strings such as `fs-mount-not-allowed`,
-`fs-permission-denied`, `job-cwd-denied`, `job-timeout-exceeded`,
+`fs-permission-denied`, `exec-cwd-denied`, `exec-timeout-exceeded`,
 `secret-denied`, `secret-undefined`, `service-unknown`,
 `service-action-denied`, and `unsupported-action`.
 
@@ -161,7 +161,7 @@ so responses can be routed back to the original local UDP peer, and keeps the
 same policy rule: the daemon only sends to configured UDP services.
 It also requires `permissions.forward`.
 
-`RunJob` accepts the existing `command` shell string and the `argv` shell-free
+`RunExec` accepts the existing `command` shell string and the `argv` shell-free
 argument vector. Agents and SDK clients should prefer `argv` when arguments are
 already structured; shell strings remain available for pipelines, redirection,
 and other shell syntax.

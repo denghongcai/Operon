@@ -110,7 +110,7 @@ The protocol has native streaming requirements:
 - file read streams
 - file write streams
 - process stdout/stderr streams
-- job status streams
+- exec status streams
 - execution event streams
 - filesystem watch events
 - possible bidirectional capability streams
@@ -139,9 +139,9 @@ service OperonRuntime {
   rpc ReadFile(FsPathRequest) returns (stream FileChunk);
   rpc ReadFileRange(FsReadRangeRequest) returns (FileChunk);
   rpc WriteFile(stream WriteFileRequest) returns (FsWrite);
-  rpc RunJob(JobRunRequest) returns (JobRecord);
-  rpc WatchJob(JobIdRequest) returns (stream JobEvent);
-  rpc StreamJobLogs(JobIdRequest) returns (stream JobLogStreamEvent);
+  rpc RunExec(ExecRunRequest) returns (ExecRecord);
+  rpc WatchExec(ExecIdRequest) returns (stream ExecEvent);
+  rpc StreamExecLogs(ExecIdRequest) returns (stream ExecLogStreamEvent);
   rpc OpenServiceTunnel(stream ServiceTunnelRequest) returns (stream ServiceTunnelResponse);
 }
 ```
@@ -171,7 +171,7 @@ contracts. Direct HTTP runtime calls would duplicate:
 - auth behavior
 - structured error semantics
 - streaming file transfer
-- job stdin/log streaming
+- exec stdin/log streaming
 - documentation and validation matrices
 
 Recommended split:
@@ -196,7 +196,7 @@ crates/
   operon-core      # shared execution model, policy primitives
   operon-protocol  # protobuf/gRPC contracts
   operon-fs        # filesystem capability
-  operon-process   # process/job capability
+  operon-process   # process/exec capability
   operon-store     # SQLite registry, audit, sessions
   operon-network   # mDNS endpoint discovery and service network helpers
   operon-mount     # OS mount adapters over RemoteFs
@@ -358,8 +358,8 @@ v0.9:
   endpoint model acceptance and mDNS discovery UX
 
 v0.9.4:
-  shell-free argv job execution
-  store-backed job log restart visibility
+  shell-free argv exec execution
+  store-backed exec log restart visibility
   consolidated runtime hardening validation
 
 v0.9.6:

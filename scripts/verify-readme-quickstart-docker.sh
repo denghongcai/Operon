@@ -90,12 +90,12 @@ operon fs list local:/
 operon fs write local:/notes.txt --content "hello from Operon"
 test "$(operon fs read local:/notes.txt)" = "hello from Operon"
 
-operon job run local -- echo hello
-operon job run local --argv -- printf "hello world"
-operon job list local
-JOB_ID="$(operon --json job run local -- echo hello | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | head -n 1)"
-test -n "$JOB_ID"
-operon job logs local "$JOB_ID"
+operon exec run local -- echo hello
+operon exec run local --argv -- printf "hello world"
+operon exec list local
+EXEC_ID="$(operon --json exec run local -- echo hello | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | head -n 1)"
+test -n "$EXEC_ID"
+operon exec logs local "$EXEC_ID"
 
 operon service list local
 operon service check local local-daemon
@@ -115,7 +115,7 @@ steps:
 
   - id: run-command
     node: local
-    action: job.run
+    action: exec.run
     cwd: /
     timeout_secs: 30
     command: cat graph-input.txt > graph-output.txt

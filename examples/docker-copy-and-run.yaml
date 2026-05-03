@@ -9,7 +9,7 @@ steps:
 
   - id: run-command
     node: node-a
-    action: job.run
+    action: exec.run
     cwd: /
     timeout_secs: 5
     command: cat graph-input.txt > graph-output.txt

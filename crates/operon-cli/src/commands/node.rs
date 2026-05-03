@@ -257,7 +257,7 @@ mod tests {
             nodes: vec![DiscoveryRecord {
                 node_id: "gpu".to_string(),
                 endpoint: "grpc://10.0.0.8:7789".to_string(),
-                capabilities: vec!["fs:workspace".to_string(), "job:default".to_string()],
+                capabilities: vec!["fs:workspace".to_string(), "exec:default".to_string()],
             }],
         };
 

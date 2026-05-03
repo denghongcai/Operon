@@ -12,25 +12,25 @@ use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
 use operon_config::{resolve_path, OperonConfig};
 use operon_core::{
-    AuditLog, CapabilityList, HealthStatus, JobList, JobRunRequest, JobStatus, JobStdin,
-    JobStdinClose, NodeInfo, RequestContext, ServiceList,
+    AuditLog, CapabilityList, ExecList, ExecRunRequest, ExecStatus, ExecStdin, ExecStdinClose,
+    HealthStatus, NodeInfo, RequestContext, ServiceList,
 };
 #[cfg(test)]
 use operon_core::{
-    FsMountPolicy, FsPermissions, FsPolicy, JobLog, JobPolicy, JobRecord, PolicyConfig,
+    ExecLog, ExecPolicy, ExecRecord, FsMountPolicy, FsPermissions, FsPolicy, PolicyConfig,
     RuntimeErrorKind, ServiceDefinition, ServicePolicy,
 };
 #[cfg(test)]
 use operon_fs::authorize_fs;
 #[cfg(test)]
-use operon_process::{authorize_job, resolve_job_secrets};
+use operon_process::{authorize_exec, resolve_exec_secrets};
 use operon_protocol::runtime::v1::{
-    job_stdin_request,
+    exec_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    CapabilityDiagnosticRequest, FileChunk, FsCopyRequest, FsListRequest, FsPathRequest,
-    FsReadRangeRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest, GetNodeRequest,
-    HealthRequest, JobIdRequest, JobLogStreamEvent, ListAuditRequest, ListCapabilitiesRequest,
-    ListJobsRequest, ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest,
+    CapabilityDiagnosticRequest, ExecIdRequest, ExecLogStreamEvent, FileChunk, FsCopyRequest,
+    FsListRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest,
+    FsWriteRangeRequest, GetNodeRequest, HealthRequest, ListAuditRequest, ListCapabilitiesRequest,
+    ListExecsRequest, ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest,
     ServiceTunnelRequest,
 };
 use tokio::sync::broadcast;
@@ -40,9 +40,9 @@ mod audit;
 mod auth;
 mod capability_diagnostics;
 mod defaults;
+mod exec_runtime;
 mod fs_service;
 mod grpc_status;
-mod job_runtime;
 mod lan_advertise;
 mod locks;
 mod pagination;
@@ -55,10 +55,10 @@ use audit::now_ms;
 use audit::{bounded_audit_events, record_audit, record_audit_capability};
 use auth::authorize_grpc;
 use defaults::{capabilities_from_policy, default_policy};
-use job_runtime::{
-    get_job_record, job_event_from_record, job_log_buffers_from_persisted_logs, job_log_complete,
-    job_log_complete_event, job_log_entry_event, job_log_list, job_log_snapshot,
-    job_log_snapshot_event, next_job_sequence, start_job,
+use exec_runtime::{
+    exec_event_from_record, exec_log_buffers_from_persisted_logs, exec_log_complete,
+    exec_log_complete_event, exec_log_entry_event, exec_log_list, exec_log_snapshot,
+    exec_log_snapshot_event, get_exec_record, next_exec_sequence, start_exec,
 };
 use lan_advertise::advertise_lan;
 use locks::lock;
@@ -68,10 +68,11 @@ use service_forward::authorize_service;
 use service_forward::{grpc_service_check, open_service_datagram_tunnel, open_service_tunnel};
 #[cfg(test)]
 use state::MAX_IN_MEMORY_AUDIT_EVENTS;
-use state::{AppState, JobEventSender, JobLogSender};
+use state::{AppState, ExecEventSender, ExecLogSender};
 #[cfg(test)]
 use state::{
-    JobCompletion, JobLogBuffer, MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS, MAX_IN_MEMORY_JOB_LOGS,
+    ExecCompletion, ExecLogBuffer, MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS,
+    MAX_IN_MEMORY_EXEC_LOGS,
 };
 use store_config::resolve_store_path;
 
@@ -129,10 +130,10 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         .and_then(|secrets| secrets.file.as_ref())
         .map(|path| resolve_path(&config_dir, path));
     let secrets = load_secrets(secrets_path.as_deref())?;
-    let stored_jobs = operon_store::load_jobs(store.as_deref())?;
+    let stored_execs = operon_store::load_execs(store.as_deref())?;
     let stored_audit_events = operon_store::load_audit_events(store.as_deref())?;
-    let stored_job_logs = operon_store::load_job_logs(store.as_deref())?;
-    let next_job_id = next_job_sequence(&stored_jobs);
+    let stored_exec_logs = operon_store::load_exec_logs(store.as_deref())?;
+    let next_exec_id = next_exec_sequence(&stored_execs);
     let node = NodeInfo {
         id: daemon.node_id.clone(),
         hostname: hostname(),
@@ -140,7 +141,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         arch: env::consts::ARCH.to_string(),
     };
     let capability_list = capabilities_from_policy(&node.id, &policy);
-    let jobs = Arc::new(Mutex::new(stored_jobs));
+    let execs = Arc::new(Mutex::new(stored_execs));
     let state = AppState {
         capabilities: capability_list.clone(),
         node,
@@ -150,15 +151,15 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
         store_writer,
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(bounded_audit_events(stored_audit_events))),
-        jobs,
-        job_logs: Arc::new(Mutex::new(job_log_buffers_from_persisted_logs(
-            stored_job_logs,
+        execs,
+        exec_logs: Arc::new(Mutex::new(exec_log_buffers_from_persisted_logs(
+            stored_exec_logs,
         ))),
-        job_events: Arc::new(Mutex::new(BTreeMap::new())),
-        job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-        job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-        job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-        next_job_id: Arc::new(AtomicU64::new(next_job_id)),
+        exec_events: Arc::new(Mutex::new(BTreeMap::new())),
+        exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
+        exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+        exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+        next_exec_id: Arc::new(AtomicU64::new(next_exec_id)),
     };
     let mdns = if daemon.advertise_lan {
         Some(advertise_lan(
@@ -205,11 +206,11 @@ struct GrpcRuntime {
 }
 
 type GrpcFileStream = fs_service::FileStream;
-type GrpcJobLogStream =
-    Pin<Box<dyn futures_util::Stream<Item = Result<JobLogStreamEvent, Status>> + Send + 'static>>;
-type GrpcJobEventStream = Pin<
+type GrpcExecLogStream =
+    Pin<Box<dyn futures_util::Stream<Item = Result<ExecLogStreamEvent, Status>> + Send + 'static>>;
+type GrpcExecEventStream = Pin<
     Box<
-        dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::JobEvent, Status>>
+        dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::ExecEvent, Status>>
             + Send
             + 'static,
     >,
@@ -456,17 +457,17 @@ impl OperonRuntime for GrpcRuntime {
             .await
     }
 
-    async fn run_job(
+    async fn run_exec(
         &self,
-        request: Request<operon_protocol::runtime::v1::JobRunRequest>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
+        request: Request<operon_protocol::runtime::v1::ExecRunRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecRecord>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let record = start_job(
+                let record = start_exec(
                     &self.state,
-                    JobRunRequest {
+                    ExecRunRequest {
                         command: request.command,
                         argv: request.argv,
                         cwd: (!request.cwd.is_empty()).then_some(request.cwd),
@@ -479,30 +480,30 @@ impl OperonRuntime for GrpcRuntime {
             .await
     }
 
-    async fn get_job(
+    async fn get_exec(
         &self,
-        request: Request<JobIdRequest>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
+        request: Request<ExecIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecRecord>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let job_id = request.into_inner().job_id;
-        let record = get_job_record(&self.state, &job_id)?;
+        let exec_id = request.into_inner().exec_id;
+        let record = get_exec_record(&self.state, &exec_id)?;
         Ok(GrpcResponse::new(record.into()))
     }
 
-    async fn list_jobs(
+    async fn list_execs(
         &self,
-        request: Request<ListJobsRequest>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobList>, Status> {
+        request: Request<ListExecsRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let jobs = lock(&self.state.jobs, "job map")?
+        let execs = lock(&self.state.execs, "exec map")?
             .values()
             .cloned()
             .collect::<Vec<_>>();
-        let (jobs, next_page_token) =
-            paginate_items(&jobs, request.page_size, &request.page_token)?;
-        let mut response: operon_protocol::runtime::v1::JobList = JobList {
-            jobs,
+        let (execs, next_page_token) =
+            paginate_items(&execs, request.page_size, &request.page_token)?;
+        let mut response: operon_protocol::runtime::v1::ExecList = ExecList {
+            execs,
             next_page_token: String::new(),
         }
         .into();
@@ -510,23 +511,23 @@ impl OperonRuntime for GrpcRuntime {
         Ok(GrpcResponse::new(response))
     }
 
-    type WatchJobStream = GrpcJobEventStream;
+    type WatchExecStream = GrpcExecEventStream;
 
-    async fn watch_job(
+    async fn watch_exec(
         &self,
-        request: Request<JobIdRequest>,
-    ) -> Result<GrpcResponse<Self::WatchJobStream>, Status> {
+        request: Request<ExecIdRequest>,
+    ) -> Result<GrpcResponse<Self::WatchExecStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let job_id = request.into_inner().job_id;
-        let mut receiver = lock(&self.state.job_events, "job event")?
-            .get(&job_id)
-            .map(JobEventSender::subscribe);
-        let initial = job_event_from_record(&get_job_record(&self.state, &job_id)?);
+        let exec_id = request.into_inner().exec_id;
+        let mut receiver = lock(&self.state.exec_events, "exec event")?
+            .get(&exec_id)
+            .map(ExecEventSender::subscribe);
+        let initial = exec_event_from_record(&get_exec_record(&self.state, &exec_id)?);
         let state = self.state.clone();
         let stream = async_stream::stream! {
             let mut latest = initial;
             yield Ok::<_, Status>(latest.clone().into());
-            if !matches!(latest.status, JobStatus::Running) {
+            if !matches!(latest.status, ExecStatus::Running) {
                 return;
             }
             if let Some(receiver) = receiver.as_mut() {
@@ -535,16 +536,16 @@ impl OperonRuntime for GrpcRuntime {
                         Ok(event) => {
                             latest = event;
                             yield Ok::<_, Status>(latest.clone().into());
-                            if !matches!(latest.status, JobStatus::Running) {
+                            if !matches!(latest.status, ExecStatus::Running) {
                                 break;
                             }
                         }
                         Err(broadcast::error::RecvError::Lagged(_)) => {
-                            match get_job_record(&state, &job_id) {
+                            match get_exec_record(&state, &exec_id) {
                                 Ok(record) => {
-                                    latest = job_event_from_record(&record);
+                                    latest = exec_event_from_record(&record);
                                     yield Ok::<_, Status>(latest.clone().into());
-                                    if !matches!(latest.status, JobStatus::Running) {
+                                    if !matches!(latest.status, ExecStatus::Running) {
                                         break;
                                     }
                                 }
@@ -562,40 +563,40 @@ impl OperonRuntime for GrpcRuntime {
         Ok(GrpcResponse::new(Box::pin(stream)))
     }
 
-    async fn list_job_logs(
+    async fn list_exec_logs(
         &self,
-        request: Request<JobIdRequest>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobLogList>, Status> {
+        request: Request<ExecIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecLogList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let job_id = request.into_inner().job_id;
-        get_job_record(&self.state, &job_id)?;
+        let exec_id = request.into_inner().exec_id;
+        get_exec_record(&self.state, &exec_id)?;
         Ok(GrpcResponse::new(
-            job_log_list(&self.state, &job_id)?.into(),
+            exec_log_list(&self.state, &exec_id)?.into(),
         ))
     }
 
-    type StreamJobLogsStream = GrpcJobLogStream;
+    type StreamExecLogsStream = GrpcExecLogStream;
 
-    async fn stream_job_logs(
+    async fn stream_exec_logs(
         &self,
-        request: Request<JobIdRequest>,
-    ) -> Result<GrpcResponse<Self::StreamJobLogsStream>, Status> {
+        request: Request<ExecIdRequest>,
+    ) -> Result<GrpcResponse<Self::StreamExecLogsStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let job_id = request.into_inner().job_id;
-        let mut log_receiver = lock(&self.state.job_log_events, "job log event")?
-            .get(&job_id)
-            .map(JobLogSender::subscribe);
-        let mut event_receiver = lock(&self.state.job_events, "job event")?
-            .get(&job_id)
-            .map(JobEventSender::subscribe);
-        let initial_record = get_job_record(&self.state, &job_id)?;
-        let (initial_snapshot, mut next_sequence) = job_log_snapshot(&self.state, &job_id)?;
+        let exec_id = request.into_inner().exec_id;
+        let mut log_receiver = lock(&self.state.exec_log_events, "exec log event")?
+            .get(&exec_id)
+            .map(ExecLogSender::subscribe);
+        let mut event_receiver = lock(&self.state.exec_events, "exec event")?
+            .get(&exec_id)
+            .map(ExecEventSender::subscribe);
+        let initial_record = get_exec_record(&self.state, &exec_id)?;
+        let (initial_snapshot, mut next_sequence) = exec_log_snapshot(&self.state, &exec_id)?;
         let state = self.state.clone();
         let stream = async_stream::stream! {
-            yield Ok::<_, Status>(job_log_snapshot_event(initial_snapshot));
-            if !matches!(initial_record.status, JobStatus::Running) {
-                match job_log_complete(&state, &job_id) {
-                    Ok(complete) => yield Ok(job_log_complete_event(complete)),
+            yield Ok::<_, Status>(exec_log_snapshot_event(initial_snapshot));
+            if !matches!(initial_record.status, ExecStatus::Running) {
+                match exec_log_complete(&state, &exec_id) {
+                    Ok(complete) => yield Ok(exec_log_complete_event(complete)),
                     Err(status) => yield Err(status),
                 }
                 return;
@@ -610,14 +611,14 @@ impl OperonRuntime for GrpcRuntime {
                                 Ok(log) => {
                                     if log.sequence >= next_sequence {
                                         next_sequence = log.sequence.saturating_add(1);
-                                        yield Ok::<_, Status>(job_log_entry_event(&job_id, log));
+                                        yield Ok::<_, Status>(exec_log_entry_event(&exec_id, log));
                                     }
                                 }
                                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                                    match job_log_snapshot(&state, &job_id) {
+                                    match exec_log_snapshot(&state, &exec_id) {
                                         Ok((snapshot, snapshot_next_sequence)) => {
                                             next_sequence = next_sequence.max(snapshot_next_sequence);
-                                            yield Ok::<_, Status>(job_log_snapshot_event(snapshot));
+                                            yield Ok::<_, Status>(exec_log_snapshot_event(snapshot));
                                         }
                                         Err(status) => {
                                             yield Err(status);
@@ -631,17 +632,17 @@ impl OperonRuntime for GrpcRuntime {
                         event = event_receiver.recv() => {
                             match event {
                                 Ok(event) => {
-                                    if !matches!(event.status, JobStatus::Running) {
-                                        match job_log_snapshot(&state, &job_id) {
+                                    if !matches!(event.status, ExecStatus::Running) {
+                                        match exec_log_snapshot(&state, &exec_id) {
                                             Ok((snapshot, _snapshot_next_sequence)) => {
-                                                yield Ok::<_, Status>(job_log_snapshot_event(snapshot));
+                                                yield Ok::<_, Status>(exec_log_snapshot_event(snapshot));
                                             }
                                             Err(status) => {
                                                 yield Err(status);
                                             }
                                         }
-                                        match job_log_complete(&state, &job_id) {
-                                            Ok(complete) => yield Ok::<_, Status>(job_log_complete_event(complete)),
+                                        match exec_log_complete(&state, &exec_id) {
+                                            Ok(complete) => yield Ok::<_, Status>(exec_log_complete_event(complete)),
                                             Err(status) => yield Err(status),
                                         }
                                         break;
@@ -658,43 +659,43 @@ impl OperonRuntime for GrpcRuntime {
         Ok(GrpcResponse::new(Box::pin(stream)))
     }
 
-    async fn write_job_stdin(
+    async fn write_exec_stdin(
         &self,
-        request: Request<tonic::Streaming<operon_protocol::runtime::v1::JobStdinRequest>>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobStdin>, Status> {
+        request: Request<tonic::Streaming<operon_protocol::runtime::v1::ExecStdinRequest>>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecStdin>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let mut stream = request.into_inner();
-        let mut job_id = None;
+        let mut exec_id = None;
         let mut sender = None;
         let mut bytes_written = 0_u64;
         while let Some(message) = stream.next().await {
             let message = message?;
             match message.payload {
-                Some(job_stdin_request::Payload::Target(target)) => {
-                    if job_id.is_some() {
+                Some(exec_stdin_request::Payload::Target(target)) => {
+                    if exec_id.is_some() {
                         return Err(Status::invalid_argument(
                             "stdin stream target metadata was sent more than once",
                         ));
                     }
-                    if target.job_id.is_empty() {
+                    if target.exec_id.is_empty() {
                         return Err(Status::invalid_argument(
-                            "stdin stream target job_id is required",
+                            "stdin stream target exec_id is required",
                         ));
                     }
                     sender = Some(
-                        lock(&self.state.job_stdin, "job stdin")?
-                            .get(&target.job_id)
+                        lock(&self.state.exec_stdin, "exec stdin")?
+                            .get(&target.exec_id)
                             .cloned()
                             .ok_or_else(|| {
                                 Status::not_found(format!(
-                                    "job `{}` has no open stdin",
-                                    target.job_id
+                                    "exec `{}` has no open stdin",
+                                    target.exec_id
                                 ))
                             })?,
                     );
-                    job_id = Some(target.job_id);
+                    exec_id = Some(target.exec_id);
                 }
-                Some(job_stdin_request::Payload::Chunk(chunk)) => {
+                Some(exec_stdin_request::Payload::Chunk(chunk)) => {
                     let Some(sender) = &sender else {
                         return Err(Status::invalid_argument(
                             "stdin stream chunk arrived before target metadata",
@@ -703,7 +704,7 @@ impl OperonRuntime for GrpcRuntime {
                     bytes_written += chunk.data.len() as u64;
                     sender
                         .send(chunk.data)
-                        .map_err(|_| Status::failed_precondition("job stdin is closed"))?;
+                        .map_err(|_| Status::failed_precondition("exec stdin is closed"))?;
                 }
                 None => {
                     return Err(Status::invalid_argument(
@@ -712,52 +713,53 @@ impl OperonRuntime for GrpcRuntime {
                 }
             }
         }
-        let Some(job_id) = job_id else {
+        let Some(exec_id) = exec_id else {
             return Err(Status::invalid_argument(
                 "stdin stream did not include target metadata",
             ));
         };
         Ok(GrpcResponse::new(
-            JobStdin {
-                job_id,
+            ExecStdin {
+                exec_id,
                 bytes_written,
             }
             .into(),
         ))
     }
 
-    async fn close_job_stdin(
+    async fn close_exec_stdin(
         &self,
-        request: Request<JobIdRequest>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobStdinClose>, Status> {
+        request: Request<ExecIdRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecStdinClose>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let job_id = request.into_inner().job_id;
-        let closed = lock(&self.state.job_stdin, "job stdin")?
-            .remove(&job_id)
+        let exec_id = request.into_inner().exec_id;
+        let closed = lock(&self.state.exec_stdin, "exec stdin")?
+            .remove(&exec_id)
             .is_some();
-        Ok(GrpcResponse::new(JobStdinClose { job_id, closed }.into()))
+        Ok(GrpcResponse::new(ExecStdinClose { exec_id, closed }.into()))
     }
 
-    async fn cancel_job(
+    async fn cancel_exec(
         &self,
-        request: Request<operon_protocol::runtime::v1::JobCancelRequest>,
-    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::JobRecord>, Status> {
+        request: Request<operon_protocol::runtime::v1::ExecCancelRequest>,
+    ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecRecord>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
-        let job_id = request.into_inner().job_id;
+        let exec_id = request.into_inner().exec_id;
         AUDIT_CONTEXT
             .scope(context, async {
-                if let Some(sender) = lock(&self.state.job_cancel, "job cancel")?.remove(&job_id) {
+                if let Some(sender) = lock(&self.state.exec_cancel, "exec cancel")?.remove(&exec_id)
+                {
                     let _ = sender.send(());
                     record_audit_capability(
                         &self.state,
-                        "job:default",
+                        "exec:default",
                         "cancel",
-                        &job_id,
+                        &exec_id,
                         true,
                         "cancel requested",
                     );
                 }
-                let record = get_job_record(&self.state, &job_id)?;
+                let record = get_exec_record(&self.state, &exec_id)?;
                 Ok(GrpcResponse::new(record.into()))
             })
             .await
@@ -854,7 +856,7 @@ impl OperonRuntime for GrpcRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::job_runtime::{append_job_log, finish_job, start_job};
+    use crate::exec_runtime::{append_exec_log, finish_exec, start_exec};
 
     fn test_policy() -> PolicyConfig {
         PolicyConfig {
@@ -870,7 +872,7 @@ mod tests {
                     },
                 }],
             },
-            job: JobPolicy {
+            exec: ExecPolicy {
                 allowed_cwds: vec!["/workspace".to_string()],
                 default_timeout_secs: 10,
                 max_timeout_secs: 30,
@@ -907,13 +909,13 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            jobs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_job_id: Arc::new(AtomicU64::new(1)),
+            execs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            next_exec_id: Arc::new(AtomicU64::new(1)),
         }
     }
 
@@ -942,14 +944,14 @@ mod tests {
     }
 
     #[test]
-    fn empty_job_request_is_rejected_before_spawn() {
-        let base = unique_temp_dir("operond-empty-job-test");
+    fn empty_exec_request_is_rejected_before_spawn() {
+        let base = unique_temp_dir("operond-empty-exec-test");
         let workspace = base.join("workspace");
         fs::create_dir_all(&workspace).expect("workspace");
         let state = test_state(test_policy(), workspace);
-        let error = start_job(
+        let error = start_exec(
             &state,
-            JobRunRequest {
+            ExecRunRequest {
                 command: String::new(),
                 argv: Vec::new(),
                 cwd: Some("/".to_string()),
@@ -957,7 +959,7 @@ mod tests {
                 secrets: Vec::new(),
             },
         )
-        .expect_err("empty job should be invalid");
+        .expect_err("empty exec should be invalid");
 
         assert_eq!(error.code(), tonic::Code::InvalidArgument);
         assert!(error.message().contains("requires command or argv"));
@@ -1149,27 +1151,27 @@ mod tests {
     }
 
     #[test]
-    fn job_policy_enforces_cwd_and_timeout() {
+    fn exec_policy_enforces_cwd_and_timeout() {
         let policy = test_policy();
 
-        assert!(authorize_job(&policy.job, "/workspace/project", Some(30)).is_ok());
+        assert!(authorize_exec(&policy.exec, "/workspace/project", Some(30)).is_ok());
 
         let cwd_error =
-            authorize_job(&policy.job, "/tmp", Some(1)).expect_err("cwd should be denied");
-        assert_eq!(cwd_error.1, "job cwd denied by policy");
+            authorize_exec(&policy.exec, "/tmp", Some(1)).expect_err("cwd should be denied");
+        assert_eq!(cwd_error.1, "exec cwd denied by policy");
 
-        let timeout_error = authorize_job(&policy.job, "/workspace", Some(31))
+        let timeout_error = authorize_exec(&policy.exec, "/workspace", Some(31))
             .expect_err("timeout should be denied");
         assert!(timeout_error.1.contains("exceeds policy maximum"));
     }
 
     #[test]
-    fn denied_job_policy_audit_uses_reason_code() {
+    fn denied_exec_policy_audit_uses_reason_code() {
         let state = test_state(test_policy(), PathBuf::from("/workspace"));
 
-        let error = start_job(
+        let error = start_exec(
             &state,
-            JobRunRequest {
+            ExecRunRequest {
                 command: "pwd".to_string(),
                 argv: Vec::new(),
                 cwd: Some("/tmp".to_string()),
@@ -1177,20 +1179,23 @@ mod tests {
                 secrets: Vec::new(),
             },
         )
-        .expect_err("job cwd should be denied");
+        .expect_err("exec cwd should be denied");
 
         assert_eq!(error.code(), tonic::Code::PermissionDenied);
         let audit = state.audit.lock().expect("audit");
         assert_eq!(audit.len(), 1);
-        assert_eq!(audit[0].capability, "job:default");
+        assert_eq!(audit[0].capability, "exec:default");
         assert_eq!(audit[0].action, "run");
         assert_eq!(audit[0].resource, "/tmp");
         assert!(!audit[0].allowed);
-        assert_eq!(audit[0].reason, "job-cwd-denied: job cwd denied by policy");
+        assert_eq!(
+            audit[0].reason,
+            "exec-cwd-denied: exec cwd denied by policy"
+        );
     }
 
     #[test]
-    fn job_secrets_must_be_allowed_and_defined() {
+    fn exec_secrets_must_be_allowed_and_defined() {
         let mut secrets = BTreeMap::new();
         secrets.insert("TEST_SECRET".to_string(), "secret-value".to_string());
         let state = AppState {
@@ -1207,17 +1212,17 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(secrets),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            jobs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_job_id: Arc::new(AtomicU64::new(1)),
+            execs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            next_exec_id: Arc::new(AtomicU64::new(1)),
         };
 
-        let resolved = resolve_job_secrets(
-            &state.policy.job,
+        let resolved = resolve_exec_secrets(
+            &state.policy.exec,
             &state.secrets,
             &["TEST_SECRET".to_string()],
         )
@@ -1227,8 +1232,8 @@ mod tests {
             Some("secret-value")
         );
 
-        let denied = resolve_job_secrets(
-            &state.policy.job,
+        let denied = resolve_exec_secrets(
+            &state.policy.exec,
             &state.secrets,
             &["DENIED_SECRET".to_string()],
         )
@@ -1252,13 +1257,13 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            jobs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_job_id: Arc::new(AtomicU64::new(1)),
+            execs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            next_exec_id: Arc::new(AtomicU64::new(1)),
         };
 
         AUDIT_CONTEXT
@@ -1306,13 +1311,13 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            jobs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            job_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            job_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            job_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_job_id: Arc::new(AtomicU64::new(1)),
+            execs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
+            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
+            next_exec_id: Arc::new(AtomicU64::new(1)),
         };
 
         for index in 0..(MAX_IN_MEMORY_AUDIT_EVENTS + 5) {
@@ -1332,35 +1337,35 @@ mod tests {
     }
 
     #[test]
-    fn job_logs_are_separate_and_bounded() {
-        let jobs = Arc::new(Mutex::new(BTreeMap::from([(
-            "job-1".to_string(),
-            JobRecord {
-                id: "job-1".to_string(),
+    fn exec_logs_are_separate_and_bounded() {
+        let execs = Arc::new(Mutex::new(BTreeMap::from([(
+            "exec-1".to_string(),
+            ExecRecord {
+                id: "exec-1".to_string(),
                 node_id: "node-a".to_string(),
                 command: "echo test".to_string(),
                 cwd: "/workspace".to_string(),
-                status: JobStatus::Running,
+                status: ExecStatus::Running,
                 exit_code: None,
                 log_count: 0,
                 logs_truncated: false,
             },
         )])));
         let logs = Arc::new(Mutex::new(BTreeMap::from([(
-            "job-1".to_string(),
-            JobLogBuffer::default(),
+            "exec-1".to_string(),
+            ExecLogBuffer::default(),
         )])));
         let (sender, _) = broadcast::channel(1);
-        let log_events = Arc::new(Mutex::new(BTreeMap::from([("job-1".to_string(), sender)])));
+        let log_events = Arc::new(Mutex::new(BTreeMap::from([("exec-1".to_string(), sender)])));
 
-        for index in 0..(MAX_IN_MEMORY_JOB_LOGS + 5) {
-            append_job_log(
-                &jobs,
+        for index in 0..(MAX_IN_MEMORY_EXEC_LOGS + 5) {
+            append_exec_log(
+                &execs,
                 &logs,
                 &log_events,
                 &operon_store::StoreWriter::new(None),
-                "job-1",
-                JobLog {
+                "exec-1",
+                ExecLog {
                     stream: "stdout".to_string(),
                     data: format!("line {index}").into_bytes(),
                     sequence: 0,
@@ -1368,70 +1373,70 @@ mod tests {
             );
         }
 
-        let record = jobs
+        let record = execs
             .lock()
-            .expect("job map")
-            .get("job-1")
-            .expect("job")
+            .expect("exec map")
+            .get("exec-1")
+            .expect("exec")
             .clone();
-        assert_eq!(record.log_count, (MAX_IN_MEMORY_JOB_LOGS + 5) as u64);
+        assert_eq!(record.log_count, (MAX_IN_MEMORY_EXEC_LOGS + 5) as u64);
         assert!(record.logs_truncated);
 
-        let buffers = logs.lock().expect("job logs");
-        let buffer = buffers.get("job-1").expect("job log buffer");
-        assert_eq!(buffer.logs.len(), MAX_IN_MEMORY_JOB_LOGS);
+        let buffers = logs.lock().expect("exec logs");
+        let buffer = buffers.get("exec-1").expect("exec log buffer");
+        assert_eq!(buffer.logs.len(), MAX_IN_MEMORY_EXEC_LOGS);
         assert_eq!(buffer.logs.front().expect("first retained").sequence, 5);
     }
 
     #[test]
-    fn finished_job_runtime_state_is_cleaned_and_log_buffers_are_bounded() {
-        let mut job_records = BTreeMap::new();
+    fn finished_exec_runtime_state_is_cleaned_and_log_buffers_are_bounded() {
+        let mut exec_records = BTreeMap::new();
         let mut log_buffers = BTreeMap::new();
-        for index in 1..=(MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS + 2) {
-            let job_id = format!("job-{index}");
-            job_records.insert(
-                job_id.clone(),
-                JobRecord {
-                    id: job_id.clone(),
+        for index in 1..=(MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS + 2) {
+            let exec_id = format!("exec-{index}");
+            exec_records.insert(
+                exec_id.clone(),
+                ExecRecord {
+                    id: exec_id.clone(),
                     node_id: "node-a".to_string(),
                     command: "true".to_string(),
                     cwd: "/workspace".to_string(),
-                    status: JobStatus::Succeeded,
+                    status: ExecStatus::Succeeded,
                     exit_code: Some(0),
                     log_count: 0,
                     logs_truncated: false,
                 },
             );
-            log_buffers.insert(job_id, JobLogBuffer::default());
+            log_buffers.insert(exec_id, ExecLogBuffer::default());
         }
-        let target_job_id = format!("job-{}", MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS + 2);
-        if let Some(record) = job_records.get_mut(&target_job_id) {
-            record.status = JobStatus::Running;
+        let target_exec_id = format!("exec-{}", MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS + 2);
+        if let Some(record) = exec_records.get_mut(&target_exec_id) {
+            record.status = ExecStatus::Running;
             record.exit_code = None;
         }
 
-        let jobs = Arc::new(Mutex::new(job_records));
+        let execs = Arc::new(Mutex::new(exec_records));
         let logs = Arc::new(Mutex::new(log_buffers));
         let (event_sender, _) = broadcast::channel(1);
         let (log_sender, _) = broadcast::channel(1);
         let events = Arc::new(Mutex::new(BTreeMap::from([(
-            target_job_id.clone(),
+            target_exec_id.clone(),
             event_sender,
         )])));
         let log_events = Arc::new(Mutex::new(BTreeMap::from([(
-            target_job_id.clone(),
+            target_exec_id.clone(),
             log_sender,
         )])));
-        let completion = JobCompletion {
+        let completion = ExecCompletion {
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            jobs,
+            execs,
             logs: logs.clone(),
             events: events.clone(),
             log_events: log_events.clone(),
             cancels: Arc::new(Mutex::new(BTreeMap::new())),
             stdin: Arc::new(Mutex::new(BTreeMap::new())),
             store_writer: operon_store::StoreWriter::new(None),
-            job_id: target_job_id.clone(),
+            exec_id: target_exec_id.clone(),
             subject: "test-subject".to_string(),
             node_id: "node-a".to_string(),
             audit_context: RequestContext {
@@ -1440,31 +1445,31 @@ mod tests {
             },
         };
 
-        finish_job(&completion, JobStatus::Succeeded, Some(0));
+        finish_exec(&completion, ExecStatus::Succeeded, Some(0));
 
-        assert!(!events.lock().expect("events").contains_key(&target_job_id));
+        assert!(!events.lock().expect("events").contains_key(&target_exec_id));
         assert!(!log_events
             .lock()
             .expect("log events")
-            .contains_key(&target_job_id));
+            .contains_key(&target_exec_id));
         let logs = logs.lock().expect("logs");
-        assert_eq!(logs.len(), MAX_IN_MEMORY_COMPLETED_JOB_LOG_BUFFERS);
-        assert!(!logs.contains_key("job-1"));
-        assert!(!logs.contains_key("job-2"));
-        assert!(logs.contains_key(&target_job_id));
+        assert_eq!(logs.len(), MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS);
+        assert!(!logs.contains_key("exec-1"));
+        assert!(!logs.contains_key("exec-2"));
+        assert!(logs.contains_key(&target_exec_id));
     }
 
     #[test]
-    fn finish_job_records_terminal_audit_event() {
-        let job_id = "job-1".to_string();
-        let jobs = Arc::new(Mutex::new(BTreeMap::from([(
-            job_id.clone(),
-            JobRecord {
-                id: job_id.clone(),
+    fn finish_exec_records_terminal_audit_event() {
+        let exec_id = "exec-1".to_string();
+        let execs = Arc::new(Mutex::new(BTreeMap::from([(
+            exec_id.clone(),
+            ExecRecord {
+                id: exec_id.clone(),
                 node_id: "node-a".to_string(),
                 command: "true".to_string(),
                 cwd: "/".to_string(),
-                status: JobStatus::Running,
+                status: ExecStatus::Running,
                 exit_code: None,
                 log_count: 0,
                 logs_truncated: false,
@@ -1474,16 +1479,19 @@ mod tests {
         let (event_sender, _) = broadcast::channel(1);
         let (log_sender, _) = broadcast::channel(1);
         let audit = Arc::new(Mutex::new(VecDeque::new()));
-        let completion = JobCompletion {
+        let completion = ExecCompletion {
             audit: audit.clone(),
-            jobs,
+            execs,
             logs,
-            events: Arc::new(Mutex::new(BTreeMap::from([(job_id.clone(), event_sender)]))),
-            log_events: Arc::new(Mutex::new(BTreeMap::from([(job_id.clone(), log_sender)]))),
+            events: Arc::new(Mutex::new(BTreeMap::from([(
+                exec_id.clone(),
+                event_sender,
+            )]))),
+            log_events: Arc::new(Mutex::new(BTreeMap::from([(exec_id.clone(), log_sender)]))),
             cancels: Arc::new(Mutex::new(BTreeMap::new())),
             stdin: Arc::new(Mutex::new(BTreeMap::new())),
             store_writer: operon_store::StoreWriter::new(None),
-            job_id: job_id.clone(),
+            exec_id: exec_id.clone(),
             subject: "test-subject".to_string(),
             node_id: "node-a".to_string(),
             audit_context: RequestContext {
@@ -1492,13 +1500,13 @@ mod tests {
             },
         };
 
-        finish_job(&completion, JobStatus::Failed, Some(7));
+        finish_exec(&completion, ExecStatus::Failed, Some(7));
 
         let events = audit.lock().expect("audit");
         let event = events.back().expect("completion audit");
-        assert_eq!(event.capability, "job:default");
+        assert_eq!(event.capability, "exec:default");
         assert_eq!(event.action, "finish");
-        assert_eq!(event.resource, job_id);
+        assert_eq!(event.resource, exec_id);
         assert!(event.allowed);
         assert_eq!(event.reason, "status=failed exit_code=7");
         assert_eq!(event.run_id.as_deref(), Some("run-1"));

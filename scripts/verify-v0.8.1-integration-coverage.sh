@@ -63,7 +63,7 @@ policy:
           read: true
           write: true
           delete: true
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30
@@ -130,21 +130,21 @@ assert stat["size"] == 5, stat
 PY
 "$OPERON" --config "$CONFIG_PATH" fs rm local:/copy.txt
 
-"$OPERON" --config "$CONFIG_PATH" --json job run local --timeout-secs 10 -- "printf job-integration" \
-  >"$TMP_DIR/job.json"
-JOB_ID="$(
-  python3 - "$TMP_DIR/job.json" <<'PY'
+"$OPERON" --config "$CONFIG_PATH" --json exec run local --timeout-secs 10 -- "printf exec-integration" \
+  >"$TMP_DIR/exec.json"
+EXEC_ID="$(
+  python3 - "$TMP_DIR/exec.json" <<'PY'
 import json
 import sys
 with open(sys.argv[1], "r", encoding="utf-8") as handle:
-    job = json.load(handle)
-assert job["status"] == "succeeded", job
-assert job["exit_code"] == 0, job
-print(job["id"])
+    exec = json.load(handle)
+assert exec["status"] == "succeeded", exec
+assert exec["exit_code"] == 0, exec
+print(exec["id"])
 PY
 )"
-"$OPERON" --config "$CONFIG_PATH" job logs local "$JOB_ID" --stream >"$TMP_DIR/job-logs.out"
-grep -q "job-integration" "$TMP_DIR/job-logs.out"
+"$OPERON" --config "$CONFIG_PATH" exec logs local "$EXEC_ID" --stream >"$TMP_DIR/exec-logs.out"
+grep -q "exec-integration" "$TMP_DIR/exec-logs.out"
 
 cat >"$GRAPH_PATH" <<'YAML'
 name: integration-graph
@@ -154,9 +154,9 @@ steps:
     action: fs.write
     path: /graph-input.txt
     content: hello graph
-  - id: run-job
+  - id: run-exec
     node: local
-    action: job.run
+    action: exec.run
     cwd: /
     timeout_secs: 10
     command: cat graph-input.txt > graph-output.txt
@@ -196,7 +196,7 @@ for expected in \
   "filesystem_capability_id_is_stable" \
   "mount_capability_constant_is_exported_at_crate_root" \
   "service_removed_event_removes_discovered_record" \
-  "job_policy_enforces_cwd_and_timeout" \
+  "exec_policy_enforces_cwd_and_timeout" \
   "protocol_version_matches_grpc_release_line" \
   "append_record_writes_json_line" \
   "audit_event_uses_policy_subject_capability_and_context" \

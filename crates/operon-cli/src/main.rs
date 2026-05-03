@@ -71,10 +71,10 @@ enum Command {
         #[command(subcommand)]
         command: ServiceCommand,
     },
-    #[command(about = "Run jobs and stream job stdin/stdout/stderr")]
-    Job {
+    #[command(about = "Run execs and stream exec stdin/stdout/stderr")]
+    Exec {
         #[command(subcommand)]
-        command: JobCommand,
+        command: ExecCommand,
     },
     #[command(about = "Run an execution graph YAML file")]
     Run {
@@ -173,13 +173,13 @@ enum CapabilityCommand {
     Explain {
         /// Node id from config.yaml.
         node_id: String,
-        /// Capability id, for example fs:workspace, job:default, secret:default, or service:web.
+        /// Capability id, for example fs:workspace, exec:default, secret:default, or service:web.
         capability_id: String,
         /// Action to diagnose, for example read, write, run, use, check, or forward.
         action: String,
         /// Resource to diagnose, such as a path, cwd, secret name, or service id.
         resource: String,
-        /// Optional timeout in seconds for job run diagnostics.
+        /// Optional timeout in seconds for exec run diagnostics.
         #[arg(long)]
         timeout_secs: Option<u64>,
     },
@@ -316,7 +316,7 @@ enum ServiceCommand {
 }
 
 #[derive(Debug, Subcommand)]
-enum JobCommand {
+enum ExecCommand {
     #[command(about = "Run a shell command on a node")]
     Run {
         /// Node id from config.yaml.
@@ -324,13 +324,13 @@ enum JobCommand {
         /// Remote working directory allowed by policy.
         #[arg(long)]
         cwd: Option<String>,
-        /// Job timeout in seconds.
+        /// Exec timeout in seconds.
         #[arg(long, default_value_t = 30)]
         timeout_secs: u64,
         /// Secret name to inject when allowed by policy.
         #[arg(long)]
         secret: Vec<String>,
-        /// Return after the job is accepted instead of waiting for completion.
+        /// Return after the exec is accepted instead of waiting for completion.
         #[arg(long)]
         detach: bool,
         /// Execute CLI words as argv without shell parsing.
@@ -340,24 +340,24 @@ enum JobCommand {
         #[arg(required = true, trailing_var_arg = true)]
         command: Vec<String>,
     },
-    #[command(about = "List jobs known by a node")]
+    #[command(about = "List execs known by a node")]
     List {
         /// Node id from config.yaml.
         node_id: String,
     },
-    #[command(about = "Get a job status record")]
+    #[command(about = "Get a exec status record")]
     Status {
         /// Node id from config.yaml.
         node_id: String,
-        /// Job id returned by job run or job list.
-        job_id: String,
+        /// Exec id returned by exec run or exec list.
+        exec_id: String,
     },
-    #[command(about = "Read or follow job stdout/stderr logs")]
+    #[command(about = "Read or follow exec stdout/stderr logs")]
     Logs {
         /// Node id from config.yaml.
         node_id: String,
-        /// Job id returned by job run or job list.
-        job_id: String,
+        /// Exec id returned by exec run or exec list.
+        exec_id: String,
         /// Keep following log output.
         #[arg(long)]
         follow: bool,
@@ -365,28 +365,28 @@ enum JobCommand {
         #[arg(long)]
         stream: bool,
     },
-    #[command(about = "Write stdin bytes to a running job")]
+    #[command(about = "Write stdin bytes to a running exec")]
     Stdin {
         /// Node id from config.yaml.
         node_id: String,
-        /// Job id returned by job run or job list.
-        job_id: String,
+        /// Exec id returned by exec run or exec list.
+        exec_id: String,
         /// Inline stdin content.
         #[arg(long)]
         content: Option<String>,
-        /// Local file whose bytes should be streamed to job stdin.
+        /// Local file whose bytes should be streamed to exec stdin.
         #[arg(long)]
         file: Option<PathBuf>,
-        /// Close job stdin after optional content or file bytes.
+        /// Close exec stdin after optional content or file bytes.
         #[arg(long)]
         close: bool,
     },
-    #[command(about = "Cancel a running job")]
+    #[command(about = "Cancel a running exec")]
     Cancel {
         /// Node id from config.yaml.
         node_id: String,
-        /// Job id returned by job run or job list.
-        job_id: String,
+        /// Exec id returned by exec run or exec list.
+        exec_id: String,
     },
 }
 
@@ -546,8 +546,8 @@ async fn main() -> anyhow::Result<()> {
                     .await
             }
         },
-        Command::Job { command } => match command {
-            JobCommand::Run {
+        Command::Exec { command } => match command {
+            ExecCommand::Run {
                 node_id,
                 cwd,
                 timeout_secs,
@@ -556,7 +556,7 @@ async fn main() -> anyhow::Result<()> {
                 argv,
                 command,
             } => {
-                commands::job::run(commands::job::JobRunInput {
+                commands::exec::run(commands::exec::ExecRunInput {
                     config_path,
                     node_id,
                     cwd,
@@ -569,30 +569,40 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .await
             }
-            JobCommand::List { node_id } => {
-                commands::job::list(config_path, &node_id, output).await
+            ExecCommand::List { node_id } => {
+                commands::exec::list(config_path, &node_id, output).await
             }
-            JobCommand::Status { node_id, job_id } => {
-                commands::job::status(config_path, &node_id, &job_id, output).await
+            ExecCommand::Status { node_id, exec_id } => {
+                commands::exec::status(config_path, &node_id, &exec_id, output).await
             }
-            JobCommand::Logs {
+            ExecCommand::Logs {
                 node_id,
-                job_id,
+                exec_id,
                 follow,
                 stream,
-            } => commands::job::logs(config_path, &node_id, &job_id, follow, stream, output).await,
-            JobCommand::Stdin {
+            } => {
+                commands::exec::logs(config_path, &node_id, &exec_id, follow, stream, output).await
+            }
+            ExecCommand::Stdin {
                 node_id,
-                job_id,
+                exec_id,
                 content,
                 file,
                 close,
             } => {
-                commands::job::stdin(config_path, &node_id, &job_id, content, file, close, output)
-                    .await
+                commands::exec::stdin(
+                    config_path,
+                    &node_id,
+                    &exec_id,
+                    content,
+                    file,
+                    close,
+                    output,
+                )
+                .await
             }
-            JobCommand::Cancel { node_id, job_id } => {
-                commands::job::cancel(config_path, &node_id, &job_id, output).await
+            ExecCommand::Cancel { node_id, exec_id } => {
+                commands::exec::cancel(config_path, &node_id, &exec_id, output).await
             }
         },
         Command::Run {

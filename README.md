@@ -28,7 +28,7 @@ coordinated execution.
 In Operon:
 
 - A **node** is any reachable machine: local, cloud, container, or server.
-- A **capability** is something a node can do: filesystem access, job
+- A **capability** is something a node can do: filesystem access, command
   execution, service access, and related runtime actions.
 - An **operon** is a composition of capabilities executed across nodes.
 
@@ -71,7 +71,7 @@ boundaries, and network access being mistaken for capability access.
 |                 v                                         |
 | trace + audit                                             |
 |                                                           |
-| capabilities: fs | job | service                          |
+| capabilities: fs | exec | service                          |
 | controls:     policy | graph                              |
 +-----------------------------------------------------------+
                               |
@@ -83,7 +83,7 @@ boundaries, and network access being mistaken for capability access.
 +-----------------------------------------------------------+
       |                       |                       |
    node-a                  node-b                  node-c
- fs + jobs                service                fs + jobs
+ fs + execs                service                fs + execs
 ```
 
 Operon adds:
@@ -91,11 +91,11 @@ Operon adds:
 - A unified capability model.
 - Structured execution across reachable nodes.
 - Built-in trace and audit output.
-- Policy-controlled filesystem, job, service, and secret use.
+- Policy-controlled filesystem, exec, service, and secret use.
 - A clear boundary between private networking and capability authorization.
 
 Cloudflare Mesh or Tailscale can decide whether one device can reach another
-device. Operon decides whether that device can read a directory, run a job, use
+device. Operon decides whether that device can read a directory, run a command, use
 a secret, forward a local service, or inspect an execution trace.
 
 ---
@@ -196,14 +196,14 @@ operon fs write local:/notes.txt --content "hello from Operon"
 operon fs read local:/notes.txt
 ```
 
-Run jobs with policy-controlled working directories, timeouts, and secret use:
+Run commands with policy-controlled working directories, timeouts, and secret use:
 
 ```bash
-operon job run local -- echo hello
-operon job run local --argv -- printf "hello world"
-operon job list local
-JOB_ID="$(operon --json job run local -- echo hello | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | head -n 1)"
-operon job logs local "$JOB_ID"
+operon exec run local -- echo hello
+operon exec run local --argv -- printf "hello world"
+operon exec list local
+EXEC_ID="$(operon --json exec run local -- echo hello | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | head -n 1)"
+operon exec logs local "$EXEC_ID"
 ```
 
 Inspect configured services and open explicit local forwards. The forward
@@ -222,7 +222,7 @@ operon audit show local --limit 20
 ```
 
 Add global `--json` before the subcommand for structured output when scripting,
-for example `operon --json job list local`.
+for example `operon --json exec list local`.
 
 ---
 
@@ -240,8 +240,8 @@ The config contains:
 
 - `daemon`: local node id, listen address, workspace, auth, and store settings.
 - `client`: known node endpoints such as `grpc://100.96.12.34:7789`.
-- `policy`: allowed filesystem mounts, job roots, services, and secrets.
-- `secrets`: file-backed secret references for job injection.
+- `policy`: allowed filesystem mounts, exec roots, services, and secrets.
+- `secrets`: file-backed secret references for exec injection.
 
 External control planes can generate the same endpoint-only `client.nodes`
 shape from Cloudflare, Tailscale, Kubernetes, inventory databases, or DNS.
@@ -304,7 +304,7 @@ steps:
 
   - id: run-command
     node: local
-    action: job.run
+    action: exec.run
     cwd: /
     timeout_secs: 30
     command: cat graph-input.txt > graph-output.txt
@@ -333,20 +333,20 @@ Operon exposes machines through explicit capabilities:
 
 ```text
 mesh://cloud-a/fs/workspace
-mesh://gpu-node/job/run
+mesh://gpu-node/exec/run
 mesh://cloud-a/service/web
 ```
 
 Current capability areas:
 
 - Filesystem read, write, list, copy, mutation, and Linux FUSE mount access.
-- Job execution with logs, stdin, cancellation, timeouts, and scoped secrets.
+- Exec execution with logs, stdin, cancellation, timeouts, and scoped secrets.
 - Service metadata, TCP health checks, TCP forwarding, and UDP/datagram
   forwarding over existing Operon node connections.
 - Audit, trace, and graph inspection.
 
 `operon capability list <node>` is policy-derived: filesystem capabilities come
-from configured mounts, job capability appears only when policy allows at least
+from configured mounts, exec capability appears only when policy allows at least
 one working directory, and service capabilities come from configured services
 and their permissions.
 
@@ -360,7 +360,7 @@ ask a daemon why one action is allowed or denied.
 Operon enforces capability boundaries:
 
 - Nodes expose only explicit mounts and configured services.
-- Secrets are injected only into allowed jobs that request them.
+- Secrets are injected only into allowed execs that request them.
 - Execution is policy-controlled.
 - Every action is auditable.
 - Network reachability never implies capability permission.
@@ -393,7 +393,7 @@ Operon is usable today as a pre-1.0 runtime. The current release includes:
 - TypeScript SDK.
 - Unified config and guided onboarding.
 - Policy-derived capabilities.
-- Filesystem, job, service, audit, trace, and graph flows.
+- Filesystem, exec, service, audit, trace, and graph flows.
 - Linux FUSE mount support.
 - TCP and UDP service forwarding over existing node connections.
 - mDNS endpoint discovery for local networks.

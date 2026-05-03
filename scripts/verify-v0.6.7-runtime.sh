@@ -52,7 +52,7 @@ policy:
           read: true
           write: true
           delete: true
-  job:
+  exec:
     allowed_cwds:
       - /
     default_timeout_secs: 30
@@ -85,17 +85,17 @@ cargo run -q -p operon-cli -- --config "$CONFIG_PATH" fs read local:/streamed.tx
   --output "$TMP_DIR/fs-stream-output.txt"
 cmp "$TMP_DIR/fs-stream-input.txt" "$TMP_DIR/fs-stream-output.txt"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec run local \
   --detach \
   --timeout-secs 10 \
   -- "cat > stdin-streamed.txt" \
-  >"$TMP_DIR/stdin-job.txt"
-stdin_job_id="$(awk '{print $2}' "$TMP_DIR/stdin-job.txt" | head -n1)"
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job stdin local "$stdin_job_id" \
+  >"$TMP_DIR/stdin-exec.txt"
+stdin_exec_id="$(awk '{print $2}' "$TMP_DIR/stdin-exec.txt" | head -n1)"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec stdin local "$stdin_exec_id" \
   --content "stdin stream content"
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job stdin local "$stdin_job_id" --close
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec stdin local "$stdin_exec_id" --close
 for _ in $(seq 1 50); do
-  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job status local "$stdin_job_id" \
+  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec status local "$stdin_exec_id" \
     >"$TMP_DIR/stdin-status.txt"
   if grep -q "Succeeded" "$TMP_DIR/stdin-status.txt"; then
     break
@@ -107,12 +107,12 @@ cargo run -q -p operon-cli -- --config "$CONFIG_PATH" fs read local:/stdin-strea
   --output "$TMP_DIR/stdin-output.txt"
 grep -q "stdin stream content" "$TMP_DIR/stdin-output.txt"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec run local \
   --detach \
   --timeout-secs 60 \
   -- 'sleep 30 & echo $! > child.pid; wait' \
-  >"$TMP_DIR/process-group-job.txt"
-process_job_id="$(awk '{print $2}' "$TMP_DIR/process-group-job.txt" | head -n1)"
+  >"$TMP_DIR/process-group-exec.txt"
+process_exec_id="$(awk '{print $2}' "$TMP_DIR/process-group-exec.txt" | head -n1)"
 
 for _ in $(seq 1 50); do
   if [[ -f "$WORKSPACE_DIR/child.pid" ]]; then
@@ -124,9 +124,9 @@ test -f "$WORKSPACE_DIR/child.pid"
 child_pid="$(cat "$WORKSPACE_DIR/child.pid")"
 kill -0 "$child_pid"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job cancel local "$process_job_id" >/dev/null
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec cancel local "$process_exec_id" >/dev/null
 for _ in $(seq 1 50); do
-  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job status local "$process_job_id" \
+  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec status local "$process_exec_id" \
     >"$TMP_DIR/process-group-status.txt"
   if grep -q "Cancelled" "$TMP_DIR/process-group-status.txt"; then
     break
@@ -153,15 +153,15 @@ if [[ -n "$child_pid" ]] && kill -0 "$child_pid" >/dev/null 2>&1; then
   exit 1
 fi
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job run local \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec run local \
   --detach \
   --timeout-secs 10 \
   -- "printf '\\377\\000A'" \
-  >"$TMP_DIR/binary-log-job.txt"
-binary_job_id="$(awk '{print $2}' "$TMP_DIR/binary-log-job.txt" | head -n1)"
+  >"$TMP_DIR/binary-log-exec.txt"
+binary_exec_id="$(awk '{print $2}' "$TMP_DIR/binary-log-exec.txt" | head -n1)"
 
 for _ in $(seq 1 50); do
-  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job status local "$binary_job_id" \
+  cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec status local "$binary_exec_id" \
     >"$TMP_DIR/binary-log-status.txt"
   if grep -q "Succeeded" "$TMP_DIR/binary-log-status.txt"; then
     break
@@ -170,15 +170,15 @@ for _ in $(seq 1 50); do
 done
 grep -q "Succeeded" "$TMP_DIR/binary-log-status.txt"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job logs local "$binary_job_id" --stream \
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec logs local "$binary_exec_id" --stream \
   >"$TMP_DIR/binary-log-output.bin"
 printf '\377\000A' >"$TMP_DIR/binary-log-expected.bin"
 cmp "$TMP_DIR/binary-log-expected.bin" "$TMP_DIR/binary-log-output.bin"
 
-cargo run -q -p operon-cli -- --config "$CONFIG_PATH" job list local >"$TMP_DIR/jobs.txt"
-grep -q "$binary_job_id" "$TMP_DIR/jobs.txt"
+cargo run -q -p operon-cli -- --config "$CONFIG_PATH" exec list local >"$TMP_DIR/execs.txt"
+grep -q "$binary_exec_id" "$TMP_DIR/execs.txt"
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" audit list local >"$TMP_DIR/audit.txt"
 grep -q "write-stream" "$TMP_DIR/audit.txt"
-grep -q "job:default" "$TMP_DIR/audit.txt"
+grep -q "exec:default" "$TMP_DIR/audit.txt"
 
 echo "v0.6.7/v0.6.8/v0.6.12 runtime validation passed"

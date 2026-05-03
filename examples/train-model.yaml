@@ -8,7 +8,7 @@ steps:
 
   - id: train
     node: gpu-node
-    action: job.run
+    action: exec.run
     command: python train.py
 
   - id: save-model

@@ -74,7 +74,7 @@ struct CapabilityGrant {
     fs_read: bool,
     fs_write: bool,
     fs_delete: bool,
-    job_run: bool,
+    exec_run: bool,
     service_check: bool,
 }
 
@@ -84,7 +84,7 @@ impl CapabilityGrant {
             fs_read: true,
             fs_write: true,
             fs_delete: false,
-            job_run: true,
+            exec_run: true,
             service_check: true,
         }
     }
@@ -94,7 +94,7 @@ impl CapabilityGrant {
             fs_read: true,
             fs_write: true,
             fs_delete: true,
-            job_run: true,
+            exec_run: true,
             service_check: true,
         }
     }
@@ -396,7 +396,7 @@ fn prompt_capability_grants(prompt: &mut impl Prompt) -> anyhow::Result<Capabili
         fs_read: prompt.confirm("Allow filesystem read", true)?,
         fs_write: prompt.confirm("Allow filesystem write", true)?,
         fs_delete: prompt.confirm("Allow filesystem delete/rename", false)?,
-        job_run: prompt.confirm("Allow job run", true)?,
+        exec_run: prompt.confirm("Allow exec run", true)?,
         service_check: prompt.confirm("Allow service checks", true)?,
     })
 }
@@ -415,8 +415,8 @@ fn build_policy(
 }
 
 fn render_policy_yaml(subject: &str, grant: &CapabilityGrant, service_port: u16) -> String {
-    let default_timeout_secs = if grant.job_run { 30 } else { 1 };
-    let max_timeout_secs = if grant.job_run { 300 } else { 1 };
+    let default_timeout_secs = if grant.exec_run { 30 } else { 1 };
+    let max_timeout_secs = if grant.exec_run { 300 } else { 1 };
     let services = render_services(grant, service_port);
     format!(
         r#"subject: {subject}
@@ -430,7 +430,7 @@ fs:
         write: {fs_write}
         delete: {fs_delete}
 
-job:
+exec:
   allowed_cwds:
     - /
   default_timeout_secs: {default_timeout_secs}
@@ -569,7 +569,7 @@ mod tests {
                 fs_read: true,
                 fs_write: false,
                 fs_delete: true,
-                job_run: true,
+                exec_run: true,
                 service_check: false,
             },
             17789,

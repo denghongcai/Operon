@@ -14,7 +14,7 @@ export enum CapabilityKind {
   CAPABILITY_KIND_UNSPECIFIED = 0,
   CAPABILITY_KIND_FS = 1,
   CAPABILITY_KIND_PROCESS = 2,
-  CAPABILITY_KIND_JOB = 3,
+  CAPABILITY_KIND_EXEC = 3,
   CAPABILITY_KIND_DEVICE_INFO = 4,
   CAPABILITY_KIND_SERVICE = 5,
   UNRECOGNIZED = -1,
@@ -32,8 +32,8 @@ export function capabilityKindFromJSON(object: any): CapabilityKind {
     case "CAPABILITY_KIND_PROCESS":
       return CapabilityKind.CAPABILITY_KIND_PROCESS;
     case 3:
-    case "CAPABILITY_KIND_JOB":
-      return CapabilityKind.CAPABILITY_KIND_JOB;
+    case "CAPABILITY_KIND_EXEC":
+      return CapabilityKind.CAPABILITY_KIND_EXEC;
     case 4:
     case "CAPABILITY_KIND_DEVICE_INFO":
       return CapabilityKind.CAPABILITY_KIND_DEVICE_INFO;
@@ -55,8 +55,8 @@ export function capabilityKindToJSON(object: CapabilityKind): string {
       return "CAPABILITY_KIND_FS";
     case CapabilityKind.CAPABILITY_KIND_PROCESS:
       return "CAPABILITY_KIND_PROCESS";
-    case CapabilityKind.CAPABILITY_KIND_JOB:
-      return "CAPABILITY_KIND_JOB";
+    case CapabilityKind.CAPABILITY_KIND_EXEC:
+      return "CAPABILITY_KIND_EXEC";
     case CapabilityKind.CAPABILITY_KIND_DEVICE_INFO:
       return "CAPABILITY_KIND_DEVICE_INFO";
     case CapabilityKind.CAPABILITY_KIND_SERVICE:
@@ -67,58 +67,58 @@ export function capabilityKindToJSON(object: CapabilityKind): string {
   }
 }
 
-export enum JobStatus {
-  JOB_STATUS_UNSPECIFIED = 0,
-  JOB_STATUS_RUNNING = 1,
-  JOB_STATUS_SUCCEEDED = 2,
-  JOB_STATUS_FAILED = 3,
-  JOB_STATUS_CANCELLED = 4,
-  JOB_STATUS_TIMED_OUT = 5,
+export enum ExecStatus {
+  EXEC_STATUS_UNSPECIFIED = 0,
+  EXEC_STATUS_RUNNING = 1,
+  EXEC_STATUS_SUCCEEDED = 2,
+  EXEC_STATUS_FAILED = 3,
+  EXEC_STATUS_CANCELLED = 4,
+  EXEC_STATUS_TIMED_OUT = 5,
   UNRECOGNIZED = -1,
 }
 
-export function jobStatusFromJSON(object: any): JobStatus {
+export function execStatusFromJSON(object: any): ExecStatus {
   switch (object) {
     case 0:
-    case "JOB_STATUS_UNSPECIFIED":
-      return JobStatus.JOB_STATUS_UNSPECIFIED;
+    case "EXEC_STATUS_UNSPECIFIED":
+      return ExecStatus.EXEC_STATUS_UNSPECIFIED;
     case 1:
-    case "JOB_STATUS_RUNNING":
-      return JobStatus.JOB_STATUS_RUNNING;
+    case "EXEC_STATUS_RUNNING":
+      return ExecStatus.EXEC_STATUS_RUNNING;
     case 2:
-    case "JOB_STATUS_SUCCEEDED":
-      return JobStatus.JOB_STATUS_SUCCEEDED;
+    case "EXEC_STATUS_SUCCEEDED":
+      return ExecStatus.EXEC_STATUS_SUCCEEDED;
     case 3:
-    case "JOB_STATUS_FAILED":
-      return JobStatus.JOB_STATUS_FAILED;
+    case "EXEC_STATUS_FAILED":
+      return ExecStatus.EXEC_STATUS_FAILED;
     case 4:
-    case "JOB_STATUS_CANCELLED":
-      return JobStatus.JOB_STATUS_CANCELLED;
+    case "EXEC_STATUS_CANCELLED":
+      return ExecStatus.EXEC_STATUS_CANCELLED;
     case 5:
-    case "JOB_STATUS_TIMED_OUT":
-      return JobStatus.JOB_STATUS_TIMED_OUT;
+    case "EXEC_STATUS_TIMED_OUT":
+      return ExecStatus.EXEC_STATUS_TIMED_OUT;
     case -1:
     case "UNRECOGNIZED":
     default:
-      return JobStatus.UNRECOGNIZED;
+      return ExecStatus.UNRECOGNIZED;
   }
 }
 
-export function jobStatusToJSON(object: JobStatus): string {
+export function execStatusToJSON(object: ExecStatus): string {
   switch (object) {
-    case JobStatus.JOB_STATUS_UNSPECIFIED:
-      return "JOB_STATUS_UNSPECIFIED";
-    case JobStatus.JOB_STATUS_RUNNING:
-      return "JOB_STATUS_RUNNING";
-    case JobStatus.JOB_STATUS_SUCCEEDED:
-      return "JOB_STATUS_SUCCEEDED";
-    case JobStatus.JOB_STATUS_FAILED:
-      return "JOB_STATUS_FAILED";
-    case JobStatus.JOB_STATUS_CANCELLED:
-      return "JOB_STATUS_CANCELLED";
-    case JobStatus.JOB_STATUS_TIMED_OUT:
-      return "JOB_STATUS_TIMED_OUT";
-    case JobStatus.UNRECOGNIZED:
+    case ExecStatus.EXEC_STATUS_UNSPECIFIED:
+      return "EXEC_STATUS_UNSPECIFIED";
+    case ExecStatus.EXEC_STATUS_RUNNING:
+      return "EXEC_STATUS_RUNNING";
+    case ExecStatus.EXEC_STATUS_SUCCEEDED:
+      return "EXEC_STATUS_SUCCEEDED";
+    case ExecStatus.EXEC_STATUS_FAILED:
+      return "EXEC_STATUS_FAILED";
+    case ExecStatus.EXEC_STATUS_CANCELLED:
+      return "EXEC_STATUS_CANCELLED";
+    case ExecStatus.EXEC_STATUS_TIMED_OUT:
+      return "EXEC_STATUS_TIMED_OUT";
+    case ExecStatus.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
   }
@@ -174,7 +174,7 @@ export interface ListCapabilitiesRequest {
   pageToken: string;
 }
 
-export interface ListJobsRequest {
+export interface ListExecsRequest {
   pageSize: number;
   pageToken: string;
 }
@@ -324,7 +324,7 @@ export interface FsCopy {
   bytesCopied: string;
 }
 
-export interface JobRunRequest {
+export interface ExecRunRequest {
   command: string;
   cwd: string;
   timeoutSecs?: string | undefined;
@@ -332,59 +332,59 @@ export interface JobRunRequest {
   argv: string[];
 }
 
-export interface JobIdRequest {
-  jobId: string;
+export interface ExecIdRequest {
+  execId: string;
 }
 
-export interface JobCancelRequest {
-  jobId: string;
+export interface ExecCancelRequest {
+  execId: string;
 }
 
-export interface JobLog {
+export interface ExecLog {
   stream: string;
   data: Uint8Array;
   sequence: string;
 }
 
-export interface JobRecord {
+export interface ExecRecord {
   id: string;
   nodeId: string;
   command: string;
   cwd: string;
-  status: JobStatus;
+  status: ExecStatus;
   exitCode?: number | undefined;
   logCount: string;
   logsTruncated: boolean;
 }
 
-export interface JobList {
-  jobs: JobRecord[];
+export interface ExecList {
+  execs: ExecRecord[];
   nextPageToken: string;
 }
 
-export interface JobLogList {
-  jobId: string;
-  logs: JobLog[];
+export interface ExecLogList {
+  execId: string;
+  logs: ExecLog[];
   truncated: boolean;
   droppedLogCount: string;
 }
 
-export interface JobLogSnapshot {
-  jobId: string;
-  logs: JobLog[];
+export interface ExecLogSnapshot {
+  execId: string;
+  logs: ExecLog[];
   truncated: boolean;
   droppedLogCount: string;
   nextSequence: string;
 }
 
-export interface JobLogEntry {
-  jobId: string;
-  log: JobLog | undefined;
+export interface ExecLogEntry {
+  execId: string;
+  log: ExecLog | undefined;
 }
 
-export interface JobLogComplete {
-  jobId: string;
-  status: JobStatus;
+export interface ExecLogComplete {
+  execId: string;
+  status: ExecStatus;
   exitCode?: number | undefined;
   logCount: string;
   logsTruncated: boolean;
@@ -392,36 +392,36 @@ export interface JobLogComplete {
   droppedLogCount: string;
 }
 
-export interface JobLogStreamEvent {
-  snapshot?: JobLogSnapshot | undefined;
-  entry?: JobLogEntry | undefined;
-  complete?: JobLogComplete | undefined;
+export interface ExecLogStreamEvent {
+  snapshot?: ExecLogSnapshot | undefined;
+  entry?: ExecLogEntry | undefined;
+  complete?: ExecLogComplete | undefined;
 }
 
-export interface JobEvent {
-  jobId: string;
-  status: JobStatus;
+export interface ExecEvent {
+  execId: string;
+  status: ExecStatus;
   exitCode?: number | undefined;
   logCount: string;
   logsTruncated: boolean;
 }
 
-export interface JobStdinRequest {
-  target?: JobStdinTarget | undefined;
+export interface ExecStdinRequest {
+  target?: ExecStdinTarget | undefined;
   chunk?: FileChunk | undefined;
 }
 
-export interface JobStdinTarget {
-  jobId: string;
+export interface ExecStdinTarget {
+  execId: string;
 }
 
-export interface JobStdin {
-  jobId: string;
+export interface ExecStdin {
+  execId: string;
   bytesWritten: string;
 }
 
-export interface JobStdinClose {
-  jobId: string;
+export interface ExecStdinClose {
+  execId: string;
   closed: boolean;
 }
 
@@ -706,12 +706,12 @@ export const ListCapabilitiesRequest: MessageFns<ListCapabilitiesRequest> = {
   },
 };
 
-function createBaseListJobsRequest(): ListJobsRequest {
+function createBaseListExecsRequest(): ListExecsRequest {
   return { pageSize: 0, pageToken: "" };
 }
 
-export const ListJobsRequest: MessageFns<ListJobsRequest> = {
-  encode(message: ListJobsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const ListExecsRequest: MessageFns<ListExecsRequest> = {
+  encode(message: ListExecsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.pageSize !== 0) {
       writer.uint32(8).uint32(message.pageSize);
     }
@@ -721,10 +721,10 @@ export const ListJobsRequest: MessageFns<ListJobsRequest> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): ListJobsRequest {
+  decode(input: BinaryReader | Uint8Array, length?: number): ListExecsRequest {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseListJobsRequest();
+    const message = createBaseListExecsRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -753,7 +753,7 @@ export const ListJobsRequest: MessageFns<ListJobsRequest> = {
     return message;
   },
 
-  fromJSON(object: any): ListJobsRequest {
+  fromJSON(object: any): ListExecsRequest {
     return {
       pageSize: isSet(object.pageSize)
         ? globalThis.Number(object.pageSize)
@@ -768,7 +768,7 @@ export const ListJobsRequest: MessageFns<ListJobsRequest> = {
     };
   },
 
-  toJSON(message: ListJobsRequest): unknown {
+  toJSON(message: ListExecsRequest): unknown {
     const obj: any = {};
     if (message.pageSize !== 0) {
       obj.pageSize = Math.round(message.pageSize);
@@ -779,11 +779,11 @@ export const ListJobsRequest: MessageFns<ListJobsRequest> = {
     return obj;
   },
 
-  create(base?: DeepPartial<ListJobsRequest>): ListJobsRequest {
-    return ListJobsRequest.fromPartial(base ?? {});
+  create(base?: DeepPartial<ListExecsRequest>): ListExecsRequest {
+    return ListExecsRequest.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<ListJobsRequest>): ListJobsRequest {
-    const message = createBaseListJobsRequest();
+  fromPartial(object: DeepPartial<ListExecsRequest>): ListExecsRequest {
+    const message = createBaseListExecsRequest();
     message.pageSize = object.pageSize ?? 0;
     message.pageToken = object.pageToken ?? "";
     return message;
@@ -3122,12 +3122,12 @@ export const FsCopy: MessageFns<FsCopy> = {
   },
 };
 
-function createBaseJobRunRequest(): JobRunRequest {
+function createBaseExecRunRequest(): ExecRunRequest {
   return { command: "", cwd: "", timeoutSecs: undefined, secrets: [], argv: [] };
 }
 
-export const JobRunRequest: MessageFns<JobRunRequest> = {
-  encode(message: JobRunRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const ExecRunRequest: MessageFns<ExecRunRequest> = {
+  encode(message: ExecRunRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.command !== "") {
       writer.uint32(10).string(message.command);
     }
@@ -3146,10 +3146,10 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobRunRequest {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecRunRequest {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobRunRequest();
+    const message = createBaseExecRunRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3202,7 +3202,7 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     return message;
   },
 
-  fromJSON(object: any): JobRunRequest {
+  fromJSON(object: any): ExecRunRequest {
     return {
       command: isSet(object.command) ? globalThis.String(object.command) : "",
       cwd: isSet(object.cwd) ? globalThis.String(object.cwd) : "",
@@ -3216,7 +3216,7 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     };
   },
 
-  toJSON(message: JobRunRequest): unknown {
+  toJSON(message: ExecRunRequest): unknown {
     const obj: any = {};
     if (message.command !== "") {
       obj.command = message.command;
@@ -3236,11 +3236,11 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobRunRequest>): JobRunRequest {
-    return JobRunRequest.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecRunRequest>): ExecRunRequest {
+    return ExecRunRequest.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobRunRequest>): JobRunRequest {
-    const message = createBaseJobRunRequest();
+  fromPartial(object: DeepPartial<ExecRunRequest>): ExecRunRequest {
+    const message = createBaseExecRunRequest();
     message.command = object.command ?? "";
     message.cwd = object.cwd ?? "";
     message.timeoutSecs = object.timeoutSecs ?? undefined;
@@ -3250,22 +3250,22 @@ export const JobRunRequest: MessageFns<JobRunRequest> = {
   },
 };
 
-function createBaseJobIdRequest(): JobIdRequest {
-  return { jobId: "" };
+function createBaseExecIdRequest(): ExecIdRequest {
+  return { execId: "" };
 }
 
-export const JobIdRequest: MessageFns<JobIdRequest> = {
-  encode(message: JobIdRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecIdRequest: MessageFns<ExecIdRequest> = {
+  encode(message: ExecIdRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobIdRequest {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecIdRequest {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobIdRequest();
+    const message = createBaseExecIdRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3274,7 +3274,7 @@ export const JobIdRequest: MessageFns<JobIdRequest> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
       }
@@ -3286,50 +3286,50 @@ export const JobIdRequest: MessageFns<JobIdRequest> = {
     return message;
   },
 
-  fromJSON(object: any): JobIdRequest {
+  fromJSON(object: any): ExecIdRequest {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
     };
   },
 
-  toJSON(message: JobIdRequest): unknown {
+  toJSON(message: ExecIdRequest): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     return obj;
   },
 
-  create(base?: DeepPartial<JobIdRequest>): JobIdRequest {
-    return JobIdRequest.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecIdRequest>): ExecIdRequest {
+    return ExecIdRequest.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobIdRequest>): JobIdRequest {
-    const message = createBaseJobIdRequest();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecIdRequest>): ExecIdRequest {
+    const message = createBaseExecIdRequest();
+    message.execId = object.execId ?? "";
     return message;
   },
 };
 
-function createBaseJobCancelRequest(): JobCancelRequest {
-  return { jobId: "" };
+function createBaseExecCancelRequest(): ExecCancelRequest {
+  return { execId: "" };
 }
 
-export const JobCancelRequest: MessageFns<JobCancelRequest> = {
-  encode(message: JobCancelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecCancelRequest: MessageFns<ExecCancelRequest> = {
+  encode(message: ExecCancelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobCancelRequest {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecCancelRequest {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobCancelRequest();
+    const message = createBaseExecCancelRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3338,7 +3338,7 @@ export const JobCancelRequest: MessageFns<JobCancelRequest> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
       }
@@ -3350,40 +3350,40 @@ export const JobCancelRequest: MessageFns<JobCancelRequest> = {
     return message;
   },
 
-  fromJSON(object: any): JobCancelRequest {
+  fromJSON(object: any): ExecCancelRequest {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
     };
   },
 
-  toJSON(message: JobCancelRequest): unknown {
+  toJSON(message: ExecCancelRequest): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     return obj;
   },
 
-  create(base?: DeepPartial<JobCancelRequest>): JobCancelRequest {
-    return JobCancelRequest.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecCancelRequest>): ExecCancelRequest {
+    return ExecCancelRequest.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobCancelRequest>): JobCancelRequest {
-    const message = createBaseJobCancelRequest();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecCancelRequest>): ExecCancelRequest {
+    const message = createBaseExecCancelRequest();
+    message.execId = object.execId ?? "";
     return message;
   },
 };
 
-function createBaseJobLog(): JobLog {
+function createBaseExecLog(): ExecLog {
   return { stream: "", data: new Uint8Array(0), sequence: "0" };
 }
 
-export const JobLog: MessageFns<JobLog> = {
-  encode(message: JobLog, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const ExecLog: MessageFns<ExecLog> = {
+  encode(message: ExecLog, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.stream !== "") {
       writer.uint32(10).string(message.stream);
     }
@@ -3396,10 +3396,10 @@ export const JobLog: MessageFns<JobLog> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobLog {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecLog {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobLog();
+    const message = createBaseExecLog();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3436,7 +3436,7 @@ export const JobLog: MessageFns<JobLog> = {
     return message;
   },
 
-  fromJSON(object: any): JobLog {
+  fromJSON(object: any): ExecLog {
     return {
       stream: isSet(object.stream) ? globalThis.String(object.stream) : "",
       data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
@@ -3444,7 +3444,7 @@ export const JobLog: MessageFns<JobLog> = {
     };
   },
 
-  toJSON(message: JobLog): unknown {
+  toJSON(message: ExecLog): unknown {
     const obj: any = {};
     if (message.stream !== "") {
       obj.stream = message.stream;
@@ -3458,11 +3458,11 @@ export const JobLog: MessageFns<JobLog> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobLog>): JobLog {
-    return JobLog.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecLog>): ExecLog {
+    return ExecLog.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobLog>): JobLog {
-    const message = createBaseJobLog();
+  fromPartial(object: DeepPartial<ExecLog>): ExecLog {
+    const message = createBaseExecLog();
     message.stream = object.stream ?? "";
     message.data = object.data ?? new Uint8Array(0);
     message.sequence = object.sequence ?? "0";
@@ -3470,7 +3470,7 @@ export const JobLog: MessageFns<JobLog> = {
   },
 };
 
-function createBaseJobRecord(): JobRecord {
+function createBaseExecRecord(): ExecRecord {
   return {
     id: "",
     nodeId: "",
@@ -3483,8 +3483,8 @@ function createBaseJobRecord(): JobRecord {
   };
 }
 
-export const JobRecord: MessageFns<JobRecord> = {
-  encode(message: JobRecord, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const ExecRecord: MessageFns<ExecRecord> = {
+  encode(message: ExecRecord, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.id !== "") {
       writer.uint32(10).string(message.id);
     }
@@ -3512,10 +3512,10 @@ export const JobRecord: MessageFns<JobRecord> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobRecord {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecRecord {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobRecord();
+    const message = createBaseExecRecord();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3592,7 +3592,7 @@ export const JobRecord: MessageFns<JobRecord> = {
     return message;
   },
 
-  fromJSON(object: any): JobRecord {
+  fromJSON(object: any): ExecRecord {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
       nodeId: isSet(object.nodeId)
@@ -3602,7 +3602,7 @@ export const JobRecord: MessageFns<JobRecord> = {
         : "",
       command: isSet(object.command) ? globalThis.String(object.command) : "",
       cwd: isSet(object.cwd) ? globalThis.String(object.cwd) : "",
-      status: isSet(object.status) ? jobStatusFromJSON(object.status) : 0,
+      status: isSet(object.status) ? execStatusFromJSON(object.status) : 0,
       exitCode: isSet(object.exitCode)
         ? globalThis.Number(object.exitCode)
         : isSet(object.exit_code)
@@ -3621,7 +3621,7 @@ export const JobRecord: MessageFns<JobRecord> = {
     };
   },
 
-  toJSON(message: JobRecord): unknown {
+  toJSON(message: ExecRecord): unknown {
     const obj: any = {};
     if (message.id !== "") {
       obj.id = message.id;
@@ -3636,7 +3636,7 @@ export const JobRecord: MessageFns<JobRecord> = {
       obj.cwd = message.cwd;
     }
     if (message.status !== 0) {
-      obj.status = jobStatusToJSON(message.status);
+      obj.status = execStatusToJSON(message.status);
     }
     if (message.exitCode !== undefined) {
       obj.exitCode = Math.round(message.exitCode);
@@ -3650,11 +3650,11 @@ export const JobRecord: MessageFns<JobRecord> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobRecord>): JobRecord {
-    return JobRecord.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecRecord>): ExecRecord {
+    return ExecRecord.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobRecord>): JobRecord {
-    const message = createBaseJobRecord();
+  fromPartial(object: DeepPartial<ExecRecord>): ExecRecord {
+    const message = createBaseExecRecord();
     message.id = object.id ?? "";
     message.nodeId = object.nodeId ?? "";
     message.command = object.command ?? "";
@@ -3667,14 +3667,14 @@ export const JobRecord: MessageFns<JobRecord> = {
   },
 };
 
-function createBaseJobList(): JobList {
-  return { jobs: [], nextPageToken: "" };
+function createBaseExecList(): ExecList {
+  return { execs: [], nextPageToken: "" };
 }
 
-export const JobList: MessageFns<JobList> = {
-  encode(message: JobList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.jobs) {
-      JobRecord.encode(v!, writer.uint32(10).fork()).join();
+export const ExecList: MessageFns<ExecList> = {
+  encode(message: ExecList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.execs) {
+      ExecRecord.encode(v!, writer.uint32(10).fork()).join();
     }
     if (message.nextPageToken !== "") {
       writer.uint32(18).string(message.nextPageToken);
@@ -3682,10 +3682,10 @@ export const JobList: MessageFns<JobList> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobList {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecList {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobList();
+    const message = createBaseExecList();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3694,7 +3694,7 @@ export const JobList: MessageFns<JobList> = {
             break;
           }
 
-          message.jobs.push(JobRecord.decode(reader, reader.uint32()));
+          message.execs.push(ExecRecord.decode(reader, reader.uint32()));
           continue;
         }
         case 2: {
@@ -3714,9 +3714,9 @@ export const JobList: MessageFns<JobList> = {
     return message;
   },
 
-  fromJSON(object: any): JobList {
+  fromJSON(object: any): ExecList {
     return {
-      jobs: globalThis.Array.isArray(object?.jobs) ? object.jobs.map((e: any) => JobRecord.fromJSON(e)) : [],
+      execs: globalThis.Array.isArray(object?.execs) ? object.execs.map((e: any) => ExecRecord.fromJSON(e)) : [],
       nextPageToken: isSet(object.nextPageToken)
         ? globalThis.String(object.nextPageToken)
         : isSet(object.next_page_token)
@@ -3725,10 +3725,10 @@ export const JobList: MessageFns<JobList> = {
     };
   },
 
-  toJSON(message: JobList): unknown {
+  toJSON(message: ExecList): unknown {
     const obj: any = {};
-    if (message.jobs?.length) {
-      obj.jobs = message.jobs.map((e) => JobRecord.toJSON(e));
+    if (message.execs?.length) {
+      obj.execs = message.execs.map((e) => ExecRecord.toJSON(e));
     }
     if (message.nextPageToken !== "") {
       obj.nextPageToken = message.nextPageToken;
@@ -3736,28 +3736,28 @@ export const JobList: MessageFns<JobList> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobList>): JobList {
-    return JobList.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecList>): ExecList {
+    return ExecList.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobList>): JobList {
-    const message = createBaseJobList();
-    message.jobs = object.jobs?.map((e) => JobRecord.fromPartial(e)) || [];
+  fromPartial(object: DeepPartial<ExecList>): ExecList {
+    const message = createBaseExecList();
+    message.execs = object.execs?.map((e) => ExecRecord.fromPartial(e)) || [];
     message.nextPageToken = object.nextPageToken ?? "";
     return message;
   },
 };
 
-function createBaseJobLogList(): JobLogList {
-  return { jobId: "", logs: [], truncated: false, droppedLogCount: "0" };
+function createBaseExecLogList(): ExecLogList {
+  return { execId: "", logs: [], truncated: false, droppedLogCount: "0" };
 }
 
-export const JobLogList: MessageFns<JobLogList> = {
-  encode(message: JobLogList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecLogList: MessageFns<ExecLogList> = {
+  encode(message: ExecLogList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     for (const v of message.logs) {
-      JobLog.encode(v!, writer.uint32(18).fork()).join();
+      ExecLog.encode(v!, writer.uint32(18).fork()).join();
     }
     if (message.truncated !== false) {
       writer.uint32(24).bool(message.truncated);
@@ -3768,10 +3768,10 @@ export const JobLogList: MessageFns<JobLogList> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobLogList {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecLogList {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobLogList();
+    const message = createBaseExecLogList();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3780,7 +3780,7 @@ export const JobLogList: MessageFns<JobLogList> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -3788,7 +3788,7 @@ export const JobLogList: MessageFns<JobLogList> = {
             break;
           }
 
-          message.logs.push(JobLog.decode(reader, reader.uint32()));
+          message.logs.push(ExecLog.decode(reader, reader.uint32()));
           continue;
         }
         case 3: {
@@ -3816,14 +3816,14 @@ export const JobLogList: MessageFns<JobLogList> = {
     return message;
   },
 
-  fromJSON(object: any): JobLogList {
+  fromJSON(object: any): ExecLogList {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
-      logs: globalThis.Array.isArray(object?.logs) ? object.logs.map((e: any) => JobLog.fromJSON(e)) : [],
+      logs: globalThis.Array.isArray(object?.logs) ? object.logs.map((e: any) => ExecLog.fromJSON(e)) : [],
       truncated: isSet(object.truncated) ? globalThis.Boolean(object.truncated) : false,
       droppedLogCount: isSet(object.droppedLogCount)
         ? globalThis.String(object.droppedLogCount)
@@ -3833,13 +3833,13 @@ export const JobLogList: MessageFns<JobLogList> = {
     };
   },
 
-  toJSON(message: JobLogList): unknown {
+  toJSON(message: ExecLogList): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.logs?.length) {
-      obj.logs = message.logs.map((e) => JobLog.toJSON(e));
+      obj.logs = message.logs.map((e) => ExecLog.toJSON(e));
     }
     if (message.truncated !== false) {
       obj.truncated = message.truncated;
@@ -3850,30 +3850,30 @@ export const JobLogList: MessageFns<JobLogList> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobLogList>): JobLogList {
-    return JobLogList.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecLogList>): ExecLogList {
+    return ExecLogList.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobLogList>): JobLogList {
-    const message = createBaseJobLogList();
-    message.jobId = object.jobId ?? "";
-    message.logs = object.logs?.map((e) => JobLog.fromPartial(e)) || [];
+  fromPartial(object: DeepPartial<ExecLogList>): ExecLogList {
+    const message = createBaseExecLogList();
+    message.execId = object.execId ?? "";
+    message.logs = object.logs?.map((e) => ExecLog.fromPartial(e)) || [];
     message.truncated = object.truncated ?? false;
     message.droppedLogCount = object.droppedLogCount ?? "0";
     return message;
   },
 };
 
-function createBaseJobLogSnapshot(): JobLogSnapshot {
-  return { jobId: "", logs: [], truncated: false, droppedLogCount: "0", nextSequence: "0" };
+function createBaseExecLogSnapshot(): ExecLogSnapshot {
+  return { execId: "", logs: [], truncated: false, droppedLogCount: "0", nextSequence: "0" };
 }
 
-export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
-  encode(message: JobLogSnapshot, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecLogSnapshot: MessageFns<ExecLogSnapshot> = {
+  encode(message: ExecLogSnapshot, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     for (const v of message.logs) {
-      JobLog.encode(v!, writer.uint32(18).fork()).join();
+      ExecLog.encode(v!, writer.uint32(18).fork()).join();
     }
     if (message.truncated !== false) {
       writer.uint32(24).bool(message.truncated);
@@ -3887,10 +3887,10 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobLogSnapshot {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecLogSnapshot {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobLogSnapshot();
+    const message = createBaseExecLogSnapshot();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -3899,7 +3899,7 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -3907,7 +3907,7 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
             break;
           }
 
-          message.logs.push(JobLog.decode(reader, reader.uint32()));
+          message.logs.push(ExecLog.decode(reader, reader.uint32()));
           continue;
         }
         case 3: {
@@ -3943,14 +3943,14 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
     return message;
   },
 
-  fromJSON(object: any): JobLogSnapshot {
+  fromJSON(object: any): ExecLogSnapshot {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
-      logs: globalThis.Array.isArray(object?.logs) ? object.logs.map((e: any) => JobLog.fromJSON(e)) : [],
+      logs: globalThis.Array.isArray(object?.logs) ? object.logs.map((e: any) => ExecLog.fromJSON(e)) : [],
       truncated: isSet(object.truncated) ? globalThis.Boolean(object.truncated) : false,
       droppedLogCount: isSet(object.droppedLogCount)
         ? globalThis.String(object.droppedLogCount)
@@ -3965,13 +3965,13 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
     };
   },
 
-  toJSON(message: JobLogSnapshot): unknown {
+  toJSON(message: ExecLogSnapshot): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.logs?.length) {
-      obj.logs = message.logs.map((e) => JobLog.toJSON(e));
+      obj.logs = message.logs.map((e) => ExecLog.toJSON(e));
     }
     if (message.truncated !== false) {
       obj.truncated = message.truncated;
@@ -3985,13 +3985,13 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobLogSnapshot>): JobLogSnapshot {
-    return JobLogSnapshot.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecLogSnapshot>): ExecLogSnapshot {
+    return ExecLogSnapshot.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobLogSnapshot>): JobLogSnapshot {
-    const message = createBaseJobLogSnapshot();
-    message.jobId = object.jobId ?? "";
-    message.logs = object.logs?.map((e) => JobLog.fromPartial(e)) || [];
+  fromPartial(object: DeepPartial<ExecLogSnapshot>): ExecLogSnapshot {
+    const message = createBaseExecLogSnapshot();
+    message.execId = object.execId ?? "";
+    message.logs = object.logs?.map((e) => ExecLog.fromPartial(e)) || [];
     message.truncated = object.truncated ?? false;
     message.droppedLogCount = object.droppedLogCount ?? "0";
     message.nextSequence = object.nextSequence ?? "0";
@@ -3999,25 +3999,25 @@ export const JobLogSnapshot: MessageFns<JobLogSnapshot> = {
   },
 };
 
-function createBaseJobLogEntry(): JobLogEntry {
-  return { jobId: "", log: undefined };
+function createBaseExecLogEntry(): ExecLogEntry {
+  return { execId: "", log: undefined };
 }
 
-export const JobLogEntry: MessageFns<JobLogEntry> = {
-  encode(message: JobLogEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecLogEntry: MessageFns<ExecLogEntry> = {
+  encode(message: ExecLogEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     if (message.log !== undefined) {
-      JobLog.encode(message.log, writer.uint32(18).fork()).join();
+      ExecLog.encode(message.log, writer.uint32(18).fork()).join();
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobLogEntry {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecLogEntry {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobLogEntry();
+    const message = createBaseExecLogEntry();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4026,7 +4026,7 @@ export const JobLogEntry: MessageFns<JobLogEntry> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -4034,7 +4034,7 @@ export const JobLogEntry: MessageFns<JobLogEntry> = {
             break;
           }
 
-          message.log = JobLog.decode(reader, reader.uint32());
+          message.log = ExecLog.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -4046,42 +4046,42 @@ export const JobLogEntry: MessageFns<JobLogEntry> = {
     return message;
   },
 
-  fromJSON(object: any): JobLogEntry {
+  fromJSON(object: any): ExecLogEntry {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
-      log: isSet(object.log) ? JobLog.fromJSON(object.log) : undefined,
+      log: isSet(object.log) ? ExecLog.fromJSON(object.log) : undefined,
     };
   },
 
-  toJSON(message: JobLogEntry): unknown {
+  toJSON(message: ExecLogEntry): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.log !== undefined) {
-      obj.log = JobLog.toJSON(message.log);
+      obj.log = ExecLog.toJSON(message.log);
     }
     return obj;
   },
 
-  create(base?: DeepPartial<JobLogEntry>): JobLogEntry {
-    return JobLogEntry.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecLogEntry>): ExecLogEntry {
+    return ExecLogEntry.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobLogEntry>): JobLogEntry {
-    const message = createBaseJobLogEntry();
-    message.jobId = object.jobId ?? "";
-    message.log = (object.log !== undefined && object.log !== null) ? JobLog.fromPartial(object.log) : undefined;
+  fromPartial(object: DeepPartial<ExecLogEntry>): ExecLogEntry {
+    const message = createBaseExecLogEntry();
+    message.execId = object.execId ?? "";
+    message.log = (object.log !== undefined && object.log !== null) ? ExecLog.fromPartial(object.log) : undefined;
     return message;
   },
 };
 
-function createBaseJobLogComplete(): JobLogComplete {
+function createBaseExecLogComplete(): ExecLogComplete {
   return {
-    jobId: "",
+    execId: "",
     status: 0,
     exitCode: undefined,
     logCount: "0",
@@ -4091,10 +4091,10 @@ function createBaseJobLogComplete(): JobLogComplete {
   };
 }
 
-export const JobLogComplete: MessageFns<JobLogComplete> = {
-  encode(message: JobLogComplete, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecLogComplete: MessageFns<ExecLogComplete> = {
+  encode(message: ExecLogComplete, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     if (message.status !== 0) {
       writer.uint32(16).int32(message.status);
@@ -4117,10 +4117,10 @@ export const JobLogComplete: MessageFns<JobLogComplete> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobLogComplete {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecLogComplete {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobLogComplete();
+    const message = createBaseExecLogComplete();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4129,7 +4129,7 @@ export const JobLogComplete: MessageFns<JobLogComplete> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -4189,14 +4189,14 @@ export const JobLogComplete: MessageFns<JobLogComplete> = {
     return message;
   },
 
-  fromJSON(object: any): JobLogComplete {
+  fromJSON(object: any): ExecLogComplete {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
-      status: isSet(object.status) ? jobStatusFromJSON(object.status) : 0,
+      status: isSet(object.status) ? execStatusFromJSON(object.status) : 0,
       exitCode: isSet(object.exitCode)
         ? globalThis.Number(object.exitCode)
         : isSet(object.exit_code)
@@ -4221,13 +4221,13 @@ export const JobLogComplete: MessageFns<JobLogComplete> = {
     };
   },
 
-  toJSON(message: JobLogComplete): unknown {
+  toJSON(message: ExecLogComplete): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.status !== 0) {
-      obj.status = jobStatusToJSON(message.status);
+      obj.status = execStatusToJSON(message.status);
     }
     if (message.exitCode !== undefined) {
       obj.exitCode = Math.round(message.exitCode);
@@ -4247,12 +4247,12 @@ export const JobLogComplete: MessageFns<JobLogComplete> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobLogComplete>): JobLogComplete {
-    return JobLogComplete.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecLogComplete>): ExecLogComplete {
+    return ExecLogComplete.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobLogComplete>): JobLogComplete {
-    const message = createBaseJobLogComplete();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecLogComplete>): ExecLogComplete {
+    const message = createBaseExecLogComplete();
+    message.execId = object.execId ?? "";
     message.status = object.status ?? 0;
     message.exitCode = object.exitCode ?? undefined;
     message.logCount = object.logCount ?? "0";
@@ -4263,28 +4263,28 @@ export const JobLogComplete: MessageFns<JobLogComplete> = {
   },
 };
 
-function createBaseJobLogStreamEvent(): JobLogStreamEvent {
+function createBaseExecLogStreamEvent(): ExecLogStreamEvent {
   return { snapshot: undefined, entry: undefined, complete: undefined };
 }
 
-export const JobLogStreamEvent: MessageFns<JobLogStreamEvent> = {
-  encode(message: JobLogStreamEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const ExecLogStreamEvent: MessageFns<ExecLogStreamEvent> = {
+  encode(message: ExecLogStreamEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.snapshot !== undefined) {
-      JobLogSnapshot.encode(message.snapshot, writer.uint32(10).fork()).join();
+      ExecLogSnapshot.encode(message.snapshot, writer.uint32(10).fork()).join();
     }
     if (message.entry !== undefined) {
-      JobLogEntry.encode(message.entry, writer.uint32(18).fork()).join();
+      ExecLogEntry.encode(message.entry, writer.uint32(18).fork()).join();
     }
     if (message.complete !== undefined) {
-      JobLogComplete.encode(message.complete, writer.uint32(26).fork()).join();
+      ExecLogComplete.encode(message.complete, writer.uint32(26).fork()).join();
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobLogStreamEvent {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecLogStreamEvent {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobLogStreamEvent();
+    const message = createBaseExecLogStreamEvent();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4293,7 +4293,7 @@ export const JobLogStreamEvent: MessageFns<JobLogStreamEvent> = {
             break;
           }
 
-          message.snapshot = JobLogSnapshot.decode(reader, reader.uint32());
+          message.snapshot = ExecLogSnapshot.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -4301,7 +4301,7 @@ export const JobLogStreamEvent: MessageFns<JobLogStreamEvent> = {
             break;
           }
 
-          message.entry = JobLogEntry.decode(reader, reader.uint32());
+          message.entry = ExecLogEntry.decode(reader, reader.uint32());
           continue;
         }
         case 3: {
@@ -4309,7 +4309,7 @@ export const JobLogStreamEvent: MessageFns<JobLogStreamEvent> = {
             break;
           }
 
-          message.complete = JobLogComplete.decode(reader, reader.uint32());
+          message.complete = ExecLogComplete.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -4321,54 +4321,54 @@ export const JobLogStreamEvent: MessageFns<JobLogStreamEvent> = {
     return message;
   },
 
-  fromJSON(object: any): JobLogStreamEvent {
+  fromJSON(object: any): ExecLogStreamEvent {
     return {
-      snapshot: isSet(object.snapshot) ? JobLogSnapshot.fromJSON(object.snapshot) : undefined,
-      entry: isSet(object.entry) ? JobLogEntry.fromJSON(object.entry) : undefined,
-      complete: isSet(object.complete) ? JobLogComplete.fromJSON(object.complete) : undefined,
+      snapshot: isSet(object.snapshot) ? ExecLogSnapshot.fromJSON(object.snapshot) : undefined,
+      entry: isSet(object.entry) ? ExecLogEntry.fromJSON(object.entry) : undefined,
+      complete: isSet(object.complete) ? ExecLogComplete.fromJSON(object.complete) : undefined,
     };
   },
 
-  toJSON(message: JobLogStreamEvent): unknown {
+  toJSON(message: ExecLogStreamEvent): unknown {
     const obj: any = {};
     if (message.snapshot !== undefined) {
-      obj.snapshot = JobLogSnapshot.toJSON(message.snapshot);
+      obj.snapshot = ExecLogSnapshot.toJSON(message.snapshot);
     }
     if (message.entry !== undefined) {
-      obj.entry = JobLogEntry.toJSON(message.entry);
+      obj.entry = ExecLogEntry.toJSON(message.entry);
     }
     if (message.complete !== undefined) {
-      obj.complete = JobLogComplete.toJSON(message.complete);
+      obj.complete = ExecLogComplete.toJSON(message.complete);
     }
     return obj;
   },
 
-  create(base?: DeepPartial<JobLogStreamEvent>): JobLogStreamEvent {
-    return JobLogStreamEvent.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecLogStreamEvent>): ExecLogStreamEvent {
+    return ExecLogStreamEvent.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobLogStreamEvent>): JobLogStreamEvent {
-    const message = createBaseJobLogStreamEvent();
+  fromPartial(object: DeepPartial<ExecLogStreamEvent>): ExecLogStreamEvent {
+    const message = createBaseExecLogStreamEvent();
     message.snapshot = (object.snapshot !== undefined && object.snapshot !== null)
-      ? JobLogSnapshot.fromPartial(object.snapshot)
+      ? ExecLogSnapshot.fromPartial(object.snapshot)
       : undefined;
     message.entry = (object.entry !== undefined && object.entry !== null)
-      ? JobLogEntry.fromPartial(object.entry)
+      ? ExecLogEntry.fromPartial(object.entry)
       : undefined;
     message.complete = (object.complete !== undefined && object.complete !== null)
-      ? JobLogComplete.fromPartial(object.complete)
+      ? ExecLogComplete.fromPartial(object.complete)
       : undefined;
     return message;
   },
 };
 
-function createBaseJobEvent(): JobEvent {
-  return { jobId: "", status: 0, exitCode: undefined, logCount: "0", logsTruncated: false };
+function createBaseExecEvent(): ExecEvent {
+  return { execId: "", status: 0, exitCode: undefined, logCount: "0", logsTruncated: false };
 }
 
-export const JobEvent: MessageFns<JobEvent> = {
-  encode(message: JobEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecEvent: MessageFns<ExecEvent> = {
+  encode(message: ExecEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     if (message.status !== 0) {
       writer.uint32(16).int32(message.status);
@@ -4385,10 +4385,10 @@ export const JobEvent: MessageFns<JobEvent> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobEvent {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecEvent {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobEvent();
+    const message = createBaseExecEvent();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4397,7 +4397,7 @@ export const JobEvent: MessageFns<JobEvent> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -4441,14 +4441,14 @@ export const JobEvent: MessageFns<JobEvent> = {
     return message;
   },
 
-  fromJSON(object: any): JobEvent {
+  fromJSON(object: any): ExecEvent {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
-      status: isSet(object.status) ? jobStatusFromJSON(object.status) : 0,
+      status: isSet(object.status) ? execStatusFromJSON(object.status) : 0,
       exitCode: isSet(object.exitCode)
         ? globalThis.Number(object.exitCode)
         : isSet(object.exit_code)
@@ -4467,13 +4467,13 @@ export const JobEvent: MessageFns<JobEvent> = {
     };
   },
 
-  toJSON(message: JobEvent): unknown {
+  toJSON(message: ExecEvent): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.status !== 0) {
-      obj.status = jobStatusToJSON(message.status);
+      obj.status = execStatusToJSON(message.status);
     }
     if (message.exitCode !== undefined) {
       obj.exitCode = Math.round(message.exitCode);
@@ -4487,12 +4487,12 @@ export const JobEvent: MessageFns<JobEvent> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobEvent>): JobEvent {
-    return JobEvent.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecEvent>): ExecEvent {
+    return ExecEvent.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobEvent>): JobEvent {
-    const message = createBaseJobEvent();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecEvent>): ExecEvent {
+    const message = createBaseExecEvent();
+    message.execId = object.execId ?? "";
     message.status = object.status ?? 0;
     message.exitCode = object.exitCode ?? undefined;
     message.logCount = object.logCount ?? "0";
@@ -4501,14 +4501,14 @@ export const JobEvent: MessageFns<JobEvent> = {
   },
 };
 
-function createBaseJobStdinRequest(): JobStdinRequest {
+function createBaseExecStdinRequest(): ExecStdinRequest {
   return { target: undefined, chunk: undefined };
 }
 
-export const JobStdinRequest: MessageFns<JobStdinRequest> = {
-  encode(message: JobStdinRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const ExecStdinRequest: MessageFns<ExecStdinRequest> = {
+  encode(message: ExecStdinRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.target !== undefined) {
-      JobStdinTarget.encode(message.target, writer.uint32(10).fork()).join();
+      ExecStdinTarget.encode(message.target, writer.uint32(10).fork()).join();
     }
     if (message.chunk !== undefined) {
       FileChunk.encode(message.chunk, writer.uint32(18).fork()).join();
@@ -4516,10 +4516,10 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobStdinRequest {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecStdinRequest {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobStdinRequest();
+    const message = createBaseExecStdinRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4528,7 +4528,7 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
             break;
           }
 
-          message.target = JobStdinTarget.decode(reader, reader.uint32());
+          message.target = ExecStdinTarget.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -4548,17 +4548,17 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
     return message;
   },
 
-  fromJSON(object: any): JobStdinRequest {
+  fromJSON(object: any): ExecStdinRequest {
     return {
-      target: isSet(object.target) ? JobStdinTarget.fromJSON(object.target) : undefined,
+      target: isSet(object.target) ? ExecStdinTarget.fromJSON(object.target) : undefined,
       chunk: isSet(object.chunk) ? FileChunk.fromJSON(object.chunk) : undefined,
     };
   },
 
-  toJSON(message: JobStdinRequest): unknown {
+  toJSON(message: ExecStdinRequest): unknown {
     const obj: any = {};
     if (message.target !== undefined) {
-      obj.target = JobStdinTarget.toJSON(message.target);
+      obj.target = ExecStdinTarget.toJSON(message.target);
     }
     if (message.chunk !== undefined) {
       obj.chunk = FileChunk.toJSON(message.chunk);
@@ -4566,13 +4566,13 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobStdinRequest>): JobStdinRequest {
-    return JobStdinRequest.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecStdinRequest>): ExecStdinRequest {
+    return ExecStdinRequest.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobStdinRequest>): JobStdinRequest {
-    const message = createBaseJobStdinRequest();
+  fromPartial(object: DeepPartial<ExecStdinRequest>): ExecStdinRequest {
+    const message = createBaseExecStdinRequest();
     message.target = (object.target !== undefined && object.target !== null)
-      ? JobStdinTarget.fromPartial(object.target)
+      ? ExecStdinTarget.fromPartial(object.target)
       : undefined;
     message.chunk = (object.chunk !== undefined && object.chunk !== null)
       ? FileChunk.fromPartial(object.chunk)
@@ -4581,22 +4581,22 @@ export const JobStdinRequest: MessageFns<JobStdinRequest> = {
   },
 };
 
-function createBaseJobStdinTarget(): JobStdinTarget {
-  return { jobId: "" };
+function createBaseExecStdinTarget(): ExecStdinTarget {
+  return { execId: "" };
 }
 
-export const JobStdinTarget: MessageFns<JobStdinTarget> = {
-  encode(message: JobStdinTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecStdinTarget: MessageFns<ExecStdinTarget> = {
+  encode(message: ExecStdinTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobStdinTarget {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecStdinTarget {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobStdinTarget();
+    const message = createBaseExecStdinTarget();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4605,7 +4605,7 @@ export const JobStdinTarget: MessageFns<JobStdinTarget> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
       }
@@ -4617,42 +4617,42 @@ export const JobStdinTarget: MessageFns<JobStdinTarget> = {
     return message;
   },
 
-  fromJSON(object: any): JobStdinTarget {
+  fromJSON(object: any): ExecStdinTarget {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
     };
   },
 
-  toJSON(message: JobStdinTarget): unknown {
+  toJSON(message: ExecStdinTarget): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     return obj;
   },
 
-  create(base?: DeepPartial<JobStdinTarget>): JobStdinTarget {
-    return JobStdinTarget.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecStdinTarget>): ExecStdinTarget {
+    return ExecStdinTarget.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobStdinTarget>): JobStdinTarget {
-    const message = createBaseJobStdinTarget();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecStdinTarget>): ExecStdinTarget {
+    const message = createBaseExecStdinTarget();
+    message.execId = object.execId ?? "";
     return message;
   },
 };
 
-function createBaseJobStdin(): JobStdin {
-  return { jobId: "", bytesWritten: "0" };
+function createBaseExecStdin(): ExecStdin {
+  return { execId: "", bytesWritten: "0" };
 }
 
-export const JobStdin: MessageFns<JobStdin> = {
-  encode(message: JobStdin, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecStdin: MessageFns<ExecStdin> = {
+  encode(message: ExecStdin, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     if (message.bytesWritten !== "0") {
       writer.uint32(16).uint64(message.bytesWritten);
@@ -4660,10 +4660,10 @@ export const JobStdin: MessageFns<JobStdin> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobStdin {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecStdin {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobStdin();
+    const message = createBaseExecStdin();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4672,7 +4672,7 @@ export const JobStdin: MessageFns<JobStdin> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -4692,12 +4692,12 @@ export const JobStdin: MessageFns<JobStdin> = {
     return message;
   },
 
-  fromJSON(object: any): JobStdin {
+  fromJSON(object: any): ExecStdin {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
       bytesWritten: isSet(object.bytesWritten)
         ? globalThis.String(object.bytesWritten)
@@ -4707,10 +4707,10 @@ export const JobStdin: MessageFns<JobStdin> = {
     };
   },
 
-  toJSON(message: JobStdin): unknown {
+  toJSON(message: ExecStdin): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.bytesWritten !== "0") {
       obj.bytesWritten = message.bytesWritten;
@@ -4718,25 +4718,25 @@ export const JobStdin: MessageFns<JobStdin> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobStdin>): JobStdin {
-    return JobStdin.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecStdin>): ExecStdin {
+    return ExecStdin.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobStdin>): JobStdin {
-    const message = createBaseJobStdin();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecStdin>): ExecStdin {
+    const message = createBaseExecStdin();
+    message.execId = object.execId ?? "";
     message.bytesWritten = object.bytesWritten ?? "0";
     return message;
   },
 };
 
-function createBaseJobStdinClose(): JobStdinClose {
-  return { jobId: "", closed: false };
+function createBaseExecStdinClose(): ExecStdinClose {
+  return { execId: "", closed: false };
 }
 
-export const JobStdinClose: MessageFns<JobStdinClose> = {
-  encode(message: JobStdinClose, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.jobId !== "") {
-      writer.uint32(10).string(message.jobId);
+export const ExecStdinClose: MessageFns<ExecStdinClose> = {
+  encode(message: ExecStdinClose, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
     }
     if (message.closed !== false) {
       writer.uint32(16).bool(message.closed);
@@ -4744,10 +4744,10 @@ export const JobStdinClose: MessageFns<JobStdinClose> = {
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): JobStdinClose {
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecStdinClose {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseJobStdinClose();
+    const message = createBaseExecStdinClose();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -4756,7 +4756,7 @@ export const JobStdinClose: MessageFns<JobStdinClose> = {
             break;
           }
 
-          message.jobId = reader.string();
+          message.execId = reader.string();
           continue;
         }
         case 2: {
@@ -4776,21 +4776,21 @@ export const JobStdinClose: MessageFns<JobStdinClose> = {
     return message;
   },
 
-  fromJSON(object: any): JobStdinClose {
+  fromJSON(object: any): ExecStdinClose {
     return {
-      jobId: isSet(object.jobId)
-        ? globalThis.String(object.jobId)
-        : isSet(object.job_id)
-        ? globalThis.String(object.job_id)
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
         : "",
       closed: isSet(object.closed) ? globalThis.Boolean(object.closed) : false,
     };
   },
 
-  toJSON(message: JobStdinClose): unknown {
+  toJSON(message: ExecStdinClose): unknown {
     const obj: any = {};
-    if (message.jobId !== "") {
-      obj.jobId = message.jobId;
+    if (message.execId !== "") {
+      obj.execId = message.execId;
     }
     if (message.closed !== false) {
       obj.closed = message.closed;
@@ -4798,12 +4798,12 @@ export const JobStdinClose: MessageFns<JobStdinClose> = {
     return obj;
   },
 
-  create(base?: DeepPartial<JobStdinClose>): JobStdinClose {
-    return JobStdinClose.fromPartial(base ?? {});
+  create(base?: DeepPartial<ExecStdinClose>): ExecStdinClose {
+    return ExecStdinClose.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<JobStdinClose>): JobStdinClose {
-    const message = createBaseJobStdinClose();
-    message.jobId = object.jobId ?? "";
+  fromPartial(object: DeepPartial<ExecStdinClose>): ExecStdinClose {
+    const message = createBaseExecStdinClose();
+    message.execId = object.execId ?? "";
     message.closed = object.closed ?? false;
     return message;
   },
@@ -6725,75 +6725,75 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
-    runJob: {
-      name: "RunJob",
-      requestType: JobRunRequest as typeof JobRunRequest,
+    runExec: {
+      name: "RunExec",
+      requestType: ExecRunRequest as typeof ExecRunRequest,
       requestStream: false,
-      responseType: JobRecord as typeof JobRecord,
+      responseType: ExecRecord as typeof ExecRecord,
       responseStream: false,
       options: {},
     },
-    getJob: {
-      name: "GetJob",
-      requestType: JobIdRequest as typeof JobIdRequest,
+    getExec: {
+      name: "GetExec",
+      requestType: ExecIdRequest as typeof ExecIdRequest,
       requestStream: false,
-      responseType: JobRecord as typeof JobRecord,
+      responseType: ExecRecord as typeof ExecRecord,
       responseStream: false,
       options: {},
     },
-    listJobs: {
-      name: "ListJobs",
-      requestType: ListJobsRequest as typeof ListJobsRequest,
+    listExecs: {
+      name: "ListExecs",
+      requestType: ListExecsRequest as typeof ListExecsRequest,
       requestStream: false,
-      responseType: JobList as typeof JobList,
+      responseType: ExecList as typeof ExecList,
       responseStream: false,
       options: {},
     },
-    watchJob: {
-      name: "WatchJob",
-      requestType: JobIdRequest as typeof JobIdRequest,
+    watchExec: {
+      name: "WatchExec",
+      requestType: ExecIdRequest as typeof ExecIdRequest,
       requestStream: false,
-      responseType: JobEvent as typeof JobEvent,
+      responseType: ExecEvent as typeof ExecEvent,
       responseStream: true,
       options: {},
     },
-    listJobLogs: {
-      name: "ListJobLogs",
-      requestType: JobIdRequest as typeof JobIdRequest,
+    listExecLogs: {
+      name: "ListExecLogs",
+      requestType: ExecIdRequest as typeof ExecIdRequest,
       requestStream: false,
-      responseType: JobLogList as typeof JobLogList,
+      responseType: ExecLogList as typeof ExecLogList,
       responseStream: false,
       options: {},
     },
-    streamJobLogs: {
-      name: "StreamJobLogs",
-      requestType: JobIdRequest as typeof JobIdRequest,
+    streamExecLogs: {
+      name: "StreamExecLogs",
+      requestType: ExecIdRequest as typeof ExecIdRequest,
       requestStream: false,
-      responseType: JobLogStreamEvent as typeof JobLogStreamEvent,
+      responseType: ExecLogStreamEvent as typeof ExecLogStreamEvent,
       responseStream: true,
       options: {},
     },
-    writeJobStdin: {
-      name: "WriteJobStdin",
-      requestType: JobStdinRequest as typeof JobStdinRequest,
+    writeExecStdin: {
+      name: "WriteExecStdin",
+      requestType: ExecStdinRequest as typeof ExecStdinRequest,
       requestStream: true,
-      responseType: JobStdin as typeof JobStdin,
+      responseType: ExecStdin as typeof ExecStdin,
       responseStream: false,
       options: {},
     },
-    closeJobStdin: {
-      name: "CloseJobStdin",
-      requestType: JobIdRequest as typeof JobIdRequest,
+    closeExecStdin: {
+      name: "CloseExecStdin",
+      requestType: ExecIdRequest as typeof ExecIdRequest,
       requestStream: false,
-      responseType: JobStdinClose as typeof JobStdinClose,
+      responseType: ExecStdinClose as typeof ExecStdinClose,
       responseStream: false,
       options: {},
     },
-    cancelJob: {
-      name: "CancelJob",
-      requestType: JobCancelRequest as typeof JobCancelRequest,
+    cancelExec: {
+      name: "CancelExec",
+      requestType: ExecCancelRequest as typeof ExecCancelRequest,
       requestStream: false,
-      responseType: JobRecord as typeof JobRecord,
+      responseType: ExecRecord as typeof ExecRecord,
       responseStream: false,
       options: {},
     },
@@ -6868,24 +6868,24 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
   deleteFs(request: FsPathRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsDelete>>;
   renameFs(request: FsRenameRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsRename>>;
   copyFs(request: FsCopyRequest, context: CallContext & CallContextExt): Promise<DeepPartial<FsCopy>>;
-  runJob(request: JobRunRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
-  getJob(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
-  listJobs(request: ListJobsRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobList>>;
-  watchJob(
-    request: JobIdRequest,
+  runExec(request: ExecRunRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecRecord>>;
+  getExec(request: ExecIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecRecord>>;
+  listExecs(request: ListExecsRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecList>>;
+  watchExec(
+    request: ExecIdRequest,
     context: CallContext & CallContextExt,
-  ): ServerStreamingMethodResult<DeepPartial<JobEvent>>;
-  listJobLogs(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobLogList>>;
-  streamJobLogs(
-    request: JobIdRequest,
+  ): ServerStreamingMethodResult<DeepPartial<ExecEvent>>;
+  listExecLogs(request: ExecIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecLogList>>;
+  streamExecLogs(
+    request: ExecIdRequest,
     context: CallContext & CallContextExt,
-  ): ServerStreamingMethodResult<DeepPartial<JobLogStreamEvent>>;
-  writeJobStdin(
-    request: AsyncIterable<JobStdinRequest>,
+  ): ServerStreamingMethodResult<DeepPartial<ExecLogStreamEvent>>;
+  writeExecStdin(
+    request: AsyncIterable<ExecStdinRequest>,
     context: CallContext & CallContextExt,
-  ): Promise<DeepPartial<JobStdin>>;
-  closeJobStdin(request: JobIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobStdinClose>>;
-  cancelJob(request: JobCancelRequest, context: CallContext & CallContextExt): Promise<DeepPartial<JobRecord>>;
+  ): Promise<DeepPartial<ExecStdin>>;
+  closeExecStdin(request: ExecIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecStdinClose>>;
+  cancelExec(request: ExecCancelRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecRecord>>;
   listServices(request: ListServicesRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ServiceList>>;
   checkService(request: ServiceIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ServiceCheck>>;
   openServiceTunnel(
@@ -6924,21 +6924,21 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
   deleteFs(request: DeepPartial<FsPathRequest>, options?: CallOptions & CallOptionsExt): Promise<FsDelete>;
   renameFs(request: DeepPartial<FsRenameRequest>, options?: CallOptions & CallOptionsExt): Promise<FsRename>;
   copyFs(request: DeepPartial<FsCopyRequest>, options?: CallOptions & CallOptionsExt): Promise<FsCopy>;
-  runJob(request: DeepPartial<JobRunRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
-  getJob(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
-  listJobs(request: DeepPartial<ListJobsRequest>, options?: CallOptions & CallOptionsExt): Promise<JobList>;
-  watchJob(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<JobEvent>;
-  listJobLogs(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobLogList>;
-  streamJobLogs(
-    request: DeepPartial<JobIdRequest>,
+  runExec(request: DeepPartial<ExecRunRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecRecord>;
+  getExec(request: DeepPartial<ExecIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecRecord>;
+  listExecs(request: DeepPartial<ListExecsRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecList>;
+  watchExec(request: DeepPartial<ExecIdRequest>, options?: CallOptions & CallOptionsExt): AsyncIterable<ExecEvent>;
+  listExecLogs(request: DeepPartial<ExecIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecLogList>;
+  streamExecLogs(
+    request: DeepPartial<ExecIdRequest>,
     options?: CallOptions & CallOptionsExt,
-  ): AsyncIterable<JobLogStreamEvent>;
-  writeJobStdin(
-    request: AsyncIterable<DeepPartial<JobStdinRequest>>,
+  ): AsyncIterable<ExecLogStreamEvent>;
+  writeExecStdin(
+    request: AsyncIterable<DeepPartial<ExecStdinRequest>>,
     options?: CallOptions & CallOptionsExt,
-  ): Promise<JobStdin>;
-  closeJobStdin(request: DeepPartial<JobIdRequest>, options?: CallOptions & CallOptionsExt): Promise<JobStdinClose>;
-  cancelJob(request: DeepPartial<JobCancelRequest>, options?: CallOptions & CallOptionsExt): Promise<JobRecord>;
+  ): Promise<ExecStdin>;
+  closeExecStdin(request: DeepPartial<ExecIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecStdinClose>;
+  cancelExec(request: DeepPartial<ExecCancelRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecRecord>;
   listServices(request: DeepPartial<ListServicesRequest>, options?: CallOptions & CallOptionsExt): Promise<ServiceList>;
   checkService(request: DeepPartial<ServiceIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ServiceCheck>;
   openServiceTunnel(

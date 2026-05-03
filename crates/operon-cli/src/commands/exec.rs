@@ -4,7 +4,7 @@ use std::{
 };
 
 use operon_core::{
-    JobList, JobLogList, JobRecord, JobRunRequest, JobStatus, JobStdin, JobStdinClose,
+    ExecList, ExecLogList, ExecRecord, ExecRunRequest, ExecStatus, ExecStdin, ExecStdinClose,
 };
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     target::load_endpoint,
 };
 
-pub(crate) struct JobRunInput {
+pub(crate) struct ExecRunInput {
     pub(crate) config_path: PathBuf,
     pub(crate) node_id: String,
     pub(crate) cwd: Option<String>,
@@ -25,16 +25,16 @@ pub(crate) struct JobRunInput {
     pub(crate) output: OutputMode,
 }
 
-pub(crate) async fn run(input: JobRunInput) -> anyhow::Result<()> {
+pub(crate) async fn run(input: ExecRunInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
-    let request = job_run_request_from_cli(
+    let request = exec_run_request_from_cli(
         input.command,
         input.argv,
         input.cwd,
         input.timeout_secs,
         input.secrets,
     );
-    let record: JobRecord = grpc::run_job(&endpoint, request).await?;
+    let record: ExecRecord = grpc::run_exec(&endpoint, request).await?;
     if input.detach {
         if input.output.json {
             print_json(&record)?;
@@ -47,7 +47,7 @@ pub(crate) async fn run(input: JobRunInput) -> anyhow::Result<()> {
     }
 
     if !input.detach {
-        let record = wait_for_job(&endpoint, &record.id).await?;
+        let record = wait_for_exec(&endpoint, &record.id).await?;
         if input.output.json {
             print_json(&record)?;
         } else if !input.output.quiet {
@@ -66,7 +66,7 @@ pub(crate) async fn list(
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let list: JobList = grpc::list_jobs(&endpoint).await?;
+    let list: ExecList = grpc::list_execs(&endpoint).await?;
     if output.json {
         print_json(&list)?;
         return Ok(());
@@ -74,7 +74,7 @@ pub(crate) async fn list(
     if output.quiet {
         return Ok(());
     }
-    for record in list.jobs {
+    for record in list.execs {
         print_status(&record);
     }
     Ok(())
@@ -83,10 +83,10 @@ pub(crate) async fn list(
 pub(crate) async fn status(
     config_path: PathBuf,
     node_id: &str,
-    job_id: &str,
+    exec_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
-    let record = load(config_path, node_id, job_id).await?;
+    let record = load(config_path, node_id, exec_id).await?;
     if output.json {
         print_json(&record)?;
         return Ok(());
@@ -101,28 +101,28 @@ pub(crate) async fn status(
 pub(crate) async fn logs(
     config_path: PathBuf,
     node_id: &str,
-    job_id: &str,
+    exec_id: &str,
     follow: bool,
     stream: bool,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     if output.json {
-        let logs: JobLogList = if stream || follow {
-            grpc::stream_job_logs(&endpoint, job_id).await?
+        let logs: ExecLogList = if stream || follow {
+            grpc::stream_exec_logs(&endpoint, exec_id).await?
         } else {
-            grpc::list_job_logs(&endpoint, job_id).await?
+            grpc::list_exec_logs(&endpoint, exec_id).await?
         };
         print_json(&logs)?;
         return Ok(());
     }
     if stream || follow {
         if output.quiet {
-            return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut io::sink()).await;
+            return grpc::stream_exec_logs_to_writer(&endpoint, exec_id, &mut io::sink()).await;
         }
-        return grpc::stream_job_logs_to_writer(&endpoint, job_id, &mut io::stdout()).await;
+        return grpc::stream_exec_logs_to_writer(&endpoint, exec_id, &mut io::stdout()).await;
     }
-    let logs = grpc::list_job_logs(&endpoint, job_id).await?;
+    let logs = grpc::list_exec_logs(&endpoint, exec_id).await?;
     if output.quiet {
         return Ok(());
     }
@@ -136,7 +136,7 @@ pub(crate) async fn logs(
 pub(crate) async fn stdin(
     config_path: PathBuf,
     node_id: &str,
-    job_id: &str,
+    exec_id: &str,
     content: Option<String>,
     file: Option<PathBuf>,
     close: bool,
@@ -144,28 +144,28 @@ pub(crate) async fn stdin(
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
     if close {
-        let closed: JobStdinClose = grpc::close_job_stdin(&endpoint, job_id).await?;
+        let closed: ExecStdinClose = grpc::close_exec_stdin(&endpoint, exec_id).await?;
         if output.json {
             print_json(&closed)?;
         } else if !output.quiet {
-            println!("{} stdin_closed={}", closed.job_id, closed.closed);
+            println!("{} stdin_closed={}", closed.exec_id, closed.closed);
         }
         return Ok(());
     }
-    let written: JobStdin = match (content, file) {
+    let written: ExecStdin = match (content, file) {
         (Some(content), None) => {
-            grpc::write_job_stdin_bytes(&endpoint, job_id, content.as_bytes()).await?
+            grpc::write_exec_stdin_bytes(&endpoint, exec_id, content.as_bytes()).await?
         }
-        (None, Some(file)) => grpc::write_job_stdin_file(&endpoint, job_id, &file).await?,
+        (None, Some(file)) => grpc::write_exec_stdin_file(&endpoint, exec_id, &file).await?,
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
-        (None, None) => anyhow::bail!("job stdin requires --content, --file, or --close"),
+        (None, None) => anyhow::bail!("exec stdin requires --content, --file, or --close"),
     };
     if output.json {
         print_json(&written)?;
     } else if !output.quiet {
         println!(
             "{} stdin_bytes_written={}",
-            written.job_id, written.bytes_written
+            written.exec_id, written.bytes_written
         );
     }
     Ok(())
@@ -174,11 +174,11 @@ pub(crate) async fn stdin(
 pub(crate) async fn cancel(
     config_path: PathBuf,
     node_id: &str,
-    job_id: &str,
+    exec_id: &str,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    let record: JobRecord = grpc::cancel_job(&endpoint, job_id).await?;
+    let record: ExecRecord = grpc::cancel_exec(&endpoint, exec_id).await?;
     if output.json {
         print_json(&record)?;
         return Ok(());
@@ -193,13 +193,13 @@ pub(crate) async fn cancel(
 pub(crate) async fn load(
     config_path: PathBuf,
     node_id: &str,
-    job_id: &str,
-) -> anyhow::Result<JobRecord> {
+    exec_id: &str,
+) -> anyhow::Result<ExecRecord> {
     let endpoint = load_endpoint(config_path, node_id)?;
-    grpc::get_job(&endpoint, job_id).await
+    grpc::get_exec(&endpoint, exec_id).await
 }
 
-fn job_command_from_cli_args(args: &[String]) -> String {
+fn exec_command_from_cli_args(args: &[String]) -> String {
     if args.len() == 1 {
         return args[0].clone();
     }
@@ -222,18 +222,18 @@ fn shell_escape_arg(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
-fn job_run_request_from_cli(
+fn exec_run_request_from_cli(
     command: Vec<String>,
     argv: bool,
     cwd: Option<String>,
     timeout_secs: u64,
     secrets: Vec<String>,
-) -> JobRunRequest {
-    JobRunRequest {
+) -> ExecRunRequest {
+    ExecRunRequest {
         command: if argv {
             String::new()
         } else {
-            job_command_from_cli_args(&command)
+            exec_command_from_cli_args(&command)
         },
         argv: if argv { command } else { Vec::new() },
         cwd,
@@ -242,33 +242,33 @@ fn job_run_request_from_cli(
     }
 }
 
-async fn wait_for_job(
+async fn wait_for_exec(
     endpoint: &operon_network::NodeEndpoint,
-    job_id: &str,
-) -> anyhow::Result<JobRecord> {
-    let _ = grpc::watch_job_to_terminal(endpoint, job_id).await?;
-    grpc::get_job(endpoint, job_id).await
+    exec_id: &str,
+) -> anyhow::Result<ExecRecord> {
+    let _ = grpc::watch_exec_to_terminal(endpoint, exec_id).await?;
+    grpc::get_exec(endpoint, exec_id).await
 }
 
-async fn print_logs(endpoint: &operon_network::NodeEndpoint, job_id: &str) -> anyhow::Result<()> {
+async fn print_logs(endpoint: &operon_network::NodeEndpoint, exec_id: &str) -> anyhow::Result<()> {
     let mut stdout = io::stdout();
-    for log in grpc::list_job_logs(endpoint, job_id).await?.logs {
+    for log in grpc::list_exec_logs(endpoint, exec_id).await?.logs {
         stdout.write_all(&log.data)?;
     }
     Ok(())
 }
 
-fn ensure_succeeded(record: &JobRecord) -> anyhow::Result<()> {
+fn ensure_succeeded(record: &ExecRecord) -> anyhow::Result<()> {
     match record.status {
-        JobStatus::Succeeded => Ok(()),
-        JobStatus::Running => anyhow::bail!("job {} is still running", record.id),
-        JobStatus::Failed | JobStatus::Cancelled | JobStatus::TimedOut => {
+        ExecStatus::Succeeded => Ok(()),
+        ExecStatus::Running => anyhow::bail!("exec {} is still running", record.id),
+        ExecStatus::Failed | ExecStatus::Cancelled | ExecStatus::TimedOut => {
             let exit_code = record
                 .exit_code
                 .map(|code| code.to_string())
                 .unwrap_or_else(|| "-".to_string());
             anyhow::bail!(
-                "job {} ended with status {:?} exit_code={}",
+                "exec {} ended with status {:?} exit_code={}",
                 record.id,
                 record.status,
                 exit_code
@@ -277,7 +277,7 @@ fn ensure_succeeded(record: &JobRecord) -> anyhow::Result<()> {
     }
 }
 
-fn print_status(record: &JobRecord) {
+fn print_status(record: &ExecRecord) {
     println!(
         "{} {} {:?} exit_code={:?} logs={} truncated={}",
         record.node_id,
@@ -294,15 +294,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn job_command_preserves_single_shell_command_string() {
-        let command = job_command_from_cli_args(&["echo hello | cat".to_string()]);
+    fn exec_command_preserves_single_shell_command_string() {
+        let command = exec_command_from_cli_args(&["echo hello | cat".to_string()]);
 
         assert_eq!(command, "echo hello | cat");
     }
 
     #[test]
-    fn job_command_shell_escapes_multiple_cli_args() {
-        let command = job_command_from_cli_args(&[
+    fn exec_command_shell_escapes_multiple_cli_args() {
+        let command = exec_command_from_cli_args(&[
             "printf".to_string(),
             "hello world".to_string(),
             "it's ok".to_string(),
@@ -312,8 +312,8 @@ mod tests {
     }
 
     #[test]
-    fn argv_job_request_keeps_arguments_unescaped() {
-        let request = job_run_request_from_cli(
+    fn argv_exec_request_keeps_arguments_unescaped() {
+        let request = exec_run_request_from_cli(
             vec!["printf".to_string(), "hello world".to_string()],
             true,
             None,
@@ -326,24 +326,24 @@ mod tests {
     }
 
     #[test]
-    fn failed_terminal_job_returns_cli_error() {
-        let record = test_job_record(JobStatus::Failed, Some(1));
+    fn failed_terminal_exec_returns_cli_error() {
+        let record = test_exec_record(ExecStatus::Failed, Some(1));
 
-        let error = ensure_succeeded(&record).expect_err("failed job should error");
+        let error = ensure_succeeded(&record).expect_err("failed exec should error");
 
         assert!(error.to_string().contains("ended with status Failed"));
     }
 
     #[test]
-    fn succeeded_terminal_job_is_ok() {
-        let record = test_job_record(JobStatus::Succeeded, Some(0));
+    fn succeeded_terminal_exec_is_ok() {
+        let record = test_exec_record(ExecStatus::Succeeded, Some(0));
 
-        ensure_succeeded(&record).expect("succeeded job should be ok");
+        ensure_succeeded(&record).expect("succeeded exec should be ok");
     }
 
-    fn test_job_record(status: JobStatus, exit_code: Option<i32>) -> JobRecord {
-        JobRecord {
-            id: "job-1".to_string(),
+    fn test_exec_record(status: ExecStatus, exit_code: Option<i32>) -> ExecRecord {
+        ExecRecord {
+            id: "exec-1".to_string(),
             node_id: "local".to_string(),
             command: "false".to_string(),
             cwd: "/".to_string(),
