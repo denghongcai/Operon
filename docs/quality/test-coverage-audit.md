@@ -7,7 +7,7 @@ than enforcing a line-percentage gate. The current project has three useful
 test layers:
 
 - Rust unit tests in every Rust crate.
-- TypeScript SDK tests under `packages/sdk-js`.
+- TypeScript SDK tests under [`packages/sdk-js`](../../packages/sdk-js).
 - validation scripts that exercise real CLI, daemon, gRPC, mount, service, and
   Docker-node workflows.
 
@@ -17,25 +17,25 @@ Current Rust crate coverage by responsibility:
 
 | Crate | Covered behaviors | Remaining emphasis |
 | --- | --- | --- |
-| `operon-core` | DTO serialization, policy YAML, service policy, graph YAML | keep enum and wire-name tests when protocol evolves |
-| `operon-config` | unified config loading, endpoint resolution, auth serialization, unknown-field warnings | keep endpoint-only config tests aligned with v0.9 acceptance |
-| `operon-fs` | workspace path containment, symlink behavior, policy scope, stable ids | add more Linux fd/openat2 tests if containment moves lower |
-| `operon-process` | job policy, environment allowlist, preserve-env mode | add more process-group tests around platform differences |
-| `operon-store` | append-only JSONL writer, fsync toggle, symlink rejection | add corruption/recovery tests if a richer store is added |
-| `operon-network` | LAN mDNS discovery removal handling | add endpoint export/import tests if discovery UX grows |
-| `operon-protocol` | page tokens and protocol version | keep conversion tests aligned with proto changes |
-| `operon-mount` | inode table, path validation, runtime wrapper, Linux mount boundaries | real FUSE behavior remains in Linux validation scripts |
-| `operond` | daemon policy, fs, job lifecycle, audit, pagination, store path, locks | keep high-risk runtime behavior here instead of only scripts |
-| `operon-cli` | command parsing helpers, config explain, onboard, completion command model | integration tests now cover binary behavior |
+| [`operon-core`](../../crates/operon-core) | DTO serialization, policy YAML, service policy, graph YAML | keep enum and wire-name tests when protocol evolves |
+| [`operon-config`](../../crates/operon-config) | unified config loading, endpoint resolution, auth serialization, unknown-field warnings | keep endpoint-only config tests aligned with v0.9 acceptance |
+| [`operon-fs`](../../crates/operon-fs) | workspace path containment, symlink behavior, policy scope, stable ids | add more Linux fd/openat2 tests if containment moves lower |
+| [`operon-process`](../../crates/operon-process) | job policy, environment allowlist, preserve-env mode | add more process-group tests around platform differences |
+| [`operon-store`](../../crates/operon-store) | append-only JSONL writer, fsync toggle, symlink rejection | add corruption/recovery tests if a richer store is added |
+| [`operon-network`](../../crates/operon-network) | LAN mDNS discovery removal handling | add endpoint export/import tests if discovery UX grows |
+| [`operon-protocol`](../../crates/operon-protocol) | page tokens and protocol version | keep conversion tests aligned with proto changes |
+| [`operon-mount`](../../crates/operon-mount) | inode table, path validation, runtime wrapper, Linux mount boundaries | real FUSE behavior remains in Linux validation scripts |
+| [`operond`](../../crates/operond) | daemon policy, fs, job lifecycle, audit, pagination, store path, locks | keep high-risk runtime behavior here instead of only scripts |
+| [`operon-cli`](../../crates/operon-cli) | command parsing helpers, config explain, onboard, completion command model | integration tests now cover binary behavior |
 
 ## Integration Coverage
 
 The repository now includes two additional integration checks:
 
-- `crates/operon-cli/tests/cli_static_integration.rs`
+- [`crates/operon-cli/tests/cli_static_integration.rs`](../../crates/operon-cli/tests/cli_static_integration.rs)
   - validates the compiled `operon` binary for help, completion generation,
     `init config`, `config explain --json`, and onboard completion guidance.
-- `scripts/verify-v0.8.1-integration-coverage.sh`
+- [`scripts/verify-v0.8.1-integration-coverage.sh`](../../scripts/verify-v0.8.1-integration-coverage.sh)
   - starts a real `operond`.
   - exercises `config explain`, node ping, capability list, service health,
     completion generation, fs write/read/copy/truncate/rm, job run/log

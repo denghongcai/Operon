@@ -143,7 +143,7 @@ The v0.8.4 modularization validation checks that fs runtime handlers,
 pagination helpers, CLI fs command handlers, output rendering helpers, and
 target parsing live outside the entrypoint files.
 
-The v0.8.5 core-domain validation checks that `operon-core` domain DTOs and
+The v0.8.5 core-domain validation checks that [`operon-core`](crates/operon-core) domain DTOs and
 policies live in focused modules with compatible root re-exports.
 
 The v0.8.6 modularization validation checks shared Rust gRPC client helpers,
@@ -493,7 +493,7 @@ ordering matters.
 The current CLI speaks gRPC to `grpc://` daemon endpoints. There is no direct
 HTTP runtime API; humans and scripts should use `operon`, including
 `operon --json`, and programs should use SDKs or generated clients from
-`proto/operon/runtime.proto`.
+[`proto/operon/runtime.proto`](proto/operon/runtime.proto).
 
 The runtime schema uses typed protobuf enums, proto3 optional presence,
 target/chunk request envelopes, job-log stream event envelopes, bidirectional

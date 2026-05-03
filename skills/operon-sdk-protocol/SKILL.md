@@ -10,8 +10,8 @@ Use the CLI first for operational tasks. Use the TypeScript SDK when writing app
 Start by reading local protocol and SDK docs:
 
 - `PROTOCOL.md` for direct gRPC connection rules.
-- `proto/operon/runtime.proto` for service and message definitions.
-- `packages/operon-sdk` for the TypeScript SDK.
+- [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto) for service and message definitions.
+- [`packages/sdk-js`](../../packages/sdk-js) for the TypeScript SDK.
 
 Use CLI help to confirm behavior before mirroring it in code:
 

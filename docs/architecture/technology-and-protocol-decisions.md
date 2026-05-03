@@ -127,9 +127,9 @@ gRPC handles these better than ad hoc JSON-RPC:
 
 The protobuf schema should be treated as the source of truth for node protocol
 contracts. The active contract lives at
-`proto/operon/runtime.proto`, Rust bindings are generated through tonic/prost,
+[`proto/operon/runtime.proto`](../../proto/operon/runtime.proto), Rust bindings are generated through tonic/prost,
 and the TypeScript SDK uses `nice-grpc` with generated `ts-proto` types for
-`grpc://` endpoints. Legacy design proto files live under `proto/archive/` and
+`grpc://` endpoints. Legacy design proto files live under [`proto/archive/`](../../proto/archive) and
 are not compiled into the runtime API.
 
 Example shape:

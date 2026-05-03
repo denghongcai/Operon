@@ -121,7 +121,7 @@ Completed:
 - `operon node ping <node-id>` implemented for Phase 1 configured endpoints.
 - `examples/nodes.yaml` includes a local endpoint.
 - local validation passed with `operond` on `127.0.0.1:7789` and `operon node ping local`.
-- Docker two-node validation added through `docker-compose.yml`, `docker/Dockerfile`, `examples/docker-nodes.yaml`, and `scripts/verify-mvp-docker.sh`.
+- Docker two-node validation added through [`docker-compose.yml`](../../docker-compose.yml), [`docker/Dockerfile`](../../docker/Dockerfile), `examples/docker-nodes.yaml`, and [`scripts/verify-mvp-docker.sh`](../../scripts/verify-mvp-docker.sh).
 - Docker two-node validation passed with `node-a` and `node-b`.
 
 Remaining:
@@ -149,9 +149,9 @@ nodes:
 Modules:
 
 - `operond`: daemon lifecycle
-- `operon-network`: manual endpoint resolver
-- `operon-core`: shared health and node info types
-- `operon-cli`: node commands
+- [`operon-network`](../../crates/operon-network): manual endpoint resolver
+- [`operon-core`](../../crates/operon-core): shared health and node info types
+- [`operon-cli`](../../crates/operon-cli): node commands
 
 Implementation notes:
 
@@ -187,7 +187,7 @@ Completed:
 - default Phase 2 capabilities are advertised: `fs`, `process`, `job`, `device-info`, and `service`.
 - `operon capability list <node-id>` implemented.
 - Docker two-node validation passed for `node-a` and `node-b` capability discovery.
-- `scripts/verify-mvp-docker.sh` now validates both node health and capability discovery.
+- [`scripts/verify-mvp-docker.sh`](../../scripts/verify-mvp-docker.sh) now validates both node health and capability discovery.
 
 Remaining:
 
@@ -391,8 +391,8 @@ Completed:
 - each step records id, node, action, status, start/end timestamps, error, and output.
 - graph execution stops on the first failed step and prints the partial trace.
 - graph execution prints structured JSON trace for human and agent consumption.
-- example Docker workflow added at `examples/docker-copy-and-run.yaml`.
-- `examples/train-model.yaml` updated with explicit step ids and write content.
+- example Docker workflow added at [`examples/docker-copy-and-run.yaml`](../../examples/docker-copy-and-run.yaml).
+- [`examples/train-model.yaml`](../../examples/train-model.yaml) updated with explicit step ids and write content.
 - Docker validation passes the copy/run/read graph demo on `node-a`.
 
 Remaining:
@@ -551,7 +551,7 @@ Completed:
 - SDK supports `fs.stat`, `fs.list`, `fs.read`, `fs.write`, and `job.run`.
 - SDK returns a structured trace with run id, step status, timing, error, and output fields.
 - README now documents the Docker MVP demo command.
-- README now shows the runnable `examples/docker-copy-and-run.yaml` workflow.
+- README now shows the runnable [`examples/docker-copy-and-run.yaml`](../../examples/docker-copy-and-run.yaml) workflow.
 - README status checklist reflects the completed MVP runtime pieces.
 - Docker validation remains the reproducible fresh-checkout demo path.
 
@@ -617,13 +617,13 @@ Current status: completed on 2026-05-01 with local validation and CI workflow up
 
 Completed:
 
-- Docker MVP validation script renamed to `scripts/verify-mvp-docker.sh`.
+- Docker MVP validation script renamed to [`scripts/verify-mvp-docker.sh`](../../scripts/verify-mvp-docker.sh).
 - README Quickstart added with the full MVP validation command set.
 - README demo command updated to use the MVP validation script.
 - `docs/plan/mvp-acceptance.md` added as the v0.1.0 acceptance baseline.
 - MVP acceptance document records scope, non-goals, validation commands, release checklist, and known limitations.
 - CI now runs on pushes to both `main` and `mvp`.
-- CI now includes an `MVP Docker Validation` job that runs `scripts/verify-mvp-docker.sh` after Rust and TypeScript checks.
+- CI now includes an `MVP Docker Validation` job that runs [`scripts/verify-mvp-docker.sh`](../../scripts/verify-mvp-docker.sh) after Rust and TypeScript checks.
 - Old `verify-phase1-docker.sh` references were updated to the MVP script name.
 - Unit test baseline added across core Rust modules and the TypeScript SDK.
 - CI Node setup updated to `actions/setup-node@v6`.
@@ -872,7 +872,7 @@ Completed:
 
 - Updated README for v0.2 CLI, node config, daemon policy, auth, store, provider resolution, secrets, trace, and Docker validation.
 - Added `docs/plan/v0.2-acceptance.md`.
-- Renamed Docker validation script to `scripts/verify-v0.2-docker.sh`.
+- Renamed Docker validation script to [`scripts/verify-v0.2-docker.sh`](../../scripts/verify-v0.2-docker.sh).
 - Updated CI to run the v0.2 Docker validation job.
 
 Remaining:
@@ -1072,9 +1072,9 @@ Completed:
 
 - Added `docs/plan/v0.3-acceptance.md`.
 - Updated README for v0.3 commands and limits.
-- Added `scripts/verify-v0.5-docker.sh`.
+- Added [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh).
 - Updated CI to run v0.3 Docker validation.
-- Verified `scripts/verify-v0.5-docker.sh` locally against the two-node Docker environment.
+- Verified [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh) locally against the two-node Docker environment.
 - Updated this phase tracker after completing v0.3 implementation.
 
 Remaining:
@@ -1193,7 +1193,7 @@ Completed:
 - Updated `trace list` to only include trace-like JSON files.
 - Updated `trace show` to default to a human-readable summary while preserving
   `--json` output.
-- Covered audit filter and trace UX paths in `scripts/verify-v0.5-docker.sh`.
+- Covered audit filter and trace UX paths in [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh).
 
 ## Phase 24: v0.4 Acceptance
 
@@ -1218,11 +1218,11 @@ Completed:
 - Added `docs/plan/v0.4-acceptance.md`.
 - Updated README with v0.4 validation, service commands, policy config, audit
   filters, and trace JSON/human usage.
-- Added `scripts/verify-v0.5-docker.sh` and made it repeatable around the
+- Added [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh) and made it repeatable around the
   read-only mount PoC temp directory.
 - Updated CI to run on pull requests and pushes to every branch.
 - Updated CI Docker validation from v0.3 to v0.4.
-- Verified `scripts/verify-v0.5-docker.sh` locally against the two-node Docker
+- Verified [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh) locally against the two-node Docker
   environment.
 
 ## v0.5 Goal
@@ -1252,21 +1252,21 @@ Planned:
 - model streaming file reads, streaming file writes, followed job logs, stdin,
   and execution events explicitly.
 - define auth metadata conventions for bearer tokens.
-- add generated Rust types through `operon-protocol`.
+- add generated Rust types through [`operon-protocol`](../../crates/operon-protocol).
 - document compatibility between migration-era HTTP facade errors and gRPC
   status details.
 
 Done when:
 
 - protobuf schemas cover the current v0.4 runtime capabilities.
-- `operon-protocol` builds generated Rust bindings.
+- [`operon-protocol`](../../crates/operon-protocol) builds generated Rust bindings.
 - protocol docs describe which methods are unary, server-streaming,
   client-streaming, or bidirectional.
 
 Completed:
 
-- Added `proto/operon/runtime.proto` as the v0.5 runtime contract.
-- Generated Rust bindings from `operon-protocol` with tonic/prost.
+- Added [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto) as the v0.5 runtime contract.
+- Generated Rust bindings from [`operon-protocol`](../../crates/operon-protocol) with tonic/prost.
 - Modeled bearer auth metadata, unary runtime methods, server-streaming file
   reads/job logs, and client-streaming file writes/job stdin.
 
@@ -1346,13 +1346,13 @@ Done when:
 
 Completed:
 
-- Added `scripts/verify-v0.5-docker.sh` as the canonical two-node gRPC
+- Added [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh) as the canonical two-node gRPC
   validation.
 - Added `examples/docker-nodes.yaml`.
 - Updated CI with v0.5 Docker validation and `protoc` installation for Rust
   protocol generation.
 - Verified locally with `cargo test --workspace`, `pnpm typecheck`,
-  `pnpm test`, and `scripts/verify-v0.5-docker.sh`.
+  `pnpm test`, and [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh).
 
 ## v0.5.1 Cleanup Goal
 
@@ -1381,7 +1381,7 @@ Goal: make gRPC the only daemon runtime API.
 Planned:
 
 - remove axum runtime routes and HTTP handler code from `operond`.
-- remove the hand-written HTTP client path from `operon-cli`.
+- remove the hand-written HTTP client path from [`operon-cli`](../../crates/operon-cli).
 - remove `http://` node endpoint support from runtime configs and examples.
 - keep CLI `--json` as the supported script interface.
 - keep TypeScript SDK on `nice-grpc`.
@@ -1402,7 +1402,7 @@ Done when:
 Completed:
 
 - `operond` now exposes runtime operations through gRPC only.
-- `operon-cli` runtime commands use the gRPC client path only.
+- [`operon-cli`](../../crates/operon-cli) runtime commands use the gRPC client path only.
 - TypeScript SDK calls `nice-grpc` directly and no longer has fetch/HTTP
   fallback behavior.
 - Docker, CI, and example node configs use `grpc://` endpoints.
@@ -1410,7 +1410,7 @@ Completed:
 - Validation passed with `cargo fmt --check`, `cargo check --workspace
   --locked`, `cargo test --workspace --locked`, `cargo clippy --workspace
   --locked -- -D warnings`, `pnpm typecheck`, `pnpm -r test`,
-  `pnpm --filter @operon/sdk build`, `scripts/verify-v0.5-docker.sh`, and
+  `pnpm --filter @operon/sdk build`, [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh), and
   `git diff --check`.
 
 Remaining:
@@ -1465,7 +1465,7 @@ Done when:
 
 Status: Completed.
 
-Goal: implement a real Linux mount path in `operon-mount`.
+Goal: implement a real Linux mount path in [`operon-mount`](../../crates/operon-mount).
 
 Planned:
 
@@ -1477,7 +1477,7 @@ Planned:
 
 Completed:
 
-- Added `fuser` and implemented a read-only FUSE adapter in `operon-mount`.
+- Added `fuser` and implemented a read-only FUSE adapter in [`operon-mount`](../../crates/operon-mount).
 - Added a `RemoteFs` trait as the Core FS Protocol boundary and kept the Linux
   FUSE code as an OS mount adapter over that trait.
 - Kept direct gRPC access through `GrpcRemoteFs`; local IPC is not part of v0.6.
@@ -1513,7 +1513,7 @@ Completed:
 - Replaced the v0.3 `mount read-only` one-shot materialization CLI with
   `operon mount <node:/path> --to <dir>`.
 - The command starts a foreground FUSE session and unmounts on Ctrl-C.
-- Added `scripts/verify-v0.6-linux-mount.sh` with host requirement checks.
+- Added [`scripts/verify-v0.6-linux-mount.sh`](../../scripts/verify-v0.6-linux-mount.sh) with host requirement checks.
 - Updated README with the live mount command and read-only limitations.
 
 Done when:
@@ -1542,8 +1542,8 @@ Completed:
 - Updated README and AGENTS for the current mount milestone.
 - Validated with `cargo fmt --check`, `cargo check --workspace --locked`,
   `cargo test --workspace --locked`, `cargo clippy --workspace --locked -- -D warnings`,
-  `pnpm typecheck`, `pnpm -r test`, `scripts/verify-v0.5-docker.sh`,
-  `scripts/verify-v0.6-linux-mount.sh`, and `git diff --check`.
+  `pnpm typecheck`, `pnpm -r test`, [`scripts/verify-v0.5-docker.sh`](../../scripts/verify-v0.5-docker.sh),
+  [`scripts/verify-v0.6-linux-mount.sh`](../../scripts/verify-v0.6-linux-mount.sh), and `git diff --check`.
 
 Done when:
 
@@ -1617,7 +1617,7 @@ Done when:
 
 Completed:
 
-- Extended `proto/operon/runtime.proto` with write-range, truncate, mkdir,
+- Extended [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto) with write-range, truncate, mkdir,
   delete, and rename fs RPCs.
 - Implemented the new daemon gRPC handlers through the existing fs policy and
   audit path.
@@ -1649,7 +1649,7 @@ Completed:
 
 - Updated `docs/plan/v0.6.1-acceptance.md` with final contract and completion
   notes.
-- Added `scripts/verify-v0.6.1-linux-write-mount.sh`.
+- Added [`scripts/verify-v0.6.1-linux-write-mount.sh`](../../scripts/verify-v0.6.1-linux-write-mount.sh).
 - Updated CI with a v0.6.1 Linux write mount validation job.
 - Updated README, AGENTS, and architecture docs for the write-through mount
   milestone.
@@ -1728,7 +1728,7 @@ Done when:
 Completed:
 
 - Added `docs/plan/v0.6.2-cli-fs-cleanup-acceptance.md`.
-- Added `scripts/verify-v0.6.2-cli-fs-cleanup.sh`.
+- Added [`scripts/verify-v0.6.2-cli-fs-cleanup.sh`](../../scripts/verify-v0.6.2-cli-fs-cleanup.sh).
 - Updated README, PROTOCOL, AGENTS, and CI for v0.6.2.
 
 Remaining:
@@ -1774,7 +1774,7 @@ Done when:
 Completed:
 
 - Added `CopyFs`, `FsCopyRequest`, and `FsCopy` to
-  `proto/operon/runtime.proto`.
+  [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto).
 - Implemented daemon-side same-node regular-file copy with workspace
   containment, read/write policy checks, and audit action `copy`.
 - Added `operon fs copy <node:/from> <node:/to>`.
@@ -1801,7 +1801,7 @@ Done when:
 Completed:
 
 - Added `docs/plan/v0.6.3-fs-copy-acceptance.md`.
-- Added `scripts/verify-v0.6.3-fs-copy.sh`.
+- Added [`scripts/verify-v0.6.3-fs-copy.sh`](../../scripts/verify-v0.6.3-fs-copy.sh).
 - Updated README, PROTOCOL, AGENTS, and CI for v0.6.3.
 
 Remaining:
@@ -1874,7 +1874,7 @@ Done when:
 Completed:
 
 - Added `docs/plan/v0.6.4-onboard-acceptance.md`.
-- Added `scripts/verify-v0.6.4-onboard.sh`.
+- Added [`scripts/verify-v0.6.4-onboard.sh`](../../scripts/verify-v0.6.4-onboard.sh).
 - Updated README, AGENTS, and CI for v0.6.4.
 
 Remaining:
@@ -1898,11 +1898,11 @@ Sensitive values should be referenced through `token_file`, `token_env`, or
 
 Status: Completed.
 
-Goal: put configuration ownership in a dedicated crate instead of `operon-network`.
+Goal: put configuration ownership in a dedicated crate instead of [`operon-network`](../../crates/operon-network).
 
 Planned:
 
-- add `operon-config`.
+- add [`operon-config`](../../crates/operon-config).
 - define `OperonConfig`, daemon config, client config, node config, auth config,
   and secret references.
 - keep provider values available for client node resolution.
@@ -1910,10 +1910,10 @@ Planned:
 
 Completed:
 
-- Added `operon-config` as the shared schema/loading crate.
+- Added [`operon-config`](../../crates/operon-config) as the shared schema/loading crate.
 - Moved unified config, node endpoint, provider, auth, daemon, client, and
-  secret reference types into `operon-config`.
-- Kept `operon-network` as a thin re-export boundary for provider/node endpoint
+  secret reference types into [`operon-config`](../../crates/operon-config).
+- Kept [`operon-network`](../../crates/operon-network) as a thin re-export boundary for provider/node endpoint
   types.
 
 ## Phase 32.11: Unified CLI And Daemon Config
@@ -1986,7 +1986,7 @@ Completed:
   so terminal job records and live log streams include drained output.
 - In-memory audit retention is capped while store append behavior remains
   unchanged.
-- LAN mDNS discovery is centralized in `operon-network` and reused by `node
+- LAN mDNS discovery is centralized in [`operon-network`](../../crates/operon-network) and reused by `node
   discover` and `onboard`.
 - CLI gRPC helpers reuse one process-local Tokio runtime instead of creating a
   new runtime for every call.
@@ -2072,10 +2072,10 @@ provider milestones will reuse.
 
 Completed:
 
-- moved workspace path containment and fs policy helpers into `operon-fs`.
-- moved job authorization and environment construction into `operon-process`.
-- moved append-only store helpers into `operon-store`.
-- moved service health check helper into `operon-network`.
+- moved workspace path containment and fs policy helpers into [`operon-fs`](../../crates/operon-fs).
+- moved job authorization and environment construction into [`operon-process`](../../crates/operon-process).
+- moved append-only store helpers into [`operon-store`](../../crates/operon-store).
+- moved service health check helper into [`operon-network`](../../crates/operon-network).
 - updated daemon code to use these crate APIs instead of local copies.
 
 Remaining:
@@ -2169,7 +2169,7 @@ Completed:
 - cancel and timeout now signal the process group with `SIGTERM`, escalate to
   `SIGKILL` after a short wait, and keep direct-child kill as the non-Unix
   fallback.
-- added `scripts/verify-v0.6.7-runtime.sh` to validate descendant termination
+- added [`scripts/verify-v0.6.7-runtime.sh`](../../scripts/verify-v0.6.7-runtime.sh) to validate descendant termination
   through the CLI and daemon.
 
 Done when:
@@ -2221,12 +2221,12 @@ the CLI entrypoint own async execution explicitly.
 
 Planned:
 
-- convert `operon-cli` entrypoint to an explicit Tokio runtime, preferably
+- convert [`operon-cli`](../../crates/operon-cli) entrypoint to an explicit Tokio runtime, preferably
   `#[tokio::main] async fn main()`.
-- convert `crates/operon-cli/src/grpc.rs` public gRPC helper functions to
+- convert [`crates/operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs) public gRPC helper functions to
   async functions.
 - remove `OnceLock<tokio::runtime::Runtime>` and the internal `block_on`
-  wrapper from `grpc.rs`.
+  wrapper from [`grpc.rs`](../../crates/operon-cli/src/grpc.rs).
 - propagate `.await` through CLI command handlers and graph execution where
   they call gRPC.
 - preserve synchronous local file/config parsing where there is no runtime
@@ -2237,7 +2237,7 @@ Planned:
 Completed:
 
 - CLI entrypoint now owns the Tokio runtime explicitly.
-- `operon-cli/src/grpc.rs` no longer owns a singleton runtime or internal
+- [`operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs) no longer owns a singleton runtime or internal
   `block_on` wrapper.
 - gRPC helper functions are async and command handlers/graph execution await
   them directly.
@@ -2246,7 +2246,7 @@ Completed:
 
 Done when:
 
-- `operon-cli/src/grpc.rs` no longer creates or owns a Tokio runtime.
+- [`operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs) no longer creates or owns a Tokio runtime.
 - all gRPC calls are awaited from the CLI command path.
 - graph audit context propagation still works after async conversion.
 - CLI tests and Docker smoke validation pass.
@@ -2268,7 +2268,7 @@ Planned:
 
 Completed:
 
-- created and executed `scripts/verify-v0.6.7-runtime.sh`.
+- created and executed [`scripts/verify-v0.6.7-runtime.sh`](../../scripts/verify-v0.6.7-runtime.sh).
 - updated `docs/plan/v0.6.7-acceptance.md`, README, PROTOCOL, and AGENTS.md.
 - completed Rust, SDK, and runtime validations for v0.6.7.
 
@@ -2370,13 +2370,13 @@ Planned:
 Done when:
 
 - contributors cannot reasonably mistake legacy proto files for live services.
-- `crates/operon-protocol/build.rs` remains focused on the active runtime API.
+- [`crates/operon-protocol/build.rs`](../../crates/operon-protocol/build.rs) remains focused on the active runtime API.
 
 Completed:
 
-- Moved inactive proto files to `proto/archive/operon/`.
-- Kept `crates/operon-protocol/build.rs` focused on
-  `proto/operon/runtime.proto`.
+- Moved inactive proto files to [`proto/archive/operon/`](../../proto/archive/operon).
+- Kept [`crates/operon-protocol/build.rs`](../../crates/operon-protocol/build.rs) focused on
+  [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto).
 - Updated architecture docs to identify `runtime.proto` as the only active
   runtime protocol.
 
@@ -2506,7 +2506,7 @@ Completed:
 
 - Added bounded completed-job log buffer retention and event broadcaster cleanup.
 - Captured request audit context before spawning job execution tasks.
-- Expanded `scripts/verify-v0.6.7-runtime.sh` and added it to CI.
+- Expanded [`scripts/verify-v0.6.7-runtime.sh`](../../scripts/verify-v0.6.7-runtime.sh) and added it to CI.
 - Updated README, PROTOCOL.md, runtime architecture docs, and
   `docs/plan/v0.6.8-release-cleanup.md`.
 - Updated `PROTOCOL_VERSION` to `v0.6.8`.
@@ -2535,7 +2535,7 @@ Done when:
 - quiet mode suppresses log output without bypassing command errors.
 - job failures are visible to shell scripts through process exit status.
 - starter config files can launch `operond start` without missing-file errors.
-- CI runs `scripts/verify-v0.6.9-cli-contract.sh`.
+- CI runs [`scripts/verify-v0.6.9-cli-contract.sh`](../../scripts/verify-v0.6.9-cli-contract.sh).
 
 Completed:
 
@@ -2549,7 +2549,7 @@ Completed:
 - Updated daemon health to report `PROTOCOL_VERSION`.
 - Made `operon init config` generate referenced starter `token` and
   `secrets.yaml` files.
-- Added unit tests and `scripts/verify-v0.6.9-cli-contract.sh`, and wired the
+- Added unit tests and [`scripts/verify-v0.6.9-cli-contract.sh`](../../scripts/verify-v0.6.9-cli-contract.sh), and wired the
   script into CI.
 
 ## Phase 32.31: v0.6.10 Runtime Hardening
@@ -2592,7 +2592,7 @@ Completed:
   conversions.
 - Handled mDNS `ServiceRemoved` events in one-shot LAN discovery and surfaced
   receiver failures.
-- Added focused tests plus `scripts/verify-v0.6.10-runtime-hardening.sh` to CI.
+- Added focused tests plus [`scripts/verify-v0.6.10-runtime-hardening.sh`](../../scripts/verify-v0.6.10-runtime-hardening.sh) to CI.
 
 Remaining:
 
@@ -2609,7 +2609,7 @@ Planned:
 
 - `docs/plan/v0.6.11-maintainability-governance.md`.
 - split daemon defaults, LAN advertise, store-path validation, status mapping,
-  and lock handling out of `operond/src/main.rs`.
+  and lock handling out of [`operond/src/main.rs`](../../crates/operond/src/main.rs).
 - make gRPC-facing daemon lock acquisition return `Status::internal` instead of
   panicking on poisoned mutexes.
 - make Linux-only mount support explicit through target-specific dependencies
@@ -2621,8 +2621,8 @@ Done when:
 - the high-risk daemon helper areas have module boundaries.
 - gRPC request paths no longer use direct poisoned-lock `expect` handling for
   shared runtime state.
-- non-Linux builds are not forced to compile `operon-mount`.
-- CI runs `scripts/verify-v0.6.11-governance.sh`.
+- non-Linux builds are not forced to compile [`operon-mount`](../../crates/operon-mount).
+- CI runs [`scripts/verify-v0.6.11-governance.sh`](../../scripts/verify-v0.6.11-governance.sh).
 - workspace validation passes.
 
 Completed:
@@ -2630,19 +2630,19 @@ Completed:
 - Added `docs/plan/v0.6.11-maintainability-governance.md`.
 - Split `operond` support code into `defaults`, `grpc_status`,
   `lan_advertise`, `locks`, and `store_config` modules.
-- Removed direct poisoned-lock `expect` calls from `operond/src/main.rs`.
+- Removed direct poisoned-lock `expect` calls from [`operond/src/main.rs`](../../crates/operond/src/main.rs).
 - Added a gRPC lock helper that maps poisoned shared-state locks to
   `Status::internal`.
 - Changed background job/audit cleanup paths to log poisoned locks and return
   instead of panicking.
-- Made `operon-cli` depend on `operon-mount` only on Linux targets.
+- Made [`operon-cli`](../../crates/operon-cli) depend on [`operon-mount`](../../crates/operon-mount) only on Linux targets.
 - Added a non-Linux `operon mount` unsupported-platform error path.
-- Added `scripts/verify-v0.6.11-governance.sh` and wired it into CI.
+- Added [`scripts/verify-v0.6.11-governance.sh`](../../scripts/verify-v0.6.11-governance.sh) and wired it into CI.
 
 Remaining:
 
 - Larger domain splits remain future work: `operond` server/fs/job/audit
-  modules, `operon-cli` command modules, and `operon-mount` remote/inode/FUSE
+  modules, [`operon-cli`](../../crates/operon-cli) command modules, and [`operon-mount`](../../crates/operon-mount) remote/inode/FUSE
   modules.
 
 ## Phase 32.33: v0.6.12 Runtime Boundary Stabilization
@@ -2659,12 +2659,12 @@ Planned:
   carry snapshots, entries, and terminal metadata.
 - keep `ListJobLogs` as the snapshot query API while CLI and SDK consume the
   streaming envelope for live log flows.
-- promote `operon-store` to an explicit append-only event writer boundary with
+- promote [`operon-store`](../../crates/operon-store) to an explicit append-only event writer boundary with
   visible fsync policy and `Result`-returning append operations.
 - surface store append failures at daemon runtime boundaries.
 - consolidate daemon background job/log/audit lock handling through runtime
   helper boundaries instead of scattered `eprintln!` paths.
-- make `operon-mount` a Linux FUSE adapter boundary by excluding the `fuser`
+- make [`operon-mount`](../../crates/operon-mount) a Linux FUSE adapter boundary by excluding the `fuser`
   dependency outside Linux.
 - add focused validation coverage and wire it into CI.
 
@@ -2673,11 +2673,11 @@ Done when:
 - `StreamJobLogs` returns envelope messages.
 - CLI JSON and stream output preserve job-log truncation metadata.
 - TS SDK exposes real stream events for job logs.
-- `operon-store` append failures are testable and no longer swallowed inside the
+- [`operon-store`](../../crates/operon-store) append failures are testable and no longer swallowed inside the
   store crate.
 - daemon persistence failures are logged consistently at the daemon boundary.
-- non-Linux builds do not resolve `fuser` through `operon-mount`.
-- CI runs `scripts/verify-v0.6.12-runtime-boundary.sh`.
+- non-Linux builds do not resolve `fuser` through [`operon-mount`](../../crates/operon-mount).
+- CI runs [`scripts/verify-v0.6.12-runtime-boundary.sh`](../../scripts/verify-v0.6.12-runtime-boundary.sh).
 - workspace validation passes.
 
 Completed:
@@ -2691,25 +2691,25 @@ Completed:
   truncation metadata.
 - Updated the TypeScript SDK generated client, public stream event types, byte
   stream helper, and SDK tests for the new envelope.
-- Added `StoreWriter` and `FsyncPolicy` to `operon-store`; append failures now
+- Added `StoreWriter` and `FsyncPolicy` to [`operon-store`](../../crates/operon-store); append failures now
   return `Result`.
 - Routed daemon append-only persistence through the store writer boundary and
   logged persistence failures at daemon runtime boundaries.
 - Replaced remaining background mutex-poison `eprintln!` paths in daemon
   runtime helpers with structured tracing errors.
-- Made `operon-mount` a Linux-only FUSE adapter boundary by gating the crate and
+- Made [`operon-mount`](../../crates/operon-mount) a Linux-only FUSE adapter boundary by gating the crate and
   the `fuser` dependency to Linux.
 - Updated protocol docs, runtime architecture docs, README release examples,
   and the public protocol version to v0.6.12.
 - Completed a post-release documentation drift pass that aligned current docs
   with v0.6.12 and marked older acceptance docs as historical snapshots.
-- Added `scripts/verify-v0.6.12-runtime-boundary.sh` and wired it into CI.
+- Added [`scripts/verify-v0.6.12-runtime-boundary.sh`](../../scripts/verify-v0.6.12-runtime-boundary.sh) and wired it into CI.
 - Validation passed:
-  - `scripts/verify-v0.6.12-runtime-boundary.sh`
-  - `scripts/verify-v0.6.7-runtime.sh`
-  - `scripts/verify-v0.6.9-cli-contract.sh`
-  - `scripts/verify-v0.6.10-runtime-hardening.sh`
-  - `scripts/verify-v0.6.11-governance.sh`
+  - [`scripts/verify-v0.6.12-runtime-boundary.sh`](../../scripts/verify-v0.6.12-runtime-boundary.sh)
+  - [`scripts/verify-v0.6.7-runtime.sh`](../../scripts/verify-v0.6.7-runtime.sh)
+  - [`scripts/verify-v0.6.9-cli-contract.sh`](../../scripts/verify-v0.6.9-cli-contract.sh)
+  - [`scripts/verify-v0.6.10-runtime-hardening.sh`](../../scripts/verify-v0.6.10-runtime-hardening.sh)
+  - [`scripts/verify-v0.6.11-governance.sh`](../../scripts/verify-v0.6.11-governance.sh)
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --locked -- -D warnings`
   - `cargo test --workspace --locked`
@@ -2788,7 +2788,7 @@ Goal: make local forwarding reproducible in CI.
 Completed:
 
 - added SDK tests for service tunnel request/response streaming.
-- added `scripts/verify-v0.7-service-forwarding.sh` with a local HTTP service,
+- added [`scripts/verify-v0.7-service-forwarding.sh`](../../scripts/verify-v0.7-service-forwarding.sh) with a local HTTP service,
   daemon policy, CLI forwarding, HTTP fetch through the forwarded port, and
   audit validation.
 - wired the v0.7 validation script into CI.
@@ -2886,7 +2886,7 @@ Goal: make UDP/datagram forwarding reproducible.
 
 Completed:
 
-- added `scripts/verify-v0.7.1-udp-datagram-forwarding.sh`.
+- added [`scripts/verify-v0.7.1-udp-datagram-forwarding.sh`](../../scripts/verify-v0.7.1-udp-datagram-forwarding.sh).
 - validated against a local UDP echo service.
 - updated README, PROTOCOL.md, architecture docs, and AGENTS.md.
 
@@ -3050,7 +3050,7 @@ Completed:
 - added compiled-binary CLI integration tests for help, shell completions,
   starter config generation, `config explain --json`, and onboard completion
   guidance.
-- added `scripts/verify-v0.8.1-integration-coverage.sh`, which starts a real
+- added [`scripts/verify-v0.8.1-integration-coverage.sh`](../../scripts/verify-v0.8.1-integration-coverage.sh), which starts a real
   daemon and exercises config, node, capability, fs, job, service, audit,
   graph, trace, and completion flows.
 - added the integration coverage validation script to CI.
@@ -3071,8 +3071,8 @@ policy/protocol hardening items for later phases.
 
 Completed:
 
-- changed audit timestamps to use `u64` end-to-end across `operon-core` and
-  `operon-protocol`, matching the gRPC `uint64` schema.
+- changed audit timestamps to use `u64` end-to-end across [`operon-core`](../../crates/operon-core) and
+  [`operon-protocol`](../../crates/operon-protocol), matching the gRPC `uint64` schema.
 - extracted shared CLI private-file and token helpers used by `init config` and
   `onboard`.
 - updated UDP service forwarding cleanup so the local socket read task is
@@ -3134,7 +3134,7 @@ Completed:
 - Updated README, `PROTOCOL.md`, runtime architecture docs, and CI validation
   for release/package/protocol version policy.
 - Validation passed with
-  `scripts/verify-v0.8.3-read-range-release-cleanup.sh`.
+  [`scripts/verify-v0.8.3-read-range-release-cleanup.sh`](../../scripts/verify-v0.8.3-read-range-release-cleanup.sh).
 
 ## Phase 47: v0.8.4 Runtime and CLI Modularization
 
@@ -3145,10 +3145,10 @@ module splits before adding endpoint discovery UX.
 
 Plan:
 
-- split `crates/operond/src/main.rs` so it keeps startup wiring and top-level
+- split [`crates/operond/src/main.rs`](../../crates/operond/src/main.rs) so it keeps startup wiring and top-level
   command dispatch, while fs, job, service forwarding, audit, pagination, and
   runtime state move into focused modules.
-- split `crates/operon-cli/src/main.rs` so it keeps clap model construction and
+- split [`crates/operon-cli/src/main.rs`](../../crates/operon-cli/src/main.rs) so it keeps clap model construction and
   high-level dispatch, while command families, output rendering, and target
   parsing move into focused modules.
 - preserve current public CLI behavior, gRPC behavior, JSON output, quiet
@@ -3157,9 +3157,9 @@ Plan:
 
 Done when:
 
-- `operond/src/main.rs` no longer directly owns fs, job, service-forwarding,
+- [`operond/src/main.rs`](../../crates/operond/src/main.rs) no longer directly owns fs, job, service-forwarding,
   audit, and pagination implementation details.
-- `operon-cli/src/main.rs` no longer directly owns every command handler and
+- [`operon-cli/src/main.rs`](../../crates/operon-cli/src/main.rs) no longer directly owns every command handler and
   renderer.
 - existing daemon, CLI, service, mount, SDK, and integration validations remain
   green.
@@ -3176,7 +3176,7 @@ Completed:
 - Extracted CLI target parsing and endpoint loading into `target`.
 - Extracted CLI filesystem command handlers into `commands/fs`.
 - Added CI validation for the current modularization boundaries.
-- Validation passed with `scripts/verify-v0.8.4-modularization.sh`.
+- Validation passed with [`scripts/verify-v0.8.4-modularization.sh`](../../scripts/verify-v0.8.4-modularization.sh).
 
 Remaining:
 
@@ -3188,7 +3188,7 @@ Remaining:
 
 Status: Completed.
 
-Goal: split `operon-core` into domain modules before endpoint discovery UX and
+Goal: split [`operon-core`](../../crates/operon-core) into domain modules before endpoint discovery UX and
 policy/trace schemas grow further.
 
 Plan:
@@ -3208,7 +3208,7 @@ Plan:
 
 Done when:
 
-- `crates/operon-core/src/lib.rs` only wires modules, re-exports public types,
+- [`crates/operon-core/src/lib.rs`](../../crates/operon-core/src/lib.rs) only wires modules, re-exports public types,
   and keeps crate-level tests.
 - serialized YAML/JSON names, gRPC schemas, SDK APIs, CLI behavior, and daemon
   behavior do not change.
@@ -3218,14 +3218,14 @@ Detailed plan: `docs/plan/v0.8.5-core-domain-module-boundaries.md`.
 
 Completed:
 
-- Split `operon-core` into `runtime`, `fs`, `job`, `service`, `policy`,
+- Split [`operon-core`](../../crates/operon-core) into `runtime`, `fs`, `job`, `service`, `policy`,
   `audit`, `discovery`, and `trace` modules.
 - Kept root-level public re-exports so current downstream imports continue to
   work.
 - Preserved serde formats, gRPC schemas, SDK APIs, CLI behavior, and daemon
   behavior.
-- Added module path / root re-export coverage in `operon-core` tests.
-- Added `scripts/verify-v0.8.5-core-domain-modules.sh` and wired it into CI.
+- Added module path / root re-export coverage in [`operon-core`](../../crates/operon-core) tests.
+- Added [`scripts/verify-v0.8.5-core-domain-modules.sh`](../../scripts/verify-v0.8.5-core-domain-modules.sh) and wired it into CI.
 
 Remaining:
 
@@ -3246,12 +3246,12 @@ Plan:
 - split `operond` runtime internals into state, runtime service, auth, job
   runtime, job logs, service forwarding, datagram forwarding, and audit
   modules.
-- split non-fs `operon-cli` command families into `commands/*` modules and
+- split non-fs [`operon-cli`](../../crates/operon-cli) command families into `commands/*` modules and
   reduce repeated text/json/quiet rendering branches where practical.
-- add a lightweight Rust `operon-grpc-client` crate for tonic endpoint URI
+- add a lightweight Rust [`operon-grpc-client`](../../crates/operon-grpc-client) crate for tonic endpoint URI
   normalization, auth/context metadata, typed client construction, and Rust-side
   stream chunk helpers shared by CLI and mount.
-- split `operon-mount` into remote client, inode table, FUSE callbacks, path,
+- split [`operon-mount`](../../crates/operon-mount) into remote client, inode table, FUSE callbacks, path,
   errors, and session modules while keeping it a Linux adapter crate.
 - add `operon graph run` and optionally `operon workflow run` aliases while
   keeping top-level `operon run` compatible.
@@ -3264,12 +3264,12 @@ Plan:
 
 Done when:
 
-- `crates/operond/src/main.rs` no longer directly owns job runtime, job log
+- [`crates/operond/src/main.rs`](../../crates/operond/src/main.rs) no longer directly owns job runtime, job log
   retention, audit append, TCP service tunnel, or UDP datagram tunnel internals.
-- `crates/operon-cli/src/main.rs` no longer owns non-fs command handlers and
+- [`crates/operon-cli/src/main.rs`](../../crates/operon-cli/src/main.rs) no longer owns non-fs command handlers and
   renderers.
 - CLI and mount share Rust gRPC endpoint/auth/client helpers.
-- `operon-mount` has module boundaries for remote client, inode table, FUSE
+- [`operon-mount`](../../crates/operon-mount) has module boundaries for remote client, inode table, FUSE
   callbacks, paths, errors, and session lifecycle.
 - TypeScript SDK exposes direct public methods for the listed core protocol
   capabilities.
@@ -3280,10 +3280,10 @@ Detailed plan:
 
 Completed:
 
-- Added `operon-grpc-client` and migrated CLI plus Linux mount gRPC callers to
+- Added [`operon-grpc-client`](../../crates/operon-grpc-client) and migrated CLI plus Linux mount gRPC callers to
   shared endpoint/auth/context/client/chunk helpers.
 - Split non-fs CLI command handlers into `commands/*` modules and reduced
-  `operon-cli/src/main.rs` to Clap model construction and high-level dispatch.
+  [`operon-cli/src/main.rs`](../../crates/operon-cli/src/main.rs) to Clap model construction and high-level dispatch.
 - Added `operon graph run` and `operon workflow run` aliases while preserving
   top-level `operon run`.
 - Updated `operon --json fs read <target> --output <file>` to emit a
@@ -3291,11 +3291,11 @@ Completed:
 - Split Linux mount internals into remote client, inode table, FUSE callbacks,
   path, errors, and session modules.
 - Split daemon auth, audit, state, job runtime/log retention, and service
-  forwarding internals out of `operond/src/main.rs`.
+  forwarding internals out of [`operond/src/main.rs`](../../crates/operond/src/main.rs).
 - Exposed direct TypeScript SDK methods for capabilities, fs stat/list, job
   run/get/cancel, and audit listing.
-- Added reusable validation helpers in `scripts/lib/validation.sh`.
-- Added `scripts/verify-v0.8.6-runtime-cli-client-modularization.sh` and wired
+- Added reusable validation helpers in [`scripts/lib/validation.sh`](../../scripts/lib/validation.sh).
+- Added [`scripts/verify-v0.8.6-runtime-cli-client-modularization.sh`](../../scripts/verify-v0.8.6-runtime-cli-client-modularization.sh) and wired
   it into CI.
 
 Remaining:
@@ -3314,7 +3314,7 @@ denial handling in the daemon filesystem service.
 
 Review finding:
 
-- `crates/operond/src/fs_service.rs` repeated the same `authorize_fs`, path
+- [`crates/operond/src/fs_service.rs`](../../crates/operond/src/fs_service.rs) repeated the same `authorize_fs`, path
   resolver, failed audit event, and `tonic::Status` conversion pattern across
   most filesystem operations.
 - That repetition made the fs service harder to review and increased the risk
@@ -3334,16 +3334,16 @@ Detailed plan:
 Completed:
 
 - Added `authorize_fs_action` plus focused workspace path resolver helpers in
-  `crates/operond/src/fs_service.rs`.
+  [`crates/operond/src/fs_service.rs`](../../crates/operond/src/fs_service.rs).
 - Reused those helpers across stat, list, read range, write range, truncate,
   mkdir, delete, rename, and copy operations.
-- Added `scripts/verify-v0.8.7-fs-service-reuse-cleanup.sh`.
+- Added [`scripts/verify-v0.8.7-fs-service-reuse-cleanup.sh`](../../scripts/verify-v0.8.7-fs-service-reuse-cleanup.sh).
 
 Remaining:
 
 - No v0.8.7 work remains.
 - Moving the full tonic `GrpcRuntime` trait implementation out of
-  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  [`operond/src/main.rs`](../../crates/operond/src/main.rs) remains a future maintainability candidate if runtime
   method routing grows again.
 
 ## Phase 51: v0.8.8 Filesystem Stream Handler Cleanup
@@ -3355,7 +3355,7 @@ service module instead of the tonic runtime router.
 
 Review finding:
 
-- `crates/operond/src/main.rs` still owned full-file `ReadFile` and
+- [`crates/operond/src/main.rs`](../../crates/operond/src/main.rs) still owned full-file `ReadFile` and
   `WriteFile` authorization, workspace path resolution, audit failure handling,
   chunk-size validation, and file IO.
 - That duplicated the filesystem service boundary improved in v0.8.7 and kept
@@ -3363,8 +3363,8 @@ Review finding:
 
 Done when:
 
-- `fs_service.rs` owns full-file read and write stream handlers.
-- `operond/src/main.rs` only performs gRPC auth, audit context scoping, and
+- [`fs_service.rs`](../../crates/operond/src/fs_service.rs) owns full-file read and write stream handlers.
+- [`operond/src/main.rs`](../../crates/operond/src/main.rs) only performs gRPC auth, audit context scoping, and
   delegation for `ReadFile` and `WriteFile`.
 - validation guards against reintroducing stream handler logic in `main.rs`.
 - daemon tests remain green.
@@ -3378,13 +3378,13 @@ Completed:
 - Reused the v0.8.7 authorization and path resolution helpers for full-file
   stream reads and writes.
 - Reduced the `ReadFile` and `WriteFile` runtime methods to delegation.
-- Added `scripts/verify-v0.8.8-fs-stream-handler-cleanup.sh`.
+- Added [`scripts/verify-v0.8.8-fs-stream-handler-cleanup.sh`](../../scripts/verify-v0.8.8-fs-stream-handler-cleanup.sh).
 
 Remaining:
 
 - No v0.8.8 work remains.
 - Moving the full tonic `GrpcRuntime` trait implementation out of
-  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  [`operond/src/main.rs`](../../crates/operond/src/main.rs) remains a future maintainability candidate if runtime
   method routing grows again.
 
 ## Phase 52: v0.8.9 Service Tunnel Boundary Cleanup
@@ -3396,17 +3396,17 @@ handling, and connection setup inside the daemon service forwarding module.
 
 Review finding:
 
-- `crates/operond/src/main.rs` still owned TCP and UDP service tunnel open
+- [`crates/operond/src/main.rs`](../../crates/operond/src/main.rs) still owned TCP and UDP service tunnel open
   handshakes: target-envelope validation, service policy authorization,
   protocol mismatch checks, audit records, TCP connection setup, and datagram
   stream delegation.
 - That kept service forwarding business logic in the gRPC router instead of
-  behind `service_forward.rs`.
+  behind [`service_forward.rs`](../../crates/operond/src/service_forward.rs).
 
 Done when:
 
-- `service_forward.rs` owns TCP and UDP tunnel open/handshake logic.
-- `operond/src/main.rs` only performs gRPC auth, audit context scoping, and
+- [`service_forward.rs`](../../crates/operond/src/service_forward.rs) owns TCP and UDP tunnel open/handshake logic.
+- [`operond/src/main.rs`](../../crates/operond/src/main.rs) only performs gRPC auth, audit context scoping, and
   delegation for service tunnel RPCs.
 - validation guards against reintroducing tunnel handshake logic in `main.rs`.
 - daemon tests remain green.
@@ -3421,13 +3421,13 @@ Completed:
 - Added service tunnel stream type aliases for the runtime trait associated
   stream types.
 - Reduced service tunnel runtime methods to delegation.
-- Added `scripts/verify-v0.8.9-service-tunnel-boundary-cleanup.sh`.
+- Added [`scripts/verify-v0.8.9-service-tunnel-boundary-cleanup.sh`](../../scripts/verify-v0.8.9-service-tunnel-boundary-cleanup.sh).
 
 Remaining:
 
 - No v0.8.9 work remains.
 - Moving the full tonic `GrpcRuntime` trait implementation out of
-  `operond/src/main.rs` remains a future maintainability candidate if runtime
+  [`operond/src/main.rs`](../../crates/operond/src/main.rs) remains a future maintainability candidate if runtime
   method routing grows again.
 
 ## Phase 53: v0.8.10 Mount Lock Hardening
@@ -3439,7 +3439,7 @@ panicking when the inode table lock is poisoned.
 
 Review finding:
 
-- `crates/operon-mount/src/fuse_fs.rs` used repeated
+- [`crates/operon-mount/src/fuse_fs.rs`](../../crates/operon-mount/src/fuse_fs.rs) used repeated
   `expect("inode table poisoned")` calls inside production FUSE callbacks.
 - A poisoned inode-table lock could panic the mount process instead of
   returning a normal errno to the kernel.
@@ -3457,10 +3457,10 @@ Detailed plan:
 
 Completed:
 
-- Added `write_inodes` in `crates/operon-mount/src/fuse_fs.rs`.
+- Added `write_inodes` in [`crates/operon-mount/src/fuse_fs.rs`](../../crates/operon-mount/src/fuse_fs.rs).
 - Replaced direct write-lock `expect` calls across lookup/upsert, setattr,
   unlink, rmdir, rename, write cache refresh, and readdir paths.
-- Added `scripts/verify-v0.8.10-mount-lock-hardening.sh`.
+- Added [`scripts/verify-v0.8.10-mount-lock-hardening.sh`](../../scripts/verify-v0.8.10-mount-lock-hardening.sh).
 
 Remaining:
 
@@ -3477,7 +3477,7 @@ of panicking.
 
 Review finding:
 
-- `crates/operon-cli/src/grpc.rs` used
+- [`crates/operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs) used
   `expect("datagram peer state poisoned")` in UDP datagram forwarding peer
   state helpers.
 - A poisoned peer-state lock could panic a long-running `operon service
@@ -3501,12 +3501,12 @@ Completed:
   command path.
 - Changed local UDP read task lock failures to stop forwarding instead of
   panicking the task.
-- Added `scripts/verify-v0.8.11-cli-datagram-lock-hardening.sh`.
+- Added [`scripts/verify-v0.8.11-cli-datagram-lock-hardening.sh`](../../scripts/verify-v0.8.11-cli-datagram-lock-hardening.sh).
 
 Remaining:
 
 - No v0.8.11 work remains.
-- Broader `operon-cli/src/grpc.rs` command-family split remains a future
+- Broader [`operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs) command-family split remains a future
   maintainability candidate.
 
 ## Phase 55: v0.8.12 Daemon Datagram Invariant Cleanup
@@ -3518,7 +3518,7 @@ forwarding.
 
 Review finding:
 
-- `crates/operond/src/service_forward.rs` used
+- [`crates/operond/src/service_forward.rs`](../../crates/operond/src/service_forward.rs) used
   `expect("session should exist after creation")` after creating or looking up
   a UDP peer session.
 - The condition should be handled as a tunnel close response instead of a
@@ -3537,7 +3537,7 @@ Completed:
 
 - Replaced the session lookup `expect` with a close response for the affected
   peer.
-- Added `scripts/verify-v0.8.12-daemon-datagram-invariant-cleanup.sh`.
+- Added [`scripts/verify-v0.8.12-daemon-datagram-invariant-cleanup.sh`](../../scripts/verify-v0.8.12-daemon-datagram-invariant-cleanup.sh).
 
 Remaining:
 
@@ -3554,9 +3554,9 @@ handling and Linux mount remote client runtime access.
 
 Review finding:
 
-- `crates/operond/src/job_runtime.rs` used
+- [`crates/operond/src/job_runtime.rs`](../../crates/operond/src/job_runtime.rs) used
   `expect("just pushed job log")` after appending a job log entry.
-- `crates/operon-mount/src/remote_client.rs` used
+- [`crates/operon-mount/src/remote_client.rs`](../../crates/operon-mount/src/remote_client.rs) used
   `expect("remote fs runtime is only cleared during drop")` when resolving the
   blocking runtime used by remote filesystem operations.
 - Both sites should fail as logged errors or returned errors instead of
@@ -3580,7 +3580,7 @@ Completed:
 - Changed the mount remote runtime accessor to return `anyhow::Result`.
 - Propagated remote runtime lookup errors through remote filesystem
   operations.
-- Added `scripts/verify-v0.8.13-production-panic-cleanup.sh`.
+- Added [`scripts/verify-v0.8.13-production-panic-cleanup.sh`](../../scripts/verify-v0.8.13-production-panic-cleanup.sh).
 
 Remaining:
 
@@ -3598,7 +3598,7 @@ construction.
 
 Review finding:
 
-- `crates/operon-cli/src/onboard.rs` used
+- [`crates/operon-cli/src/onboard.rs`](../../crates/operon-cli/src/onboard.rs) used
   `expect("daemon onboarding should have a token")` after deriving the daemon
   token for daemon and combined onboarding roles.
 - The token should always exist for those roles, but a broken invariant should
@@ -3616,12 +3616,12 @@ Detailed plan:
 Completed:
 
 - Replaced the daemon-token `expect` with an explicit `anyhow` error branch.
-- Added `scripts/verify-v0.8.14-onboard-invariant-cleanup.sh`.
+- Added [`scripts/verify-v0.8.14-onboard-invariant-cleanup.sh`](../../scripts/verify-v0.8.14-onboard-invariant-cleanup.sh).
 
 Remaining:
 
 - No v0.8.14 work remains.
-- `operon-cli` still contains test-only assertion panics and one
+- [`operon-cli`](../../crates/operon-cli) still contains test-only assertion panics and one
   `String` formatting invariant in token generation; those do not represent
   user-triggered onboarding panics.
 
@@ -3634,7 +3634,7 @@ from CLI private-file helpers.
 
 Review finding:
 
-- `crates/operon-cli/src/private_files.rs` formatted generated token bytes
+- [`crates/operon-cli/src/private_files.rs`](../../crates/operon-cli/src/private_files.rs) formatted generated token bytes
   with `write!` and `expect("writing to String should not fail")`.
 - Writing to a `String` is effectively infallible, but token generation does
   not need a panic-style assertion for hex encoding.
@@ -3653,7 +3653,7 @@ Completed:
 - Replaced `write!`-based hex formatting with direct nibble-to-character
   encoding.
 - Removed the now-unused `fmt::Write` import.
-- Added `scripts/verify-v0.8.15-token-generation-panic-cleanup.sh`.
+- Added [`scripts/verify-v0.8.15-token-generation-panic-cleanup.sh`](../../scripts/verify-v0.8.15-token-generation-panic-cleanup.sh).
 
 Remaining:
 
@@ -3704,7 +3704,7 @@ Completed:
   acceptance docs.
 - Left stale `provider` config fields inert so existing endpoint entries are
   not blocked by metadata Operon no longer consumes.
-- Added `scripts/verify-v0.8.16-endpoint-model-simplification.sh`.
+- Added [`scripts/verify-v0.8.16-endpoint-model-simplification.sh`](../../scripts/verify-v0.8.16-endpoint-model-simplification.sh).
 
 Remaining:
 
@@ -3741,7 +3741,7 @@ Detailed plan:
 Completed:
 
 - Added `OperonConfig::from_str_with_warnings` and config warning records.
-- Split unknown-field scanning into `crates/operon-config/src/warnings.rs`.
+- Split unknown-field scanning into [`crates/operon-config/src/warnings.rs`](../../crates/operon-config/src/warnings.rs).
 - Added unknown field detection for root, daemon, daemon auth, client nodes,
   node auth, policy, secrets, fs mounts, job policy, services, and service
   permissions.
@@ -3749,13 +3749,13 @@ Completed:
   returning the parsed config.
 - Added config and CLI integration tests proving unknown fields warn without
   blocking commands.
-- Added `scripts/verify-v0.8.17-config-unknown-field-warnings.sh`.
+- Added [`scripts/verify-v0.8.17-config-unknown-field-warnings.sh`](../../scripts/verify-v0.8.17-config-unknown-field-warnings.sh).
 
 Remaining:
 
 - No v0.8.17 work remains.
 - Future schema additions should update the unknown-field allowlist in
-  `operon-config`.
+  [`operon-config`](../../crates/operon-config).
 
 ## Phase 61: v0.8.18 Docs, Help, and Skills Synchronization
 
@@ -3780,7 +3780,7 @@ Completed:
 
 - Updated repo-local skills and planning docs to use current mDNS discovery
   syntax.
-- Added `scripts/verify-docs-help-skills-sync.sh`.
+- Added [`scripts/verify-docs-help-skills-sync.sh`](../../scripts/verify-docs-help-skills-sync.sh).
 - Added graph/workflow help validation to the docs/help/skills sync gate.
 - Added AGENTS.md rules requiring future CLI, config, endpoint, docs, and skill
   changes to keep those surfaces synchronized.
@@ -3812,8 +3812,8 @@ Done when:
 
 Completed:
 
-- Added `scripts/verify-v0.9-endpoint-model.sh`.
-- Kept `examples/config.yaml` endpoint-only.
+- Added [`scripts/verify-v0.9-endpoint-model.sh`](../../scripts/verify-v0.9-endpoint-model.sh).
+- Kept [`examples/config.yaml`](../../examples/config.yaml) endpoint-only.
 - Added mDNS discovery record coverage for endpoint candidates without provider
   metadata.
 - Added discovery export coverage proving generated config contains endpoint
@@ -3855,7 +3855,7 @@ Completed:
   policy grants.
 - Documented third-party control-plane scripts as external generators of
   endpoint-only config.
-- Added `scripts/verify-post-v0.9-discovery-ux.sh` and wired it into CI.
+- Added [`scripts/verify-post-v0.9-discovery-ux.sh`](../../scripts/verify-post-v0.9-discovery-ux.sh) and wired it into CI.
 
 Remaining:
 
@@ -3883,7 +3883,7 @@ Completed:
 - Removed the static `default_capabilities` source.
 - Updated daemon startup to build `CapabilityList` from `PolicyConfig`.
 - Updated service denial audit ids to use `service:<service_id>`.
-- Added `scripts/verify-policy-derived-capabilities.sh`.
+- Added [`scripts/verify-policy-derived-capabilities.sh`](../../scripts/verify-policy-derived-capabilities.sh).
 
 Remaining:
 
@@ -3898,7 +3898,7 @@ events from the existing append-only JSONL store at startup.
 
 Done when:
 
-- `operon-store` can load `kind: audit` records from the JSONL store.
+- [`operon-store`](../../crates/operon-store) can load `kind: audit` records from the JSONL store.
 - daemon startup seeds `AppState.audit` from the configured store.
 - startup audit loading keeps the existing bounded in-memory audit retention.
 - no protocol, schema, or query database change is introduced.
@@ -3911,7 +3911,7 @@ Completed:
 - Added `bounded_audit_events` to preserve `MAX_IN_MEMORY_AUDIT_EVENTS` during
   startup reload.
 - Added focused store and daemon tests.
-- Added `scripts/verify-v0.9.3-store-backed-audit-visibility.sh`.
+- Added [`scripts/verify-v0.9.3-store-backed-audit-visibility.sh`](../../scripts/verify-v0.9.3-store-backed-audit-visibility.sh).
 
 Remaining:
 
@@ -3949,7 +3949,7 @@ Done when:
 - shell-command and argv job execution contracts are clear across protocol,
   CLI, SDK, docs, and tests if argv execution is implemented.
 - `init config` and `onboard` explain their LAN advertisement defaults.
-- `scripts/verify-v0.9.4-runtime-hardening-consolidation.sh` is added and
+- [`scripts/verify-v0.9.4-runtime-hardening-consolidation.sh`](../../scripts/verify-v0.9.4-runtime-hardening-consolidation.sh) is added and
   wired into CI.
 
 Detailed plan:
@@ -3968,7 +3968,7 @@ Completed:
 - Bumped `PROTOCOL_VERSION` to `v0.9.4`.
 - Added LAN advertisement default notes for `operon init config` and
   `operon onboard`.
-- Added `scripts/verify-v0.9.4-runtime-hardening-consolidation.sh` and wired
+- Added [`scripts/verify-v0.9.4-runtime-hardening-consolidation.sh`](../../scripts/verify-v0.9.4-runtime-hardening-consolidation.sh) and wired
   it into CI.
 
 Remaining:
@@ -4002,7 +4002,7 @@ Done when:
 - human `operon config explain` output remains readable and names effective
   grants and limits.
 - unknown config field warnings remain non-blocking.
-- `scripts/verify-v0.9.5-policy-language-hardening.sh` is added and wired into
+- [`scripts/verify-v0.9.5-policy-language-hardening.sh`](../../scripts/verify-v0.9.5-policy-language-hardening.sh) is added and wired into
   CI.
 
 Detailed plan:
@@ -4012,7 +4012,7 @@ Remaining:
 
 Completed:
 
-- Added `PolicyDecision` and `PolicyReasonCode` to `operon-core`.
+- Added `PolicyDecision` and `PolicyReasonCode` to [`operon-core`](../../crates/operon-core).
 - Added shared decision-producing authorization helpers for filesystem, job,
   secret, and service policy checks.
 - Updated daemon deny audit paths to record stable policy reason codes with
@@ -4021,7 +4021,7 @@ Completed:
   grants.
 - Documented the policy decision vocabulary in README, `PROTOCOL.md`, and
   runtime API docs.
-- Added `scripts/verify-v0.9.5-policy-language-hardening.sh` and wired it into
+- Added [`scripts/verify-v0.9.5-policy-language-hardening.sh`](../../scripts/verify-v0.9.5-policy-language-hardening.sh) and wired it into
   CI.
 
 Remaining:
@@ -4057,7 +4057,7 @@ Done when:
   reimplementing policy in the CLI.
 - unsupported capability/action pairs return a denied diagnostic with
   `unsupported-action`.
-- `scripts/verify-v0.9.6-capability-diagnostics.sh` is added and wired into CI.
+- [`scripts/verify-v0.9.6-capability-diagnostics.sh`](../../scripts/verify-v0.9.6-capability-diagnostics.sh) is added and wired into CI.
 
 Detailed plan:
 `docs/plan/v0.9.6-capability-diagnostics.md`.
@@ -4076,7 +4076,7 @@ Completed:
   bindings.
 - Documented capability diagnostics in README, `PROTOCOL.md`, and runtime API
   docs.
-- Added `scripts/verify-v0.9.6-capability-diagnostics.sh` and wired it into CI.
+- Added [`scripts/verify-v0.9.6-capability-diagnostics.sh`](../../scripts/verify-v0.9.6-capability-diagnostics.sh) and wired it into CI.
 
 Remaining:
 
@@ -4137,11 +4137,11 @@ Completed:
   v0.9.7 protocol version and the README/DEVELOPMENT documentation split.
 - Follow-up README validation ran the public release Quickstart in Docker,
   aligned user-facing examples with the real onboard defaults, documented
-  skills prerequisites, and added `scripts/verify-readme-quickstart-docker.sh`.
+  skills prerequisites, and added [`scripts/verify-readme-quickstart-docker.sh`](../../scripts/verify-readme-quickstart-docker.sh).
 - Follow-up release hardening moved Rust release builds into an Ubuntu 20.04
   container, pinned a modern `protoc` for proto3 optional support, documented
   the glibc 2.31+ Linux binary baseline, and added
-  `scripts/verify-release-glibc-baseline.sh`.
+  [`scripts/verify-release-glibc-baseline.sh`](../../scripts/verify-release-glibc-baseline.sh).
 - Follow-up README validation tightened the agent skills prerequisite to
   Node.js 18+ and made the Ubuntu 20.04 Docker quickstart validation install
   Node.js 20 before running the Vercel Skills CLI.
@@ -4149,6 +4149,10 @@ Completed:
   and the TypeScript SDK package version to `v0.9.9` / `0.9.9`, exposed
   `operon --version` and `operond --version`, and updated the release policy so
   future public releases keep tag, package, and runtime health versions aligned.
+- Follow-up documentation link audit linked references to source files, crates,
+  protocol files, scripts, workflows, examples, and skills across README,
+  DEVELOPMENT, architecture docs, phase docs, quality docs, AGENTS.md, and
+  repo-local skills.
 
 Remaining:
 

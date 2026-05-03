@@ -13,7 +13,7 @@ later hardening work.
 - Runtime configs use `grpc://` or `grpcs://` node endpoints.
 - Scripts should use `operon --json`, not direct daemon calls.
 - Programs should use an SDK or generate a gRPC client from
-  `proto/operon/runtime.proto`.
+  [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto).
 - Clients that do not use an SDK should follow `PROTOCOL.md`.
 - Authentication is bearer-token based when `daemon.auth.token`,
   `daemon.auth.token_file`, or `daemon.auth.token_env` is configured.
@@ -36,7 +36,7 @@ networking, or another existing secure network layer.
 
 ## gRPC Runtime Surface
 
-The source of truth is `proto/operon/runtime.proto`.
+The source of truth is [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto).
 
 Unary calls:
 
@@ -172,5 +172,5 @@ and other shell syntax.
 script needs stable machine-readable output.
 
 SDKs and generated clients are the supported programmatic interface. A new
-daemon runtime surface must be added to `proto/operon/runtime.proto` first, then
+daemon runtime surface must be added to [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto) first, then
 exposed through CLI/SDK as needed.

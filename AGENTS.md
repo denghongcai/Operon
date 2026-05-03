@@ -115,7 +115,7 @@ Operon should not own:
     and release/package/protocol version policy cleanup.
 
 - `docs/plan/v0.8.4-runtime-cli-modularization.md`
-  - v0.8.4 scope for behavior-preserving `operond` and `operon-cli`
+  - v0.8.4 scope for behavior-preserving `operond` and [`operon-cli`](crates/operon-cli)
     modularization before endpoint discovery UX work resumes.
 
 - `docs/plan/v0.8.6-runtime-cli-client-modularization.md`
@@ -244,7 +244,7 @@ Operon should not own:
 - Completed cleanup milestone: v0.6.2 CLI fs mutation command alignment.
 - Completed fs milestone: v0.6.3 same-node fs copy for protocol, CLI, and SDK.
 - Completed onboarding milestone: v0.6.4 guided first-run setup through `operon onboard`.
-- Completed config milestone: v0.6.5 unified `config.yaml` through `operon-config`.
+- Completed config milestone: v0.6.5 unified `config.yaml` through [`operon-config`](crates/operon-config).
 - Completed hardening milestone: v0.6.6 workspace containment, isolated job
   environment construction, graph audit context, streaming client cleanup, and
   runtime helper crate boundaries.
@@ -290,7 +290,7 @@ Operon should not own:
   filesystem handlers and pagination helpers, plus CLI output, target parsing,
   and fs command handlers. Job runtime, service forwarding, audit helpers, and
   non-fs CLI command families remain follow-up modularization work.
-- Completed core domain boundary milestone: v0.8.5 split `operon-core` into
+- Completed core domain boundary milestone: v0.8.5 split [`operon-core`](crates/operon-core) into
   runtime, fs, job, service, policy, audit, discovery, and trace modules while
   keeping root-level public re-exports for compatibility.
 - Completed maintainability milestone: v0.8.6 added shared Rust gRPC client
@@ -301,12 +301,12 @@ Operon should not own:
   authorization, path resolution, and failed-audit handling duplication while
   preserving existing fs operation behavior.
 - Completed cleanup milestone: v0.8.8 moved daemon full-file filesystem stream
-  read/write behavior behind `fs_service.rs`, leaving `operond/src/main.rs`
+  read/write behavior behind [`fs_service.rs`](crates/operond/src/fs_service.rs), leaving [`operond/src/main.rs`](crates/operond/src/main.rs)
   responsible only for gRPC auth, audit context scoping, and delegation for
   those RPCs.
 - Completed cleanup milestone: v0.8.9 moved daemon TCP and UDP service tunnel
-  open/handshake logic behind `service_forward.rs`, leaving
-  `operond/src/main.rs` responsible only for gRPC auth, audit context scoping,
+  open/handshake logic behind [`service_forward.rs`](crates/operond/src/service_forward.rs), leaving
+  [`operond/src/main.rs`](crates/operond/src/main.rs) responsible only for gRPC auth, audit context scoping,
   and delegation for those RPCs.
 - Completed hardening milestone: v0.8.10 replaced Linux FUSE mount inode-table
   write-lock panics with helper-mediated errors that callbacks return as
@@ -374,7 +374,7 @@ Operon should not own:
 - When CLI commands, config shape, endpoint/discovery behavior, docs, or skills
   change, update README, PROTOCOL, relevant docs/plan files, repo-local skills,
   and AGENTS.md in the same task when affected.
-- Run `scripts/verify-docs-help-skills-sync.sh` after changes that touch CLI
+- Run [`scripts/verify-docs-help-skills-sync.sh`](scripts/verify-docs-help-skills-sync.sh) after changes that touch CLI
   help, docs, skills, endpoint/discovery behavior, or AGENTS.md rules.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
@@ -420,7 +420,7 @@ Defer:
 - Public release tags, Rust crate versions, the TypeScript SDK package version,
   and `PROTOCOL_VERSION` must align for public releases so CLI `--version`,
   SDK package metadata, and runtime health output report the same release line.
-- Every public release must update `scripts/verify-readme-quickstart-docker.sh`
+- Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
   when README Quickstart, release packaging, install prerequisites, or agent
   skills guidance changes, and must run that script against the public release
   before publishing or declaring the release complete.
@@ -439,9 +439,9 @@ Defer:
   poisoned-lock handling, Linux-only mount dependency gating, and CI governance
   validation. Larger domain splits remain future work.
 - Latest phase status update: v0.6.12 completed Runtime Boundary Stabilization.
-  `StreamJobLogs` now uses event envelopes, `operon-store` exposes an
+  `StreamJobLogs` now uses event envelopes, [`operon-store`](crates/operon-store) exposes an
   append-only writer boundary, daemon persistence failures surface at runtime
-  boundaries, `operon-mount` is a Linux FUSE adapter crate boundary, CI
+  boundaries, [`operon-mount`](crates/operon-mount) is a Linux FUSE adapter crate boundary, CI
   includes the v0.6.12 validation script, and the post-release documentation
   drift pass aligned current docs with the v0.6.12 runtime. Nothing remains in
   v0.6.12.
@@ -452,7 +452,7 @@ Defer:
   Modularization pass. Daemon fs and pagination logic plus CLI fs/output/target
   logic are extracted and validated. Job/service/audit and non-fs CLI command
   extraction remains future maintainability work.
-- Latest phase status update: v0.8.5 completed. `operon-core` domain modules
+- Latest phase status update: v0.8.5 completed. [`operon-core`](crates/operon-core) domain modules
   are split, compatibility re-exports remain in place, CI has a dedicated
   v0.8.5 validation script, and no behavior or schema work remains in this
   phase.
@@ -463,20 +463,20 @@ Defer:
   summary output, and low-risk validation shell helpers are complete. Nothing
   remains in v0.8.6.
 - Latest phase status update: v0.8.7 completed Filesystem Service Reuse
-  Cleanup. `fs_service.rs` now uses helper boundaries for authorization,
+  Cleanup. [`fs_service.rs`](crates/operond/src/fs_service.rs) now uses helper boundaries for authorization,
   workspace path resolution, and failed-audit handling. Nothing remains in
   v0.8.7.
 - Latest phase status update: v0.8.8 completed Filesystem Stream Handler
   Cleanup. Full-file `ReadFile` and `WriteFile` stream behavior now lives in
-  `fs_service.rs`, and the runtime router delegates those RPCs. Nothing
+  [`fs_service.rs`](crates/operond/src/fs_service.rs), and the runtime router delegates those RPCs. Nothing
   remains in v0.8.8.
 - Latest phase status update: v0.8.9 completed Service Tunnel Boundary
   Cleanup. TCP and UDP service tunnel target parsing, authorization, protocol
   checks, audit handling, and connection setup now live in
-  `service_forward.rs`, and the runtime router delegates those RPCs. Nothing
+  [`service_forward.rs`](crates/operond/src/service_forward.rs), and the runtime router delegates those RPCs. Nothing
   remains in v0.8.9.
 - Latest phase status update: v0.8.10 completed Mount Lock Hardening.
-  `operon-mount` FUSE callbacks no longer panic on poisoned inode-table write
+  [`operon-mount`](crates/operon-mount) FUSE callbacks no longer panic on poisoned inode-table write
   locks; they return errno responses or propagated mount errors. Nothing
   remains in v0.8.10.
 - Latest phase status update: v0.8.11 completed CLI Datagram Lock Hardening.
@@ -510,27 +510,29 @@ Defer:
 - Latest phase status update: v0.9 completed Endpoint Model Acceptance.
   Endpoint-only example config, mDNS endpoint candidate records, endpoint-only
   discovery export, and no automatic policy grants are covered by
-  `scripts/verify-v0.9-endpoint-model.sh`. Nothing remains in v0.9.
+  [`scripts/verify-v0.9-endpoint-model.sh`](scripts/verify-v0.9-endpoint-model.sh). Nothing remains in v0.9.
 - Latest phase status update: v0.9.1 completed Post-v0.9 Discovery UX.
   Discovery export now refuses same-node endpoint conflicts, optional
   `--check-health` reports endpoint health in discovery output, external
   endpoint config generator guidance is documented, and
-  `scripts/verify-post-v0.9-discovery-ux.sh` covers the behavior. Nothing
+  [`scripts/verify-post-v0.9-discovery-ux.sh`](scripts/verify-post-v0.9-discovery-ux.sh) covers the behavior. Nothing
   remains in v0.9.1.
 - Latest phase status update: v0.9.2 completed Policy-Derived Capability
   Discovery. Daemon capability lists now come from `PolicyConfig`; fs, job, and
   service capabilities are advertised only when configured, service denial audit
   ids use `service:<service_id>`, and
-  `scripts/verify-policy-derived-capabilities.sh` covers the behavior. Nothing
+  [`scripts/verify-policy-derived-capabilities.sh`](scripts/verify-policy-derived-capabilities.sh) covers the behavior. Nothing
   remains in v0.9.2.
 - Latest phase status update: v0.9.3 completed Store-Backed Audit Visibility.
   Daemon startup now loads persisted audit events from the append-only JSONL
   store into the bounded in-memory audit queue, and
-  `scripts/verify-v0.9.3-store-backed-audit-visibility.sh` covers the behavior.
+  [`scripts/verify-v0.9.3-store-backed-audit-visibility.sh`](scripts/verify-v0.9.3-store-backed-audit-visibility.sh) covers the behavior.
   Nothing remains in v0.9.3.
 - Latest phase status update: v0.9.7 completed Runtime API Hardening.
   `ListFs` now uses paginated request/response metadata, CLI/mount/SDK helpers
   preserve complete-list behavior by walking pages, SDK file writes stream
   `ReadableStream` bodies without full pre-buffering, empty daemon job requests
-  are rejected, and runtime API docs list bidirectional tunnel RPCs explicitly.
-  Nothing remains in v0.9.7.
+  are rejected, runtime API docs list bidirectional tunnel RPCs explicitly,
+  release/version surfaces are aligned to v0.9.9, and the follow-up
+  documentation link audit linked source, crate, protocol, script, workflow,
+  example, and skill references. Nothing remains in v0.9.7.
