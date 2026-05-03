@@ -417,6 +417,13 @@ Defer:
 - Do not reintroduce Operon-owned transport/mesh/VPN responsibilities without updating the decision docs first.
 - Prefer adding or updating decision records when changing product scope or architecture boundaries.
 - Keep README language aligned with the decision docs.
+- Public release tags, Rust crate versions, the TypeScript SDK package version,
+  and `PROTOCOL_VERSION` must align for public releases so CLI `--version`,
+  SDK package metadata, and runtime health output report the same release line.
+- Every public release must update `scripts/verify-readme-quickstart-docker.sh`
+  when README Quickstart, release packaging, install prerequisites, or agent
+  skills guidance changes, and must run that script against the public release
+  before publishing or declaring the release complete.
 - After every task, update `docs/plan/development-phases.md` before finishing.
 - Phase updates must state which phase changed, what was completed, and what remains.
 - If implementation changes the phase scope, update the phase text itself instead of only adding a note.

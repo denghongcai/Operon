@@ -85,7 +85,7 @@ tokio::task_local! {
 }
 
 #[derive(Debug, Parser)]
-#[command(name = "operond", about = "Operon capability daemon")]
+#[command(name = "operond", version, about = "Operon capability daemon")]
 struct Args {
     #[command(subcommand)]
     command: Command,

@@ -5,6 +5,18 @@ fn operon() -> Command {
 }
 
 #[test]
+fn cli_version_matches_release_line() {
+    let output = operon()
+        .arg("--version")
+        .output()
+        .expect("run operon version");
+
+    assert!(output.status.success(), "stderr={}", stderr(&output));
+    let stdout = String::from_utf8(output.stdout).expect("utf8 version");
+    assert!(stdout.contains("0.9.9"), "stdout={stdout}");
+}
+
+#[test]
 fn help_lists_self_description_and_completion_command() {
     let output = operon().arg("--help").output().expect("run operon help");
 

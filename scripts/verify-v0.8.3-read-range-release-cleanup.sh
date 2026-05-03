@@ -12,7 +12,7 @@ rg -n 'fs_service::read_range' crates/operond/src/main.rs
 rg -n 'read_file_range\(operon_grpc_client::request' crates/operon-mount/src/remote_client.rs
 rg -n 'readFileRangeBytes' packages/sdk-js/src/index.ts
 rg -n 'ReadFileRange' PROTOCOL.md docs/architecture/runtime-api.md docs/architecture/technology-and-protocol-decisions.md
-rg -n 'PROTOCOL_VERSION: &str = "v0.9.7"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.9.9"' crates/operon-protocol/src/lib.rs
 
 python - <<'PY'
 from pathlib import Path
@@ -32,7 +32,7 @@ if "VERSION=v0.6.12" in development or "git tag v0.6.12" in development:
     raise SystemExit("DEVELOPMENT still hard-codes a stale v0.6.12 release command")
 for required in [
     "GitHub release tags identify shipped binary bundles",
-    "`PROTOCOL_VERSION` identifies the public gRPC wire/API compatibility line",
+    "`PROTOCOL_VERSION` must align with the public release tag",
 ]:
     if required not in development:
         raise SystemExit(f"DEVELOPMENT missing version policy text: {required}")

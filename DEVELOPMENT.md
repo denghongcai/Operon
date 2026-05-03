@@ -206,13 +206,12 @@ releases are intentionally left unpublished for manual review.
 Version policy:
 
 - GitHub release tags identify shipped binary bundles.
-- Rust crate versions and the TypeScript SDK package version identify package
-  publication lines; they do not need to change for every binary release until
-  crates.io/npm publishing is enabled.
-- `PROTOCOL_VERSION` identifies the public gRPC wire/API compatibility line.
-  Bump it when `proto/operon/runtime.proto` changes or compatibility semantics
-  change. Do not bump it for skills, test coverage, documentation-only, or
-  internal refactor phases.
+- Rust crate versions, the TypeScript SDK package version, and
+  `PROTOCOL_VERSION` must align with the public release tag before publishing a
+  release so `operon --version`, `operond --version`, SDK package metadata, and
+  `operon node ping` / health output do not disagree.
+- For internal or unpublished development work, defer the version bump until the
+  release preparation commit.
 
 ## Onboarding Details
 

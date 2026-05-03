@@ -17,6 +17,7 @@ use output::{print_json, OutputMode};
 #[derive(Debug, Parser)]
 #[command(
     name = "operon",
+    version,
     about = "Operate Operon nodes through config.yaml, gRPC runtime APIs, and policy-aware capabilities"
 )]
 struct Args {

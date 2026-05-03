@@ -3110,8 +3110,8 @@ Plan:
 - keep `ReadFile` as the streaming full-file API and document the difference.
 - clean up README release examples so they do not hard-code a stale release
   version.
-- document how GitHub release tags, Rust crate versions, TS SDK package
-  versions, and `PROTOCOL_VERSION` relate to each other.
+- document that GitHub release tags, Rust crate versions, TS SDK package
+  versions, and `PROTOCOL_VERSION` must align for public releases.
 
 Done when:
 
@@ -3119,8 +3119,8 @@ Done when:
 - daemon range-read validation prevents offset/size overflow.
 - protocol and SDK tests cover the new API surface.
 - README and release docs do not imply `v0.6.12` is the current install target.
-- version policy explains why protocol version bumps are tied to wire/API
-  compatibility, not every skills, testing, or internal cleanup phase.
+- version policy explains that public release preparation must align release,
+  package, and protocol versions together.
 
 Detailed plan: `docs/plan/v0.8.3-read-range-release-cleanup.md`.
 
@@ -4145,6 +4145,10 @@ Completed:
 - Follow-up README validation tightened the agent skills prerequisite to
   Node.js 18+ and made the Ubuntu 20.04 Docker quickstart validation install
   Node.js 20 before running the Vercel Skills CLI.
+- Follow-up version alignment bumped `PROTOCOL_VERSION`, Rust crate versions,
+  and the TypeScript SDK package version to `v0.9.9` / `0.9.9`, exposed
+  `operon --version` and `operond --version`, and updated the release policy so
+  future public releases keep tag, package, and runtime health versions aligned.
 
 Remaining:
 
