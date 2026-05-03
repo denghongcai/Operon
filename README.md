@@ -1,5 +1,7 @@
 # Operon
 
+[![Latest Release](https://img.shields.io/github/v/release/denghongcai/Operon?sort=semver&display_name=tag)](https://github.com/denghongcai/Operon/releases/latest)
+
 > The missing execution model for AI agents.
 
 Operon is an AI-native capability runtime for machines already connected by
