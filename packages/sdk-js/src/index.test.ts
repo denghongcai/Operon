@@ -355,12 +355,13 @@ describe("OperonClient", () => {
       fromPath: "/a.txt",
       toPath: "/b.txt",
       bytesCopied: "7",
+      version: "v1:file:7:123",
     });
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
     const result = await client.copyFile("node-a", "/a.txt", "/b.txt");
 
-    expect(result).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7 });
+    expect(result).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7, version: "v1:file:7:123" });
     expect(niceGrpcMock.client.copyFs).toHaveBeenCalledWith(
       { fromPath: "/a.txt", toPath: "/b.txt" },
       expect.any(Object),
@@ -386,7 +387,14 @@ describe("OperonClient", () => {
       const iterator = requests[Symbol.asyncIterator]();
       await expect(iterator.next()).resolves.toEqual({
         done: false,
-        value: { target: { path: "/stream.bin" } },
+        value: {
+          target: {
+            path: "/stream.bin",
+            precondition: undefined,
+            expectedVersion: undefined,
+            requireAbsent: false,
+          },
+        },
       });
       return { path: "/stream.bin", bytesWritten: "0" };
     });
@@ -406,6 +414,38 @@ describe("OperonClient", () => {
     await client.writeFileBytes("node-a", "/stream.bin", body);
 
     expect(pulls).toBeLessThan(3);
+  });
+
+  it("passes filesystem write expected versions as gRPC preconditions", async () => {
+    niceGrpcMock.client.writeFile.mockImplementation(async (requests: AsyncIterable<unknown>) => {
+      const iterator = requests[Symbol.asyncIterator]();
+      await expect(iterator.next()).resolves.toEqual({
+        done: false,
+        value: {
+          target: {
+            path: "/guarded.txt",
+            precondition: {
+              expectedVersion: "v1:file:3:123",
+              requireAbsent: false,
+            },
+            expectedVersion: "v1:file:3:123",
+            requireAbsent: false,
+          },
+        },
+      });
+      return { path: "/guarded.txt", bytesWritten: "3", version: "v1:file:3:456" };
+    });
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    await expect(
+      client.writeFileBytes("node-a", "/guarded.txt", "new", {
+        expected_version: "v1:file:3:123",
+      }),
+    ).resolves.toEqual({
+      path: "/guarded.txt",
+      bytes_written: 3,
+      version: "v1:file:3:456",
+    });
   });
 
   it("opens service tunnels as binary streams", async () => {
@@ -538,6 +578,7 @@ describe("OperonClient", () => {
       fromPath: "/a.txt",
       toPath: "/b.txt",
       bytesCopied: "7",
+      version: "v1:file:7:123",
     });
 
     const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
@@ -547,7 +588,7 @@ describe("OperonClient", () => {
     });
 
     expect(trace.status).toBe("succeeded");
-    expect(trace.steps[0].output).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7 });
+    expect(trace.steps[0].output).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7, version: "v1:file:7:123" });
   });
 });
 

@@ -235,6 +235,7 @@ export interface PolicyDecision {
 
 export interface FsPathRequest {
   path: string;
+  precondition?: FsPrecondition | undefined;
 }
 
 export interface FsListRequest {
@@ -248,6 +249,7 @@ export interface FsStat {
   isFile: boolean;
   isDir: boolean;
   size: string;
+  version: string;
 }
 
 export interface FsEntry {
@@ -256,6 +258,7 @@ export interface FsEntry {
   isFile: boolean;
   isDir: boolean;
   size: string;
+  version: string;
 }
 
 export interface FsList {
@@ -281,22 +284,32 @@ export interface WriteFileRequest {
 
 export interface WriteFileTarget {
   path: string;
+  precondition?: FsPrecondition | undefined;
+  expectedVersion?: string | undefined;
+  requireAbsent: boolean;
 }
 
 export interface FsWrite {
   path: string;
   bytesWritten: string;
+  version: string;
 }
 
 export interface FsWriteRangeRequest {
   path: string;
   offset: string;
   data: Uint8Array;
+  precondition?: FsPrecondition | undefined;
+  expectedVersion?: string | undefined;
+  requireAbsent: boolean;
 }
 
 export interface FsTruncateRequest {
   path: string;
   size: string;
+  precondition?: FsPrecondition | undefined;
+  expectedVersion?: string | undefined;
+  requireAbsent: boolean;
 }
 
 export interface FsDelete {
@@ -306,6 +319,11 @@ export interface FsDelete {
 export interface FsRenameRequest {
   fromPath: string;
   toPath: string;
+  fromPrecondition?: FsPrecondition | undefined;
+  toPrecondition?: FsPrecondition | undefined;
+  fromExpectedVersion?: string | undefined;
+  toExpectedVersion?: string | undefined;
+  toRequireAbsent: boolean;
 }
 
 export interface FsRename {
@@ -316,12 +334,23 @@ export interface FsRename {
 export interface FsCopyRequest {
   fromPath: string;
   toPath: string;
+  fromPrecondition?: FsPrecondition | undefined;
+  toPrecondition?: FsPrecondition | undefined;
+  fromExpectedVersion?: string | undefined;
+  toExpectedVersion?: string | undefined;
+  toRequireAbsent: boolean;
 }
 
 export interface FsCopy {
   fromPath: string;
   toPath: string;
   bytesCopied: string;
+  version: string;
+}
+
+export interface FsPrecondition {
+  expectedVersion?: string | undefined;
+  requireAbsent: boolean;
 }
 
 export interface ExecRunRequest {
@@ -1671,13 +1700,16 @@ export const PolicyDecision: MessageFns<PolicyDecision> = {
 };
 
 function createBaseFsPathRequest(): FsPathRequest {
-  return { path: "" };
+  return { path: "", precondition: undefined };
 }
 
 export const FsPathRequest: MessageFns<FsPathRequest> = {
   encode(message: FsPathRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.path !== "") {
       writer.uint32(10).string(message.path);
+    }
+    if (message.precondition !== undefined) {
+      FsPrecondition.encode(message.precondition, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -1697,6 +1729,14 @@ export const FsPathRequest: MessageFns<FsPathRequest> = {
           message.path = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.precondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1707,13 +1747,19 @@ export const FsPathRequest: MessageFns<FsPathRequest> = {
   },
 
   fromJSON(object: any): FsPathRequest {
-    return { path: isSet(object.path) ? globalThis.String(object.path) : "" };
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      precondition: isSet(object.precondition) ? FsPrecondition.fromJSON(object.precondition) : undefined,
+    };
   },
 
   toJSON(message: FsPathRequest): unknown {
     const obj: any = {};
     if (message.path !== "") {
       obj.path = message.path;
+    }
+    if (message.precondition !== undefined) {
+      obj.precondition = FsPrecondition.toJSON(message.precondition);
     }
     return obj;
   },
@@ -1724,6 +1770,9 @@ export const FsPathRequest: MessageFns<FsPathRequest> = {
   fromPartial(object: DeepPartial<FsPathRequest>): FsPathRequest {
     const message = createBaseFsPathRequest();
     message.path = object.path ?? "";
+    message.precondition = (object.precondition !== undefined && object.precondition !== null)
+      ? FsPrecondition.fromPartial(object.precondition)
+      : undefined;
     return message;
   },
 };
@@ -1829,7 +1878,7 @@ export const FsListRequest: MessageFns<FsListRequest> = {
 };
 
 function createBaseFsStat(): FsStat {
-  return { path: "", isFile: false, isDir: false, size: "0" };
+  return { path: "", isFile: false, isDir: false, size: "0", version: "" };
 }
 
 export const FsStat: MessageFns<FsStat> = {
@@ -1845,6 +1894,9 @@ export const FsStat: MessageFns<FsStat> = {
     }
     if (message.size !== "0") {
       writer.uint32(32).uint64(message.size);
+    }
+    if (message.version !== "") {
+      writer.uint32(42).string(message.version);
     }
     return writer;
   },
@@ -1888,6 +1940,14 @@ export const FsStat: MessageFns<FsStat> = {
           message.size = reader.uint64().toString();
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.version = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1911,6 +1971,7 @@ export const FsStat: MessageFns<FsStat> = {
         ? globalThis.Boolean(object.is_dir)
         : false,
       size: isSet(object.size) ? globalThis.String(object.size) : "0",
+      version: isSet(object.version) ? globalThis.String(object.version) : "",
     };
   },
 
@@ -1928,6 +1989,9 @@ export const FsStat: MessageFns<FsStat> = {
     if (message.size !== "0") {
       obj.size = message.size;
     }
+    if (message.version !== "") {
+      obj.version = message.version;
+    }
     return obj;
   },
 
@@ -1940,12 +2004,13 @@ export const FsStat: MessageFns<FsStat> = {
     message.isFile = object.isFile ?? false;
     message.isDir = object.isDir ?? false;
     message.size = object.size ?? "0";
+    message.version = object.version ?? "";
     return message;
   },
 };
 
 function createBaseFsEntry(): FsEntry {
-  return { name: "", path: "", isFile: false, isDir: false, size: "0" };
+  return { name: "", path: "", isFile: false, isDir: false, size: "0", version: "" };
 }
 
 export const FsEntry: MessageFns<FsEntry> = {
@@ -1964,6 +2029,9 @@ export const FsEntry: MessageFns<FsEntry> = {
     }
     if (message.size !== "0") {
       writer.uint32(40).uint64(message.size);
+    }
+    if (message.version !== "") {
+      writer.uint32(50).string(message.version);
     }
     return writer;
   },
@@ -2015,6 +2083,14 @@ export const FsEntry: MessageFns<FsEntry> = {
           message.size = reader.uint64().toString();
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.version = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2039,6 +2115,7 @@ export const FsEntry: MessageFns<FsEntry> = {
         ? globalThis.Boolean(object.is_dir)
         : false,
       size: isSet(object.size) ? globalThis.String(object.size) : "0",
+      version: isSet(object.version) ? globalThis.String(object.version) : "",
     };
   },
 
@@ -2059,6 +2136,9 @@ export const FsEntry: MessageFns<FsEntry> = {
     if (message.size !== "0") {
       obj.size = message.size;
     }
+    if (message.version !== "") {
+      obj.version = message.version;
+    }
     return obj;
   },
 
@@ -2072,6 +2152,7 @@ export const FsEntry: MessageFns<FsEntry> = {
     message.isFile = object.isFile ?? false;
     message.isDir = object.isDir ?? false;
     message.size = object.size ?? "0";
+    message.version = object.version ?? "";
     return message;
   },
 };
@@ -2403,13 +2484,22 @@ export const WriteFileRequest: MessageFns<WriteFileRequest> = {
 };
 
 function createBaseWriteFileTarget(): WriteFileTarget {
-  return { path: "" };
+  return { path: "", precondition: undefined, expectedVersion: undefined, requireAbsent: false };
 }
 
 export const WriteFileTarget: MessageFns<WriteFileTarget> = {
   encode(message: WriteFileTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.path !== "") {
       writer.uint32(10).string(message.path);
+    }
+    if (message.precondition !== undefined) {
+      FsPrecondition.encode(message.precondition, writer.uint32(18).fork()).join();
+    }
+    if (message.expectedVersion !== undefined) {
+      writer.uint32(26).string(message.expectedVersion);
+    }
+    if (message.requireAbsent !== false) {
+      writer.uint32(32).bool(message.requireAbsent);
     }
     return writer;
   },
@@ -2429,6 +2519,30 @@ export const WriteFileTarget: MessageFns<WriteFileTarget> = {
           message.path = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.precondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.expectedVersion = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.requireAbsent = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2439,13 +2553,35 @@ export const WriteFileTarget: MessageFns<WriteFileTarget> = {
   },
 
   fromJSON(object: any): WriteFileTarget {
-    return { path: isSet(object.path) ? globalThis.String(object.path) : "" };
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      precondition: isSet(object.precondition) ? FsPrecondition.fromJSON(object.precondition) : undefined,
+      expectedVersion: isSet(object.expectedVersion)
+        ? globalThis.String(object.expectedVersion)
+        : isSet(object.expected_version)
+        ? globalThis.String(object.expected_version)
+        : undefined,
+      requireAbsent: isSet(object.requireAbsent)
+        ? globalThis.Boolean(object.requireAbsent)
+        : isSet(object.require_absent)
+        ? globalThis.Boolean(object.require_absent)
+        : false,
+    };
   },
 
   toJSON(message: WriteFileTarget): unknown {
     const obj: any = {};
     if (message.path !== "") {
       obj.path = message.path;
+    }
+    if (message.precondition !== undefined) {
+      obj.precondition = FsPrecondition.toJSON(message.precondition);
+    }
+    if (message.expectedVersion !== undefined) {
+      obj.expectedVersion = message.expectedVersion;
+    }
+    if (message.requireAbsent !== false) {
+      obj.requireAbsent = message.requireAbsent;
     }
     return obj;
   },
@@ -2456,12 +2592,17 @@ export const WriteFileTarget: MessageFns<WriteFileTarget> = {
   fromPartial(object: DeepPartial<WriteFileTarget>): WriteFileTarget {
     const message = createBaseWriteFileTarget();
     message.path = object.path ?? "";
+    message.precondition = (object.precondition !== undefined && object.precondition !== null)
+      ? FsPrecondition.fromPartial(object.precondition)
+      : undefined;
+    message.expectedVersion = object.expectedVersion ?? undefined;
+    message.requireAbsent = object.requireAbsent ?? false;
     return message;
   },
 };
 
 function createBaseFsWrite(): FsWrite {
-  return { path: "", bytesWritten: "0" };
+  return { path: "", bytesWritten: "0", version: "" };
 }
 
 export const FsWrite: MessageFns<FsWrite> = {
@@ -2471,6 +2612,9 @@ export const FsWrite: MessageFns<FsWrite> = {
     }
     if (message.bytesWritten !== "0") {
       writer.uint32(16).uint64(message.bytesWritten);
+    }
+    if (message.version !== "") {
+      writer.uint32(26).string(message.version);
     }
     return writer;
   },
@@ -2498,6 +2642,14 @@ export const FsWrite: MessageFns<FsWrite> = {
           message.bytesWritten = reader.uint64().toString();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.version = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2515,6 +2667,7 @@ export const FsWrite: MessageFns<FsWrite> = {
         : isSet(object.bytes_written)
         ? globalThis.String(object.bytes_written)
         : "0",
+      version: isSet(object.version) ? globalThis.String(object.version) : "",
     };
   },
 
@@ -2526,6 +2679,9 @@ export const FsWrite: MessageFns<FsWrite> = {
     if (message.bytesWritten !== "0") {
       obj.bytesWritten = message.bytesWritten;
     }
+    if (message.version !== "") {
+      obj.version = message.version;
+    }
     return obj;
   },
 
@@ -2536,12 +2692,20 @@ export const FsWrite: MessageFns<FsWrite> = {
     const message = createBaseFsWrite();
     message.path = object.path ?? "";
     message.bytesWritten = object.bytesWritten ?? "0";
+    message.version = object.version ?? "";
     return message;
   },
 };
 
 function createBaseFsWriteRangeRequest(): FsWriteRangeRequest {
-  return { path: "", offset: "0", data: new Uint8Array(0) };
+  return {
+    path: "",
+    offset: "0",
+    data: new Uint8Array(0),
+    precondition: undefined,
+    expectedVersion: undefined,
+    requireAbsent: false,
+  };
 }
 
 export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
@@ -2554,6 +2718,15 @@ export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
     }
     if (message.data.length !== 0) {
       writer.uint32(26).bytes(message.data);
+    }
+    if (message.precondition !== undefined) {
+      FsPrecondition.encode(message.precondition, writer.uint32(34).fork()).join();
+    }
+    if (message.expectedVersion !== undefined) {
+      writer.uint32(42).string(message.expectedVersion);
+    }
+    if (message.requireAbsent !== false) {
+      writer.uint32(48).bool(message.requireAbsent);
     }
     return writer;
   },
@@ -2589,6 +2762,30 @@ export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
           message.data = reader.bytes();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.precondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.expectedVersion = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.requireAbsent = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2603,6 +2800,17 @@ export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
       path: isSet(object.path) ? globalThis.String(object.path) : "",
       offset: isSet(object.offset) ? globalThis.String(object.offset) : "0",
       data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
+      precondition: isSet(object.precondition) ? FsPrecondition.fromJSON(object.precondition) : undefined,
+      expectedVersion: isSet(object.expectedVersion)
+        ? globalThis.String(object.expectedVersion)
+        : isSet(object.expected_version)
+        ? globalThis.String(object.expected_version)
+        : undefined,
+      requireAbsent: isSet(object.requireAbsent)
+        ? globalThis.Boolean(object.requireAbsent)
+        : isSet(object.require_absent)
+        ? globalThis.Boolean(object.require_absent)
+        : false,
     };
   },
 
@@ -2617,6 +2825,15 @@ export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
     if (message.data.length !== 0) {
       obj.data = base64FromBytes(message.data);
     }
+    if (message.precondition !== undefined) {
+      obj.precondition = FsPrecondition.toJSON(message.precondition);
+    }
+    if (message.expectedVersion !== undefined) {
+      obj.expectedVersion = message.expectedVersion;
+    }
+    if (message.requireAbsent !== false) {
+      obj.requireAbsent = message.requireAbsent;
+    }
     return obj;
   },
 
@@ -2628,12 +2845,17 @@ export const FsWriteRangeRequest: MessageFns<FsWriteRangeRequest> = {
     message.path = object.path ?? "";
     message.offset = object.offset ?? "0";
     message.data = object.data ?? new Uint8Array(0);
+    message.precondition = (object.precondition !== undefined && object.precondition !== null)
+      ? FsPrecondition.fromPartial(object.precondition)
+      : undefined;
+    message.expectedVersion = object.expectedVersion ?? undefined;
+    message.requireAbsent = object.requireAbsent ?? false;
     return message;
   },
 };
 
 function createBaseFsTruncateRequest(): FsTruncateRequest {
-  return { path: "", size: "0" };
+  return { path: "", size: "0", precondition: undefined, expectedVersion: undefined, requireAbsent: false };
 }
 
 export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
@@ -2643,6 +2865,15 @@ export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
     }
     if (message.size !== "0") {
       writer.uint32(16).uint64(message.size);
+    }
+    if (message.precondition !== undefined) {
+      FsPrecondition.encode(message.precondition, writer.uint32(26).fork()).join();
+    }
+    if (message.expectedVersion !== undefined) {
+      writer.uint32(34).string(message.expectedVersion);
+    }
+    if (message.requireAbsent !== false) {
+      writer.uint32(40).bool(message.requireAbsent);
     }
     return writer;
   },
@@ -2670,6 +2901,30 @@ export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
           message.size = reader.uint64().toString();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.precondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.expectedVersion = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.requireAbsent = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2683,6 +2938,17 @@ export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
     return {
       path: isSet(object.path) ? globalThis.String(object.path) : "",
       size: isSet(object.size) ? globalThis.String(object.size) : "0",
+      precondition: isSet(object.precondition) ? FsPrecondition.fromJSON(object.precondition) : undefined,
+      expectedVersion: isSet(object.expectedVersion)
+        ? globalThis.String(object.expectedVersion)
+        : isSet(object.expected_version)
+        ? globalThis.String(object.expected_version)
+        : undefined,
+      requireAbsent: isSet(object.requireAbsent)
+        ? globalThis.Boolean(object.requireAbsent)
+        : isSet(object.require_absent)
+        ? globalThis.Boolean(object.require_absent)
+        : false,
     };
   },
 
@@ -2694,6 +2960,15 @@ export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
     if (message.size !== "0") {
       obj.size = message.size;
     }
+    if (message.precondition !== undefined) {
+      obj.precondition = FsPrecondition.toJSON(message.precondition);
+    }
+    if (message.expectedVersion !== undefined) {
+      obj.expectedVersion = message.expectedVersion;
+    }
+    if (message.requireAbsent !== false) {
+      obj.requireAbsent = message.requireAbsent;
+    }
     return obj;
   },
 
@@ -2704,6 +2979,11 @@ export const FsTruncateRequest: MessageFns<FsTruncateRequest> = {
     const message = createBaseFsTruncateRequest();
     message.path = object.path ?? "";
     message.size = object.size ?? "0";
+    message.precondition = (object.precondition !== undefined && object.precondition !== null)
+      ? FsPrecondition.fromPartial(object.precondition)
+      : undefined;
+    message.expectedVersion = object.expectedVersion ?? undefined;
+    message.requireAbsent = object.requireAbsent ?? false;
     return message;
   },
 };
@@ -2767,7 +3047,15 @@ export const FsDelete: MessageFns<FsDelete> = {
 };
 
 function createBaseFsRenameRequest(): FsRenameRequest {
-  return { fromPath: "", toPath: "" };
+  return {
+    fromPath: "",
+    toPath: "",
+    fromPrecondition: undefined,
+    toPrecondition: undefined,
+    fromExpectedVersion: undefined,
+    toExpectedVersion: undefined,
+    toRequireAbsent: false,
+  };
 }
 
 export const FsRenameRequest: MessageFns<FsRenameRequest> = {
@@ -2777,6 +3065,21 @@ export const FsRenameRequest: MessageFns<FsRenameRequest> = {
     }
     if (message.toPath !== "") {
       writer.uint32(18).string(message.toPath);
+    }
+    if (message.fromPrecondition !== undefined) {
+      FsPrecondition.encode(message.fromPrecondition, writer.uint32(26).fork()).join();
+    }
+    if (message.toPrecondition !== undefined) {
+      FsPrecondition.encode(message.toPrecondition, writer.uint32(34).fork()).join();
+    }
+    if (message.fromExpectedVersion !== undefined) {
+      writer.uint32(42).string(message.fromExpectedVersion);
+    }
+    if (message.toExpectedVersion !== undefined) {
+      writer.uint32(50).string(message.toExpectedVersion);
+    }
+    if (message.toRequireAbsent !== false) {
+      writer.uint32(56).bool(message.toRequireAbsent);
     }
     return writer;
   },
@@ -2804,6 +3107,46 @@ export const FsRenameRequest: MessageFns<FsRenameRequest> = {
           message.toPath = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.fromPrecondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.toPrecondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.fromExpectedVersion = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.toExpectedVersion = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.toRequireAbsent = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2825,6 +3168,31 @@ export const FsRenameRequest: MessageFns<FsRenameRequest> = {
         : isSet(object.to_path)
         ? globalThis.String(object.to_path)
         : "",
+      fromPrecondition: isSet(object.fromPrecondition)
+        ? FsPrecondition.fromJSON(object.fromPrecondition)
+        : isSet(object.from_precondition)
+        ? FsPrecondition.fromJSON(object.from_precondition)
+        : undefined,
+      toPrecondition: isSet(object.toPrecondition)
+        ? FsPrecondition.fromJSON(object.toPrecondition)
+        : isSet(object.to_precondition)
+        ? FsPrecondition.fromJSON(object.to_precondition)
+        : undefined,
+      fromExpectedVersion: isSet(object.fromExpectedVersion)
+        ? globalThis.String(object.fromExpectedVersion)
+        : isSet(object.from_expected_version)
+        ? globalThis.String(object.from_expected_version)
+        : undefined,
+      toExpectedVersion: isSet(object.toExpectedVersion)
+        ? globalThis.String(object.toExpectedVersion)
+        : isSet(object.to_expected_version)
+        ? globalThis.String(object.to_expected_version)
+        : undefined,
+      toRequireAbsent: isSet(object.toRequireAbsent)
+        ? globalThis.Boolean(object.toRequireAbsent)
+        : isSet(object.to_require_absent)
+        ? globalThis.Boolean(object.to_require_absent)
+        : false,
     };
   },
 
@@ -2836,6 +3204,21 @@ export const FsRenameRequest: MessageFns<FsRenameRequest> = {
     if (message.toPath !== "") {
       obj.toPath = message.toPath;
     }
+    if (message.fromPrecondition !== undefined) {
+      obj.fromPrecondition = FsPrecondition.toJSON(message.fromPrecondition);
+    }
+    if (message.toPrecondition !== undefined) {
+      obj.toPrecondition = FsPrecondition.toJSON(message.toPrecondition);
+    }
+    if (message.fromExpectedVersion !== undefined) {
+      obj.fromExpectedVersion = message.fromExpectedVersion;
+    }
+    if (message.toExpectedVersion !== undefined) {
+      obj.toExpectedVersion = message.toExpectedVersion;
+    }
+    if (message.toRequireAbsent !== false) {
+      obj.toRequireAbsent = message.toRequireAbsent;
+    }
     return obj;
   },
 
@@ -2846,6 +3229,15 @@ export const FsRenameRequest: MessageFns<FsRenameRequest> = {
     const message = createBaseFsRenameRequest();
     message.fromPath = object.fromPath ?? "";
     message.toPath = object.toPath ?? "";
+    message.fromPrecondition = (object.fromPrecondition !== undefined && object.fromPrecondition !== null)
+      ? FsPrecondition.fromPartial(object.fromPrecondition)
+      : undefined;
+    message.toPrecondition = (object.toPrecondition !== undefined && object.toPrecondition !== null)
+      ? FsPrecondition.fromPartial(object.toPrecondition)
+      : undefined;
+    message.fromExpectedVersion = object.fromExpectedVersion ?? undefined;
+    message.toExpectedVersion = object.toExpectedVersion ?? undefined;
+    message.toRequireAbsent = object.toRequireAbsent ?? false;
     return message;
   },
 };
@@ -2935,7 +3327,15 @@ export const FsRename: MessageFns<FsRename> = {
 };
 
 function createBaseFsCopyRequest(): FsCopyRequest {
-  return { fromPath: "", toPath: "" };
+  return {
+    fromPath: "",
+    toPath: "",
+    fromPrecondition: undefined,
+    toPrecondition: undefined,
+    fromExpectedVersion: undefined,
+    toExpectedVersion: undefined,
+    toRequireAbsent: false,
+  };
 }
 
 export const FsCopyRequest: MessageFns<FsCopyRequest> = {
@@ -2945,6 +3345,21 @@ export const FsCopyRequest: MessageFns<FsCopyRequest> = {
     }
     if (message.toPath !== "") {
       writer.uint32(18).string(message.toPath);
+    }
+    if (message.fromPrecondition !== undefined) {
+      FsPrecondition.encode(message.fromPrecondition, writer.uint32(26).fork()).join();
+    }
+    if (message.toPrecondition !== undefined) {
+      FsPrecondition.encode(message.toPrecondition, writer.uint32(34).fork()).join();
+    }
+    if (message.fromExpectedVersion !== undefined) {
+      writer.uint32(42).string(message.fromExpectedVersion);
+    }
+    if (message.toExpectedVersion !== undefined) {
+      writer.uint32(50).string(message.toExpectedVersion);
+    }
+    if (message.toRequireAbsent !== false) {
+      writer.uint32(56).bool(message.toRequireAbsent);
     }
     return writer;
   },
@@ -2972,6 +3387,46 @@ export const FsCopyRequest: MessageFns<FsCopyRequest> = {
           message.toPath = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.fromPrecondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.toPrecondition = FsPrecondition.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.fromExpectedVersion = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.toExpectedVersion = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.toRequireAbsent = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2993,6 +3448,31 @@ export const FsCopyRequest: MessageFns<FsCopyRequest> = {
         : isSet(object.to_path)
         ? globalThis.String(object.to_path)
         : "",
+      fromPrecondition: isSet(object.fromPrecondition)
+        ? FsPrecondition.fromJSON(object.fromPrecondition)
+        : isSet(object.from_precondition)
+        ? FsPrecondition.fromJSON(object.from_precondition)
+        : undefined,
+      toPrecondition: isSet(object.toPrecondition)
+        ? FsPrecondition.fromJSON(object.toPrecondition)
+        : isSet(object.to_precondition)
+        ? FsPrecondition.fromJSON(object.to_precondition)
+        : undefined,
+      fromExpectedVersion: isSet(object.fromExpectedVersion)
+        ? globalThis.String(object.fromExpectedVersion)
+        : isSet(object.from_expected_version)
+        ? globalThis.String(object.from_expected_version)
+        : undefined,
+      toExpectedVersion: isSet(object.toExpectedVersion)
+        ? globalThis.String(object.toExpectedVersion)
+        : isSet(object.to_expected_version)
+        ? globalThis.String(object.to_expected_version)
+        : undefined,
+      toRequireAbsent: isSet(object.toRequireAbsent)
+        ? globalThis.Boolean(object.toRequireAbsent)
+        : isSet(object.to_require_absent)
+        ? globalThis.Boolean(object.to_require_absent)
+        : false,
     };
   },
 
@@ -3004,6 +3484,21 @@ export const FsCopyRequest: MessageFns<FsCopyRequest> = {
     if (message.toPath !== "") {
       obj.toPath = message.toPath;
     }
+    if (message.fromPrecondition !== undefined) {
+      obj.fromPrecondition = FsPrecondition.toJSON(message.fromPrecondition);
+    }
+    if (message.toPrecondition !== undefined) {
+      obj.toPrecondition = FsPrecondition.toJSON(message.toPrecondition);
+    }
+    if (message.fromExpectedVersion !== undefined) {
+      obj.fromExpectedVersion = message.fromExpectedVersion;
+    }
+    if (message.toExpectedVersion !== undefined) {
+      obj.toExpectedVersion = message.toExpectedVersion;
+    }
+    if (message.toRequireAbsent !== false) {
+      obj.toRequireAbsent = message.toRequireAbsent;
+    }
     return obj;
   },
 
@@ -3014,12 +3509,21 @@ export const FsCopyRequest: MessageFns<FsCopyRequest> = {
     const message = createBaseFsCopyRequest();
     message.fromPath = object.fromPath ?? "";
     message.toPath = object.toPath ?? "";
+    message.fromPrecondition = (object.fromPrecondition !== undefined && object.fromPrecondition !== null)
+      ? FsPrecondition.fromPartial(object.fromPrecondition)
+      : undefined;
+    message.toPrecondition = (object.toPrecondition !== undefined && object.toPrecondition !== null)
+      ? FsPrecondition.fromPartial(object.toPrecondition)
+      : undefined;
+    message.fromExpectedVersion = object.fromExpectedVersion ?? undefined;
+    message.toExpectedVersion = object.toExpectedVersion ?? undefined;
+    message.toRequireAbsent = object.toRequireAbsent ?? false;
     return message;
   },
 };
 
 function createBaseFsCopy(): FsCopy {
-  return { fromPath: "", toPath: "", bytesCopied: "0" };
+  return { fromPath: "", toPath: "", bytesCopied: "0", version: "" };
 }
 
 export const FsCopy: MessageFns<FsCopy> = {
@@ -3032,6 +3536,9 @@ export const FsCopy: MessageFns<FsCopy> = {
     }
     if (message.bytesCopied !== "0") {
       writer.uint32(24).uint64(message.bytesCopied);
+    }
+    if (message.version !== "") {
+      writer.uint32(34).string(message.version);
     }
     return writer;
   },
@@ -3067,6 +3574,14 @@ export const FsCopy: MessageFns<FsCopy> = {
           message.bytesCopied = reader.uint64().toString();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.version = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3093,6 +3608,7 @@ export const FsCopy: MessageFns<FsCopy> = {
         : isSet(object.bytes_copied)
         ? globalThis.String(object.bytes_copied)
         : "0",
+      version: isSet(object.version) ? globalThis.String(object.version) : "",
     };
   },
 
@@ -3107,6 +3623,9 @@ export const FsCopy: MessageFns<FsCopy> = {
     if (message.bytesCopied !== "0") {
       obj.bytesCopied = message.bytesCopied;
     }
+    if (message.version !== "") {
+      obj.version = message.version;
+    }
     return obj;
   },
 
@@ -3118,6 +3637,91 @@ export const FsCopy: MessageFns<FsCopy> = {
     message.fromPath = object.fromPath ?? "";
     message.toPath = object.toPath ?? "";
     message.bytesCopied = object.bytesCopied ?? "0";
+    message.version = object.version ?? "";
+    return message;
+  },
+};
+
+function createBaseFsPrecondition(): FsPrecondition {
+  return { expectedVersion: undefined, requireAbsent: false };
+}
+
+export const FsPrecondition: MessageFns<FsPrecondition> = {
+  encode(message: FsPrecondition, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.expectedVersion !== undefined) {
+      writer.uint32(10).string(message.expectedVersion);
+    }
+    if (message.requireAbsent !== false) {
+      writer.uint32(16).bool(message.requireAbsent);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FsPrecondition {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFsPrecondition();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.expectedVersion = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.requireAbsent = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FsPrecondition {
+    return {
+      expectedVersion: isSet(object.expectedVersion)
+        ? globalThis.String(object.expectedVersion)
+        : isSet(object.expected_version)
+        ? globalThis.String(object.expected_version)
+        : undefined,
+      requireAbsent: isSet(object.requireAbsent)
+        ? globalThis.Boolean(object.requireAbsent)
+        : isSet(object.require_absent)
+        ? globalThis.Boolean(object.require_absent)
+        : false,
+    };
+  },
+
+  toJSON(message: FsPrecondition): unknown {
+    const obj: any = {};
+    if (message.expectedVersion !== undefined) {
+      obj.expectedVersion = message.expectedVersion;
+    }
+    if (message.requireAbsent !== false) {
+      obj.requireAbsent = message.requireAbsent;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FsPrecondition>): FsPrecondition {
+    return FsPrecondition.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FsPrecondition>): FsPrecondition {
+    const message = createBaseFsPrecondition();
+    message.expectedVersion = object.expectedVersion ?? undefined;
+    message.requireAbsent = object.requireAbsent ?? false;
     return message;
   },
 };

@@ -209,6 +209,15 @@ Operon should not own:
     `exec` capability across protocol, daemon, CLI, SDK, docs, skills, and
     validation.
 
+- `docs/plan/v0.10.1-fs-consistency-workspace-hardening.md`
+  - v0.10.1 scope for filesystem versions, mutation preconditions, guarded
+    CLI/SDK writes, Linux `openat2(RESOLVE_BENEATH)` workspace hardening, and
+    validation.
+
+- `docs/plan/v0.10.2-operator-diagnostics.md`
+  - v0.10.2 scope for `operon doctor` config, endpoint, auth, protocol,
+    capability, and service diagnostics.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -355,7 +364,14 @@ Operon should not own:
   TypeScript SDK, policy, audit, examples, docs, skills, and validation. The
   legacy job command group is intentionally not retained as a compatibility
   alias.
-- Next planned milestone: define the next phase after v0.10.
+- Completed filesystem hardening milestone: v0.10.1 added opaque filesystem
+  versions, optional mutation preconditions, guarded CLI/SDK writes, Linux
+  fd-relative `openat2(RESOLVE_BENEATH)` workspace validation where available,
+  and validation coverage.
+- Completed operator diagnostics milestone: v0.10.2 added `operon doctor` with
+  config warning, endpoint/auth, health/protocol, capability diagnostic, and
+  service health reporting in human and JSON output.
+- Next planned milestone: define the next phase after v0.10.2.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -556,3 +572,16 @@ Defer:
   command group is not retained as a supported command, and
   [`scripts/verify-v0.10-exec-unification.sh`](scripts/verify-v0.10-exec-unification.sh)
   covers the active-surface migration. Nothing remains in v0.10.
+- Latest phase status update: v0.10.1 completed Filesystem Consistency and
+  Workspace Hardening. Filesystem stat/list/write/copy responses now carry
+  opaque versions, mutation requests can use preconditions for stale-write
+  protection, Linux containment attempts fd-relative `openat2(RESOLVE_BENEATH)`
+  validation where available, CLI/SDK guarded writes are wired, and
+  [`scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh`](scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh)
+  covers the behavior. Nothing remains in v0.10.1.
+- Latest phase status update: v0.10.2 completed Operator Diagnostics.
+  `operon doctor` now reports config unknown fields, endpoint/auth errors,
+  health/protocol status, daemon-owned capability diagnostics, and service
+  health in human or JSON output, and
+  [`scripts/verify-v0.10.2-operator-diagnostics.sh`](scripts/verify-v0.10.2-operator-diagnostics.sh)
+  covers the behavior. Nothing remains in v0.10.2.

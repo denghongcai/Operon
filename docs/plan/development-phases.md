@@ -4203,60 +4203,90 @@ Remaining:
 
 - Nothing remains in v0.10.
 
-## Later Candidate Work
+## Phase 71: v0.10.1 Filesystem Consistency and Workspace Hardening
 
-Status: Candidate backlog. The next post-v0.10 phase has not been approved yet.
+Status: Completed.
 
-These candidates capture the current development directions to evaluate before
-opening the next implementation phase. They are intentionally not marked as
-committed scope until the next phase is selected.
+Purpose: define a concrete filesystem consistency contract and tighten Linux
+workspace containment before adding more high-level filesystem behavior.
 
-### Candidate A: Filesystem Consistency and Workspace Hardening
+Scope:
 
-Recommended next now that the execution model has been settled.
+- add opaque filesystem versions to stat/list/write/copy responses.
+- add optional filesystem mutation preconditions so clients can send
+  `expected_version` or `require_absent` guards and receive gRPC
+  `FAILED_PRECONDITION` on stale writes.
+- expose guarded writes through the CLI and TypeScript SDK.
+- add Linux fd-relative workspace containment validation with
+  `openat2(RESOLVE_BENEATH)` where the kernel supports it, while keeping the
+  canonical fallback for unsupported kernels and non-Linux hosts.
+- document the updated consistency contract in `PROTOCOL.md` and runtime API
+  docs.
+- add validation coverage in
+  [`scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh`](../../scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh).
 
-Purpose: close correctness and workspace-safety gaps before adding more
-high-level filesystem features.
+Detailed plan:
+`docs/plan/v0.10.1-fs-consistency-workspace-hardening.md`.
 
-Possible scope:
+Completed:
 
-- define the filesystem consistency contract for concurrent clients.
-- evaluate file versions, etags, leases, or compare-and-swap style write
-  preconditions.
-- add optional write preconditions to protocol, CLI, SDK, and audit behavior if
-  the selected contract needs them.
-- harden Linux workspace containment with fd-relative resolution such as
-  `openat2(RESOLVE_BENEATH)` where practical.
-- validate concurrent write behavior and workspace traversal behavior with
-  focused daemon and integration coverage.
-- align `PROTOCOL.md`, runtime API docs, CLI/SDK error wording, and audit
-  semantics with the chosen contract.
+- Added `FsPrecondition` and filesystem version fields to the runtime protocol.
+- Daemon filesystem mutations now validate version/absence preconditions and
+  return `FAILED_PRECONDITION` on stale writes.
+- Linux workspace path checks now attempt fd-relative
+  `openat2(RESOLVE_BENEATH)` validation in addition to canonical containment.
+- CLI `fs write` and TypeScript SDK `writeFileBytes` can send guarded writes.
+- Protocol/runtime docs and validation scripts are aligned.
 
-Why this matters: `PROTOCOL.md` currently documents that filesystem mutation
-requests do not carry versions, etags, lock tokens, leases, or compare-and-swap
-preconditions, and that workspace containment is still path-based rather than
-fd-relative on Linux.
+Remaining:
 
-### Candidate B: Operator Diagnostics / `operon doctor`
+- No v0.10.1 work remains.
+
+## Phase 72: v0.10.2 Operator Diagnostics
+
+Status: Completed.
 
 Purpose: provide one operator-facing diagnostic entrypoint that explains common
 setup and runtime problems without requiring users or agents to stitch together
 multiple commands manually.
 
-Possible scope:
+Scope:
 
-- add `operon doctor` or `operon node diagnose`.
+- add `operon doctor`.
 - report config unknown-field warnings, endpoint health, auth/token failures,
-  protocol version mismatches, discovery export conflicts, capability
-  diagnostics, and service health.
+  protocol version mismatches, capability diagnostics, and service health.
 - support human output and `--json` for scripts and agents.
 - reuse daemon-owned policy diagnostics from `ExplainCapability` instead of
   duplicating authorization logic in the CLI.
 - document when to use doctor output versus lower-level commands.
+- add validation coverage in
+  [`scripts/verify-v0.10.2-operator-diagnostics.sh`](../../scripts/verify-v0.10.2-operator-diagnostics.sh).
 
-Why this matters: v0.9.6 added capability diagnostics, but there is not yet a
-single workflow for diagnosing configuration, endpoint, auth, discovery,
-policy, and service readiness together.
+Detailed plan:
+`docs/plan/v0.10.2-operator-diagnostics.md`.
+
+Completed:
+
+- Added top-level `operon doctor` with human and JSON output.
+- Doctor reports config unknown fields, endpoint/auth resolution errors,
+  health/protocol status, daemon-owned capability diagnostics, and service
+  health checks.
+- README, DEVELOPMENT, AGENTS.md, and repo-local CLI guidance point users and
+  agents to `operon doctor` for first-pass troubleshooting.
+- Follow-up version alignment bumped Rust crate versions, the TypeScript SDK
+  package version, and `PROTOCOL_VERSION` to `v0.10.2` / `0.10.2`.
+
+Remaining:
+
+- No v0.10.2 work remains.
+
+## Later Candidate Work
+
+Status: Candidate backlog. The next post-v0.10.2 phase has not been approved yet.
+
+These candidates capture current development directions to evaluate before
+opening the next implementation phase. They are intentionally not marked as
+committed scope until the next phase is selected.
 
 ### Candidate C: Release / Distribution Readiness
 

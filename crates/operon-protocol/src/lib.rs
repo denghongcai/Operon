@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.10.0";
+pub const PROTOCOL_VERSION: &str = "v0.10.2";
 
 pub mod runtime {
     pub mod v1 {
@@ -166,6 +166,7 @@ impl From<operon_core::FsStat> for runtime::v1::FsStat {
             is_file: value.is_file,
             is_dir: value.is_dir,
             size: value.size,
+            version: value.version,
         }
     }
 }
@@ -177,6 +178,7 @@ impl From<runtime::v1::FsStat> for operon_core::FsStat {
             is_file: value.is_file,
             is_dir: value.is_dir,
             size: value.size,
+            version: value.version,
         }
     }
 }
@@ -189,6 +191,7 @@ impl From<operon_core::FsEntry> for runtime::v1::FsEntry {
             is_file: value.is_file,
             is_dir: value.is_dir,
             size: value.size,
+            version: value.version,
         }
     }
 }
@@ -201,6 +204,7 @@ impl From<runtime::v1::FsEntry> for operon_core::FsEntry {
             is_file: value.is_file,
             is_dir: value.is_dir,
             size: value.size,
+            version: value.version,
         }
     }
 }
@@ -250,6 +254,7 @@ impl From<operon_core::FsWrite> for runtime::v1::FsWrite {
         Self {
             path: value.path,
             bytes_written: value.bytes_written,
+            version: value.version,
         }
     }
 }
@@ -259,6 +264,25 @@ impl From<runtime::v1::FsWrite> for operon_core::FsWrite {
         Self {
             path: value.path,
             bytes_written: value.bytes_written,
+            version: value.version,
+        }
+    }
+}
+
+impl From<operon_core::FsPrecondition> for runtime::v1::FsPrecondition {
+    fn from(value: operon_core::FsPrecondition) -> Self {
+        Self {
+            expected_version: value.expected_version,
+            require_absent: value.require_absent,
+        }
+    }
+}
+
+impl From<runtime::v1::FsPrecondition> for operon_core::FsPrecondition {
+    fn from(value: runtime::v1::FsPrecondition) -> Self {
+        Self {
+            expected_version: value.expected_version,
+            require_absent: value.require_absent,
         }
     }
 }
@@ -687,7 +711,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.10.0");
+        assert_eq!(PROTOCOL_VERSION, "v0.10.2");
     }
 
     #[test]
@@ -737,6 +761,30 @@ mod tests {
         assert_eq!(grpc.next_page_token, "audit-next");
         let core = operon_core::AuditLog::from(grpc);
         assert_eq!(core.next_page_token, "audit-next");
+    }
+
+    #[test]
+    fn fs_version_and_precondition_round_trip_through_grpc_shape() {
+        let stat = operon_core::FsStat {
+            path: "/file.txt".to_string(),
+            is_file: true,
+            is_dir: false,
+            size: 10,
+            version: "v1:file:10:123".to_string(),
+        };
+        let grpc: runtime::v1::FsStat = stat.clone().into();
+        assert_eq!(grpc.version, stat.version);
+        let core = operon_core::FsStat::from(grpc);
+        assert_eq!(core.version, stat.version);
+
+        let precondition = operon_core::FsPrecondition {
+            expected_version: Some("v1:file:10:123".to_string()),
+            require_absent: false,
+        };
+        let grpc: runtime::v1::FsPrecondition = precondition.clone().into();
+        assert_eq!(grpc.expected_version, precondition.expected_version);
+        let core = operon_core::FsPrecondition::from(grpc);
+        assert_eq!(core, precondition);
     }
 
     #[test]

@@ -75,6 +75,8 @@ scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
 scripts/verify-v0.9.5-policy-language-hardening.sh
 scripts/verify-v0.9.6-capability-diagnostics.sh
 scripts/verify-v0.10-exec-unification.sh
+scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh
+scripts/verify-v0.10.2-operator-diagnostics.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
@@ -194,6 +196,14 @@ The v0.10 exec unification validation checks that the active protocol, CLI,
 SDK, docs, examples, validation scripts, and repo-local skills use the unified
 `exec` capability vocabulary and that the legacy job command group is not
 supported.
+
+The v0.10.1 filesystem consistency validation checks opaque filesystem versions,
+mutation preconditions, guarded CLI/SDK writes, and Linux
+`openat2(RESOLVE_BENEATH)` workspace hardening.
+
+The v0.10.2 operator diagnostics validation checks `operon doctor`, JSON config
+warning output, endpoint/auth/health/protocol aggregation, capability
+diagnostics, and service health wiring.
 
 ## Release Automation
 

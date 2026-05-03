@@ -362,6 +362,11 @@ and their permissions.
 Use `operon capability explain <node> <capability_id> <action> <resource>` to
 ask a daemon why one action is allowed or denied.
 
+For first-pass troubleshooting, run `operon doctor` or
+`operon --json doctor`. Doctor reports config warnings, endpoint/auth health,
+runtime protocol version mismatches, capability diagnostics, and service health
+checks from one command.
+
 ---
 
 ## Secure By Design

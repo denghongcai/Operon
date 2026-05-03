@@ -112,6 +112,12 @@ enum Command {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    #[command(about = "Run config, endpoint, auth, protocol, capability, and service diagnostics")]
+    Doctor {
+        /// Optional node ids to diagnose. Defaults to every configured client node.
+        #[arg(long)]
+        node: Vec<String>,
+    },
     #[command(about = "Generate shell completion scripts")]
     Completion {
         /// Shell to generate completions for.
@@ -215,6 +221,9 @@ enum FsCommand {
         /// Local file whose bytes should be streamed to the target.
         #[arg(long)]
         file: Option<PathBuf>,
+        /// Only write if the current remote file version matches this value.
+        #[arg(long)]
+        expected_version: Option<String>,
     },
     #[command(about = "Create a remote directory")]
     Mkdir {
@@ -489,7 +498,18 @@ async fn main() -> anyhow::Result<()> {
                 target,
                 content,
                 file,
-            } => commands::fs::write(config_path, &target, content, file, output).await,
+                expected_version,
+            } => {
+                commands::fs::write(
+                    config_path,
+                    &target,
+                    content,
+                    file,
+                    expected_version,
+                    output,
+                )
+                .await
+            }
             FsCommand::Mkdir { target } => commands::fs::mkdir(config_path, &target, output).await,
             FsCommand::Rm { target } => commands::fs::rm(config_path, &target, output).await,
             FsCommand::Rename { from, to } => {
@@ -625,6 +645,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Config { command } => match command {
             ConfigCommand::Explain => commands::config::explain(config_path, output),
         },
+        Command::Doctor { node } => commands::doctor::run(config_path, node, output).await,
         Command::Completion { shell } => completion(shell),
     }
 }
@@ -673,5 +694,14 @@ mod tests {
             .expect("capability subcommand should exist")
             .find_subcommand_mut("explain")
             .expect("capability explain subcommand should exist");
+    }
+
+    #[test]
+    fn clap_model_exposes_doctor_command() {
+        let mut command = Args::command();
+
+        command
+            .find_subcommand_mut("doctor")
+            .expect("doctor subcommand should exist");
     }
 }

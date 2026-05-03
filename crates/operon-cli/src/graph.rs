@@ -114,7 +114,7 @@ async fn execute_step_action(
             let endpoint = load_endpoint(config_path, &step.node)?;
             let path = required_field(step.path.as_deref(), "path")?;
             let content = step.content.clone().unwrap_or_default();
-            let write = grpc::write_file_bytes(&endpoint, path, content.as_bytes()).await?;
+            let write = grpc::write_file_bytes(&endpoint, path, content.as_bytes(), None).await?;
             Ok(serde_json::to_value(write)?)
         }
         "exec.run" => run_exec_step(config_path, step).await,

@@ -212,16 +212,26 @@ and direct clients.
 decision because it needs source streaming, target writing, failure recovery, and
 audit ownership across two nodes.
 
-## Filesystem Concurrency
+## Filesystem Concurrency and Preconditions
 
-The current filesystem protocol does not provide conflict detection.
+`FsStat`, `FsEntry`, `FsWrite`, and `FsCopy` responses carry an opaque
+`version` string. Clients may store that value and send it back in
+`FsPrecondition.expected_version` on later mutation requests. The version is a
+daemon-owned comparison token, not a stable inode, mtime, checksum, or globally
+meaningful etag; clients must not parse it.
 
-Filesystem mutation requests do not carry file versions, etags, lock tokens,
-leases, or compare-and-swap preconditions. `ReadFile` is a live stream from the
-remote daemon, not a snapshot read. `ReadFileRange` reads the requested bytes at
-call time. `WriteFile` replaces file content, and `WriteFileRange` writes the
-requested byte range, but neither operation checks that the file is unchanged
-since a prior read.
+Filesystem mutation requests can carry optional preconditions:
+
+- `expected_version`: reject the mutation with gRPC `FAILED_PRECONDITION` when
+  the current target version differs.
+- `require_absent`: reject the mutation with gRPC `FAILED_PRECONDITION` when
+  the target already exists.
+
+`WriteFile`, `WriteFileRange`, `TruncateFs`, `DeleteFs`, `RenameFs`, and
+`CopyFs` accept precondition fields. Requests without preconditions preserve the
+existing last-writer behavior. `ReadFile` is still a live stream from the remote
+daemon, not a snapshot read. `ReadFileRange` reads the requested bytes at call
+time.
 
 The daemon resolves filesystem targets under the configured workspace and
 rejects symlink-resolved paths that escape that workspace.
@@ -231,16 +241,16 @@ itself is a symlink inside the workspace, the operation applies to the symlink
 entry, not the symlink target. Parent directories are still resolved and checked
 for workspace containment.
 
-If multiple clients mutate the same path concurrently, Operon does not define a
-merge order beyond the order in which the remote daemon and underlying
-filesystem apply operations. Clients that need deterministic behavior should
-serialize mutations outside the protocol until a later versioning or lease
-contract exists.
+If multiple clients mutate the same path concurrently without preconditions,
+Operon does not define a merge order beyond the order in which the remote daemon
+and underlying filesystem apply operations. Clients that need deterministic
+single-object updates should use `expected_version` and retry from a fresh stat
+or read result. Operon still does not provide multi-file transactions, leases,
+or automatic merge/conflict resolution.
 
-Current containment checks are path-based and do not yet use Linux
-`openat2(RESOLVE_BENEATH)`. Deployments should not allow untrusted local
-processes to concurrently mutate the daemon workspace until fd-relative
-resolution is added.
+On Linux, the daemon attempts fd-relative workspace containment validation with
+`openat2(RESOLVE_BENEATH)` when the kernel supports it. Unsupported kernels and
+non-Linux hosts keep the canonical containment fallback.
 
 `WatchExec` returns ordered `ExecEvent` messages for the requested execution.
 The first event is the current execution state. Later events are status changes,

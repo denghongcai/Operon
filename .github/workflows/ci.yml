@@ -138,6 +138,12 @@ jobs:
           - name: v0.10 Exec Unification Validation
             script: scripts/verify-v0.10-exec-unification.sh
             node: true
+          - name: v0.10.1 Filesystem Consistency and Workspace Hardening Validation
+            script: scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh
+            node: true
+          - name: v0.10.2 Operator Diagnostics Validation
+            script: scripts/verify-v0.10.2-operator-diagnostics.sh
+            node: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6

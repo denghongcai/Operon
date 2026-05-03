@@ -105,6 +105,7 @@ mod tests {
             is_file: false,
             is_dir: true,
             size: 0,
+            version: "root".to_string(),
         };
         let mut table = InodeTable::new(root);
 
@@ -117,6 +118,7 @@ mod tests {
                     is_file: true,
                     is_dir: false,
                     size: 3,
+                    version: "v1".to_string(),
                 },
             )
             .expect("first");
@@ -129,6 +131,7 @@ mod tests {
                     is_file: true,
                     is_dir: false,
                     size: 5,
+                    version: "v2".to_string(),
                 },
             )
             .expect("second");

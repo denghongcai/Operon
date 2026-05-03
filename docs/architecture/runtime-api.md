@@ -89,6 +89,10 @@ Runtime schema constraints:
 - `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
   unary random-read API for mount adapters and generated clients that need
   offset/size reads.
+- Filesystem stat/list/write/copy responses carry opaque `version` values.
+  Mutating filesystem requests can carry `FsPrecondition` with
+  `expected_version` or `require_absent`; stale or violated preconditions map to
+  gRPC `FAILED_PRECONDITION`.
 - `StreamExecLogs` uses an explicit event envelope with snapshot, entry, and
   complete variants; raw `ExecLog` remains a payload type, not the stream
   response type.

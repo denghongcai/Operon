@@ -112,6 +112,7 @@ pub(crate) async fn write(
     target: &str,
     content: Option<String>,
     file: Option<PathBuf>,
+    expected_version: Option<String>,
     output: OutputMode,
 ) -> anyhow::Result<()> {
     let target = parse_node_path(target)?;
@@ -119,9 +120,17 @@ pub(crate) async fn write(
 
     let write: FsWrite = match (content, file) {
         (Some(content), None) => {
-            grpc::write_file_bytes(&endpoint, &target.path, content.as_bytes()).await?
+            grpc::write_file_bytes(
+                &endpoint,
+                &target.path,
+                content.as_bytes(),
+                expected_version,
+            )
+            .await?
         }
-        (None, Some(file)) => grpc::write_file(&endpoint, &target.path, &file).await?,
+        (None, Some(file)) => {
+            grpc::write_file(&endpoint, &target.path, &file, expected_version).await?
+        }
         (Some(_), Some(_)) => anyhow::bail!("use either --content or --file, not both"),
         (None, None) => anyhow::bail!("fs write requires --content or --file"),
     };

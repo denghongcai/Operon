@@ -465,6 +465,7 @@ impl fuser::Filesystem for OperonFuseFs {
                     is_file: item.is_file,
                     is_dir: item.is_dir,
                     size: item.size,
+                    version: item.version,
                 };
                 match table.upsert(parent.ino, item.name.clone(), stat) {
                     Ok(entry) => entries.push((entry.ino, kind, item.name)),
