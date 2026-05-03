@@ -14,9 +14,8 @@ Operon is an AI-native capability runtime for machines already connected by
 Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
 private network.
 
-Instead of building another VPN or mesh network, Operon focuses on what happens
-after machines can reach each other: capability discovery, policy, execution
-graphs, audit, and agent-friendly tooling.
+Operon focuses on what happens after machines can reach each other: capability
+discovery, policy, execution graphs, audit, and agent-friendly tooling.
 
 ---
 
@@ -36,8 +35,18 @@ In Operon:
 Operon = Capability + Context + Policy + Execution
 ```
 
-Operon is not a VPN, mesh network, remote desktop, file sync tool, or SSH
-wrapper. It runs on top of connectivity you already trust.
+For example:
+
+- **Agent workspace handoff:** an agent can write files into a remote workspace,
+  run validation commands on the machine that owns that workspace, and inspect
+  the resulting trace and audit events.
+- **Remote service verification:** an agent can start a temporary service on a
+  remote machine with `exec.run`, verify it with a policy-controlled service
+  health check or explicit local forward, and keep that operational path
+  auditable.
+
+Operon is not a network overlay, remote desktop, file sync tool, or SSH wrapper.
+It runs on top of connectivity you already trust.
 
 ---
 
@@ -49,7 +58,7 @@ AI agents often interact with real machines through fragmented tools:
 - APIs
 - File uploads
 - Remote desktops
-- VPN-connected machines
+- Privately reachable machines
 
 That usually means poor composability, weak execution traces, unclear security
 boundaries, and network access being mistaken for capability access.
@@ -282,8 +291,8 @@ In production-style deployments, run daemon endpoints only on an existing
 encrypted private network or behind a trusted local tunnel.
 
 LAN mDNS discovery can find local Operon daemons, but Operon does not create
-VPNs, assign mesh IPs, perform NAT traversal, or grant capability access through
-discovery.
+network overlays, assign mesh IPs, perform NAT traversal, or grant capability
+access through discovery.
 
 ---
 
@@ -410,7 +419,7 @@ reference, and current phase tracking, see:
 
 ## Vision
 
-Operon is not a VPN or remote control tool.
+Operon is not a remote control tool or network overlay.
 
 It is a new execution model where:
 
