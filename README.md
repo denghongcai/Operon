@@ -386,7 +386,7 @@ For SDK and direct protocol integration details, see
 
 ## Project Status
 
-Operon is in early development. The current runtime includes:
+Operon is usable today as a pre-1.0 runtime. The current release includes:
 
 - Rust daemon and CLI.
 - gRPC runtime protocol.
