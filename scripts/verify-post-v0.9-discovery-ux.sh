@@ -8,7 +8,7 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/validation.sh"
 
 require_pattern 'Phase 63: Post-v0.9 Discovery UX' docs/plan/development-phases.md
-require_pattern 'scripts/verify-post-v0.9-discovery-ux.sh' README.md
+require_pattern 'scripts/verify-post-v0.9-discovery-ux.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-post-v0.9-discovery-ux.sh' .github/workflows/ci.yml
 require_pattern 'write_discovered_config_refuses_conflicting_existing_endpoint' crates/operon-cli/src/commands/node.rs
 require_pattern 'check_discovered_health' crates/operon-cli/src/commands/node.rs

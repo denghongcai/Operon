@@ -4133,6 +4133,8 @@ Completed:
 - Added daemon validation for empty job requests before spawning a shell.
 - Documented the runtime API hardening in README, `PROTOCOL.md`, runtime API
   docs, AGENTS.md, and this tracker.
+- Follow-up validation maintenance aligned older CI validation scripts with the
+  v0.9.7 protocol version and the README/DEVELOPMENT documentation split.
 
 Remaining:
 
