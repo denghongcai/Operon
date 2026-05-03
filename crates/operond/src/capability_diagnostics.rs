@@ -31,15 +31,21 @@ fn explain_fs(policy: &PolicyConfig, request: &CapabilityDiagnosticRequest) -> P
 }
 
 fn explain_exec(policy: &PolicyConfig, request: &CapabilityDiagnosticRequest) -> PolicyDecision {
-    if request.action != "run" {
-        return unsupported(policy, request);
+    match request.action.as_str() {
+        "run" => operon_process::authorize_exec_decision(
+            &policy.subject,
+            &policy.exec,
+            &request.resource,
+            request.timeout_secs,
+        ),
+        "session" => operon_process::authorize_exec_session_decision(
+            &policy.subject,
+            &policy.exec,
+            &request.resource,
+            request.timeout_secs,
+        ),
+        _ => unsupported(policy, request),
     }
-    operon_process::authorize_exec_decision(
-        &policy.subject,
-        &policy.exec,
-        &request.resource,
-        request.timeout_secs,
-    )
 }
 
 fn explain_secret(
@@ -122,6 +128,7 @@ mod tests {
                 allowed_cwds: vec!["/workspace".to_string()],
                 default_timeout_secs: 30,
                 max_timeout_secs: 60,
+                allow_sessions: false,
                 preserve_env: false,
                 env_allowlist: Vec::new(),
                 allowed_secrets: vec!["TOKEN".to_string()],

@@ -454,6 +454,52 @@ export interface ExecStdinClose {
   closed: boolean;
 }
 
+export interface ExecSessionRequest {
+  start?: ExecSessionStart | undefined;
+  input?: ExecSessionInput | undefined;
+  resize?: ExecSessionResize | undefined;
+}
+
+export interface ExecSessionStart {
+  command: string;
+  cwd: string;
+  timeoutSecs?: string | undefined;
+  secrets: string[];
+  argv: string[];
+  rows: number;
+  cols: number;
+}
+
+export interface ExecSessionInput {
+  data: Uint8Array;
+}
+
+export interface ExecSessionResize {
+  rows: number;
+  cols: number;
+}
+
+export interface ExecSessionStarted {
+  execId: string;
+}
+
+export interface ExecSessionOutput {
+  execId: string;
+  data: Uint8Array;
+}
+
+export interface ExecSessionExit {
+  execId: string;
+  status: ExecStatus;
+  exitCode?: number | undefined;
+}
+
+export interface ExecSessionEvent {
+  started?: ExecSessionStarted | undefined;
+  output?: ExecSessionOutput | undefined;
+  exit?: ExecSessionExit | undefined;
+}
+
 export interface ServiceIdRequest {
   serviceId: string;
 }
@@ -5413,6 +5459,740 @@ export const ExecStdinClose: MessageFns<ExecStdinClose> = {
   },
 };
 
+function createBaseExecSessionRequest(): ExecSessionRequest {
+  return { start: undefined, input: undefined, resize: undefined };
+}
+
+export const ExecSessionRequest: MessageFns<ExecSessionRequest> = {
+  encode(message: ExecSessionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.start !== undefined) {
+      ExecSessionStart.encode(message.start, writer.uint32(10).fork()).join();
+    }
+    if (message.input !== undefined) {
+      ExecSessionInput.encode(message.input, writer.uint32(18).fork()).join();
+    }
+    if (message.resize !== undefined) {
+      ExecSessionResize.encode(message.resize, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.start = ExecSessionStart.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.input = ExecSessionInput.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.resize = ExecSessionResize.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionRequest {
+    return {
+      start: isSet(object.start) ? ExecSessionStart.fromJSON(object.start) : undefined,
+      input: isSet(object.input) ? ExecSessionInput.fromJSON(object.input) : undefined,
+      resize: isSet(object.resize) ? ExecSessionResize.fromJSON(object.resize) : undefined,
+    };
+  },
+
+  toJSON(message: ExecSessionRequest): unknown {
+    const obj: any = {};
+    if (message.start !== undefined) {
+      obj.start = ExecSessionStart.toJSON(message.start);
+    }
+    if (message.input !== undefined) {
+      obj.input = ExecSessionInput.toJSON(message.input);
+    }
+    if (message.resize !== undefined) {
+      obj.resize = ExecSessionResize.toJSON(message.resize);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionRequest>): ExecSessionRequest {
+    return ExecSessionRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionRequest>): ExecSessionRequest {
+    const message = createBaseExecSessionRequest();
+    message.start = (object.start !== undefined && object.start !== null)
+      ? ExecSessionStart.fromPartial(object.start)
+      : undefined;
+    message.input = (object.input !== undefined && object.input !== null)
+      ? ExecSessionInput.fromPartial(object.input)
+      : undefined;
+    message.resize = (object.resize !== undefined && object.resize !== null)
+      ? ExecSessionResize.fromPartial(object.resize)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseExecSessionStart(): ExecSessionStart {
+  return { command: "", cwd: "", timeoutSecs: undefined, secrets: [], argv: [], rows: 0, cols: 0 };
+}
+
+export const ExecSessionStart: MessageFns<ExecSessionStart> = {
+  encode(message: ExecSessionStart, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.command !== "") {
+      writer.uint32(10).string(message.command);
+    }
+    if (message.cwd !== "") {
+      writer.uint32(18).string(message.cwd);
+    }
+    if (message.timeoutSecs !== undefined) {
+      writer.uint32(24).uint64(message.timeoutSecs);
+    }
+    for (const v of message.secrets) {
+      writer.uint32(34).string(v!);
+    }
+    for (const v of message.argv) {
+      writer.uint32(42).string(v!);
+    }
+    if (message.rows !== 0) {
+      writer.uint32(48).uint32(message.rows);
+    }
+    if (message.cols !== 0) {
+      writer.uint32(56).uint32(message.cols);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionStart {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionStart();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.command = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.cwd = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.timeoutSecs = reader.uint64().toString();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.secrets.push(reader.string());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.argv.push(reader.string());
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.rows = reader.uint32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.cols = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionStart {
+    return {
+      command: isSet(object.command) ? globalThis.String(object.command) : "",
+      cwd: isSet(object.cwd) ? globalThis.String(object.cwd) : "",
+      timeoutSecs: isSet(object.timeoutSecs)
+        ? globalThis.String(object.timeoutSecs)
+        : isSet(object.timeout_secs)
+        ? globalThis.String(object.timeout_secs)
+        : undefined,
+      secrets: globalThis.Array.isArray(object?.secrets) ? object.secrets.map((e: any) => globalThis.String(e)) : [],
+      argv: globalThis.Array.isArray(object?.argv) ? object.argv.map((e: any) => globalThis.String(e)) : [],
+      rows: isSet(object.rows) ? globalThis.Number(object.rows) : 0,
+      cols: isSet(object.cols) ? globalThis.Number(object.cols) : 0,
+    };
+  },
+
+  toJSON(message: ExecSessionStart): unknown {
+    const obj: any = {};
+    if (message.command !== "") {
+      obj.command = message.command;
+    }
+    if (message.cwd !== "") {
+      obj.cwd = message.cwd;
+    }
+    if (message.timeoutSecs !== undefined) {
+      obj.timeoutSecs = message.timeoutSecs;
+    }
+    if (message.secrets?.length) {
+      obj.secrets = message.secrets;
+    }
+    if (message.argv?.length) {
+      obj.argv = message.argv;
+    }
+    if (message.rows !== 0) {
+      obj.rows = Math.round(message.rows);
+    }
+    if (message.cols !== 0) {
+      obj.cols = Math.round(message.cols);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionStart>): ExecSessionStart {
+    return ExecSessionStart.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionStart>): ExecSessionStart {
+    const message = createBaseExecSessionStart();
+    message.command = object.command ?? "";
+    message.cwd = object.cwd ?? "";
+    message.timeoutSecs = object.timeoutSecs ?? undefined;
+    message.secrets = object.secrets?.map((e) => e) || [];
+    message.argv = object.argv?.map((e) => e) || [];
+    message.rows = object.rows ?? 0;
+    message.cols = object.cols ?? 0;
+    return message;
+  },
+};
+
+function createBaseExecSessionInput(): ExecSessionInput {
+  return { data: new Uint8Array(0) };
+}
+
+export const ExecSessionInput: MessageFns<ExecSessionInput> = {
+  encode(message: ExecSessionInput, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.data.length !== 0) {
+      writer.uint32(10).bytes(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionInput {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionInput();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.data = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionInput {
+    return { data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0) };
+  },
+
+  toJSON(message: ExecSessionInput): unknown {
+    const obj: any = {};
+    if (message.data.length !== 0) {
+      obj.data = base64FromBytes(message.data);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionInput>): ExecSessionInput {
+    return ExecSessionInput.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionInput>): ExecSessionInput {
+    const message = createBaseExecSessionInput();
+    message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseExecSessionResize(): ExecSessionResize {
+  return { rows: 0, cols: 0 };
+}
+
+export const ExecSessionResize: MessageFns<ExecSessionResize> = {
+  encode(message: ExecSessionResize, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.rows !== 0) {
+      writer.uint32(8).uint32(message.rows);
+    }
+    if (message.cols !== 0) {
+      writer.uint32(16).uint32(message.cols);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionResize {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionResize();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.rows = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.cols = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionResize {
+    return {
+      rows: isSet(object.rows) ? globalThis.Number(object.rows) : 0,
+      cols: isSet(object.cols) ? globalThis.Number(object.cols) : 0,
+    };
+  },
+
+  toJSON(message: ExecSessionResize): unknown {
+    const obj: any = {};
+    if (message.rows !== 0) {
+      obj.rows = Math.round(message.rows);
+    }
+    if (message.cols !== 0) {
+      obj.cols = Math.round(message.cols);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionResize>): ExecSessionResize {
+    return ExecSessionResize.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionResize>): ExecSessionResize {
+    const message = createBaseExecSessionResize();
+    message.rows = object.rows ?? 0;
+    message.cols = object.cols ?? 0;
+    return message;
+  },
+};
+
+function createBaseExecSessionStarted(): ExecSessionStarted {
+  return { execId: "" };
+}
+
+export const ExecSessionStarted: MessageFns<ExecSessionStarted> = {
+  encode(message: ExecSessionStarted, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionStarted {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionStarted();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.execId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionStarted {
+    return {
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
+        : "",
+    };
+  },
+
+  toJSON(message: ExecSessionStarted): unknown {
+    const obj: any = {};
+    if (message.execId !== "") {
+      obj.execId = message.execId;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionStarted>): ExecSessionStarted {
+    return ExecSessionStarted.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionStarted>): ExecSessionStarted {
+    const message = createBaseExecSessionStarted();
+    message.execId = object.execId ?? "";
+    return message;
+  },
+};
+
+function createBaseExecSessionOutput(): ExecSessionOutput {
+  return { execId: "", data: new Uint8Array(0) };
+}
+
+export const ExecSessionOutput: MessageFns<ExecSessionOutput> = {
+  encode(message: ExecSessionOutput, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
+    }
+    if (message.data.length !== 0) {
+      writer.uint32(18).bytes(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionOutput {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionOutput();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.execId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.data = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionOutput {
+    return {
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
+        : "",
+      data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: ExecSessionOutput): unknown {
+    const obj: any = {};
+    if (message.execId !== "") {
+      obj.execId = message.execId;
+    }
+    if (message.data.length !== 0) {
+      obj.data = base64FromBytes(message.data);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionOutput>): ExecSessionOutput {
+    return ExecSessionOutput.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionOutput>): ExecSessionOutput {
+    const message = createBaseExecSessionOutput();
+    message.execId = object.execId ?? "";
+    message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseExecSessionExit(): ExecSessionExit {
+  return { execId: "", status: 0, exitCode: undefined };
+}
+
+export const ExecSessionExit: MessageFns<ExecSessionExit> = {
+  encode(message: ExecSessionExit, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.execId !== "") {
+      writer.uint32(10).string(message.execId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
+    }
+    if (message.exitCode !== undefined) {
+      writer.uint32(24).int32(message.exitCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionExit {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionExit();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.execId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.exitCode = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionExit {
+    return {
+      execId: isSet(object.execId)
+        ? globalThis.String(object.execId)
+        : isSet(object.exec_id)
+        ? globalThis.String(object.exec_id)
+        : "",
+      status: isSet(object.status) ? execStatusFromJSON(object.status) : 0,
+      exitCode: isSet(object.exitCode)
+        ? globalThis.Number(object.exitCode)
+        : isSet(object.exit_code)
+        ? globalThis.Number(object.exit_code)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ExecSessionExit): unknown {
+    const obj: any = {};
+    if (message.execId !== "") {
+      obj.execId = message.execId;
+    }
+    if (message.status !== 0) {
+      obj.status = execStatusToJSON(message.status);
+    }
+    if (message.exitCode !== undefined) {
+      obj.exitCode = Math.round(message.exitCode);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionExit>): ExecSessionExit {
+    return ExecSessionExit.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionExit>): ExecSessionExit {
+    const message = createBaseExecSessionExit();
+    message.execId = object.execId ?? "";
+    message.status = object.status ?? 0;
+    message.exitCode = object.exitCode ?? undefined;
+    return message;
+  },
+};
+
+function createBaseExecSessionEvent(): ExecSessionEvent {
+  return { started: undefined, output: undefined, exit: undefined };
+}
+
+export const ExecSessionEvent: MessageFns<ExecSessionEvent> = {
+  encode(message: ExecSessionEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.started !== undefined) {
+      ExecSessionStarted.encode(message.started, writer.uint32(10).fork()).join();
+    }
+    if (message.output !== undefined) {
+      ExecSessionOutput.encode(message.output, writer.uint32(18).fork()).join();
+    }
+    if (message.exit !== undefined) {
+      ExecSessionExit.encode(message.exit, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ExecSessionEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseExecSessionEvent();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.started = ExecSessionStarted.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.output = ExecSessionOutput.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.exit = ExecSessionExit.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ExecSessionEvent {
+    return {
+      started: isSet(object.started) ? ExecSessionStarted.fromJSON(object.started) : undefined,
+      output: isSet(object.output) ? ExecSessionOutput.fromJSON(object.output) : undefined,
+      exit: isSet(object.exit) ? ExecSessionExit.fromJSON(object.exit) : undefined,
+    };
+  },
+
+  toJSON(message: ExecSessionEvent): unknown {
+    const obj: any = {};
+    if (message.started !== undefined) {
+      obj.started = ExecSessionStarted.toJSON(message.started);
+    }
+    if (message.output !== undefined) {
+      obj.output = ExecSessionOutput.toJSON(message.output);
+    }
+    if (message.exit !== undefined) {
+      obj.exit = ExecSessionExit.toJSON(message.exit);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ExecSessionEvent>): ExecSessionEvent {
+    return ExecSessionEvent.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ExecSessionEvent>): ExecSessionEvent {
+    const message = createBaseExecSessionEvent();
+    message.started = (object.started !== undefined && object.started !== null)
+      ? ExecSessionStarted.fromPartial(object.started)
+      : undefined;
+    message.output = (object.output !== undefined && object.output !== null)
+      ? ExecSessionOutput.fromPartial(object.output)
+      : undefined;
+    message.exit = (object.exit !== undefined && object.exit !== null)
+      ? ExecSessionExit.fromPartial(object.exit)
+      : undefined;
+    return message;
+  },
+};
+
 function createBaseServiceIdRequest(): ServiceIdRequest {
   return { serviceId: "" };
 }
@@ -7401,6 +8181,14 @@ export const OperonRuntimeDefinition = {
       responseStream: false,
       options: {},
     },
+    openExecSession: {
+      name: "OpenExecSession",
+      requestType: ExecSessionRequest as typeof ExecSessionRequest,
+      requestStream: true,
+      responseType: ExecSessionEvent as typeof ExecSessionEvent,
+      responseStream: true,
+      options: {},
+    },
     listServices: {
       name: "ListServices",
       requestType: ListServicesRequest as typeof ListServicesRequest,
@@ -7490,6 +8278,10 @@ export interface OperonRuntimeServiceImplementation<CallContextExt = {}> {
   ): Promise<DeepPartial<ExecStdin>>;
   closeExecStdin(request: ExecIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecStdinClose>>;
   cancelExec(request: ExecCancelRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ExecRecord>>;
+  openExecSession(
+    request: AsyncIterable<ExecSessionRequest>,
+    context: CallContext & CallContextExt,
+  ): ServerStreamingMethodResult<DeepPartial<ExecSessionEvent>>;
   listServices(request: ListServicesRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ServiceList>>;
   checkService(request: ServiceIdRequest, context: CallContext & CallContextExt): Promise<DeepPartial<ServiceCheck>>;
   openServiceTunnel(
@@ -7543,6 +8335,10 @@ export interface OperonRuntimeClient<CallOptionsExt = {}> {
   ): Promise<ExecStdin>;
   closeExecStdin(request: DeepPartial<ExecIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecStdinClose>;
   cancelExec(request: DeepPartial<ExecCancelRequest>, options?: CallOptions & CallOptionsExt): Promise<ExecRecord>;
+  openExecSession(
+    request: AsyncIterable<DeepPartial<ExecSessionRequest>>,
+    options?: CallOptions & CallOptionsExt,
+  ): AsyncIterable<ExecSessionEvent>;
   listServices(request: DeepPartial<ListServicesRequest>, options?: CallOptions & CallOptionsExt): Promise<ServiceList>;
   checkService(request: DeepPartial<ServiceIdRequest>, options?: CallOptions & CallOptionsExt): Promise<ServiceCheck>;
   openServiceTunnel(

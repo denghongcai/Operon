@@ -349,7 +349,8 @@ mesh://cloud-a/service/web
 Current capability areas:
 
 - Filesystem read, write, list, copy, mutation, and Linux FUSE mount access.
-- Exec execution with logs, stdin, cancellation, timeouts, and scoped secrets.
+- Exec execution with logs, stdin, cancellation, timeouts, scoped secrets, and
+  Unix PTY-backed interactive sessions when policy enables `exec.session`.
 - Service metadata, TCP health checks, TCP forwarding, and UDP/datagram
   forwarding over existing Operon node connections.
 - Audit, trace, and graph inspection.

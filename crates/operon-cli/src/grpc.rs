@@ -434,46 +434,6 @@ pub async fn list_exec_logs(endpoint: &NodeEndpoint, exec_id: &str) -> anyhow::R
     .await
 }
 
-pub async fn stream_exec_logs_to_writer(
-    endpoint: &NodeEndpoint,
-    exec_id: &str,
-    writer: &mut impl Write,
-) -> anyhow::Result<()> {
-    let exec_id = exec_id.to_string();
-    call(endpoint, |mut client, endpoint| async move {
-        let mut stream = client
-            .stream_exec_logs(with_auth(&endpoint, ExecIdRequest { exec_id })?)
-            .await?
-            .into_inner();
-        let mut next_sequence = 0;
-        while let Some(event) = stream.message().await? {
-            match event.event {
-                Some(exec_log_stream_event::Event::Snapshot(snapshot)) => {
-                    for log in snapshot.logs {
-                        if log.sequence >= next_sequence {
-                            next_sequence = log.sequence.saturating_add(1);
-                            writer.write_all(&log.data)?;
-                        }
-                    }
-                    next_sequence = next_sequence.max(snapshot.next_sequence);
-                }
-                Some(exec_log_stream_event::Event::Entry(entry)) => {
-                    let Some(log) = entry.log else {
-                        continue;
-                    };
-                    if log.sequence >= next_sequence {
-                        next_sequence = log.sequence.saturating_add(1);
-                        writer.write_all(&log.data)?;
-                    }
-                }
-                Some(exec_log_stream_event::Event::Complete(_)) | None => {}
-            }
-        }
-        Ok(())
-    })
-    .await
-}
-
 pub async fn stream_exec_logs(
     endpoint: &NodeEndpoint,
     exec_id: &str,
@@ -877,7 +837,7 @@ pub async fn list_audit(endpoint: &NodeEndpoint) -> anyhow::Result<AuditLog> {
     })
 }
 
-async fn call<T, Fut>(
+pub(crate) async fn call<T, Fut>(
     endpoint: &NodeEndpoint,
     f: impl FnOnce(OperonRuntimeClient<Channel>, NodeEndpoint) -> Fut,
 ) -> anyhow::Result<T>
@@ -889,7 +849,10 @@ where
     f(client, endpoint).await
 }
 
-fn with_auth<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<tonic::Request<T>> {
+pub(crate) fn with_auth<T>(
+    endpoint: &NodeEndpoint,
+    message: T,
+) -> anyhow::Result<tonic::Request<T>> {
     if let Ok(context) = REQUEST_CONTEXT.try_with(Clone::clone) {
         return operon_grpc_client::request_with_context(endpoint, Some(&context), message);
     }

@@ -77,6 +77,8 @@ scripts/verify-v0.9.6-capability-diagnostics.sh
 scripts/verify-v0.10-exec-unification.sh
 scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh
 scripts/verify-v0.10.2-operator-diagnostics.sh
+scripts/verify-v0.11-exec-session.sh
+scripts/verify-v0.10.4-maintainability-cleanup.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
@@ -202,8 +204,16 @@ mutation preconditions, guarded CLI/SDK writes, and Linux
 `openat2(RESOLVE_BENEATH)` workspace hardening.
 
 The v0.10.2 operator diagnostics validation checks `operon doctor`, JSON config
-warning output, endpoint/auth/health/protocol aggregation, capability
-diagnostics, and service health wiring.
+diagnostics, endpoint/auth/protocol/capability/service diagnostics, and docs
+coverage.
+
+The v0.11 exec session validation checks the PTY-backed `OpenExecSession`
+protocol, `operon exec session` CLI command, SDK helper, policy diagnostics,
+and a real local daemon session.
+
+The v0.10.4 maintainability validation checks that exec RPC routing and
+PTY/session runtime behavior live behind focused daemon and CLI module
+boundaries.
 
 ## Release Automation
 
@@ -302,6 +312,7 @@ policy:
       - /
     default_timeout_secs: 30
     max_timeout_secs: 300
+    allow_sessions: true
     preserve_env: false
     env_allowlist: []
     allowed_secrets: []
@@ -362,6 +373,7 @@ exec:
     - /
   default_timeout_secs: 30
   max_timeout_secs: 300
+  allow_sessions: true
   preserve_env: false
   env_allowlist: []
   allowed_secrets:

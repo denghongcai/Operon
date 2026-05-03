@@ -26,6 +26,7 @@ const niceGrpcMock = vi.hoisted(() => {
       streamExecLogs: vi.fn(),
       writeExecStdin: vi.fn(),
       closeExecStdin: vi.fn(),
+      openExecSession: vi.fn(),
       listServices: vi.fn(),
       checkService: vi.fn(),
       cancelExec: vi.fn(),
@@ -589,6 +590,38 @@ describe("OperonClient", () => {
 
     expect(trace.status).toBe("succeeded");
     expect(trace.steps[0].output).toEqual({ from_path: "/a.txt", to_path: "/b.txt", bytes_copied: 7, version: "v1:file:7:123" });
+  });
+
+  it("opens exec session streams with start metadata and input chunks", async () => {
+    niceGrpcMock.client.openExecSession.mockReturnValue(asyncIterable([
+      { started: { execId: "exec-1" } },
+      { output: { execId: "exec-1", data: new TextEncoder().encode("hello") } },
+      { exit: { execId: "exec-1", status: ExecStatus.EXEC_STATUS_SUCCEEDED, exitCode: 0 } },
+    ]));
+
+    const client = new OperonClient([{ nodeId: "node-a", endpoint: "grpc://127.0.0.1:7789" }]);
+    const events: unknown[] = [];
+    const stream = await client.openExecSession(
+      "node-a",
+      { argv: ["/bin/sh"], cwd: "/", rows: 30, cols: 100 },
+      asyncIterable([new TextEncoder().encode("exit\n")]),
+    );
+    for await (const event of stream) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "started", exec_id: "exec-1" },
+      { type: "output", exec_id: "exec-1", data: new TextEncoder().encode("hello") },
+      { type: "exit", exec_id: "exec-1", status: "succeeded", exit_code: 0 },
+    ]);
+    const requests = niceGrpcMock.client.openExecSession.mock.calls[0][0];
+    const sent = [];
+    for await (const request of requests) {
+      sent.push(request);
+    }
+    expect(sent[0]).toMatchObject({ start: { argv: ["/bin/sh"], cwd: "/", rows: 30, cols: 100 } });
+    expect(sent[1]).toMatchObject({ input: { data: new TextEncoder().encode("exit\n") } });
   });
 });
 

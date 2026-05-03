@@ -21,6 +21,7 @@ pub(crate) fn default_policy() -> PolicyConfig {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 300,
+            allow_sessions: true,
             preserve_env: false,
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
@@ -54,12 +55,16 @@ pub(crate) fn capabilities_from_policy(node_id: &str, policy: &PolicyConfig) -> 
     }
 
     if !policy.exec.allowed_cwds.is_empty() {
+        let mut permissions = vec!["run".to_string(), "cancel".to_string(), "logs".to_string()];
+        if policy.exec.allow_sessions {
+            permissions.push("session".to_string());
+        }
         capabilities.push(Capability {
             id: "exec:default".to_string(),
             kind: CapabilityKind::Exec,
             node_id: node_id.to_string(),
             name: "default".to_string(),
-            permissions: vec!["run".to_string(), "cancel".to_string(), "logs".to_string()],
+            permissions,
             description: "Policy-scoped exec execution".to_string(),
         });
     }
@@ -110,6 +115,7 @@ mod tests {
                 allowed_cwds: Vec::new(),
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,
+                allow_sessions: false,
                 preserve_env: false,
                 env_allowlist: Vec::new(),
                 allowed_secrets: Vec::new(),
@@ -146,6 +152,7 @@ mod tests {
             },
         });
         policy.exec.allowed_cwds.push("/project".to_string());
+        policy.exec.allow_sessions = true;
         policy.service.services.push(ServiceDefinition {
             id: "web".to_string(),
             name: "web".to_string(),
@@ -176,7 +183,12 @@ mod tests {
             .expect("exec capability");
         assert_eq!(
             exec.permissions,
-            vec!["run".to_string(), "cancel".to_string(), "logs".to_string()]
+            vec![
+                "run".to_string(),
+                "cancel".to_string(),
+                "logs".to_string(),
+                "session".to_string()
+            ]
         );
         let service = capabilities
             .capabilities

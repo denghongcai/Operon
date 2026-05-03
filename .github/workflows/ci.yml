@@ -144,6 +144,11 @@ jobs:
           - name: v0.10.2 Operator Diagnostics Validation
             script: scripts/verify-v0.10.2-operator-diagnostics.sh
             node: true
+          - name: v0.11 Exec Session Validation
+            script: scripts/verify-v0.11-exec-session.sh
+            node: true
+          - name: v0.10.4 Maintainability Cleanup Validation
+            script: scripts/verify-v0.10.4-maintainability-cleanup.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

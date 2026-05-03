@@ -720,6 +720,7 @@ mod tests {
                 allowed_cwds: Vec::new(),
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,
+                allow_sessions: false,
                 preserve_env: false,
                 env_allowlist: Vec::new(),
                 allowed_secrets: Vec::new(),

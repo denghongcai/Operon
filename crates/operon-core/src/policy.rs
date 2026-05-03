@@ -43,6 +43,8 @@ pub struct ExecPolicy {
     pub default_timeout_secs: u64,
     pub max_timeout_secs: u64,
     #[serde(default)]
+    pub allow_sessions: bool,
+    #[serde(default)]
     pub preserve_env: bool,
     pub env_allowlist: Vec<String>,
     #[serde(default)]
@@ -114,6 +116,7 @@ pub enum PolicyReasonCode {
     FsMountNotAllowed,
     FsPermissionDenied,
     ExecCwdDenied,
+    ExecSessionDenied,
     ExecTimeoutExceeded,
     SecretDenied,
     SecretUndefined,
@@ -129,6 +132,7 @@ impl PolicyReasonCode {
             Self::FsMountNotAllowed => "fs-mount-not-allowed",
             Self::FsPermissionDenied => "fs-permission-denied",
             Self::ExecCwdDenied => "exec-cwd-denied",
+            Self::ExecSessionDenied => "exec-session-denied",
             Self::ExecTimeoutExceeded => "exec-timeout-exceeded",
             Self::SecretDenied => "secret-denied",
             Self::SecretUndefined => "secret-undefined",
@@ -144,6 +148,7 @@ impl PolicyReasonCode {
             "fs-mount-not-allowed" => Some(Self::FsMountNotAllowed),
             "fs-permission-denied" => Some(Self::FsPermissionDenied),
             "exec-cwd-denied" => Some(Self::ExecCwdDenied),
+            "exec-session-denied" => Some(Self::ExecSessionDenied),
             "exec-timeout-exceeded" => Some(Self::ExecTimeoutExceeded),
             "secret-denied" => Some(Self::SecretDenied),
             "secret-undefined" => Some(Self::SecretUndefined),

@@ -4280,15 +4280,67 @@ Remaining:
 
 - No v0.10.2 work remains.
 
+## Phase 73: v0.11 Exec Session / PTY Interactive
+
+Status: Completed.
+
+Goal: add a true interactive execution surface for terminal-like workflows
+after the v0.10 execution vocabulary migration removed the historical `job`
+concept.
+
+Detailed plan: `docs/plan/v0.11-exec-session-pty-interactive.md`.
+
+Completed:
+
+- Added `OpenExecSession` as a bidirectional streaming protocol with explicit
+  start, input, resize, started, output, and exit envelopes.
+- Added `policy.exec.allow_sessions` and `exec:default` `session`
+  authorization distinct from `exec.run`.
+- Added PTY-backed daemon session execution through a dedicated
+  [`exec_session.rs`](../../crates/operond/src/exec_session.rs) module.
+- Added `operon exec session` and TypeScript SDK `openExecSession`.
+- Bumped Rust crate versions, TypeScript SDK package version, and
+  `PROTOCOL_VERSION` to `v0.11.0` / `0.11.0`.
+- Updated README, `PROTOCOL.md`, runtime API docs, repo-local skills,
+  DEVELOPMENT.md, CI, and validation coverage.
+
+Remaining:
+
+- No v0.11 work remains.
+- Windows ConPTY support remains future distribution/platform work.
+
+## Phase 74: v0.10.4 Maintainability Cleanup
+
+Status: Completed.
+
+Goal: continue behavior-preserving modularization around the remaining large
+runtime and CLI files so future feature work stays cheap and localized.
+
+Detailed plan: `docs/plan/v0.10.4-maintainability-cleanup.md`.
+
+Completed:
+
+- Added [`exec_service.rs`](../../crates/operond/src/exec_service.rs) so daemon
+  exec RPC routing delegates out of [`operond/src/main.rs`](../../crates/operond/src/main.rs).
+- Kept PTY/session runtime ownership in
+  [`exec_session.rs`](../../crates/operond/src/exec_session.rs).
+- Added [`grpc_exec.rs`](../../crates/operon-cli/src/grpc_exec.rs) for
+  exec-specific CLI gRPC streaming helpers.
+- Added [`scripts/verify-v0.10.4-maintainability-cleanup.sh`](../../scripts/verify-v0.10.4-maintainability-cleanup.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
+Remaining:
+
+- No v0.10.4 work remains.
+- Broader onboarding and service forwarding decomposition remains future
+  maintainability work if those surfaces grow.
+
 ## Later Candidate Work
 
-Status: Candidate backlog. The next post-v0.10.2 phase has not been approved yet.
+Status: Candidate backlog. The next post-v0.11/v0.10.4 phase has not been
+approved yet.
 
-These candidates capture current development directions to evaluate before
-opening the next implementation phase. They are intentionally not marked as
-committed scope until the next phase is selected.
-
-### Candidate C: Release / Distribution Readiness
+### Candidate A: Release / Distribution Readiness
 
 Purpose: make the public release surface match the architecture decision, or
 explicitly narrow the pre-1.0 supported target set.
@@ -4309,28 +4361,6 @@ Possible scope:
 Why this matters: the architecture decisions list macOS and Windows as initial
 binary targets, while the current draft release workflow builds Linux
 `x86_64`, `aarch64`, and `armv7` archives.
-
-### Candidate D: Maintainability Cleanup Phase
-
-Purpose: continue behavior-preserving modularization around the remaining large
-runtime and CLI files so future feature work stays cheap and localized.
-
-Possible scope:
-
-- split remaining runtime routing and request delegation out of
-  `crates/operond/src/main.rs` if the entrypoint continues to grow.
-- extract clearer command-family or transport helpers from
-  `crates/operon-cli/src/grpc.rs`.
-- split onboarding plan construction, prompt handling, and file writes inside
-  `crates/operon-cli/src/onboard.rs`.
-- keep service forwarding and current execution runtime state-machine modules
-  focused if new behavior touches them.
-- add validation that checks the intended module ownership without changing
-  runtime behavior.
-
-Why this matters: earlier modularization phases reduced several hotspots, but
-`operond/src/main.rs`, `operon-cli/src/grpc.rs`, service forwarding, current
-execution runtime, and onboarding remain the main maintenance surfaces to watch.
 
 ## Planning Principle
 

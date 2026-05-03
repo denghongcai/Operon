@@ -12,6 +12,66 @@ pub struct ExecRunRequest {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecSessionStart {
+    pub command: String,
+    #[serde(default)]
+    pub argv: Vec<String>,
+    pub cwd: Option<String>,
+    pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub secrets: Vec<String>,
+    #[serde(default = "default_session_rows")]
+    pub rows: u16,
+    #[serde(default = "default_session_cols")]
+    pub cols: u16,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecSessionInput {
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecSessionResize {
+    pub rows: u16,
+    pub cols: u16,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecSessionStarted {
+    pub exec_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecSessionOutput {
+    pub exec_id: String,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecSessionExit {
+    pub exec_id: String,
+    pub status: ExecStatus,
+    pub exit_code: Option<i32>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case", tag = "type")]
+pub enum ExecSessionEvent {
+    Started(ExecSessionStarted),
+    Output(ExecSessionOutput),
+    Exit(ExecSessionExit),
+}
+
+fn default_session_rows() -> u16 {
+    24
+}
+
+fn default_session_cols() -> u16 {
+    80
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExecCancelRequest {
     pub exec_id: String,
 }

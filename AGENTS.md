@@ -218,6 +218,14 @@ Operon should not own:
   - v0.10.2 scope for `operon doctor` config, endpoint, auth, protocol,
     capability, and service diagnostics.
 
+- `docs/plan/v0.11-exec-session-pty-interactive.md`
+  - v0.11 scope for PTY-backed `OpenExecSession`, `exec.session` policy,
+    CLI/SDK session helpers, and validation.
+
+- `docs/plan/v0.10.4-maintainability-cleanup.md`
+  - v0.10.4 scope for daemon exec RPC routing, PTY/session module ownership,
+    CLI exec gRPC helper boundaries, and validation.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -371,7 +379,14 @@ Operon should not own:
 - Completed operator diagnostics milestone: v0.10.2 added `operon doctor` with
   config warning, endpoint/auth, health/protocol, capability diagnostic, and
   service health reporting in human and JSON output.
-- Next planned milestone: define the next phase after v0.10.2.
+- Completed exec session milestone: v0.11 added PTY-backed `OpenExecSession`,
+  `exec.session` policy, CLI and SDK session helpers, docs, skills, and
+  validation coverage, with versions aligned to `v0.11.0` / `0.11.0`.
+- Completed maintainability cleanup milestone: v0.10.4 moved daemon exec RPC
+  routing into [`exec_service.rs`](crates/operond/src/exec_service.rs),
+  PTY/session runtime behavior into [`exec_session.rs`](crates/operond/src/exec_session.rs),
+  and CLI exec streaming helpers into [`grpc_exec.rs`](crates/operon-cli/src/grpc_exec.rs).
+- Next planned milestone: define the next phase after v0.11/v0.10.4.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -585,3 +600,16 @@ Defer:
   health in human or JSON output, and
   [`scripts/verify-v0.10.2-operator-diagnostics.sh`](scripts/verify-v0.10.2-operator-diagnostics.sh)
   covers the behavior. Nothing remains in v0.10.2.
+- Latest phase status update: v0.11 completed Exec Session / PTY Interactive.
+  `OpenExecSession` now carries start/input/resize requests and
+  started/output/exit events, daemon sessions run through a PTY, policy can
+  advertise and diagnose `exec.session`, CLI/SDK helpers are wired, and
+  [`scripts/verify-v0.11-exec-session.sh`](scripts/verify-v0.11-exec-session.sh)
+  covers the behavior. Nothing remains in v0.11.
+- Latest phase status update: v0.10.4 completed Maintainability Cleanup.
+  Daemon exec RPC routing now delegates through
+  [`exec_service.rs`](crates/operond/src/exec_service.rs), PTY/session behavior
+  lives in [`exec_session.rs`](crates/operond/src/exec_session.rs), CLI exec
+  streaming helpers live in [`grpc_exec.rs`](crates/operon-cli/src/grpc_exec.rs),
+  and [`scripts/verify-v0.10.4-maintainability-cleanup.sh`](scripts/verify-v0.10.4-maintainability-cleanup.sh)
+  covers the module boundaries. Nothing remains in v0.10.4.

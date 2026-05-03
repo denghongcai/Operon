@@ -3,12 +3,18 @@ use std::{
     path::PathBuf,
 };
 
+use anyhow::Context as _;
+use crossterm::{
+    terminal::{disable_raw_mode, enable_raw_mode},
+    tty::IsTty as _,
+};
 use operon_core::{
-    ExecList, ExecLogList, ExecRecord, ExecRunRequest, ExecStatus, ExecStdin, ExecStdinClose,
+    ExecList, ExecLogList, ExecRecord, ExecRunRequest, ExecSessionEvent, ExecSessionStart,
+    ExecStatus, ExecStdin, ExecStdinClose,
 };
 
 use crate::{
-    grpc,
+    grpc, grpc_exec,
     output::{print_json, OutputMode},
     target::load_endpoint,
 };
@@ -21,6 +27,20 @@ pub(crate) struct ExecRunInput {
     pub(crate) secrets: Vec<String>,
     pub(crate) detach: bool,
     pub(crate) argv: bool,
+    pub(crate) command: Vec<String>,
+    pub(crate) output: OutputMode,
+}
+
+pub(crate) struct ExecSessionInput {
+    pub(crate) config_path: PathBuf,
+    pub(crate) node_id: String,
+    pub(crate) cwd: Option<String>,
+    pub(crate) timeout_secs: u64,
+    pub(crate) secrets: Vec<String>,
+    pub(crate) argv: bool,
+    pub(crate) rows: u16,
+    pub(crate) cols: u16,
+    pub(crate) content: Option<String>,
     pub(crate) command: Vec<String>,
     pub(crate) output: OutputMode,
 }
@@ -118,9 +138,10 @@ pub(crate) async fn logs(
     }
     if stream || follow {
         if output.quiet {
-            return grpc::stream_exec_logs_to_writer(&endpoint, exec_id, &mut io::sink()).await;
+            return grpc_exec::stream_exec_logs_to_writer(&endpoint, exec_id, &mut io::sink())
+                .await;
         }
-        return grpc::stream_exec_logs_to_writer(&endpoint, exec_id, &mut io::stdout()).await;
+        return grpc_exec::stream_exec_logs_to_writer(&endpoint, exec_id, &mut io::stdout()).await;
     }
     let logs = grpc::list_exec_logs(&endpoint, exec_id).await?;
     if output.quiet {
@@ -169,6 +190,109 @@ pub(crate) async fn stdin(
         );
     }
     Ok(())
+}
+
+pub(crate) async fn session(input: ExecSessionInput) -> anyhow::Result<()> {
+    let endpoint = load_endpoint(input.config_path, &input.node_id)?;
+    let start = ExecSessionStart {
+        command: if input.argv {
+            String::new()
+        } else {
+            exec_command_from_cli_args(&input.command)
+        },
+        argv: if input.argv {
+            input.command
+        } else {
+            Vec::new()
+        },
+        cwd: input.cwd,
+        timeout_secs: Some(input.timeout_secs),
+        secrets: input.secrets,
+        rows: input.rows,
+        cols: input.cols,
+    };
+    let mut stdout = io::stdout();
+    let event = match input.content {
+        Some(content) => {
+            grpc_exec::open_exec_session_to_writer(
+                &endpoint,
+                start,
+                grpc_exec::ExecSessionInputSource::Inline(content.into_bytes()),
+                &mut stdout,
+            )
+            .await?
+        }
+        None => {
+            let _raw_mode = RawModeGuard::enable_if_tty()?;
+            grpc_exec::open_exec_session_to_writer(
+                &endpoint,
+                start,
+                grpc_exec::ExecSessionInputSource::LocalStdin,
+                &mut stdout,
+            )
+            .await?
+        }
+    };
+    finish_session(event, input.output)
+}
+
+fn finish_session(event: ExecSessionEvent, output: OutputMode) -> anyhow::Result<()> {
+    if output.json {
+        print_json(&event)?;
+    } else if !output.quiet {
+        print_session_terminal(&event);
+    }
+    ensure_session_succeeded(&event)
+}
+
+fn ensure_session_succeeded(event: &ExecSessionEvent) -> anyhow::Result<()> {
+    match event {
+        ExecSessionEvent::Exit(exit) if matches!(exit.status, ExecStatus::Succeeded) => Ok(()),
+        ExecSessionEvent::Exit(exit) => {
+            let exit_code = exit
+                .exit_code
+                .map(|code| code.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            anyhow::bail!(
+                "exec session {} ended with status {:?} exit_code={}",
+                exit.exec_id,
+                exit.status,
+                exit_code
+            )
+        }
+        _ => anyhow::bail!("exec session ended without exit event"),
+    }
+}
+
+fn print_session_terminal(event: &ExecSessionEvent) {
+    if let ExecSessionEvent::Exit(exit) = event {
+        eprintln!(
+            "{} session {:?} exit_code={:?}",
+            exit.exec_id, exit.status, exit.exit_code
+        );
+    }
+}
+
+struct RawModeGuard {
+    enabled: bool,
+}
+
+impl RawModeGuard {
+    fn enable_if_tty() -> anyhow::Result<Self> {
+        let enabled = io::stdin().is_tty();
+        if enabled {
+            enable_raw_mode().context("enable local terminal raw mode")?;
+        }
+        Ok(Self { enabled })
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        if self.enabled {
+            let _ = disable_raw_mode();
+        }
+    }
 }
 
 pub(crate) async fn cancel(

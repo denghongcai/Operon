@@ -40,6 +40,8 @@ require_pattern 'v0.10 Execution Capability Unification' docs/plan/development-p
 require_pattern 'scripts/verify-v0.10-exec-unification.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-v0.10.2-operator-diagnostics.sh' DEVELOPMENT.md
+require_pattern 'scripts/verify-v0.11-exec-session.sh' DEVELOPMENT.md
+require_pattern 'scripts/verify-v0.10.4-maintainability-cleanup.sh' DEVELOPMENT.md
 
 for skill in skills/*/SKILL.md; do
   require_pattern 'operon .*--help|operon <command> --help|CLI help is the source of truth' "$skill"
@@ -84,6 +86,7 @@ help_commands=(
   "exec status --help"
   "exec logs --help"
   "exec stdin --help"
+  "exec session --help"
   "exec cancel --help"
   "run --help"
   "graph --help"

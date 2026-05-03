@@ -16,6 +16,8 @@ import {
   type ExecLogList as GrpcExecLogList,
   type ExecLogStreamEvent as GrpcExecLogStreamEvent,
   type ExecRecord as GrpcExecRecord,
+  type ExecSessionEvent as GrpcExecSessionEvent,
+  type ExecSessionRequest as GrpcExecSessionRequest,
   type ExecStdin as GrpcExecStdin,
   type ExecStdinClose as GrpcExecStdinClose,
   type OperonRuntimeClient,
@@ -180,6 +182,21 @@ export type ExecStdinCloseResult = {
   exec_id: string;
   closed: boolean;
 };
+
+export type ExecSessionStart = {
+  command?: string;
+  argv?: string[];
+  cwd?: string;
+  timeoutSecs?: number;
+  secrets?: string[];
+  rows?: number;
+  cols?: number;
+};
+
+export type ExecSessionEvent =
+  | { type: "started"; exec_id: string }
+  | { type: "output"; exec_id: string; data: Uint8Array }
+  | { type: "exit"; exec_id: string; status: ExecRecord["status"]; exit_code?: number | null };
 
 export type ServiceDefinition = {
   id: string;
@@ -468,6 +485,19 @@ export class OperonClient {
     return fromGrpcExecStdinClose(
       await this.grpcClient(endpoint).closeExecStdin({ execId }, this.grpcOptions(endpoint)),
     );
+  }
+
+  async openExecSession(
+    nodeId: string,
+    start: ExecSessionStart,
+    input?: AsyncIterable<Uint8Array>,
+  ): Promise<AsyncIterable<ExecSessionEvent>> {
+    const endpoint = this.endpointFor(nodeId);
+    const events = this.grpcClient(endpoint).openExecSession(
+      grpcExecSessionRequests(start, input ?? emptyAsyncIterable()),
+      this.grpcOptions(endpoint),
+    );
+    return mapGrpcExecSessionEvents(events);
   }
 
   async listServices(nodeId: string): Promise<ServiceList> {
@@ -898,6 +928,28 @@ async function* grpcStdinChunks(execId: string, bytes: Uint8Array): AsyncIterabl
   }
 }
 
+async function* grpcExecSessionRequests(
+  start: ExecSessionStart,
+  input: AsyncIterable<Uint8Array>,
+): AsyncIterable<GrpcExecSessionRequest> {
+  yield {
+    start: {
+      command: start.command ?? "",
+      argv: start.argv ?? [],
+      cwd: start.cwd ?? "",
+      timeoutSecs: start.timeoutSecs === undefined ? undefined : String(start.timeoutSecs),
+      secrets: start.secrets ?? [],
+      rows: start.rows ?? 24,
+      cols: start.cols ?? 80,
+    },
+  };
+  for await (const chunk of input) {
+    yield { input: { data: chunk } };
+  }
+}
+
+async function* emptyAsyncIterable(): AsyncIterable<Uint8Array> {}
+
 async function* grpcServiceTunnelRequests(
   serviceId: string,
   input: AsyncIterable<Uint8Array>,
@@ -1156,6 +1208,23 @@ async function* mapGrpcExecLogStreamEvents(events: AsyncIterable<GrpcExecLogStre
     const mapped = fromGrpcExecLogStreamEvent(event);
     if (mapped) {
       yield mapped;
+    }
+  }
+}
+
+async function* mapGrpcExecSessionEvents(events: AsyncIterable<GrpcExecSessionEvent>): AsyncIterable<ExecSessionEvent> {
+  for await (const event of events) {
+    if (event.started) {
+      yield { type: "started", exec_id: event.started.execId };
+    } else if (event.output) {
+      yield { type: "output", exec_id: event.output.execId, data: event.output.data };
+    } else if (event.exit) {
+      yield {
+        type: "exit",
+        exec_id: event.exit.execId,
+        status: fromGrpcExecStatus(event.exit.status),
+        exit_code: event.exit.exitCode,
+      };
     }
   }
 }

@@ -7,6 +7,7 @@ use operon_config::OperonConfig;
 mod commands;
 mod graph;
 mod grpc;
+mod grpc_exec;
 mod onboard;
 mod output;
 mod private_files;
@@ -390,6 +391,35 @@ enum ExecCommand {
         #[arg(long)]
         close: bool,
     },
+    #[command(about = "Open a PTY-backed interactive exec session")]
+    Session {
+        /// Node id from config.yaml.
+        node_id: String,
+        /// Remote working directory allowed by policy.
+        #[arg(long)]
+        cwd: Option<String>,
+        /// Session timeout in seconds.
+        #[arg(long, default_value_t = 300)]
+        timeout_secs: u64,
+        /// Secret name to inject when allowed by policy.
+        #[arg(long)]
+        secret: Vec<String>,
+        /// Execute CLI words as argv without shell parsing.
+        #[arg(long)]
+        argv: bool,
+        /// Initial terminal rows.
+        #[arg(long, default_value_t = 24)]
+        rows: u16,
+        /// Initial terminal columns.
+        #[arg(long, default_value_t = 80)]
+        cols: u16,
+        /// Optional stdin content. Omit to stream local stdin interactively.
+        #[arg(long)]
+        content: Option<String>,
+        /// Shell command to execute in the PTY. Multiple CLI words are shell-escaped.
+        #[arg(required = true, trailing_var_arg = true)]
+        command: Vec<String>,
+    },
     #[command(about = "Cancel a running exec")]
     Cancel {
         /// Node id from config.yaml.
@@ -621,6 +651,32 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             }
+            ExecCommand::Session {
+                node_id,
+                cwd,
+                timeout_secs,
+                secret,
+                argv,
+                rows,
+                cols,
+                content,
+                command,
+            } => {
+                commands::exec::session(commands::exec::ExecSessionInput {
+                    config_path,
+                    node_id,
+                    cwd,
+                    timeout_secs,
+                    secrets: secret,
+                    argv,
+                    rows,
+                    cols,
+                    content,
+                    command,
+                    output,
+                })
+                .await
+            }
             ExecCommand::Cancel { node_id, exec_id } => {
                 commands::exec::cancel(config_path, &node_id, &exec_id, output).await
             }
@@ -703,5 +759,16 @@ mod tests {
         command
             .find_subcommand_mut("doctor")
             .expect("doctor subcommand should exist");
+    }
+
+    #[test]
+    fn clap_model_exposes_exec_session_command() {
+        let mut command = Args::command();
+
+        command
+            .find_subcommand_mut("exec")
+            .expect("exec subcommand should exist")
+            .find_subcommand_mut("session")
+            .expect("exec session subcommand should exist");
     }
 }

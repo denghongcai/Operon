@@ -435,6 +435,7 @@ exec:
     - /
   default_timeout_secs: {default_timeout_secs}
   max_timeout_secs: {max_timeout_secs}
+  allow_sessions: true
   preserve_env: false
   env_allowlist: []
   allowed_secrets: []

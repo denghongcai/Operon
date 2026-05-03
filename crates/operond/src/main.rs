@@ -4,36 +4,28 @@ use std::{
     collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
-    pin::Pin,
     sync::{atomic::AtomicU64, Arc, Mutex},
 };
 
 use clap::{Parser, Subcommand};
-use futures_util::StreamExt;
 use operon_config::{resolve_path, OperonConfig};
-use operon_core::{
-    AuditLog, CapabilityList, ExecList, ExecRunRequest, ExecStatus, ExecStdin, ExecStdinClose,
-    HealthStatus, NodeInfo, RequestContext, ServiceList,
-};
+use operon_core::{AuditLog, CapabilityList, HealthStatus, NodeInfo, RequestContext, ServiceList};
 #[cfg(test)]
 use operon_core::{
-    ExecLog, ExecPolicy, ExecRecord, FsMountPolicy, FsPermissions, FsPolicy, PolicyConfig,
-    RuntimeErrorKind, ServiceDefinition, ServicePolicy,
+    ExecLog, ExecPolicy, ExecRecord, ExecRunRequest, ExecStatus, FsMountPolicy, FsPermissions,
+    FsPolicy, PolicyConfig, RuntimeErrorKind, ServiceDefinition, ServicePolicy,
 };
 #[cfg(test)]
 use operon_fs::authorize_fs;
 #[cfg(test)]
 use operon_process::{authorize_exec, resolve_exec_secrets};
 use operon_protocol::runtime::v1::{
-    exec_stdin_request,
     operon_runtime_server::{OperonRuntime, OperonRuntimeServer},
-    CapabilityDiagnosticRequest, ExecIdRequest, ExecLogStreamEvent, FileChunk, FsCopyRequest,
-    FsListRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest,
-    FsWriteRangeRequest, GetNodeRequest, HealthRequest, ListAuditRequest, ListCapabilitiesRequest,
-    ListExecsRequest, ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest,
-    ServiceTunnelRequest,
+    CapabilityDiagnosticRequest, ExecIdRequest, FileChunk, FsCopyRequest, FsListRequest,
+    FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest,
+    GetNodeRequest, HealthRequest, ListAuditRequest, ListCapabilitiesRequest, ListExecsRequest,
+    ListServicesRequest, ServiceDatagramTunnelRequest, ServiceIdRequest, ServiceTunnelRequest,
 };
-use tokio::sync::broadcast;
 use tonic::{transport::Server, Request, Response as GrpcResponse, Status};
 
 mod audit;
@@ -41,6 +33,8 @@ mod auth;
 mod capability_diagnostics;
 mod defaults;
 mod exec_runtime;
+mod exec_service;
+mod exec_session;
 mod fs_service;
 mod grpc_status;
 mod lan_advertise;
@@ -52,23 +46,21 @@ mod store_config;
 
 #[cfg(test)]
 use audit::now_ms;
-use audit::{bounded_audit_events, record_audit, record_audit_capability};
+#[cfg(test)]
+use audit::record_audit_capability;
+use audit::{bounded_audit_events, record_audit};
 use auth::authorize_grpc;
 use defaults::{capabilities_from_policy, default_policy};
-use exec_runtime::{
-    exec_event_from_record, exec_log_buffers_from_persisted_logs, exec_log_complete,
-    exec_log_complete_event, exec_log_entry_event, exec_log_list, exec_log_snapshot,
-    exec_log_snapshot_event, get_exec_record, next_exec_sequence, start_exec,
-};
+use exec_runtime::{exec_log_buffers_from_persisted_logs, next_exec_sequence};
 use lan_advertise::advertise_lan;
 use locks::lock;
 use pagination::paginate_items;
 #[cfg(test)]
 use service_forward::authorize_service;
 use service_forward::{grpc_service_check, open_service_datagram_tunnel, open_service_tunnel};
+use state::AppState;
 #[cfg(test)]
 use state::MAX_IN_MEMORY_AUDIT_EVENTS;
-use state::{AppState, ExecEventSender, ExecLogSender};
 #[cfg(test)]
 use state::{
     ExecCompletion, ExecLogBuffer, MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS,
@@ -206,17 +198,11 @@ struct GrpcRuntime {
 }
 
 type GrpcFileStream = fs_service::FileStream;
-type GrpcExecLogStream =
-    Pin<Box<dyn futures_util::Stream<Item = Result<ExecLogStreamEvent, Status>> + Send + 'static>>;
-type GrpcExecEventStream = Pin<
-    Box<
-        dyn futures_util::Stream<Item = Result<operon_protocol::runtime::v1::ExecEvent, Status>>
-            + Send
-            + 'static,
-    >,
->;
+type GrpcExecLogStream = exec_service::ExecLogStream;
+type GrpcExecEventStream = exec_service::ExecEventStream;
 type GrpcServiceTunnelStream = service_forward::ServiceTunnelStream;
 type GrpcServiceDatagramTunnelStream = service_forward::ServiceDatagramTunnelStream;
+type GrpcExecSessionStream = exec_service::ExecSessionStream;
 
 #[tonic::async_trait]
 impl OperonRuntime for GrpcRuntime {
@@ -481,17 +467,10 @@ impl OperonRuntime for GrpcRuntime {
         let request = request.into_inner();
         AUDIT_CONTEXT
             .scope(context, async {
-                let record = start_exec(
+                Ok(GrpcResponse::new(exec_service::run_exec(
                     &self.state,
-                    ExecRunRequest {
-                        command: request.command,
-                        argv: request.argv,
-                        cwd: (!request.cwd.is_empty()).then_some(request.cwd),
-                        timeout_secs: request.timeout_secs,
-                        secrets: request.secrets,
-                    },
-                )?;
-                Ok(GrpcResponse::new(record.into()))
+                    request,
+                )?))
             })
             .await
     }
@@ -501,9 +480,10 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<ExecIdRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecRecord>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let exec_id = request.into_inner().exec_id;
-        let record = get_exec_record(&self.state, &exec_id)?;
-        Ok(GrpcResponse::new(record.into()))
+        Ok(GrpcResponse::new(exec_service::get_exec(
+            &self.state,
+            request.into_inner(),
+        )?))
     }
 
     async fn list_execs(
@@ -511,20 +491,10 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<ListExecsRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
-        let request = request.into_inner();
-        let execs = lock(&self.state.execs, "exec map")?
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        let (execs, next_page_token) =
-            paginate_items(&execs, request.page_size, &request.page_token)?;
-        let mut response: operon_protocol::runtime::v1::ExecList = ExecList {
-            execs,
-            next_page_token: String::new(),
-        }
-        .into();
-        response.next_page_token = next_page_token;
-        Ok(GrpcResponse::new(response))
+        Ok(GrpcResponse::new(exec_service::list_execs(
+            &self.state,
+            request.into_inner(),
+        )?))
     }
 
     type WatchExecStream = GrpcExecEventStream;
@@ -535,48 +505,10 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<Self::WatchExecStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let exec_id = request.into_inner().exec_id;
-        let mut receiver = lock(&self.state.exec_events, "exec event")?
-            .get(&exec_id)
-            .map(ExecEventSender::subscribe);
-        let initial = exec_event_from_record(&get_exec_record(&self.state, &exec_id)?);
-        let state = self.state.clone();
-        let stream = async_stream::stream! {
-            let mut latest = initial;
-            yield Ok::<_, Status>(latest.clone().into());
-            if !matches!(latest.status, ExecStatus::Running) {
-                return;
-            }
-            if let Some(receiver) = receiver.as_mut() {
-                loop {
-                    match receiver.recv().await {
-                        Ok(event) => {
-                            latest = event;
-                            yield Ok::<_, Status>(latest.clone().into());
-                            if !matches!(latest.status, ExecStatus::Running) {
-                                break;
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(_)) => {
-                            match get_exec_record(&state, &exec_id) {
-                                Ok(record) => {
-                                    latest = exec_event_from_record(&record);
-                                    yield Ok::<_, Status>(latest.clone().into());
-                                    if !matches!(latest.status, ExecStatus::Running) {
-                                        break;
-                                    }
-                                }
-                                Err(status) => {
-                                    yield Err(status);
-                                    break;
-                                }
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Closed) => break,
-                    }
-                }
-            }
-        };
-        Ok(GrpcResponse::new(Box::pin(stream)))
+        Ok(GrpcResponse::new(exec_service::watch_exec(
+            self.state.clone(),
+            exec_id,
+        )?))
     }
 
     async fn list_exec_logs(
@@ -585,10 +517,10 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecLogList>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let exec_id = request.into_inner().exec_id;
-        get_exec_record(&self.state, &exec_id)?;
-        Ok(GrpcResponse::new(
-            exec_log_list(&self.state, &exec_id)?.into(),
-        ))
+        Ok(GrpcResponse::new(exec_service::list_exec_logs(
+            &self.state,
+            exec_id,
+        )?))
     }
 
     type StreamExecLogsStream = GrpcExecLogStream;
@@ -599,80 +531,10 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<Self::StreamExecLogsStream>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let exec_id = request.into_inner().exec_id;
-        let mut log_receiver = lock(&self.state.exec_log_events, "exec log event")?
-            .get(&exec_id)
-            .map(ExecLogSender::subscribe);
-        let mut event_receiver = lock(&self.state.exec_events, "exec event")?
-            .get(&exec_id)
-            .map(ExecEventSender::subscribe);
-        let initial_record = get_exec_record(&self.state, &exec_id)?;
-        let (initial_snapshot, mut next_sequence) = exec_log_snapshot(&self.state, &exec_id)?;
-        let state = self.state.clone();
-        let stream = async_stream::stream! {
-            yield Ok::<_, Status>(exec_log_snapshot_event(initial_snapshot));
-            if !matches!(initial_record.status, ExecStatus::Running) {
-                match exec_log_complete(&state, &exec_id) {
-                    Ok(complete) => yield Ok(exec_log_complete_event(complete)),
-                    Err(status) => yield Err(status),
-                }
-                return;
-            }
-            if let (Some(log_receiver), Some(event_receiver)) =
-                (log_receiver.as_mut(), event_receiver.as_mut())
-            {
-                loop {
-                    tokio::select! {
-                        log = log_receiver.recv() => {
-                            match log {
-                                Ok(log) => {
-                                    if log.sequence >= next_sequence {
-                                        next_sequence = log.sequence.saturating_add(1);
-                                        yield Ok::<_, Status>(exec_log_entry_event(&exec_id, log));
-                                    }
-                                }
-                                Err(broadcast::error::RecvError::Lagged(_)) => {
-                                    match exec_log_snapshot(&state, &exec_id) {
-                                        Ok((snapshot, snapshot_next_sequence)) => {
-                                            next_sequence = next_sequence.max(snapshot_next_sequence);
-                                            yield Ok::<_, Status>(exec_log_snapshot_event(snapshot));
-                                        }
-                                        Err(status) => {
-                                            yield Err(status);
-                                            break;
-                                        }
-                                    }
-                                }
-                                Err(broadcast::error::RecvError::Closed) => break,
-                            }
-                        }
-                        event = event_receiver.recv() => {
-                            match event {
-                                Ok(event) => {
-                                    if !matches!(event.status, ExecStatus::Running) {
-                                        match exec_log_snapshot(&state, &exec_id) {
-                                            Ok((snapshot, _snapshot_next_sequence)) => {
-                                                yield Ok::<_, Status>(exec_log_snapshot_event(snapshot));
-                                            }
-                                            Err(status) => {
-                                                yield Err(status);
-                                            }
-                                        }
-                                        match exec_log_complete(&state, &exec_id) {
-                                            Ok(complete) => yield Ok::<_, Status>(exec_log_complete_event(complete)),
-                                            Err(status) => yield Err(status),
-                                        }
-                                        break;
-                                    }
-                                }
-                                Err(broadcast::error::RecvError::Lagged(_)) => {}
-                                Err(broadcast::error::RecvError::Closed) => break,
-                            }
-                        }
-                    }
-                }
-            }
-        };
-        Ok(GrpcResponse::new(Box::pin(stream)))
+        Ok(GrpcResponse::new(exec_service::stream_exec_logs(
+            self.state.clone(),
+            exec_id,
+        )?))
     }
 
     async fn write_exec_stdin(
@@ -681,65 +543,8 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecStdin>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let mut stream = request.into_inner();
-        let mut exec_id = None;
-        let mut sender = None;
-        let mut bytes_written = 0_u64;
-        while let Some(message) = stream.next().await {
-            let message = message?;
-            match message.payload {
-                Some(exec_stdin_request::Payload::Target(target)) => {
-                    if exec_id.is_some() {
-                        return Err(Status::invalid_argument(
-                            "stdin stream target metadata was sent more than once",
-                        ));
-                    }
-                    if target.exec_id.is_empty() {
-                        return Err(Status::invalid_argument(
-                            "stdin stream target exec_id is required",
-                        ));
-                    }
-                    sender = Some(
-                        lock(&self.state.exec_stdin, "exec stdin")?
-                            .get(&target.exec_id)
-                            .cloned()
-                            .ok_or_else(|| {
-                                Status::not_found(format!(
-                                    "exec `{}` has no open stdin",
-                                    target.exec_id
-                                ))
-                            })?,
-                    );
-                    exec_id = Some(target.exec_id);
-                }
-                Some(exec_stdin_request::Payload::Chunk(chunk)) => {
-                    let Some(sender) = &sender else {
-                        return Err(Status::invalid_argument(
-                            "stdin stream chunk arrived before target metadata",
-                        ));
-                    };
-                    bytes_written += chunk.data.len() as u64;
-                    sender
-                        .send(chunk.data)
-                        .map_err(|_| Status::failed_precondition("exec stdin is closed"))?;
-                }
-                None => {
-                    return Err(Status::invalid_argument(
-                        "stdin stream message is missing payload",
-                    ));
-                }
-            }
-        }
-        let Some(exec_id) = exec_id else {
-            return Err(Status::invalid_argument(
-                "stdin stream did not include target metadata",
-            ));
-        };
         Ok(GrpcResponse::new(
-            ExecStdin {
-                exec_id,
-                bytes_written,
-            }
-            .into(),
+            exec_service::write_exec_stdin(&self.state, &mut stream).await?,
         ))
     }
 
@@ -749,10 +554,10 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::ExecStdinClose>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let exec_id = request.into_inner().exec_id;
-        let closed = lock(&self.state.exec_stdin, "exec stdin")?
-            .remove(&exec_id)
-            .is_some();
-        Ok(GrpcResponse::new(ExecStdinClose { exec_id, closed }.into()))
+        Ok(GrpcResponse::new(exec_service::close_exec_stdin(
+            &self.state,
+            exec_id,
+        )?))
     }
 
     async fn cancel_exec(
@@ -763,20 +568,26 @@ impl OperonRuntime for GrpcRuntime {
         let exec_id = request.into_inner().exec_id;
         AUDIT_CONTEXT
             .scope(context, async {
-                if let Some(sender) = lock(&self.state.exec_cancel, "exec cancel")?.remove(&exec_id)
-                {
-                    let _ = sender.send(());
-                    record_audit_capability(
-                        &self.state,
-                        "exec:default",
-                        "cancel",
-                        &exec_id,
-                        true,
-                        "cancel requested",
-                    );
-                }
-                let record = get_exec_record(&self.state, &exec_id)?;
-                Ok(GrpcResponse::new(record.into()))
+                Ok(GrpcResponse::new(exec_service::cancel_exec(
+                    &self.state,
+                    exec_id,
+                )?))
+            })
+            .await
+    }
+
+    type OpenExecSessionStream = GrpcExecSessionStream;
+
+    async fn open_exec_session(
+        &self,
+        request: Request<tonic::Streaming<operon_protocol::runtime::v1::ExecSessionRequest>>,
+    ) -> Result<GrpcResponse<Self::OpenExecSessionStream>, Status> {
+        let context = authorize_grpc(&self.state, request.metadata())?;
+        let stream = request.into_inner();
+        AUDIT_CONTEXT
+            .scope(context, async {
+                let output = exec_service::open_exec_session(self.state.clone(), stream).await?;
+                Ok(GrpcResponse::new(output))
             })
             .await
     }
@@ -873,6 +684,7 @@ impl OperonRuntime for GrpcRuntime {
 mod tests {
     use super::*;
     use crate::exec_runtime::{append_exec_log, finish_exec, start_exec};
+    use tokio::sync::broadcast;
 
     fn test_policy() -> PolicyConfig {
         PolicyConfig {
@@ -892,6 +704,7 @@ mod tests {
                 allowed_cwds: vec!["/workspace".to_string()],
                 default_timeout_secs: 10,
                 max_timeout_secs: 30,
+                allow_sessions: true,
                 preserve_env: false,
                 env_allowlist: Vec::new(),
                 allowed_secrets: vec!["TEST_SECRET".to_string()],

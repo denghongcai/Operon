@@ -27,6 +27,7 @@ service OperonRuntime {
   rpc WriteExecStdin(stream ExecStdinRequest) returns (ExecStdin);
   rpc CloseExecStdin(ExecIdRequest) returns (ExecStdinClose);
   rpc CancelExec(ExecCancelRequest) returns (ExecRecord);
+  rpc OpenExecSession(stream ExecSessionRequest) returns (stream ExecSessionEvent);
   rpc ListServices(ListServicesRequest) returns (ServiceList);
   rpc CheckService(ServiceIdRequest) returns (ServiceCheck);
   rpc OpenServiceTunnel(stream ServiceTunnelRequest) returns (stream ServiceTunnelResponse);
@@ -358,6 +359,56 @@ message ExecStdin {
 message ExecStdinClose {
   string exec_id = 1;
   bool closed = 2;
+}
+
+message ExecSessionRequest {
+  oneof payload {
+    ExecSessionStart start = 1;
+    ExecSessionInput input = 2;
+    ExecSessionResize resize = 3;
+  }
+}
+
+message ExecSessionStart {
+  string command = 1;
+  string cwd = 2;
+  optional uint64 timeout_secs = 3;
+  repeated string secrets = 4;
+  repeated string argv = 5;
+  uint32 rows = 6;
+  uint32 cols = 7;
+}
+
+message ExecSessionInput {
+  bytes data = 1;
+}
+
+message ExecSessionResize {
+  uint32 rows = 1;
+  uint32 cols = 2;
+}
+
+message ExecSessionStarted {
+  string exec_id = 1;
+}
+
+message ExecSessionOutput {
+  string exec_id = 1;
+  bytes data = 2;
+}
+
+message ExecSessionExit {
+  string exec_id = 1;
+  ExecStatus status = 2;
+  optional int32 exit_code = 3;
+}
+
+message ExecSessionEvent {
+  oneof event {
+    ExecSessionStarted started = 1;
+    ExecSessionOutput output = 2;
+    ExecSessionExit exit = 3;
+  }
 }
 
 message ServiceIdRequest {

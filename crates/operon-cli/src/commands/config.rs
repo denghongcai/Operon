@@ -63,6 +63,7 @@ struct ExecPolicyExplain {
     allowed_cwds: Vec<String>,
     default_timeout_secs: u64,
     max_timeout_secs: u64,
+    allow_sessions: bool,
     preserve_env: bool,
     env_allowlist: Vec<String>,
     allowed_secrets: Vec<String>,
@@ -152,6 +153,7 @@ impl ConfigExplain {
                     allowed_cwds: policy.exec.allowed_cwds.clone(),
                     default_timeout_secs: policy.exec.default_timeout_secs,
                     max_timeout_secs: policy.exec.max_timeout_secs,
+                    allow_sessions: policy.exec.allow_sessions,
                     preserve_env: policy.exec.preserve_env,
                     env_allowlist: policy.exec.env_allowlist.clone(),
                     allowed_secrets: policy.exec.allowed_secrets.clone(),
@@ -236,10 +238,11 @@ fn print_config_explain(explain: &ConfigExplain) {
                 );
             }
             println!(
-                "  exec: allowed_cwds={} default_timeout={} max_timeout={} preserve_env={} env_allowlist={} allowed_secrets={}",
+                "  exec: allowed_cwds={} default_timeout={} max_timeout={} allow_sessions={} preserve_env={} env_allowlist={} allowed_secrets={}",
                 policy.exec.allowed_cwds.join(","),
                 policy.exec.default_timeout_secs,
                 policy.exec.max_timeout_secs,
+                policy.exec.allow_sessions,
                 policy.exec.preserve_env,
                 policy.exec.env_allowlist.join(","),
                 policy.exec.allowed_secrets.join(",")
@@ -347,6 +350,17 @@ fn effective_policy_grants(policy: &operon_core::PolicyConfig) -> Vec<PolicyGran
             cwd,
             true,
             operon_core::PolicyReasonCode::Allowed,
+        ));
+        grants.push(policy_grant(
+            "exec:default",
+            "session",
+            cwd,
+            policy.exec.allow_sessions,
+            if policy.exec.allow_sessions {
+                operon_core::PolicyReasonCode::Allowed
+            } else {
+                operon_core::PolicyReasonCode::ExecSessionDenied
+            },
         ));
     }
     for secret in &policy.exec.allowed_secrets {

@@ -12,7 +12,7 @@ require_pattern 'Status: Completed' docs/plan/v0.9.4-runtime-hardening-consolida
 require_pattern 'v0.9.4 Runtime Hardening Consolidation' docs/plan/development-phases.md
 require_pattern 'No v0.9.4 work remains' docs/plan/development-phases.md
 
-require_pattern 'PROTOCOL_VERSION: &str = "v0.10.2"' crates/operon-protocol/src/lib.rs
+require_pattern 'PROTOCOL_VERSION: &str = "v0.11.0"' crates/operon-protocol/src/lib.rs
 require_pattern 'repeated string argv = 6' proto/operon/runtime.proto
 require_pattern 'argv: value.argv' crates/operon-protocol/src/lib.rs
 require_pattern 'Execute CLI words as argv without shell parsing' crates/operon-cli/src/main.rs

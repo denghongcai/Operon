@@ -17,6 +17,32 @@ pub fn authorize_exec(
     Err(decision.runtime_error())
 }
 
+pub fn authorize_exec_session_decision(
+    subject: &str,
+    policy: &ExecPolicy,
+    cwd: &str,
+    timeout_secs: Option<u64>,
+) -> PolicyDecision {
+    if !policy.allow_sessions {
+        return PolicyDecision::denied(
+            subject,
+            "exec:default",
+            "session",
+            cwd,
+            PolicyReasonCode::ExecSessionDenied,
+            "exec sessions are denied by policy",
+        );
+    }
+    let decision = authorize_exec_decision(subject, policy, cwd, timeout_secs);
+    if decision.allowed {
+        return PolicyDecision::allowed(subject, "exec:default", "session", cwd, "allowed");
+    }
+    PolicyDecision {
+        action: "session".to_string(),
+        ..decision
+    }
+}
+
 pub fn authorize_exec_decision(
     subject: &str,
     policy: &ExecPolicy,
@@ -150,6 +176,7 @@ mod tests {
             allowed_cwds: vec!["/workspace".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            allow_sessions: false,
             preserve_env: false,
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
@@ -173,6 +200,7 @@ mod tests {
             allowed_cwds: vec!["/workspace".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            allow_sessions: false,
             preserve_env: false,
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),
@@ -199,11 +227,37 @@ mod tests {
     }
 
     #[test]
+    fn exec_session_policy_requires_session_permission() {
+        let mut policy = ExecPolicy {
+            allowed_cwds: vec!["/workspace".to_string()],
+            default_timeout_secs: 30,
+            max_timeout_secs: 60,
+            allow_sessions: false,
+            preserve_env: false,
+            env_allowlist: Vec::new(),
+            allowed_secrets: Vec::new(),
+        };
+
+        let denied = authorize_exec_session_decision("local-cli", &policy, "/workspace", Some(30));
+        assert!(!denied.allowed);
+        assert_eq!(
+            denied.reason_code,
+            operon_core::PolicyReasonCode::ExecSessionDenied
+        );
+
+        policy.allow_sessions = true;
+        let allowed = authorize_exec_session_decision("local-cli", &policy, "/workspace", Some(30));
+        assert!(allowed.allowed);
+        assert_eq!(allowed.action, "session");
+    }
+
+    #[test]
     fn secret_authorization_decision_names_denied_and_missing_secrets() {
         let policy = ExecPolicy {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            allow_sessions: false,
             preserve_env: false,
             env_allowlist: Vec::new(),
             allowed_secrets: vec!["TOKEN".to_string()],
@@ -245,6 +299,7 @@ mod tests {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            allow_sessions: false,
             preserve_env: false,
             env_allowlist: vec!["PATH".to_string()],
             allowed_secrets: Vec::new(),
@@ -262,6 +317,7 @@ mod tests {
             allowed_cwds: vec!["/".to_string()],
             default_timeout_secs: 30,
             max_timeout_secs: 60,
+            allow_sessions: false,
             preserve_env: true,
             env_allowlist: Vec::new(),
             allowed_secrets: Vec::new(),

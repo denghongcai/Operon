@@ -1,4 +1,4 @@
-pub const PROTOCOL_VERSION: &str = "v0.10.2";
+pub const PROTOCOL_VERSION: &str = "v0.11.0";
 
 pub mod runtime {
     pub mod v1 {
@@ -471,6 +471,82 @@ impl From<runtime::v1::ExecStdinClose> for operon_core::ExecStdinClose {
     }
 }
 
+impl From<operon_core::ExecSessionStart> for runtime::v1::ExecSessionStart {
+    fn from(value: operon_core::ExecSessionStart) -> Self {
+        Self {
+            command: value.command,
+            cwd: value.cwd.unwrap_or_default(),
+            timeout_secs: value.timeout_secs,
+            secrets: value.secrets,
+            argv: value.argv,
+            rows: value.rows as u32,
+            cols: value.cols as u32,
+        }
+    }
+}
+
+impl TryFrom<runtime::v1::ExecSessionStart> for operon_core::ExecSessionStart {
+    type Error = String;
+
+    fn try_from(value: runtime::v1::ExecSessionStart) -> Result<Self, Self::Error> {
+        Ok(Self {
+            command: value.command,
+            argv: value.argv,
+            cwd: (!value.cwd.is_empty()).then_some(value.cwd),
+            timeout_secs: value.timeout_secs,
+            secrets: value.secrets,
+            rows: session_dimension(value.rows, 24, "rows")?,
+            cols: session_dimension(value.cols, 80, "cols")?,
+        })
+    }
+}
+
+impl From<operon_core::ExecSessionStarted> for runtime::v1::ExecSessionStarted {
+    fn from(value: operon_core::ExecSessionStarted) -> Self {
+        Self {
+            exec_id: value.exec_id,
+        }
+    }
+}
+
+impl From<operon_core::ExecSessionOutput> for runtime::v1::ExecSessionOutput {
+    fn from(value: operon_core::ExecSessionOutput) -> Self {
+        Self {
+            exec_id: value.exec_id,
+            data: value.data,
+        }
+    }
+}
+
+impl From<operon_core::ExecSessionExit> for runtime::v1::ExecSessionExit {
+    fn from(value: operon_core::ExecSessionExit) -> Self {
+        Self {
+            exec_id: value.exec_id,
+            status: grpc_exec_status(&value.status) as i32,
+            exit_code: value.exit_code,
+        }
+    }
+}
+
+impl From<operon_core::ExecSessionEvent> for runtime::v1::ExecSessionEvent {
+    fn from(value: operon_core::ExecSessionEvent) -> Self {
+        use runtime::v1::exec_session_event::Event;
+        let event = match value {
+            operon_core::ExecSessionEvent::Started(started) => Event::Started(started.into()),
+            operon_core::ExecSessionEvent::Output(output) => Event::Output(output.into()),
+            operon_core::ExecSessionEvent::Exit(exit) => Event::Exit(exit.into()),
+        };
+        Self { event: Some(event) }
+    }
+}
+
+fn session_dimension(value: u32, default: u16, field: &str) -> Result<u16, String> {
+    if value == 0 {
+        return Ok(default);
+    }
+    u16::try_from(value).map_err(|_| format!("exec session {field} is out of range"))
+}
+
 impl From<operon_core::ServiceDefinition> for runtime::v1::ServiceDefinition {
     fn from(value: operon_core::ServiceDefinition) -> Self {
         Self {
@@ -711,7 +787,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.10.2");
+        assert_eq!(PROTOCOL_VERSION, "v0.11.0");
     }
 
     #[test]
@@ -863,6 +939,29 @@ mod tests {
         assert_eq!(core.cwd, Some("/work".to_string()));
         assert_eq!(core.timeout_secs, Some(10));
         assert_eq!(core.secrets, vec!["TOKEN".to_string()]);
+    }
+
+    #[test]
+    fn exec_session_start_round_trips_through_grpc_shape() {
+        let request = operon_core::ExecSessionStart {
+            command: String::new(),
+            argv: vec!["bash".to_string(), "-li".to_string()],
+            cwd: Some("/work".to_string()),
+            timeout_secs: Some(120),
+            secrets: vec!["TOKEN".to_string()],
+            rows: 33,
+            cols: 120,
+        };
+
+        let grpc: runtime::v1::ExecSessionStart = request.clone().into();
+        let core = operon_core::ExecSessionStart::try_from(grpc).expect("session start");
+
+        assert_eq!(core.argv, request.argv);
+        assert_eq!(core.cwd, request.cwd);
+        assert_eq!(core.timeout_secs, request.timeout_secs);
+        assert_eq!(core.secrets, request.secrets);
+        assert_eq!(core.rows, 33);
+        assert_eq!(core.cols, 120);
     }
 
     #[test]

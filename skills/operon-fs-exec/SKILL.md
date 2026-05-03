@@ -14,6 +14,7 @@ operon fs --help
 operon fs read --help
 operon fs write --help
 operon exec run --help
+operon exec session --help
 operon exec logs --help
 operon exec stdin --help
 ```
@@ -37,9 +38,16 @@ Exec command choice:
 
 - Run a command and wait: `operon exec run <node> -- <command>`.
 - Start and return immediately: `operon exec run <node> --detach -- <command>`.
+- Open a PTY-backed interactive command when policy allows sessions:
+  `operon exec session <node> -- <command>`.
 - Check status: `operon exec status <node> <exec_id>`.
 - Read or follow stdout/stderr: `operon exec logs <node> <exec_id>`.
 - Send stdin or close it: `operon exec stdin <node> <exec_id>`.
 - Cancel: `operon exec cancel <node> <exec_id>`.
 
-Treat exec execution as policy-sensitive. Confirm cwd, timeout, secrets, and destructive shell commands. Check `audit show` after running execs that mutate files, services, or external systems.
+Use `exec.run` for non-interactive commands and graph steps. Use
+`exec.session` only when the command needs terminal semantics such as shell
+line editing, terminal control, or PTY-aware programs. Treat exec execution as
+policy-sensitive. Confirm cwd, timeout, secrets, and destructive shell
+commands. Check `audit show` after running execs that mutate files, services,
+or external systems.

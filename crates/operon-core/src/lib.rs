@@ -158,6 +158,7 @@ steps:
                 allowed_cwds: vec!["/tmp".to_string()],
                 default_timeout_secs: 30,
                 max_timeout_secs: 300,
+                allow_sessions: false,
                 preserve_env: false,
                 env_allowlist: vec![],
                 allowed_secrets: vec![],

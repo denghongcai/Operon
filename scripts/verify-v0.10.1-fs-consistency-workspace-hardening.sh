@@ -17,8 +17,8 @@ require_pattern 'string version = 5' proto/operon/runtime.proto
 require_pattern 'optional FsPrecondition precondition' proto/operon/runtime.proto
 require_pattern 'optional string expected_version' proto/operon/runtime.proto
 require_pattern 'bool require_absent' proto/operon/runtime.proto
-require_pattern 'PROTOCOL_VERSION: &str = "v0.10.2"' crates/operon-protocol/src/lib.rs
-require_pattern '"version": "0.10.2"' packages/sdk-js/package.json
+require_pattern 'PROTOCOL_VERSION: &str = "v0.11.0"' crates/operon-protocol/src/lib.rs
+require_pattern '"version": "0.11.0"' packages/sdk-js/package.json
 
 require_pattern 'LinuxOpenat2ResolveBeneath' crates/operon-fs/src/lib.rs
 require_pattern 'SYS_openat2' crates/operon-fs/src/lib.rs

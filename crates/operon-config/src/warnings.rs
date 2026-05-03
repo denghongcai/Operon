@@ -110,6 +110,7 @@ fn collect_policy(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<Conf
             "allowed_cwds",
             "default_timeout_secs",
             "max_timeout_secs",
+            "allow_sessions",
             "preserve_env",
             "env_allowlist",
             "allowed_secrets",

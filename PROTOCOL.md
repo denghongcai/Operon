@@ -158,6 +158,7 @@ Client-streaming calls:
 
 Bidirectional-streaming calls:
 
+- `OpenExecSession`
 - `OpenServiceTunnel`
 - `OpenServiceDatagramTunnel`
 
@@ -362,6 +363,16 @@ Set `policy.exec.preserve_env: true` to preserve the daemon's complete
 environment for spawned execs. This is useful when commands need normal process
 context such as `HOME`, `PATH`, proxy variables, or toolchain variables, but it
 also grants execs access to every environment variable visible to `operond`.
+
+`OpenExecSession` is the PTY/TTY-backed interactive execution path. The first
+client message must carry `ExecSessionStart` metadata with either `command` or
+`argv`, optional cwd/timeout/secrets, and initial terminal rows/columns. Later
+client messages may carry raw input bytes or resize events. Server events report
+`started`, raw terminal `output`, and final `exit` status. Session authorization
+uses the distinct `exec:default` `session` action; `policy.exec.allow_sessions`
+must be true. Session lifecycle is audited, but input bytes are not copied into
+audit event resources. The first implementation is Unix PTY focused; Windows
+ConPTY support is explicit future distribution work.
 
 ## Errors
 

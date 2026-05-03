@@ -19,6 +19,7 @@ Use CLI help to confirm behavior before mirroring it in code:
 operon config explain --help
 operon fs read --help
 operon exec logs --help
+operon exec session --help
 operon service forward --help
 ```
 
@@ -26,12 +27,15 @@ Integration guidance:
 
 - Read config with the same assumptions as `operon config explain`.
 - Use bearer auth only from configured token sources; do not log token values.
-- Prefer streaming APIs for large file reads, file writes, exec stdin, and exec logs.
+- Prefer streaming APIs for large file reads, file writes, exec stdin, exec
+  logs, and PTY-backed exec sessions.
 - Preserve and reuse opaque filesystem `version` values when a workflow needs
   stale-write protection; send `expected_version` rather than parsing version
   tokens.
 - Preserve audit and trace context when running execution graphs.
 - Respect pagination fields on list APIs.
+- Use `OpenExecSession` / SDK `openExecSession` for interactive terminal
+  workflows; use `RunExec` / `runExec` for non-interactive commands.
 - Treat service forwarding as an explicit user operation, not an automatic background side effect.
 
 After implementing a client workflow, compare it against equivalent CLI behavior and verify with audit or trace output.

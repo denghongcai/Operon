@@ -10,15 +10,17 @@ rg -n 'pub enum FsyncPolicy' crates/operon-store/src/lib.rs
 rg -n 'pub fn append_record\(path: Option<&Path>, record: &serde_json::Value\) -> anyhow::Result<\(\)>' crates/operon-store/src/lib.rs
 
 rg -n 'StoreWriter::new' crates/operond/src/main.rs
-rg -n 'exec_log_snapshot_event' crates/operond/src/main.rs
-rg -n 'exec_log_complete_event' crates/operond/src/main.rs
+rg -n 'exec_log_snapshot_event' crates/operond/src/exec_runtime.rs
+rg -n 'exec_log_complete_event' crates/operond/src/exec_runtime.rs
+rg -n 'exec_log_snapshot_event' crates/operond/src/exec_service.rs
+rg -n 'exec_log_complete_event' crates/operond/src/exec_service.rs
 
 rg -n "\\[target\\.'cfg\\(target_os = \"linux\"\\)'\\.dependencies\\]" crates/operon-mount/Cargo.toml
 rg -n '^#!\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
 
 rg -n 'export type ExecLogStreamEvent' packages/sdk-js/src/index.ts
 rg -n 'streamExecLogEvents' packages/sdk-js/src/index.ts
-rg -n 'PROTOCOL_VERSION: &str = "v0.10.2"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.11.0"' crates/operon-protocol/src/lib.rs
 
 cargo test -p operon-store --locked
 cargo test -p operond --locked

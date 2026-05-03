@@ -76,6 +76,7 @@ Client-streaming calls:
 
 Bidirectional-streaming calls:
 
+- `OpenExecSession`
 - `OpenServiceTunnel`
 - `OpenServiceDatagramTunnel`
 
@@ -86,6 +87,8 @@ Runtime schema constraints:
   presence rather than paired `has_*` booleans.
 - `WriteFile` and `WriteExecStdin` use explicit target and chunk envelope
   variants.
+- `OpenExecSession` uses explicit start, input, and resize request envelopes
+  and started, output, and exit response envelopes.
 - `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
   unary random-read API for mount adapters and generated clients that need
   offset/size reads.
