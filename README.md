@@ -117,6 +117,18 @@ mkdir -p ~/.zfunc
 operon completion zsh > ~/.zfunc/_operon
 ```
 
+Optional agent skills:
+
+```bash
+npx skills add https://github.com/denghongcai/Operon --list
+npx skills add https://github.com/denghongcai/Operon --skill '*' --agent codex --yes
+```
+
+This uses the [Vercel Skills CLI](https://github.com/vercel-labs/skills) to
+install Operon's repo-local skills for agents such as Codex, Claude Code,
+Cursor, and other supported coding agents. Replace `codex` with your target
+agent, or omit `--agent codex --yes` to choose interactively.
+
 ---
 
 ## Basic Usage
