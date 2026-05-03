@@ -54,6 +54,36 @@ AI agents often interact with real machines through fragmented tools:
 That usually means poor composability, weak execution traces, unclear security
 boundaries, and network access being mistaken for capability access.
 
+```text
+              AI agents                     apps and tools
+                  |                              |
+           use CLI + skills                   use SDK
+                  |                              |
+                  +--------------+---------------+
+                                 |
+                                 v
++------------------------------------------------+
+| Operon capability runtime                      |
+|                                                |
+| discover -> authorize -> execute               |
+|                 |                              |
+|                 v                              |
+|           trace + audit                        |
+|                                                |
+| capabilities: fs | job | service               |
+| controls:     policy | graph                   |
++------------------------------------------------+
+                                 |
+        secure access over existing reachability
+                                 |
++----------------- Existing private network -----------------+
+| Cloudflare Mesh | Tailscale | WireGuard | LAN | Kubernetes |
++------------------------------------------------------------+
+        |                    |                     |
+     node-a               node-b                node-c
+   fs + jobs             service              fs + jobs
+```
+
 Operon adds:
 
 - A unified capability model.
