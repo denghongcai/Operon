@@ -4195,6 +4195,9 @@ Completed:
   repo-local skills, examples, validation scripts, and CI validation.
 - Added [`scripts/verify-v0.10-exec-unification.sh`](../../scripts/verify-v0.10-exec-unification.sh)
   to validate the active exec surface and stale job command removal.
+- Follow-up release governance update added an AGENTS.md rule that public
+  release tags must be created only after the release commit is merged to
+  `main`, and from the commit intended for `main`.
 
 Remaining:
 

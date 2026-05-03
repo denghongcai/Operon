@@ -430,6 +430,9 @@ Defer:
 - Public release tags, Rust crate versions, the TypeScript SDK package version,
   and `PROTOCOL_VERSION` must align for public releases so CLI `--version`,
   SDK package metadata, and runtime health output report the same release line.
+- Before creating or publishing a public release tag, confirm the release
+  commit is already merged to `main`; release tags must be created from the
+  commit currently intended for `main`, not from an unmerged feature branch.
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
   when README Quickstart, release packaging, install prerequisites, or agent
   skills guidance changes, and must run that script against the public release
