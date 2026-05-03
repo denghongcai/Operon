@@ -4416,6 +4416,10 @@ Completed:
   requests: Unix uses `/bin/sh -c`, Windows uses `cmd.exe /C`.
 - Added [`scripts/verify-v0.11.3-platform-capability-matrix.sh`](../../scripts/verify-v0.11.3-platform-capability-matrix.sh)
   and wired it into CI and DEVELOPMENT.md.
+- Follow-up CI repair authenticated `arduino/setup-protoc` with the workflow
+  token, made preserved environment tests tolerate Windows `Path` casing, and
+  updated the older v0.8.6 modularization verifier for the current
+  service TCP/datagram module boundaries.
 
 Remaining:
 

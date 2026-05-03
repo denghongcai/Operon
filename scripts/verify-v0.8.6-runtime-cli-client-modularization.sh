@@ -44,8 +44,10 @@ done
 require_pattern 'pub\(crate\) fn start_exec' crates/operond/src/exec_runtime.rs
 require_pattern 'pub\(crate\) fn append_exec_log' crates/operond/src/exec_runtime.rs
 require_pattern 'pub\(crate\) fn finish_exec' crates/operond/src/exec_runtime.rs
-require_pattern 'pub\(crate\) fn service_tunnel_stream' crates/operond/src/service_forward.rs
-require_pattern 'pub\(crate\) fn service_datagram_tunnel_stream' crates/operond/src/service_forward.rs
+require_file crates/operond/src/service_tcp_forward.rs
+require_file crates/operond/src/service_datagram_forward.rs
+require_pattern 'service_tcp_forward::service_tunnel_stream' crates/operond/src/service_forward.rs
+require_pattern 'service_datagram_forward::service_datagram_tunnel_stream' crates/operond/src/service_forward.rs
 require_pattern 'pub\(crate\) fn record_audit_capability' crates/operond/src/audit.rs
 reject_pattern '^pub\(crate\) fn append_exec_log' crates/operond/src/main.rs
 reject_pattern '^pub\(crate\) fn finish_exec' crates/operond/src/main.rs

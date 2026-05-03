@@ -16,6 +16,7 @@ require_pattern 'rust-platform-smoke' .github/workflows/ci.yml
 require_pattern 'macos-latest' .github/workflows/ci.yml
 require_pattern 'windows-latest' .github/workflows/ci.yml
 require_pattern 'arduino/setup-protoc@v3' .github/workflows/ci.yml
+require_pattern 'repo-token: \$\{\{ github\.token \}\}' .github/workflows/ci.yml
 require_pattern 'cargo check --workspace --locked' .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked shell_invocation_matches_platform' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-cli --locked exec_session_terminal_dimensions' .github/workflows/ci.yml

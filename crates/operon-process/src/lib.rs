@@ -327,7 +327,7 @@ mod tests {
 
         let env = exec_environment(&policy, secrets);
 
-        assert!(env.contains_key("PATH"));
+        assert!(env.keys().any(|key| key.eq_ignore_ascii_case("PATH")));
         assert_eq!(env.get("TOKEN").map(String::as_str), Some("secret"));
     }
 }

@@ -62,6 +62,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: "25.3"
+          repo-token: ${{ github.token }}
 
       - name: Check workspace
         run: cargo check --workspace --locked
