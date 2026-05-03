@@ -12,6 +12,10 @@ jobs:
   build-rust:
     name: Build Rust (${{ matrix.arch }})
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+    env:
+      PROTOC_VERSION: "25.3"
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +30,27 @@ jobs:
             arch: linux-armv7
             packages: gcc-arm-linux-gnueabihf
     steps:
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages="${{ matrix.packages }}"
+
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential \
+            ca-certificates \
+            curl \
+            git \
+            pkg-config \
+            unzip \
+            ${packages}
+
+          curl -fsSLo /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          unzip -q -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -36,15 +61,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-${{ matrix.target }}
-
-      - name: Install build dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          packages="${{ matrix.packages }}"
-
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler ${packages}
 
       - name: Install Rust target
         run: rustup target add "${{ matrix.target }}"
@@ -58,6 +74,14 @@ jobs:
           CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
           PKG_CONFIG_ALLOW_CROSS: "1"
         run: cargo build --release --locked --target "${{ matrix.target }}" -p operon-cli -p operond
+
+      - name: Validate GLIBC baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/verify-release-glibc-baseline.sh \
+            "target/${{ matrix.target }}/release/operon" \
+            "target/${{ matrix.target }}/release/operond"
 
       - name: Package Rust binaries
         shell: bash

@@ -115,6 +115,8 @@ jobs:
           - name: v0.8.6 Runtime CLI Client Modularization Validation
             script: scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
             node: true
+          - name: Release GLIBC Baseline Validation
+            script: scripts/verify-release-glibc-baseline.sh
           - name: Docs Help Skills Sync Validation
             script: scripts/verify-docs-help-skills-sync.sh
           - name: v0.9 Endpoint Model Validation

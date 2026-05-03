@@ -64,7 +64,10 @@ a secret, forward a local service, or inspect an execution trace.
 
 ## Quickstart
 
-Install the latest Linux release binary:
+Install the latest Linux release binary.
+
+The prebuilt Linux archives are glibc-based and currently target glibc 2.31 or
+newer, such as Ubuntu 20.04+.
 
 ```bash
 VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
@@ -95,10 +98,15 @@ operon onboard \
   --listen 127.0.0.1:7789
 ```
 
-Start the daemon and verify the local node:
+Start the daemon. This command runs in the foreground:
 
 ```bash
 operond start
+```
+
+In another terminal, verify the local node:
+
+```bash
 operon node ping local
 operon capability list local
 ```
@@ -117,11 +125,11 @@ mkdir -p ~/.zfunc
 operon completion zsh > ~/.zfunc/_operon
 ```
 
-Optional agent skills:
+Optional agent skills require Node.js, npm/npx, and git:
 
 ```bash
-npx skills add https://github.com/denghongcai/Operon --list
-npx skills add https://github.com/denghongcai/Operon --skill '*' --agent codex --yes
+npx -y skills add https://github.com/denghongcai/Operon --list
+npx -y skills add https://github.com/denghongcai/Operon --skill '*' --agent codex --yes
 ```
 
 This uses the [Vercel Skills CLI](https://github.com/vercel-labs/skills) to
@@ -146,8 +154,8 @@ Read and write files inside configured workspace mounts:
 
 ```bash
 operon fs list local:/
-operon fs read local:/README.md
 operon fs write local:/notes.txt --content "hello from Operon"
+operon fs read local:/notes.txt
 ```
 
 Run jobs with policy-controlled working directories, timeouts, and secret use:
@@ -156,26 +164,27 @@ Run jobs with policy-controlled working directories, timeouts, and secret use:
 operon job run local -- echo hello
 operon job run local --argv -- printf "hello world"
 operon job list local
-operon job logs local job-1
+JOB_ID="$(operon --json job run local -- echo hello | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | head -n 1)"
+operon job logs local "$JOB_ID"
 ```
 
-Inspect configured services and open explicit local forwards:
+Inspect configured services and open explicit local forwards. The forward
+command runs in the foreground; stop it with Ctrl-C when finished:
 
 ```bash
 operon service list local
-operon service check local daemon
-operon service forward local daemon --listen 127.0.0.1:17789
+operon service check local local-daemon
+operon service forward local local-daemon --listen 127.0.0.1:17789
 ```
 
-Review audit and trace output:
+Review audit output:
 
 ```bash
 operon audit show local --limit 20
-operon run --trace-output ./trace.json ./workflow.yaml
-operon trace show ./trace.json
 ```
 
-Add `--json` for structured output when scripting.
+Add global `--json` before the subcommand for structured output when scripting,
+for example `operon --json job list local`.
 
 ---
 
@@ -242,35 +251,36 @@ discovery.
 
 ## Example Workflow
 
-An Operon workflow composes node capabilities into a traceable execution graph:
+An Operon workflow composes node capabilities into a traceable execution graph.
+This example runs against the `local` node created in the Quickstart:
 
 ```yaml
-name: copy-and-run
+name: local-copy-and-run
 
 steps:
   - id: write-input
-    node: cloud-a
+    node: local
     action: fs.write
     path: /graph-input.txt
     content: hello from graph
 
   - id: run-command
-    node: gpu-node
+    node: local
     action: job.run
     cwd: /
     timeout_secs: 30
     command: cat graph-input.txt > graph-output.txt
 
   - id: read-output
-    node: cloud-a
+    node: local
     action: fs.read
     path: /graph-output.txt
 ```
 
-Run it against already reachable daemon endpoints:
+Save it as `workflow.yaml`, then run it:
 
 ```bash
-operon --config ./operon.config.yaml run --trace-output ./trace.json ./workflow.yaml
+operon run --trace-output ./trace.json ./workflow.yaml
 operon trace show ./trace.json
 ```
 

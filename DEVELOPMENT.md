@@ -64,6 +64,8 @@ scripts/verify-v0.8.3-read-range-release-cleanup.sh
 scripts/verify-v0.8.4-modularization.sh
 scripts/verify-v0.8.5-core-domain-modules.sh
 scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
+scripts/verify-readme-quickstart-docker.sh
+scripts/verify-release-glibc-baseline.sh
 scripts/verify-docs-help-skills-sync.sh
 scripts/verify-v0.9-endpoint-model.sh
 scripts/verify-post-v0.9-discovery-ux.sh
@@ -73,6 +75,16 @@ scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
 scripts/verify-v0.9.5-policy-language-hardening.sh
 scripts/verify-v0.9.6-capability-diagnostics.sh
 ```
+
+The README quickstart Docker validation installs the latest public release in a
+fresh Ubuntu 20.04 environment, runs the user-facing Quickstart, installs the
+repo-local skills through the Vercel Skills CLI, and exercises the README file,
+job, service, audit, trace, and config examples.
+
+The release glibc baseline validation keeps Linux release builds on an Ubuntu
+20.04 / glibc 2.31 baseline, pins a modern `protoc` because Ubuntu 20.04's
+package is too old for proto3 optional fields, and can inspect built binaries
+for accidental newer GLIBC symbol requirements.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store

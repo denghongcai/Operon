@@ -4135,6 +4135,13 @@ Completed:
   docs, AGENTS.md, and this tracker.
 - Follow-up validation maintenance aligned older CI validation scripts with the
   v0.9.7 protocol version and the README/DEVELOPMENT documentation split.
+- Follow-up README validation ran the public release Quickstart in Docker,
+  aligned user-facing examples with the real onboard defaults, documented
+  skills prerequisites, and added `scripts/verify-readme-quickstart-docker.sh`.
+- Follow-up release hardening moved Rust release builds into an Ubuntu 20.04
+  container, pinned a modern `protoc` for proto3 optional support, documented
+  the glibc 2.31+ Linux binary baseline, and added
+  `scripts/verify-release-glibc-baseline.sh`.
 
 Remaining:
 
