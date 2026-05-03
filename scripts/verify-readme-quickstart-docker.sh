@@ -18,13 +18,14 @@ apt-get install -y --no-install-recommends \
   coreutils \
   curl \
   git \
-  nodejs \
-  npm \
   procps \
   sudo \
   tar \
   zsh \
   >/dev/null
+
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
+apt-get install -y --no-install-recommends nodejs >/dev/null
 
 useradd -m -s /bin/bash operon
 printf 'operon ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/operon

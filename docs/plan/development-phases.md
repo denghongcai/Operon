@@ -4142,6 +4142,9 @@ Completed:
   container, pinned a modern `protoc` for proto3 optional support, documented
   the glibc 2.31+ Linux binary baseline, and added
   `scripts/verify-release-glibc-baseline.sh`.
+- Follow-up README validation tightened the agent skills prerequisite to
+  Node.js 18+ and made the Ubuntu 20.04 Docker quickstart validation install
+  Node.js 20 before running the Vercel Skills CLI.
 
 Remaining:
 

@@ -125,7 +125,7 @@ mkdir -p ~/.zfunc
 operon completion zsh > ~/.zfunc/_operon
 ```
 
-Optional agent skills require Node.js, npm/npx, and git:
+Optional agent skills require Node.js 18 or newer, npm/npx, and git:
 
 ```bash
 npx -y skills add https://github.com/denghongcai/Operon --list

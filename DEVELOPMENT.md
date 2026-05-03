@@ -78,8 +78,8 @@ scripts/verify-v0.9.6-capability-diagnostics.sh
 
 The README quickstart Docker validation installs the latest public release in a
 fresh Ubuntu 20.04 environment, runs the user-facing Quickstart, installs the
-repo-local skills through the Vercel Skills CLI, and exercises the README file,
-job, service, audit, trace, and config examples.
+repo-local skills through the Vercel Skills CLI with Node.js 20, and exercises
+the README file, job, service, audit, trace, and config examples.
 
 The release glibc baseline validation keeps Linux release builds on an Ubuntu
 20.04 / glibc 2.31 baseline, pins a modern `protoc` because Ubuntu 20.04's
