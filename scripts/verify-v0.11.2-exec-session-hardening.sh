@@ -18,8 +18,8 @@ require_pattern 'spawn_resize_forwarder' crates/operon-cli/src/grpc_exec.rs
 require_pattern 'ExecSessionResize' crates/operon-cli/src/grpc_exec.rs
 require_pattern 'SessionStreamGuard' crates/operond/src/exec_session.rs
 require_pattern 'SessionControl::Terminate' crates/operond/src/exec_session.rs
-require_pattern 'zhiburt/conpty' docs/plan/v0.11.2-exec-session-hardening.md
-require_pattern 'conpty = "0.7.0"' docs/plan/v0.11.2-exec-session-hardening.md
+require_pattern 'portable-pty' docs/plan/v0.11.2-exec-session-hardening.md
+require_pattern 'macOS and Windows PTY validation remains future platform/distribution work' docs/plan/v0.11.2-exec-session-hardening.md
 
 cargo test -p operon-cli --locked exec_session_terminal_dimensions
 cargo test -p operond --locked exec_session_stream_guard

@@ -374,8 +374,9 @@ interactive. Server events report `started`, raw terminal `output`, and final
 the daemon terminates the remote session. Session authorization uses the
 distinct `exec:default` `session` action; `policy.exec.allow_sessions` must be
 true. Session lifecycle is audited, but input bytes are not copied into audit
-event resources. The first implementation is Unix PTY focused; `zhiburt/conpty`
-is the current candidate for future Windows ConPTY backend work.
+event resources. The first implementation is Unix PTY focused; future macOS and
+Windows validation should continue through the existing `portable-pty`
+abstraction.
 
 ## Errors
 

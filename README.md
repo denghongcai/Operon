@@ -111,7 +111,9 @@ a secret, forward a local service, or inspect an execution trace.
 
 ## Quickstart
 
-Install the latest Linux release binary.
+Install the latest Linux release binary. Current public release artifacts are
+Linux-only; macOS and Windows are candidate core runtime platforms but do not
+have published prebuilt archives yet.
 
 The prebuilt Linux archives are glibc-based and currently target glibc 2.31 or
 newer, such as Ubuntu 20.04+.
@@ -412,6 +414,12 @@ Operon is usable today as a pre-1.0 runtime. The current release includes:
 - Linux FUSE mount support.
 - TCP and UDP service forwarding over existing node connections.
 - mDNS endpoint discovery for local networks.
+
+Current public release artifacts are Linux-only for `x86_64`, `arm64`, and
+`armv7`. macOS and Windows are candidate core runtime platforms covered by CI
+smoke planning for daemon/CLI, gRPC, config, filesystem RPC, exec, service,
+audit, trace, graph, and SDK protocol flows. Linux FUSE mount support remains
+Linux-only; macFUSE and WinFsp are deferred adapter work.
 
 For contributor setup, validation commands, release automation, detailed config
 reference, and current phase tracking, see:

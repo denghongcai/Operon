@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
+use crate::output::OutputMode;
+#[cfg(target_os = "linux")]
 use crate::{
-    output::{print_json, OutputMode},
+    output::print_json,
     target::{load_endpoint, parse_node_path},
 };
 

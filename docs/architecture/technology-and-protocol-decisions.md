@@ -383,6 +383,22 @@ macos-aarch64
 windows-x86_64
 ```
 
+Current public release automation only builds Linux archives. macOS and Windows
+are candidate core runtime platforms covered by CI smoke checks; before macOS or
+Windows artifacts are published, the project should use the platform capability
+matrix below as the release gate:
+
+| Capability group | macOS / Windows first-pass stance |
+| --- | --- |
+| daemon, CLI, gRPC, auth, config, audit, trace, graph, capability diagnostics | target core runtime parity |
+| filesystem RPCs | target normal file and directory parity |
+| workspace containment | document fallback semantics; Linux `openat2` remains stronger |
+| non-interactive exec | target argv-first parity; shell defaults are platform-specific |
+| interactive exec sessions | validate through the existing `portable-pty` abstraction |
+| TCP/UDP service forwarding | target parity, with firewall caveats in diagnostics |
+| mount adapter | defer; Linux FUSE remains the only supported mount adapter |
+| private config/token permissions | add Windows ACL semantics or warn before claiming parity |
+
 Extended target set:
 
 ```text

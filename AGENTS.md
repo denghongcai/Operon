@@ -228,7 +228,12 @@ Operon should not own:
 
 - `docs/plan/v0.11.2-exec-session-hardening.md`
   - v0.11.2 scope for local TTY sizing, Unix resize forwarding, session stream
-    drop termination, and Windows ConPTY follow-up assessment.
+    drop termination, and cross-platform `portable-pty` follow-up assessment.
+
+- `docs/plan/v0.11.3-platform-capability-matrix.md`
+  - v0.11.3 scope for macOS/Windows core runtime alignment research, platform
+    capability matrix documentation, CI smoke planning, and Linux-only mount
+    boundary decisions.
 
 - `docs/plan/v0.10.5-maintainability-cleanup.md`
   - v0.10.5 scope for daemon service tunnel module boundaries and CLI service
@@ -396,11 +401,16 @@ Operon should not own:
   and CLI exec streaming helpers into [`grpc_exec.rs`](crates/operon-cli/src/grpc_exec.rs).
 - Completed exec session hardening milestone: v0.11.2 added local TTY sizing,
   Unix resize forwarding, response-stream drop termination, and documented
-  `zhiburt/conpty` as the likely future Windows ConPTY backend candidate.
+  `portable-pty` as the intended future macOS/Windows PTY validation
+  abstraction.
 - Completed maintainability cleanup milestone: v0.10.5 moved daemon TCP and
   UDP service tunnel state machines plus CLI service forwarding transport
   helpers behind focused module boundaries.
-- Next planned milestone: define the next phase after v0.11.2/v0.10.5.
+- Completed platform capability matrix milestone: v0.11.3 documented
+  macOS/Windows core runtime candidate support, added platform smoke CI entries,
+  kept release artifacts and mount support Linux-only, and kept interactive PTY
+  direction on `portable-pty`.
+- Next planned milestone: define the next phase after v0.11.3.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -630,8 +640,8 @@ Defer:
 - Latest phase status update: v0.11.2 completed Exec Session Hardening.
   `operon exec session` now defaults to attached TTY dimensions, interactive
   Unix sessions forward resize events, dropped daemon response streams
-  terminate remote sessions before terminal exit, `zhiburt/conpty` is recorded
-  as the likely future Windows ConPTY backend candidate, and
+  terminate remote sessions before terminal exit, `portable-pty` is recorded as
+  the intended future macOS/Windows PTY validation abstraction, and
   [`scripts/verify-v0.11.2-exec-session-hardening.sh`](scripts/verify-v0.11.2-exec-session-hardening.sh)
   covers the behavior. Nothing remains in v0.11.2.
 - Latest phase status update: v0.10.5 completed Maintainability Cleanup.
@@ -642,3 +652,10 @@ Defer:
   forwarding transport helpers live in [`grpc_service.rs`](crates/operon-cli/src/grpc_service.rs),
   and [`scripts/verify-v0.10.5-maintainability-cleanup.sh`](scripts/verify-v0.10.5-maintainability-cleanup.sh)
   covers the module boundaries. Nothing remains in v0.10.5.
+- Latest phase status update: v0.11.3 completed Platform Capability Matrix and
+  CI Smoke. macOS and Windows are documented as candidate core runtime
+  platforms, CI has explicit platform smoke entries, release artifacts and mount
+  support remain Linux-only, command-string exec/session shell defaults are
+  platform-specific, and
+  [`scripts/verify-v0.11.3-platform-capability-matrix.sh`](scripts/verify-v0.11.3-platform-capability-matrix.sh)
+  covers the docs, CI, and shell-default evidence. Nothing remains in v0.11.3.

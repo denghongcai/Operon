@@ -271,8 +271,8 @@ fn exec_status_from_wait(
 
 fn build_exec_command(task: &ExecTask) -> TokioCommand {
     let mut command = if task.argv.is_empty() {
-        let mut command = TokioCommand::new("/bin/sh");
-        command.arg("-c").arg(&task.command);
+        let mut command = TokioCommand::new(exec_shell_program());
+        command.arg(exec_shell_arg()).arg(&task.command);
         command
     } else {
         let mut command = TokioCommand::new(&task.argv[0]);
@@ -289,6 +289,26 @@ fn build_exec_command(task: &ExecTask) -> TokioCommand {
         .kill_on_drop(true);
     configure_exec_process_group(&mut command);
     command
+}
+
+#[cfg(windows)]
+fn exec_shell_program() -> &'static str {
+    "cmd.exe"
+}
+
+#[cfg(not(windows))]
+fn exec_shell_program() -> &'static str {
+    "/bin/sh"
+}
+
+#[cfg(windows)]
+fn exec_shell_arg() -> &'static str {
+    "/C"
+}
+
+#[cfg(not(windows))]
+fn exec_shell_arg() -> &'static str {
+    "-c"
 }
 
 #[cfg(unix)]
@@ -750,6 +770,21 @@ pub(crate) fn exec_log_buffers_from_persisted_logs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exec_shell_invocation_matches_platform() {
+        #[cfg(windows)]
+        {
+            assert_eq!(exec_shell_program(), "cmd.exe");
+            assert_eq!(exec_shell_arg(), "/C");
+        }
+
+        #[cfg(not(windows))]
+        {
+            assert_eq!(exec_shell_program(), "/bin/sh");
+            assert_eq!(exec_shell_arg(), "-c");
+        }
+    }
 
     #[test]
     fn persisted_exec_logs_seed_bounded_log_buffers() {

@@ -81,6 +81,7 @@ scripts/verify-v0.11-exec-session.sh
 scripts/verify-v0.10.4-maintainability-cleanup.sh
 scripts/verify-v0.11.2-exec-session-hardening.sh
 scripts/verify-v0.10.5-maintainability-cleanup.sh
+scripts/verify-v0.11.3-platform-capability-matrix.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
@@ -219,11 +220,16 @@ boundaries.
 
 The v0.11.2 exec session hardening validation checks local terminal dimension
 defaults, Unix resize forwarding, daemon response-stream drop termination, and
-the documented Windows ConPTY follow-up assessment.
+the documented cross-platform `portable-pty` follow-up assessment.
 
 The v0.10.5 maintainability validation checks that service tunnel state
 machines and CLI service forwarding transport helpers live behind focused
 daemon and CLI module boundaries.
+
+The v0.11.3 platform capability matrix validation checks the macOS/Windows core
+runtime capability matrix, platform smoke CI entries, Linux-only mount boundary,
+`portable-pty` session direction, and platform-specific shell defaults for
+command-string exec/session requests.
 
 ## Release Automation
 
@@ -236,7 +242,9 @@ git push origin v0.x.y
 ```
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
-`armv7` binary tarballs, a JavaScript SDK tarball, and `SHA256SUMS`. Draft
+`armv7` binary tarballs, a JavaScript SDK tarball, and `SHA256SUMS`. macOS and
+Windows are candidate core runtime platforms in CI smoke work, but the current
+release workflow does not publish macOS or Windows binary archives. Draft
 releases are intentionally left unpublished for manual review.
 
 Version policy:

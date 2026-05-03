@@ -44,6 +44,7 @@ require_pattern 'scripts/verify-v0.11-exec-session.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-v0.10.4-maintainability-cleanup.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-v0.11.2-exec-session-hardening.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-v0.10.5-maintainability-cleanup.sh' DEVELOPMENT.md
+require_pattern 'scripts/verify-v0.11.3-platform-capability-matrix.sh' DEVELOPMENT.md
 
 for skill in skills/*/SKILL.md; do
   require_pattern 'operon .*--help|operon <command> --help|CLI help is the source of truth' "$skill"

@@ -37,6 +37,53 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --locked -- -D warnings
 
+  rust-platform-smoke:
+    name: Rust Platform Smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-rust-${{ runner.os }}
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
+
+      - name: Check workspace
+        run: cargo check --workspace --locked
+
+      - name: Test protocol
+        run: cargo test -p operon-protocol --locked
+
+      - name: Test config
+        run: cargo test -p operon-config --locked
+
+      - name: Test filesystem core
+        run: cargo test -p operon-fs --locked
+
+      - name: Test exec policy
+        run: cargo test -p operon-process --locked
+
+      - name: Test daemon platform shell defaults
+        run: cargo test -p operond --locked shell_invocation_matches_platform
+
+      - name: Test CLI session dimensions
+        run: cargo test -p operon-cli --locked exec_session_terminal_dimensions
+
   typescript:
     name: TypeScript
     runs-on: ubuntu-latest
@@ -153,6 +200,8 @@ jobs:
             script: scripts/verify-v0.11.2-exec-session-hardening.sh
           - name: v0.10.5 Maintainability Cleanup Validation
             script: scripts/verify-v0.10.5-maintainability-cleanup.sh
+          - name: v0.11.3 Platform Capability Matrix Validation
+            script: scripts/verify-v0.11.3-platform-capability-matrix.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

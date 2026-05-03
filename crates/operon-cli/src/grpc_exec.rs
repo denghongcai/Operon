@@ -5,9 +5,11 @@ use std::{
 
 use operon_core::{ExecSessionEvent, ExecSessionStart, ExecStatus};
 use operon_network::NodeEndpoint;
+#[cfg(unix)]
+use operon_protocol::runtime::v1::ExecSessionResize;
 use operon_protocol::runtime::v1::{
     exec_log_stream_event, exec_session_event, exec_session_request, ExecIdRequest,
-    ExecSessionInput, ExecSessionRequest, ExecSessionResize,
+    ExecSessionInput, ExecSessionRequest,
 };
 use tokio::sync::mpsc;
 

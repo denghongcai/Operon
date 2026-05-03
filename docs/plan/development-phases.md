@@ -4307,7 +4307,7 @@ Completed:
 Remaining:
 
 - No v0.11 work remains.
-- Windows ConPTY support remains future distribution/platform work.
+- macOS and Windows PTY validation remains future distribution/platform work.
 
 ## Phase 74: v0.10.4 Maintainability Cleanup
 
@@ -4353,8 +4353,8 @@ Completed:
   `ExecSessionResize` messages over `OpenExecSession`.
 - Daemon response streams now terminate the remote session when dropped before
   a terminal exit event.
-- Recorded `zhiburt/conpty` / `conpty = "0.7.0"` as the likely future Windows
-  ConPTY backend candidate, with implementation deferred until Windows CI and
+- Recorded `portable-pty` as the intended PTY abstraction for future macOS and
+  Windows validation, with platform behavior deferred until Windows CI and
   packaging are defined.
 - Added [`scripts/verify-v0.11.2-exec-session-hardening.sh`](../../scripts/verify-v0.11.2-exec-session-hardening.sh)
   and wired it into CI and DEVELOPMENT.md.
@@ -4362,7 +4362,7 @@ Completed:
 Remaining:
 
 - No v0.11.2 work remains.
-- Windows ConPTY implementation remains future platform/distribution work.
+- macOS and Windows PTY validation remains future platform/distribution work.
 
 ## Phase 76: v0.10.5 Maintainability Cleanup
 
@@ -4392,10 +4392,40 @@ Remaining:
 
 - No v0.10.5 work remains.
 
+## Phase 77: v0.11.3 Platform Capability Matrix and CI Smoke
+
+Status: Completed.
+
+Goal: decide whether macOS and Windows can align with Linux for the core
+daemon/CLI runtime before public release artifacts expand beyond Linux.
+
+Current status: completed on 2026-05-04.
+
+Detailed plan: `docs/plan/v0.11.3-platform-capability-matrix.md`.
+
+Completed:
+
+- Documented the platform capability matrix for Linux, macOS, and Windows.
+- Added macOS and Windows Rust platform smoke CI for workspace checks and
+  focused core tests.
+- Kept public release artifacts Linux-only for now and documented macOS/Windows
+  as candidate core runtime platforms.
+- Kept Linux FUSE mount support Linux-only, with macFUSE and WinFsp deferred.
+- Kept interactive exec sessions on the existing `portable-pty` abstraction.
+- Added platform-specific shell defaults for command-string exec/session
+  requests: Unix uses `/bin/sh -c`, Windows uses `cmd.exe /C`.
+- Added [`scripts/verify-v0.11.3-platform-capability-matrix.sh`](../../scripts/verify-v0.11.3-platform-capability-matrix.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
+Remaining:
+
+- No v0.11.3 work remains.
+- macOS and Windows release artifacts remain future release/distribution work.
+
 ## Later Candidate Work
 
-Status: Candidate backlog. The next post-v0.11.2/v0.10.5 phase has not been
-approved yet.
+Status: Candidate backlog. The next post-v0.11.3 phase has not been approved
+yet.
 
 ### Candidate A: Release / Distribution Readiness
 

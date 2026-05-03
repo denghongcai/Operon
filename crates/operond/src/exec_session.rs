@@ -372,8 +372,8 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
 
 fn session_command(task: &SessionTask) -> CommandBuilder {
     if task.argv.is_empty() {
-        let mut command = CommandBuilder::new("/bin/sh");
-        command.arg("-c");
+        let mut command = CommandBuilder::new(session_shell_program());
+        command.arg(session_shell_arg());
         command.arg(&task.command);
         command
     } else {
@@ -381,6 +381,26 @@ fn session_command(task: &SessionTask) -> CommandBuilder {
         command.args(&task.argv[1..]);
         command
     }
+}
+
+#[cfg(windows)]
+fn session_shell_program() -> &'static str {
+    "cmd.exe"
+}
+
+#[cfg(not(windows))]
+fn session_shell_program() -> &'static str {
+    "/bin/sh"
+}
+
+#[cfg(windows)]
+fn session_shell_arg() -> &'static str {
+    "/C"
+}
+
+#[cfg(not(windows))]
+fn session_shell_arg() -> &'static str {
+    "-c"
 }
 
 #[derive(Clone)]
@@ -471,6 +491,21 @@ fn pty_size(rows: u32, cols: u32) -> Result<PtySize, Status> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_shell_invocation_matches_platform() {
+        #[cfg(windows)]
+        {
+            assert_eq!(session_shell_program(), "cmd.exe");
+            assert_eq!(session_shell_arg(), "/C");
+        }
+
+        #[cfg(not(windows))]
+        {
+            assert_eq!(session_shell_program(), "/bin/sh");
+            assert_eq!(session_shell_arg(), "-c");
+        }
+    }
 
     #[test]
     fn pty_size_defaults_zero_dimensions() {
