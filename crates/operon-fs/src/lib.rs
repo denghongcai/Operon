@@ -9,10 +9,19 @@ pub const FILESYSTEM_CAPABILITY: &str = "fs";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTraversalHardening {
     CanonicalContainedPath,
+    LinuxOpenat2ResolveBeneath,
 }
 
 pub fn workspace_traversal_hardening() -> WorkspaceTraversalHardening {
-    WorkspaceTraversalHardening::CanonicalContainedPath
+    #[cfg(target_os = "linux")]
+    {
+        WorkspaceTraversalHardening::LinuxOpenat2ResolveBeneath
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        WorkspaceTraversalHardening::CanonicalContainedPath
+    }
 }
 
 pub fn resolve_workspace_path(workspace: &Path, virtual_path: &str) -> RuntimeResult<PathBuf> {
@@ -84,6 +93,7 @@ fn contained_canonical_path(workspace: &Path, raw: &Path) -> RuntimeResult<PathB
         .canonicalize()
         .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
     if canonical.starts_with(&workspace) {
+        validate_existing_path_fd_relative(&workspace, &canonical)?;
         Ok(canonical)
     } else {
         Err((
@@ -108,6 +118,7 @@ fn ensure_creatable_path_contained(workspace: &Path, raw: &Path) -> RuntimeResul
         .canonicalize()
         .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
     if canonical.starts_with(&workspace) {
+        validate_existing_path_fd_relative(&workspace, &canonical)?;
         Ok(())
     } else {
         Err((
@@ -129,6 +140,7 @@ fn ensure_leaf_parent_contained(workspace: &Path, raw: &Path) -> RuntimeResult<(
         .canonicalize()
         .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
     if canonical.starts_with(&workspace) {
+        validate_existing_path_fd_relative(&workspace, &canonical)?;
         Ok(())
     } else {
         Err((
@@ -136,6 +148,87 @@ fn ensure_leaf_parent_contained(workspace: &Path, raw: &Path) -> RuntimeResult<(
             "path parent resolves outside workspace mount".to_string(),
         ))
     }
+}
+
+fn validate_existing_path_fd_relative(workspace: &Path, raw: &Path) -> RuntimeResult<()> {
+    #[cfg(target_os = "linux")]
+    {
+        linux_openat2_resolve_beneath(workspace, raw)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (workspace, raw);
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_openat2_resolve_beneath(workspace: &Path, raw: &Path) -> RuntimeResult<()> {
+    use std::{ffi::CString, os::fd::RawFd, os::unix::ffi::OsStrExt, os::unix::io::AsRawFd};
+
+    #[repr(C)]
+    struct OpenHow {
+        flags: u64,
+        mode: u64,
+        resolve: u64,
+    }
+
+    const RESOLVE_NO_MAGICLINKS: u64 = 0x02;
+    const RESOLVE_BENEATH: u64 = 0x08;
+
+    let relative = raw.strip_prefix(workspace).map_err(|_| {
+        (
+            RuntimeErrorKind::Forbidden,
+            "path is not workspace-relative".to_string(),
+        )
+    })?;
+    if relative.as_os_str().is_empty() {
+        return Ok(());
+    }
+
+    let workspace_file = std::fs::File::open(workspace)
+        .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
+    let path = CString::new(relative.as_os_str().as_bytes()).map_err(|_| {
+        (
+            RuntimeErrorKind::InvalidArgument,
+            "path contains an interior NUL byte".to_string(),
+        )
+    })?;
+    let how = OpenHow {
+        flags: (libc::O_CLOEXEC | libc::O_PATH) as u64,
+        mode: 0,
+        resolve: RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS,
+    };
+    let fd = unsafe {
+        libc::syscall(
+            libc::SYS_openat2,
+            workspace_file.as_raw_fd(),
+            path.as_ptr(),
+            &how,
+            std::mem::size_of::<OpenHow>(),
+        ) as RawFd
+    };
+    if fd >= 0 {
+        unsafe {
+            libc::close(fd);
+        }
+        return Ok(());
+    }
+
+    let error = std::io::Error::last_os_error();
+    if matches!(
+        error.raw_os_error(),
+        Some(libc::ENOSYS | libc::EINVAL | libc::EPERM)
+    ) {
+        return Ok(());
+    }
+    let kind = match error.kind() {
+        std::io::ErrorKind::NotFound => RuntimeErrorKind::NotFound,
+        std::io::ErrorKind::PermissionDenied => RuntimeErrorKind::Forbidden,
+        _ => RuntimeErrorKind::Forbidden,
+    };
+    Err((kind, error.to_string()))
 }
 
 fn canonicalize_workspace(workspace: &Path) -> RuntimeResult<PathBuf> {
@@ -364,6 +457,13 @@ mod tests {
 
     #[test]
     fn traversal_hardening_strategy_is_explicit() {
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            workspace_traversal_hardening(),
+            WorkspaceTraversalHardening::LinuxOpenat2ResolveBeneath
+        );
+
+        #[cfg(not(target_os = "linux"))]
         assert_eq!(
             workspace_traversal_hardening(),
             WorkspaceTraversalHardening::CanonicalContainedPath

@@ -9,6 +9,7 @@ Use this skill for operational inspection and scriptable CLI workflows. Prefer J
 
 ```bash
 operon --config <path> --json config explain
+operon --config <path> --json doctor
 operon --config <path> --json node list
 operon --config <path> --json capability list <node>
 ```
@@ -17,6 +18,7 @@ For exact flags, run the relevant help command first:
 
 ```bash
 operon --help
+operon doctor --help
 operon config explain --help
 operon node --help
 operon capability --help
@@ -28,6 +30,8 @@ operon run --help
 Common scenarios:
 
 - Need to know which config is active: `operon config explain`.
+- Need first-pass troubleshooting for config, endpoint, auth, protocol,
+  capability, or service health: `operon doctor`.
 - Need to see reachable configured nodes: `operon node list`, then `operon node ping <node>`.
 - Need LAN mDNS endpoint discovery: `operon node discover --timeout-secs 3`.
 - Need to know what a node allows: `operon capability list <node>`.

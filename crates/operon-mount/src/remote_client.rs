@@ -57,7 +57,10 @@ impl RemoteFs for GrpcRemoteFs {
             Ok(client
                 .stat_fs(operon_grpc_client::request(
                     &self.endpoint,
-                    FsPathRequest { path },
+                    FsPathRequest {
+                        path,
+                        precondition: None,
+                    },
                 )?)
                 .await?
                 .into_inner()
@@ -118,6 +121,9 @@ impl RemoteFs for GrpcRemoteFs {
             path: path.to_string(),
             offset,
             data: data.to_vec(),
+            precondition: None,
+            expected_version: None,
+            require_absent: false,
         };
         block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
@@ -133,6 +139,9 @@ impl RemoteFs for GrpcRemoteFs {
         let request = FsTruncateRequest {
             path: path.to_string(),
             size,
+            precondition: None,
+            expected_version: None,
+            require_absent: false,
         };
         block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
@@ -147,6 +156,7 @@ impl RemoteFs for GrpcRemoteFs {
     fn mkdir(&self, path: &str) -> anyhow::Result<FsStat> {
         let request = FsPathRequest {
             path: path.to_string(),
+            precondition: None,
         };
         block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
@@ -161,6 +171,7 @@ impl RemoteFs for GrpcRemoteFs {
     fn delete(&self, path: &str) -> anyhow::Result<()> {
         let request = FsPathRequest {
             path: path.to_string(),
+            precondition: None,
         };
         block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());
@@ -175,6 +186,11 @@ impl RemoteFs for GrpcRemoteFs {
         let request = FsRenameRequest {
             from_path: from_path.to_string(),
             to_path: to_path.to_string(),
+            from_precondition: None,
+            to_precondition: None,
+            from_expected_version: None,
+            to_expected_version: None,
+            to_require_absent: false,
         };
         block_on_runtime(self.runtime()?, async {
             let mut client = OperonRuntimeClient::new(self.channel.clone());

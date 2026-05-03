@@ -363,15 +363,12 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsWrite>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
+        let (path, offset, data, precondition) =
+            fs_service::precondition_from_write_range_request(request);
         AUDIT_CONTEXT
             .scope(context, async {
-                let write = fs_service::write_range(
-                    &self.state,
-                    request.path,
-                    request.offset,
-                    request.data,
-                )
-                .await?;
+                let write =
+                    fs_service::write_range(&self.state, path, offset, data, precondition).await?;
                 Ok(GrpcResponse::new(write.into()))
             })
             .await
@@ -383,9 +380,10 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsStat>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
+        let (path, size, precondition) = fs_service::precondition_from_truncate_request(request);
         AUDIT_CONTEXT
             .scope(context, async {
-                let stat = fs_service::truncate(&self.state, request.path, request.size).await?;
+                let stat = fs_service::truncate(&self.state, path, size, precondition).await?;
                 Ok(GrpcResponse::new(stat.into()))
             })
             .await
@@ -410,10 +408,10 @@ impl OperonRuntime for GrpcRuntime {
         request: Request<FsPathRequest>,
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsDelete>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
-        let path = request.into_inner().path;
+        let (path, precondition) = fs_service::precondition_from_path_request(request.into_inner());
         AUDIT_CONTEXT
             .scope(context, async {
-                let path = fs_service::delete(&self.state, path).await?;
+                let path = fs_service::delete(&self.state, path, precondition).await?;
                 Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsDelete {
                     path,
                 }))
@@ -427,9 +425,18 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsRename>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
+        let (from_precondition, to_precondition) =
+            fs_service::preconditions_from_rename_request(&request);
         AUDIT_CONTEXT
             .scope(context, async {
-                fs_service::rename(&self.state, &request.from_path, &request.to_path).await?;
+                fs_service::rename(
+                    &self.state,
+                    &request.from_path,
+                    &request.to_path,
+                    from_precondition,
+                    to_precondition,
+                )
+                .await?;
                 Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsRename {
                     from_path: request.from_path,
                     to_path: request.to_path,
@@ -444,14 +451,23 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::FsCopy>, Status> {
         let context = authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
+        let (from_precondition, to_precondition) =
+            fs_service::preconditions_from_copy_request(&request);
         AUDIT_CONTEXT
             .scope(context, async {
-                let bytes_copied =
-                    fs_service::copy(&self.state, &request.from_path, &request.to_path).await?;
+                let (bytes_copied, version) = fs_service::copy(
+                    &self.state,
+                    &request.from_path,
+                    &request.to_path,
+                    from_precondition,
+                    to_precondition,
+                )
+                .await?;
                 Ok(GrpcResponse::new(operon_protocol::runtime::v1::FsCopy {
                     from_path: request.from_path,
                     to_path: request.to_path,
                     bytes_copied,
+                    version,
                 }))
             })
             .await
@@ -1123,7 +1139,7 @@ mod tests {
         policy.fs.mounts[0].permissions.delete = true;
         let state = test_state(policy, workspace);
 
-        fs_service::delete(&state, "/link".to_string())
+        fs_service::delete(&state, "/link".to_string(), None)
             .await
             .expect("delete symlink");
 

@@ -27,6 +27,9 @@ Integration guidance:
 - Read config with the same assumptions as `operon config explain`.
 - Use bearer auth only from configured token sources; do not log token values.
 - Prefer streaming APIs for large file reads, file writes, exec stdin, and exec logs.
+- Preserve and reuse opaque filesystem `version` values when a workflow needs
+  stale-write protection; send `expected_version` rather than parsing version
+  tokens.
 - Preserve audit and trace context when running execution graphs.
 - Respect pagination fields on list APIs.
 - Treat service forwarding as an explicit user operation, not an automatic background side effect.

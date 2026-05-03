@@ -38,6 +38,8 @@ require_pattern 'scripts/verify-docs-help-skills-sync.sh' AGENTS.md
 require_pattern 'v0.8.18 Docs, Help, and Skills Synchronization' docs/plan/development-phases.md
 require_pattern 'v0.10 Execution Capability Unification' docs/plan/development-phases.md
 require_pattern 'scripts/verify-v0.10-exec-unification.sh' DEVELOPMENT.md
+require_pattern 'scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh' DEVELOPMENT.md
+require_pattern 'scripts/verify-v0.10.2-operator-diagnostics.sh' DEVELOPMENT.md
 
 for skill in skills/*/SKILL.md; do
   require_pattern 'operon .*--help|operon <command> --help|CLI help is the source of truth' "$skill"
@@ -47,6 +49,7 @@ help_commands=(
   "--help"
   "config --help"
   "config explain --help"
+  "doctor --help"
   "node --help"
   "node list --help"
   "node discover --help"

@@ -1,6 +1,7 @@
 pub(crate) mod audit;
 pub(crate) mod capability;
 pub(crate) mod config;
+pub(crate) mod doctor;
 pub(crate) mod exec;
 pub(crate) mod fs;
 pub(crate) mod init;

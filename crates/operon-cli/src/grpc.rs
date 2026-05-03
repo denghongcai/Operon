@@ -123,7 +123,13 @@ pub async fn fs_stat(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsSt
     let path = path.to_string();
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
-            .stat_fs(with_auth(&endpoint, FsPathRequest { path })?)
+            .stat_fs(with_auth(
+                &endpoint,
+                FsPathRequest {
+                    path,
+                    precondition: None,
+                },
+            )?)
             .await?
             .into_inner()
             .into())
@@ -175,7 +181,13 @@ pub async fn read_file_to_writer(
     let path = path.to_string();
     call(endpoint, |mut client, endpoint| async move {
         let mut stream = client
-            .read_file(with_auth(&endpoint, FsPathRequest { path })?)
+            .read_file(with_auth(
+                &endpoint,
+                FsPathRequest {
+                    path,
+                    precondition: None,
+                },
+            )?)
             .await?
             .into_inner();
         while let Some(chunk) = stream.message().await? {
@@ -190,9 +202,10 @@ pub async fn write_file_bytes(
     endpoint: &NodeEndpoint,
     path: &str,
     body: &[u8],
+    expected_version: Option<String>,
 ) -> anyhow::Result<FsWrite> {
     let path = path.to_string();
-    let chunks = chunk_write_requests(path, body);
+    let chunks = chunk_write_requests(path, body, expected_version);
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
             .write_file(with_auth(&endpoint, stream::iter(chunks))?)
@@ -207,19 +220,26 @@ pub async fn write_file(
     endpoint: &NodeEndpoint,
     path: &str,
     file: &Path,
+    expected_version: Option<String>,
 ) -> anyhow::Result<FsWrite> {
     let mut data = Vec::new();
     fs::File::open(file)
         .with_context(|| format!("failed to open {}", file.display()))?
         .read_to_end(&mut data)?;
-    write_file_bytes(endpoint, path, &data).await
+    write_file_bytes(endpoint, path, &data, expected_version).await
 }
 
 pub async fn fs_mkdir(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsStat> {
     let path = path.to_string();
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
-            .mkdir_fs(with_auth(&endpoint, FsPathRequest { path })?)
+            .mkdir_fs(with_auth(
+                &endpoint,
+                FsPathRequest {
+                    path,
+                    precondition: None,
+                },
+            )?)
             .await?
             .into_inner()
             .into())
@@ -231,7 +251,13 @@ pub async fn fs_delete(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<St
     let path = path.to_string();
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
-            .delete_fs(with_auth(&endpoint, FsPathRequest { path })?)
+            .delete_fs(with_auth(
+                &endpoint,
+                FsPathRequest {
+                    path,
+                    precondition: None,
+                },
+            )?)
             .await?
             .into_inner()
             .path)
@@ -247,6 +273,11 @@ pub async fn fs_rename(
     let request = FsRenameRequest {
         from_path: from_path.to_string(),
         to_path: to_path.to_string(),
+        from_precondition: None,
+        to_precondition: None,
+        from_expected_version: None,
+        to_expected_version: None,
+        to_require_absent: false,
     };
     call(endpoint, |mut client, endpoint| async move {
         let response = client
@@ -266,6 +297,11 @@ pub async fn fs_copy(
     let request = FsCopyRequest {
         from_path: from_path.to_string(),
         to_path: to_path.to_string(),
+        from_precondition: None,
+        to_precondition: None,
+        from_expected_version: None,
+        to_expected_version: None,
+        to_require_absent: false,
     };
     call(endpoint, |mut client, endpoint| async move {
         let response = client
@@ -281,6 +317,9 @@ pub async fn fs_truncate(endpoint: &NodeEndpoint, path: &str, size: u64) -> anyh
     let request = FsTruncateRequest {
         path: path.to_string(),
         size,
+        precondition: None,
+        expected_version: None,
+        require_absent: false,
     };
     call(endpoint, |mut client, endpoint| async move {
         Ok(client
@@ -881,7 +920,7 @@ mod tests {
 
     #[test]
     fn chunks_write_requests_use_target_then_data_chunks() {
-        let chunks = chunk_write_requests("file.txt".to_string(), &[1_u8; 70 * 1024]);
+        let chunks = chunk_write_requests("file.txt".to_string(), &[1_u8; 70 * 1024], None);
 
         assert_eq!(chunks.len(), 3);
         assert!(matches!(

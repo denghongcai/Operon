@@ -2,7 +2,8 @@ use operon_core::RequestContext;
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     exec_stdin_request, operon_runtime_client::OperonRuntimeClient, write_file_request,
-    ExecStdinRequest, ExecStdinTarget, FileChunk, WriteFileRequest, WriteFileTarget,
+    ExecStdinRequest, ExecStdinTarget, FileChunk, FsPrecondition, WriteFileRequest,
+    WriteFileTarget,
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
@@ -63,10 +64,23 @@ pub fn apply_metadata(
     Ok(())
 }
 
-pub fn chunk_write_requests(path: String, body: &[u8]) -> Vec<WriteFileRequest> {
+pub fn chunk_write_requests(
+    path: String,
+    body: &[u8],
+    expected_version: Option<String>,
+) -> Vec<WriteFileRequest> {
+    let expected_version_for_precondition = expected_version.clone();
     let mut chunks = vec![WriteFileRequest {
         payload: Some(write_file_request::Payload::Target(WriteFileTarget {
             path,
+            precondition: expected_version_for_precondition.map(|expected_version| {
+                FsPrecondition {
+                    expected_version: Some(expected_version),
+                    require_absent: false,
+                }
+            }),
+            expected_version,
+            require_absent: false,
         })),
     }];
     if body.is_empty() {
@@ -167,7 +181,27 @@ mod tests {
 
     #[test]
     fn chunks_empty_streams_with_explicit_empty_chunk() {
-        assert_eq!(chunk_write_requests("/empty".to_string(), &[]).len(), 2);
+        assert_eq!(
+            chunk_write_requests("/empty".to_string(), &[], None).len(),
+            2
+        );
         assert_eq!(chunk_stdin_requests("exec-1".to_string(), &[]).len(), 2);
+    }
+
+    #[test]
+    fn chunks_write_target_can_include_expected_version() {
+        let chunks = chunk_write_requests(
+            "/file.txt".to_string(),
+            &[1, 2, 3],
+            Some("version-1".to_string()),
+        );
+        let target = chunks
+            .first()
+            .and_then(|chunk| chunk.payload.as_ref())
+            .expect("target payload");
+        let write_file_request::Payload::Target(target) = target else {
+            panic!("first write request should carry target metadata");
+        };
+        assert_eq!(target.expected_version.as_deref(), Some("version-1"));
     }
 }

@@ -1,7 +1,7 @@
 use std::{path::PathBuf, pin::Pin};
 
 use futures_util::{Stream, StreamExt};
-use operon_core::{FsEntry, FsList, FsStat, FsWrite};
+use operon_core::{FsEntry, FsList, FsPrecondition, FsStat, FsWrite};
 use operon_fs::{
     authorize_fs_decision, join_virtual_path, resolve_create_workspace_path,
     resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
@@ -60,6 +60,143 @@ pub(crate) fn checked_file_end(
         )));
     }
     Ok(end)
+}
+
+fn fs_version(metadata: &std::fs::Metadata) -> String {
+    let modified_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let kind = if metadata.is_dir() {
+        "dir"
+    } else if metadata.is_file() {
+        "file"
+    } else {
+        "other"
+    };
+    format!("v1:{kind}:{}:{modified_nanos}", metadata.len())
+}
+
+fn version_from_metadata(metadata: std::fs::Metadata) -> String {
+    fs_version(&metadata)
+}
+
+fn grpc_precondition(
+    precondition: Option<operon_protocol::runtime::v1::FsPrecondition>,
+    expected_version: Option<String>,
+    require_absent: bool,
+) -> Option<FsPrecondition> {
+    let mut precondition = precondition.map(Into::into);
+    if expected_version.is_some() || require_absent {
+        let current = precondition.get_or_insert(FsPrecondition {
+            expected_version: None,
+            require_absent: false,
+        });
+        if expected_version.is_some() {
+            current.expected_version = expected_version;
+        }
+        current.require_absent |= require_absent;
+    }
+    precondition
+}
+
+pub(crate) fn precondition_from_path_request(
+    request: operon_protocol::runtime::v1::FsPathRequest,
+) -> (String, Option<FsPrecondition>) {
+    (request.path, request.precondition.map(Into::into))
+}
+
+pub(crate) fn precondition_from_write_range_request(
+    request: operon_protocol::runtime::v1::FsWriteRangeRequest,
+) -> (String, u64, Vec<u8>, Option<FsPrecondition>) {
+    (
+        request.path,
+        request.offset,
+        request.data,
+        grpc_precondition(
+            request.precondition,
+            request.expected_version,
+            request.require_absent,
+        ),
+    )
+}
+
+pub(crate) fn precondition_from_truncate_request(
+    request: operon_protocol::runtime::v1::FsTruncateRequest,
+) -> (String, u64, Option<FsPrecondition>) {
+    (
+        request.path,
+        request.size,
+        grpc_precondition(
+            request.precondition,
+            request.expected_version,
+            request.require_absent,
+        ),
+    )
+}
+
+pub(crate) fn preconditions_from_rename_request(
+    request: &operon_protocol::runtime::v1::FsRenameRequest,
+) -> (Option<FsPrecondition>, Option<FsPrecondition>) {
+    (
+        grpc_precondition(
+            request.from_precondition.clone(),
+            request.from_expected_version.clone(),
+            false,
+        ),
+        grpc_precondition(
+            request.to_precondition.clone(),
+            request.to_expected_version.clone(),
+            request.to_require_absent,
+        ),
+    )
+}
+
+pub(crate) fn preconditions_from_copy_request(
+    request: &operon_protocol::runtime::v1::FsCopyRequest,
+) -> (Option<FsPrecondition>, Option<FsPrecondition>) {
+    (
+        grpc_precondition(
+            request.from_precondition.clone(),
+            request.from_expected_version.clone(),
+            false,
+        ),
+        grpc_precondition(
+            request.to_precondition.clone(),
+            request.to_expected_version.clone(),
+            request.to_require_absent,
+        ),
+    )
+}
+
+fn check_precondition(path: &PathBuf, precondition: Option<&FsPrecondition>) -> Result<(), Status> {
+    let Some(precondition) = precondition else {
+        return Ok(());
+    };
+    if precondition.require_absent {
+        match std::fs::symlink_metadata(path) {
+            Ok(_) => {
+                return Err(Status::failed_precondition(
+                    "fs precondition failed: target already exists",
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(status_from_io_error(error)),
+        }
+    }
+    let Some(expected_version) = precondition.expected_version.as_deref() else {
+        return Ok(());
+    };
+    let metadata = std::fs::symlink_metadata(path).map_err(status_from_io_error)?;
+    let actual_version = fs_version(&metadata);
+    if actual_version == expected_version {
+        return Ok(());
+    }
+    Err(Status::failed_precondition(format!(
+        "fs precondition failed: expected version {expected_version}, actual version {actual_version}"
+    )))
 }
 
 fn authorize_fs_action(
@@ -139,6 +276,7 @@ pub(crate) async fn stat(state: &AppState, path: String) -> Result<FsStat, Statu
         is_file: metadata.is_file(),
         is_dir: metadata.is_dir(),
         size: metadata.len(),
+        version: version_from_metadata(metadata),
     })
 }
 
@@ -166,6 +304,7 @@ pub(crate) async fn list_page(
             is_file: metadata.is_file(),
             is_dir: metadata.is_dir(),
             size: metadata.len(),
+            version: version_from_metadata(metadata),
         });
     }
     entries.sort_by(|a, b| a.name.cmp(&b.name));
@@ -244,6 +383,12 @@ pub(crate) async fn write_stream(
                 authorize_fs_action(state, "write-stream", &target.path, "write", &target.path)?;
                 let full_path =
                     resolve_write_path(state, "write-stream", &target.path, &target.path)?;
+                let precondition = grpc_precondition(
+                    target.precondition,
+                    target.expected_version,
+                    target.require_absent,
+                );
+                check_precondition(&full_path, precondition.as_ref())?;
                 if let Some(parent) = full_path.parent() {
                     tokio::fs::create_dir_all(parent)
                         .await
@@ -281,10 +426,15 @@ pub(crate) async fn write_stream(
             "write stream did not include target metadata",
         ));
     };
+    let full_path = resolve_existing_path(state, "write-stream", &path, &path)?;
+    let metadata = tokio::fs::metadata(&full_path)
+        .await
+        .map_err(status_from_io_error)?;
     record_audit(state, "write-stream", &path, true, "allowed");
     Ok(FsWrite {
         path,
         bytes_written,
+        version: version_from_metadata(metadata),
     })
 }
 
@@ -293,11 +443,13 @@ pub(crate) async fn write_range(
     path: String,
     offset: u64,
     data: Vec<u8>,
+    precondition: Option<FsPrecondition>,
 ) -> Result<FsWrite, Status> {
     validate_write_chunk(data.len())?;
     checked_file_end(offset, data.len(), "write range")?;
     authorize_fs_action(state, "write-range", &path, "write", &path)?;
     let full_path = resolve_write_path(state, "write-range", &path, &path)?;
+    check_precondition(&full_path, precondition.as_ref())?;
     if let Some(parent) = full_path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -315,14 +467,23 @@ pub(crate) async fn write_range(
         .map_err(status_from_io_error)?;
     file.write_all(&data).await.map_err(status_from_io_error)?;
     file.flush().await.map_err(status_from_io_error)?;
+    let metadata = tokio::fs::metadata(&full_path)
+        .await
+        .map_err(status_from_io_error)?;
     record_audit(state, "write-range", &path, true, "allowed");
     Ok(FsWrite {
         path,
         bytes_written: data.len() as u64,
+        version: version_from_metadata(metadata),
     })
 }
 
-pub(crate) async fn truncate(state: &AppState, path: String, size: u64) -> Result<FsStat, Status> {
+pub(crate) async fn truncate(
+    state: &AppState,
+    path: String,
+    size: u64,
+    precondition: Option<FsPrecondition>,
+) -> Result<FsStat, Status> {
     if size > MAX_FS_FILE_BYTES {
         return Err(Status::invalid_argument(format!(
             "truncate size exceeds maximum fs object size of {} bytes",
@@ -331,6 +492,7 @@ pub(crate) async fn truncate(state: &AppState, path: String, size: u64) -> Resul
     }
     authorize_fs_action(state, "truncate", &path, "write", &path)?;
     let full_path = resolve_write_path(state, "truncate", &path, &path)?;
+    check_precondition(&full_path, precondition.as_ref())?;
     if let Some(parent) = full_path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -353,6 +515,7 @@ pub(crate) async fn truncate(state: &AppState, path: String, size: u64) -> Resul
         is_file: metadata.is_file(),
         is_dir: metadata.is_dir(),
         size: metadata.len(),
+        version: version_from_metadata(metadata),
     })
 }
 
@@ -371,12 +534,18 @@ pub(crate) async fn mkdir(state: &AppState, path: String) -> Result<FsStat, Stat
         is_file: metadata.is_file(),
         is_dir: metadata.is_dir(),
         size: metadata.len(),
+        version: version_from_metadata(metadata),
     })
 }
 
-pub(crate) async fn delete(state: &AppState, path: String) -> Result<String, Status> {
+pub(crate) async fn delete(
+    state: &AppState,
+    path: String,
+    precondition: Option<FsPrecondition>,
+) -> Result<String, Status> {
     authorize_fs_action(state, "delete", &path, "delete", &path)?;
     let full_path = resolve_existing_leaf_path(state, "delete", &path, &path)?;
+    check_precondition(&full_path, precondition.as_ref())?;
     let metadata = tokio::fs::symlink_metadata(&full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -393,12 +562,20 @@ pub(crate) async fn delete(state: &AppState, path: String) -> Result<String, Sta
     Ok(path)
 }
 
-pub(crate) async fn rename(state: &AppState, from_path: &str, to_path: &str) -> Result<(), Status> {
+pub(crate) async fn rename(
+    state: &AppState,
+    from_path: &str,
+    to_path: &str,
+    from_precondition: Option<FsPrecondition>,
+    to_precondition: Option<FsPrecondition>,
+) -> Result<(), Status> {
     let resource = format!("{from_path} -> {to_path}");
     authorize_fs_action(state, "rename", &resource, "delete", from_path)?;
     authorize_fs_action(state, "rename", &resource, "write", to_path)?;
     let from_full_path = resolve_existing_leaf_path(state, "rename", &resource, from_path)?;
     let to_full_path = resolve_write_path(state, "rename", &resource, to_path)?;
+    check_precondition(&from_full_path, from_precondition.as_ref())?;
+    check_precondition(&to_full_path, to_precondition.as_ref())?;
     tokio::fs::rename(&from_full_path, &to_full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -406,12 +583,20 @@ pub(crate) async fn rename(state: &AppState, from_path: &str, to_path: &str) -> 
     Ok(())
 }
 
-pub(crate) async fn copy(state: &AppState, from_path: &str, to_path: &str) -> Result<u64, Status> {
+pub(crate) async fn copy(
+    state: &AppState,
+    from_path: &str,
+    to_path: &str,
+    from_precondition: Option<FsPrecondition>,
+    to_precondition: Option<FsPrecondition>,
+) -> Result<(u64, String), Status> {
     let resource = format!("{from_path} -> {to_path}");
     authorize_fs_action(state, "copy", &resource, "read", from_path)?;
     authorize_fs_action(state, "copy", &resource, "write", to_path)?;
     let from_full_path = resolve_existing_path(state, "copy", &resource, from_path)?;
     let to_full_path = resolve_write_path(state, "copy", &resource, to_path)?;
+    check_precondition(&from_full_path, from_precondition.as_ref())?;
+    check_precondition(&to_full_path, to_precondition.as_ref())?;
     let metadata = tokio::fs::metadata(&from_full_path)
         .await
         .map_err(status_from_io_error)?;
@@ -422,6 +607,68 @@ pub(crate) async fn copy(state: &AppState, from_path: &str, to_path: &str) -> Re
     let bytes_copied = tokio::fs::copy(&from_full_path, &to_full_path)
         .await
         .map_err(status_from_io_error)?;
+    let metadata = tokio::fs::metadata(&to_full_path)
+        .await
+        .map_err(status_from_io_error)?;
     record_audit(state, "copy", &resource, true, "allowed");
-    Ok(bytes_copied)
+    Ok((bytes_copied, version_from_metadata(metadata)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "operond-fs-service-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    fn fs_version_changes_when_file_metadata_changes() {
+        let path = temp_path("version");
+        std::fs::write(&path, "old").expect("write old");
+        let first = fs_version(&std::fs::metadata(&path).expect("first metadata"));
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        std::fs::write(&path, "new-content").expect("write new");
+        let second = fs_version(&std::fs::metadata(&path).expect("second metadata"));
+
+        assert_ne!(first, second);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn check_precondition_rejects_mismatched_expected_version() {
+        let path = temp_path("precondition");
+        std::fs::write(&path, "data").expect("write");
+        let error = check_precondition(
+            &path,
+            Some(&FsPrecondition {
+                expected_version: Some("stale-version".to_string()),
+                require_absent: false,
+            }),
+        )
+        .expect_err("stale version should fail");
+
+        assert_eq!(error.code(), tonic::Code::FailedPrecondition);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn check_precondition_allows_require_absent_for_missing_target() {
+        let path = temp_path("absent");
+        check_precondition(
+            &path,
+            Some(&FsPrecondition {
+                expected_version: None,
+                require_absent: true,
+            }),
+        )
+        .expect("missing path should satisfy require_absent");
+    }
 }

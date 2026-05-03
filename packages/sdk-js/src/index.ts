@@ -123,6 +123,11 @@ export type FsStat = ReturnType<typeof fromGrpcFsStat>;
 
 export type FsList = ReturnType<typeof fromGrpcFsList>;
 
+export type FsPrecondition = {
+  expected_version?: string;
+  require_absent?: boolean;
+};
+
 export type ExecList = {
   execs: ExecRecord[];
 };
@@ -340,20 +345,29 @@ export class OperonClient {
     return this.readFileStreamWithEndpoint(endpoint, path);
   }
 
-  async writeFileBytes(nodeId: string, path: string, body: BodyInit): Promise<unknown> {
+  async writeFileBytes(
+    nodeId: string,
+    path: string,
+    body: BodyInit,
+    precondition?: FsPrecondition,
+  ): Promise<unknown> {
     const endpoint = this.endpointFor(nodeId);
     return fromGrpcFsWrite(
-      await this.grpcClient(endpoint).writeFile(grpcFileChunksFromBody(path, body), this.grpcOptions(endpoint)),
+      await this.grpcClient(endpoint).writeFile(
+        grpcFileChunksFromBody(path, body, precondition),
+        this.grpcOptions(endpoint),
+      ),
     );
   }
 
-  async copyFile(nodeId: string, fromPath: string, toPath: string): Promise<{ from_path: string; to_path: string; bytes_copied: number }> {
+  async copyFile(nodeId: string, fromPath: string, toPath: string): Promise<{ from_path: string; to_path: string; bytes_copied: number; version: string }> {
     const endpoint = this.endpointFor(nodeId);
     const copy = await this.grpcClient(endpoint).copyFs({ fromPath, toPath }, this.grpcOptions(endpoint));
     return {
       from_path: copy.fromPath,
       to_path: copy.toPath,
       bytes_copied: Number(copy.bytesCopied),
+      version: copy.version,
     };
   }
 
@@ -623,6 +637,7 @@ export class OperonClient {
           from_path: copy.fromPath,
           to_path: copy.toPath,
           bytes_copied: Number(copy.bytesCopied),
+          version: copy.version,
         };
       }
       case "exec.run":
@@ -810,8 +825,15 @@ async function streamToBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8A
   return concatChunks(chunks);
 }
 
-async function* grpcFileChunks(path: string, bytes: Uint8Array): AsyncIterable<{ target?: { path: string }; chunk?: { data: Uint8Array } }> {
-  yield { target: { path } };
+async function* grpcFileChunks(
+  path: string,
+  bytes: Uint8Array,
+  precondition?: FsPrecondition,
+): AsyncIterable<{
+  target?: ReturnType<typeof grpcFileTarget>;
+  chunk?: { data: Uint8Array };
+}> {
+  yield { target: grpcFileTarget(path, precondition) };
   if (bytes.byteLength === 0) {
     yield { chunk: { data: new Uint8Array() } };
     return;
@@ -823,8 +845,15 @@ async function* grpcFileChunks(path: string, bytes: Uint8Array): AsyncIterable<{
   }
 }
 
-async function* grpcFileChunksFromBody(path: string, body: BodyInit): AsyncIterable<{ target?: { path: string }; chunk?: { data: Uint8Array } }> {
-  yield { target: { path } };
+async function* grpcFileChunksFromBody(
+  path: string,
+  body: BodyInit,
+  precondition?: FsPrecondition,
+): AsyncIterable<{
+  target?: ReturnType<typeof grpcFileTarget>;
+  chunk?: { data: Uint8Array };
+}> {
+  yield { target: grpcFileTarget(path, precondition) };
   let emitted = false;
   for await (const bytes of bodyToByteChunks(body)) {
     if (bytes.byteLength === 0) {
@@ -840,6 +869,20 @@ async function* grpcFileChunksFromBody(path: string, body: BodyInit): AsyncItera
   if (!emitted) {
     yield { chunk: { data: new Uint8Array() } };
   }
+}
+
+function grpcFileTarget(path: string, precondition?: FsPrecondition) {
+  const requireAbsent = precondition?.require_absent ?? false;
+  const expectedVersion = precondition?.expected_version;
+  return {
+    path,
+    precondition:
+      expectedVersion || requireAbsent
+        ? { expectedVersion, requireAbsent }
+        : undefined,
+    expectedVersion,
+    requireAbsent,
+  };
 }
 
 async function* grpcStdinChunks(execId: string, bytes: Uint8Array): AsyncIterable<{ target?: { execId: string }; chunk?: { data: Uint8Array } }> {
@@ -943,6 +986,7 @@ function fromGrpcFsStat(stat: GrpcFsStat) {
     is_file: stat.isFile,
     is_dir: stat.isDir,
     size: Number(stat.size),
+    version: stat.version,
   };
 }
 
@@ -955,6 +999,7 @@ function fromGrpcFsList(list: GrpcFsList) {
       is_file: entry.isFile,
       is_dir: entry.isDir,
       size: Number(entry.size),
+      version: entry.version,
     })),
     next_page_token: list.nextPageToken,
   };
@@ -1006,6 +1051,7 @@ function fromGrpcFsWrite(write: GrpcFsWrite) {
   return {
     path: write.path,
     bytes_written: Number(write.bytesWritten),
+    version: write.version,
   };
 }
 
