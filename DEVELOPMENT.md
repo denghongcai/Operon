@@ -296,10 +296,10 @@ operations. Use `operon --json` for scripts, and use `PROTOCOL.md` if you need
 to integrate without an SDK. Auth can use `token`, `token_file`, or
 `token_env`; file paths are resolved relative to the config file directory.
 
-Cloudflare Mesh, Tailscale, WireGuard, SSH tunnels, Kubernetes DNS, LAN IPs,
-and manual DNS names are all ordinary endpoints to Operon. LAN mDNS discovery
-can find local Operon daemons, but Operon still does not create VPNs, assign
-mesh IPs, or grant capability access through discovery.
+Cloudflare Mesh, Tailscale, WireGuard, Kubernetes DNS, LAN IPs, manual DNS
+names, and trusted tunnel endpoints are all ordinary endpoints to Operon. LAN
+mDNS discovery can find local Operon daemons, but Operon still does not create
+VPNs, assign mesh IPs, or grant capability access through discovery.
 
 Discovery export is intentionally conservative. `operon node discover
 --output-config <path>` writes endpoint-only client nodes. If `<path>` already

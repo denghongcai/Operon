@@ -5,8 +5,8 @@
 > The missing execution model for AI agents.
 
 Operon is an AI-native capability runtime for machines already connected by
-Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes networking, or any
-other private network.
+Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
+private network.
 
 Instead of building another VPN or mesh network, Operon focuses on what happens
 after machines can reach each other: capability discovery, policy, execution
@@ -105,8 +105,7 @@ operon capability list local
 
 `operond` and `operon` read `$HOME/.operon/config.yaml` by default. Put daemon
 endpoints on an existing private network such as Cloudflare Mesh, Tailscale,
-WireGuard, SSH, LAN, or Kubernetes networking before exposing them to other
-machines.
+WireGuard, LAN, or Kubernetes networking before exposing them to other machines.
 
 Optional shell completions:
 
@@ -204,7 +203,6 @@ Use:
 - Cloudflare Mesh
 - Tailscale
 - WireGuard
-- SSH tunnels
 - Local LAN
 - Kubernetes networking
 
