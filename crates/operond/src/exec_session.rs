@@ -88,8 +88,12 @@ pub(crate) async fn open_exec_session(
     });
 
     let output = async_stream::stream! {
+        let mut session_guard = SessionStreamGuard::new(control_tx);
         while let Some(event) = event_rx.recv().await {
             let terminal = matches!(event.event, Some(exec_session_event::Event::Exit(_)));
+            if terminal {
+                session_guard.disarm();
+            }
             yield Ok::<_, Status>(event);
             if terminal {
                 break;
@@ -102,6 +106,32 @@ pub(crate) async fn open_exec_session(
 struct SessionHandle {
     control_tx: std_mpsc::Sender<SessionControl>,
     event_rx: mpsc::UnboundedReceiver<GrpcExecSessionEvent>,
+}
+
+struct SessionStreamGuard {
+    control_tx: std_mpsc::Sender<SessionControl>,
+    terminate_on_drop: bool,
+}
+
+impl SessionStreamGuard {
+    fn new(control_tx: std_mpsc::Sender<SessionControl>) -> Self {
+        Self {
+            control_tx,
+            terminate_on_drop: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.terminate_on_drop = false;
+    }
+}
+
+impl Drop for SessionStreamGuard {
+    fn drop(&mut self) {
+        if self.terminate_on_drop {
+            let _ = self.control_tx.send(SessionControl::Terminate);
+        }
+    }
 }
 
 fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<SessionHandle, Status> {
@@ -448,5 +478,23 @@ mod tests {
 
         assert_eq!(size.rows, 24);
         assert_eq!(size.cols, 80);
+    }
+
+    #[test]
+    fn exec_session_stream_guard_terminates_on_drop_before_exit() {
+        let (tx, rx) = std_mpsc::channel();
+        drop(SessionStreamGuard::new(tx));
+
+        assert!(matches!(rx.recv(), Ok(SessionControl::Terminate)));
+    }
+
+    #[test]
+    fn exec_session_stream_guard_disarms_after_terminal_exit() {
+        let (tx, rx) = std_mpsc::channel();
+        let mut guard = SessionStreamGuard::new(tx);
+        guard.disarm();
+        drop(guard);
+
+        assert!(rx.try_recv().is_err());
     }
 }

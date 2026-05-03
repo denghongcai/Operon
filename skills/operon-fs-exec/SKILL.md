@@ -40,6 +40,8 @@ Exec command choice:
 - Start and return immediately: `operon exec run <node> --detach -- <command>`.
 - Open a PTY-backed interactive command when policy allows sessions:
   `operon exec session <node> -- <command>`.
+  The CLI uses the attached terminal size by default and forwards Unix resize
+  events during interactive sessions.
 - Check status: `operon exec status <node> <exec_id>`.
 - Read or follow stdout/stderr: `operon exec logs <node> <exec_id>`.
 - Send stdin or close it: `operon exec stdin <node> <exec_id>`.

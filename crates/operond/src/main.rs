@@ -40,7 +40,9 @@ mod grpc_status;
 mod lan_advertise;
 mod locks;
 mod pagination;
+mod service_datagram_forward;
 mod service_forward;
+mod service_tcp_forward;
 mod state;
 mod store_config;
 

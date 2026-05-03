@@ -367,12 +367,15 @@ also grants execs access to every environment variable visible to `operond`.
 `OpenExecSession` is the PTY/TTY-backed interactive execution path. The first
 client message must carry `ExecSessionStart` metadata with either `command` or
 `argv`, optional cwd/timeout/secrets, and initial terminal rows/columns. Later
-client messages may carry raw input bytes or resize events. Server events report
-`started`, raw terminal `output`, and final `exit` status. Session authorization
-uses the distinct `exec:default` `session` action; `policy.exec.allow_sessions`
-must be true. Session lifecycle is audited, but input bytes are not copied into
-audit event resources. The first implementation is Unix PTY focused; Windows
-ConPTY support is explicit future distribution work.
+client messages may carry raw input bytes or resize events; CLI clients default
+rows/columns from the attached local TTY and forward Unix resize signals when
+interactive. Server events report `started`, raw terminal `output`, and final
+`exit` status. If the response stream is dropped before a terminal exit event,
+the daemon terminates the remote session. Session authorization uses the
+distinct `exec:default` `session` action; `policy.exec.allow_sessions` must be
+true. Session lifecycle is audited, but input bytes are not copied into audit
+event resources. The first implementation is Unix PTY focused; `zhiburt/conpty`
+is the current candidate for future Windows ConPTY backend work.
 
 ## Errors
 

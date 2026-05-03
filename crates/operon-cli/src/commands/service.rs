@@ -3,7 +3,7 @@ use std::{net::SocketAddr, path::PathBuf};
 use operon_core::{ServiceCheck, ServiceList, ServiceProtocol};
 
 use crate::{
-    grpc,
+    grpc, grpc_service,
     output::{print_json, OutputMode},
     target::load_endpoint,
 };
@@ -86,7 +86,7 @@ pub(crate) async fn forward(
         let service_id = service_id.clone();
         tokio::spawn(async move {
             if let Err(error) =
-                grpc::forward_service_connection(&endpoint, &service_id, socket).await
+                grpc_service::forward_service_connection(&endpoint, &service_id, socket).await
             {
                 eprintln!(
                     "service forward connection from {} failed: {:#}",
@@ -121,7 +121,7 @@ pub(crate) async fn forward_udp(
         );
     }
 
-    grpc::forward_service_datagrams(&endpoint, &service_id, socket).await
+    grpc_service::forward_service_datagrams(&endpoint, &service_id, socket).await
 }
 
 pub(crate) fn format_service_protocol(protocol: &ServiceProtocol) -> &'static str {

@@ -4335,9 +4335,66 @@ Remaining:
 - Broader onboarding and service forwarding decomposition remains future
   maintainability work if those surfaces grow.
 
+## Phase 75: v0.11.2 Exec Session Hardening
+
+Status: Completed.
+
+Goal: tighten the PTY-backed exec session surface so interactive clients keep
+terminal dimensions synchronized and dropped response streams do not leave
+orphaned remote session processes.
+
+Detailed plan: `docs/plan/v0.11.2-exec-session-hardening.md`.
+
+Completed:
+
+- `operon exec session` now uses the attached local TTY size by default when
+  `--rows` or `--cols` are omitted.
+- Interactive Unix sessions forward terminal resize signals as
+  `ExecSessionResize` messages over `OpenExecSession`.
+- Daemon response streams now terminate the remote session when dropped before
+  a terminal exit event.
+- Recorded `zhiburt/conpty` / `conpty = "0.7.0"` as the likely future Windows
+  ConPTY backend candidate, with implementation deferred until Windows CI and
+  packaging are defined.
+- Added [`scripts/verify-v0.11.2-exec-session-hardening.sh`](../../scripts/verify-v0.11.2-exec-session-hardening.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
+Remaining:
+
+- No v0.11.2 work remains.
+- Windows ConPTY implementation remains future platform/distribution work.
+
+## Phase 76: v0.10.5 Maintainability Cleanup
+
+Status: Completed.
+
+Goal: continue behavior-preserving modularization by moving service tunnel
+state machines and CLI service transport helpers behind focused module
+boundaries.
+
+Detailed plan: `docs/plan/v0.10.5-maintainability-cleanup.md`.
+
+Completed:
+
+- Added [`service_tcp_forward.rs`](../../crates/operond/src/service_tcp_forward.rs)
+  for daemon TCP service tunnel stream behavior.
+- Added [`service_datagram_forward.rs`](../../crates/operond/src/service_datagram_forward.rs)
+  for daemon UDP datagram tunnel session behavior.
+- Kept [`service_forward.rs`](../../crates/operond/src/service_forward.rs)
+  focused on service health, authorization, audit, target parsing, and
+  delegation.
+- Added [`grpc_service.rs`](../../crates/operon-cli/src/grpc_service.rs) for
+  CLI service forwarding transport helpers.
+- Added [`scripts/verify-v0.10.5-maintainability-cleanup.sh`](../../scripts/verify-v0.10.5-maintainability-cleanup.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
+Remaining:
+
+- No v0.10.5 work remains.
+
 ## Later Candidate Work
 
-Status: Candidate backlog. The next post-v0.11/v0.10.4 phase has not been
+Status: Candidate backlog. The next post-v0.11.2/v0.10.5 phase has not been
 approved yet.
 
 ### Candidate A: Release / Distribution Readiness

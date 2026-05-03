@@ -79,6 +79,8 @@ scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh
 scripts/verify-v0.10.2-operator-diagnostics.sh
 scripts/verify-v0.11-exec-session.sh
 scripts/verify-v0.10.4-maintainability-cleanup.sh
+scripts/verify-v0.11.2-exec-session-hardening.sh
+scripts/verify-v0.10.5-maintainability-cleanup.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
@@ -214,6 +216,14 @@ and a real local daemon session.
 The v0.10.4 maintainability validation checks that exec RPC routing and
 PTY/session runtime behavior live behind focused daemon and CLI module
 boundaries.
+
+The v0.11.2 exec session hardening validation checks local terminal dimension
+defaults, Unix resize forwarding, daemon response-stream drop termination, and
+the documented Windows ConPTY follow-up assessment.
+
+The v0.10.5 maintainability validation checks that service tunnel state
+machines and CLI service forwarding transport helpers live behind focused
+daemon and CLI module boundaries.
 
 ## Release Automation
 

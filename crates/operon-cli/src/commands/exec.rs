@@ -38,11 +38,17 @@ pub(crate) struct ExecSessionInput {
     pub(crate) timeout_secs: u64,
     pub(crate) secrets: Vec<String>,
     pub(crate) argv: bool,
-    pub(crate) rows: u16,
-    pub(crate) cols: u16,
+    pub(crate) rows: Option<u16>,
+    pub(crate) cols: Option<u16>,
     pub(crate) content: Option<String>,
     pub(crate) command: Vec<String>,
     pub(crate) output: OutputMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TerminalDimensions {
+    rows: u16,
+    cols: u16,
 }
 
 pub(crate) async fn run(input: ExecRunInput) -> anyhow::Result<()> {
@@ -194,6 +200,7 @@ pub(crate) async fn stdin(
 
 pub(crate) async fn session(input: ExecSessionInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path, &input.node_id)?;
+    let dimensions = local_terminal_dimensions_or_default(input.rows, input.cols);
     let start = ExecSessionStart {
         command: if input.argv {
             String::new()
@@ -208,8 +215,8 @@ pub(crate) async fn session(input: ExecSessionInput) -> anyhow::Result<()> {
         cwd: input.cwd,
         timeout_secs: Some(input.timeout_secs),
         secrets: input.secrets,
-        rows: input.rows,
-        cols: input.cols,
+        rows: dimensions.rows,
+        cols: dimensions.cols,
     };
     let mut stdout = io::stdout();
     let event = match input.content {
@@ -227,7 +234,9 @@ pub(crate) async fn session(input: ExecSessionInput) -> anyhow::Result<()> {
             grpc_exec::open_exec_session_to_writer(
                 &endpoint,
                 start,
-                grpc_exec::ExecSessionInputSource::LocalStdin,
+                grpc_exec::ExecSessionInputSource::LocalStdin {
+                    forward_resize: io::stdin().is_tty(),
+                },
                 &mut stdout,
             )
             .await?
@@ -243,6 +252,24 @@ fn finish_session(event: ExecSessionEvent, output: OutputMode) -> anyhow::Result
         print_session_terminal(&event);
     }
     ensure_session_succeeded(&event)
+}
+
+pub(crate) fn local_terminal_dimensions_or_default(
+    rows: Option<u16>,
+    cols: Option<u16>,
+) -> TerminalDimensions {
+    let terminal_size = io::stdin()
+        .is_tty()
+        .then(crossterm::terminal::size)
+        .and_then(Result::ok);
+    TerminalDimensions {
+        rows: rows
+            .or_else(|| terminal_size.map(|(_, rows)| rows))
+            .unwrap_or(24),
+        cols: cols
+            .or_else(|| terminal_size.map(|(cols, _)| cols))
+            .unwrap_or(80),
+    }
 }
 
 fn ensure_session_succeeded(event: &ExecSessionEvent) -> anyhow::Result<()> {
@@ -447,6 +474,27 @@ mod tests {
 
         assert_eq!(request.command, "");
         assert_eq!(request.argv, vec!["printf", "hello world"]);
+    }
+
+    #[test]
+    fn exec_session_terminal_dimensions_use_explicit_overrides() {
+        let dimensions = local_terminal_dimensions_or_default(Some(33), Some(120));
+
+        assert_eq!(
+            dimensions,
+            TerminalDimensions {
+                rows: 33,
+                cols: 120
+            }
+        );
+    }
+
+    #[test]
+    fn exec_session_terminal_dimensions_default_when_unattached() {
+        let dimensions = local_terminal_dimensions_or_default(None, None);
+
+        assert!(dimensions.rows > 0);
+        assert!(dimensions.cols > 0);
     }
 
     #[test]

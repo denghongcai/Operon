@@ -149,6 +149,10 @@ jobs:
             node: true
           - name: v0.10.4 Maintainability Cleanup Validation
             script: scripts/verify-v0.10.4-maintainability-cleanup.sh
+          - name: v0.11.2 Exec Session Hardening Validation
+            script: scripts/verify-v0.11.2-exec-session-hardening.sh
+          - name: v0.10.5 Maintainability Cleanup Validation
+            script: scripts/verify-v0.10.5-maintainability-cleanup.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

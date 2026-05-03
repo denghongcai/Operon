@@ -8,6 +8,7 @@ mod commands;
 mod graph;
 mod grpc;
 mod grpc_exec;
+mod grpc_service;
 mod onboard;
 mod output;
 mod private_files;
@@ -407,12 +408,12 @@ enum ExecCommand {
         /// Execute CLI words as argv without shell parsing.
         #[arg(long)]
         argv: bool,
-        /// Initial terminal rows.
-        #[arg(long, default_value_t = 24)]
-        rows: u16,
-        /// Initial terminal columns.
-        #[arg(long, default_value_t = 80)]
-        cols: u16,
+        /// Initial terminal rows. Defaults to the local TTY rows, or 24.
+        #[arg(long)]
+        rows: Option<u16>,
+        /// Initial terminal columns. Defaults to the local TTY columns, or 80.
+        #[arg(long)]
+        cols: Option<u16>,
         /// Optional stdin content. Omit to stream local stdin interactively.
         #[arg(long)]
         content: Option<String>,

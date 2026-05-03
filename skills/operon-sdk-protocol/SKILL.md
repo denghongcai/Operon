@@ -35,7 +35,8 @@ Integration guidance:
 - Preserve audit and trace context when running execution graphs.
 - Respect pagination fields on list APIs.
 - Use `OpenExecSession` / SDK `openExecSession` for interactive terminal
-  workflows; use `RunExec` / `runExec` for non-interactive commands.
+  workflows, including explicit resize events when the client owns a TTY; use
+  `RunExec` / `runExec` for non-interactive commands.
 - Treat service forwarding as an explicit user operation, not an automatic background side effect.
 
 After implementing a client workflow, compare it against equivalent CLI behavior and verify with audit or trace output.

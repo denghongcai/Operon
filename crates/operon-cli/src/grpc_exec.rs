@@ -7,7 +7,7 @@ use operon_core::{ExecSessionEvent, ExecSessionStart, ExecStatus};
 use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     exec_log_stream_event, exec_session_event, exec_session_request, ExecIdRequest,
-    ExecSessionInput, ExecSessionRequest,
+    ExecSessionInput, ExecSessionRequest, ExecSessionResize,
 };
 use tokio::sync::mpsc;
 
@@ -15,7 +15,7 @@ use crate::grpc::{call, with_auth};
 
 pub(crate) enum ExecSessionInputSource {
     Inline(Vec<u8>),
-    LocalStdin,
+    LocalStdin { forward_resize: bool },
 }
 
 pub(crate) async fn stream_exec_logs_to_writer(
@@ -78,7 +78,10 @@ pub(crate) async fn open_exec_session_to_writer(
                 })?;
                 drop(tx);
             }
-            ExecSessionInputSource::LocalStdin => {
+            ExecSessionInputSource::LocalStdin { forward_resize } => {
+                if forward_resize {
+                    spawn_resize_forwarder(tx.clone());
+                }
                 spawn_stdin_forwarder(tx);
             }
         }
@@ -144,6 +147,36 @@ pub(crate) async fn open_exec_session_to_writer(
     })
     .await
 }
+
+#[cfg(unix)]
+fn spawn_resize_forwarder(tx: mpsc::UnboundedSender<ExecSessionRequest>) {
+    tokio::spawn(async move {
+        let Ok(mut signals) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())
+        else {
+            return;
+        };
+        while signals.recv().await.is_some() {
+            let Ok((cols, rows)) = crossterm::terminal::size() else {
+                continue;
+            };
+            if tx
+                .send(ExecSessionRequest {
+                    payload: Some(exec_session_request::Payload::Resize(ExecSessionResize {
+                        rows: u32::from(rows),
+                        cols: u32::from(cols),
+                    })),
+                })
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn spawn_resize_forwarder(_tx: mpsc::UnboundedSender<ExecSessionRequest>) {}
 
 fn spawn_stdin_forwarder(tx: mpsc::UnboundedSender<ExecSessionRequest>) {
     thread::spawn(move || {

@@ -226,6 +226,14 @@ Operon should not own:
   - v0.10.4 scope for daemon exec RPC routing, PTY/session module ownership,
     CLI exec gRPC helper boundaries, and validation.
 
+- `docs/plan/v0.11.2-exec-session-hardening.md`
+  - v0.11.2 scope for local TTY sizing, Unix resize forwarding, session stream
+    drop termination, and Windows ConPTY follow-up assessment.
+
+- `docs/plan/v0.10.5-maintainability-cleanup.md`
+  - v0.10.5 scope for daemon service tunnel module boundaries and CLI service
+    forwarding gRPC helper boundaries.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -386,7 +394,13 @@ Operon should not own:
   routing into [`exec_service.rs`](crates/operond/src/exec_service.rs),
   PTY/session runtime behavior into [`exec_session.rs`](crates/operond/src/exec_session.rs),
   and CLI exec streaming helpers into [`grpc_exec.rs`](crates/operon-cli/src/grpc_exec.rs).
-- Next planned milestone: define the next phase after v0.11/v0.10.4.
+- Completed exec session hardening milestone: v0.11.2 added local TTY sizing,
+  Unix resize forwarding, response-stream drop termination, and documented
+  `zhiburt/conpty` as the likely future Windows ConPTY backend candidate.
+- Completed maintainability cleanup milestone: v0.10.5 moved daemon TCP and
+  UDP service tunnel state machines plus CLI service forwarding transport
+  helpers behind focused module boundaries.
+- Next planned milestone: define the next phase after v0.11.2/v0.10.5.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -613,3 +627,18 @@ Defer:
   streaming helpers live in [`grpc_exec.rs`](crates/operon-cli/src/grpc_exec.rs),
   and [`scripts/verify-v0.10.4-maintainability-cleanup.sh`](scripts/verify-v0.10.4-maintainability-cleanup.sh)
   covers the module boundaries. Nothing remains in v0.10.4.
+- Latest phase status update: v0.11.2 completed Exec Session Hardening.
+  `operon exec session` now defaults to attached TTY dimensions, interactive
+  Unix sessions forward resize events, dropped daemon response streams
+  terminate remote sessions before terminal exit, `zhiburt/conpty` is recorded
+  as the likely future Windows ConPTY backend candidate, and
+  [`scripts/verify-v0.11.2-exec-session-hardening.sh`](scripts/verify-v0.11.2-exec-session-hardening.sh)
+  covers the behavior. Nothing remains in v0.11.2.
+- Latest phase status update: v0.10.5 completed Maintainability Cleanup.
+  Daemon TCP service tunnel stream behavior lives in
+  [`service_tcp_forward.rs`](crates/operond/src/service_tcp_forward.rs), UDP
+  datagram tunnel sessions live in
+  [`service_datagram_forward.rs`](crates/operond/src/service_datagram_forward.rs), CLI service
+  forwarding transport helpers live in [`grpc_service.rs`](crates/operon-cli/src/grpc_service.rs),
+  and [`scripts/verify-v0.10.5-maintainability-cleanup.sh`](scripts/verify-v0.10.5-maintainability-cleanup.sh)
+  covers the module boundaries. Nothing remains in v0.10.5.
