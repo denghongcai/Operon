@@ -5100,9 +5100,9 @@ Completed:
   TypeScript, macOS/Windows platform smoke, and every consolidated validation
   group.
 - Harden mount-session shutdown handling so non-interactive runner contexts
-  that cannot install a Ctrl-C handler do not immediately terminate live mount
-  processes, and expand Windows live-smoke diagnostics for daemon, mount,
-  process, and WinFsp service state.
+  that cannot install a Ctrl-C handler or lose the shutdown channel do not
+  immediately terminate live mount processes, and expand Windows live-smoke
+  diagnostics for daemon, mount, process, and WinFsp service state.
 
 Remaining:
 

@@ -33,26 +33,23 @@ impl MountSession {
     pub fn wait_for_shutdown(self) -> anyhow::Result<()> {
         let (tx, rx) = mpsc::channel();
         let handler_tx = tx.clone();
-        let mut tx_guard = Some(tx);
-        match ctrlc::set_handler(move || {
+        let _tx_guard = match ctrlc::set_handler(move || {
             let _ = handler_tx.send(());
         }) {
-            Ok(()) => {
-                tx_guard = None;
-            }
+            Ok(()) => None,
             Err(error) => {
                 eprintln!(
                     "warning: failed to install mount shutdown handler; terminate the mount process to unmount: {error}"
                 );
+                Some(tx)
             }
-        }
+        };
 
         loop {
             match rx.recv_timeout(Duration::from_secs(3600)) {
                 Ok(()) => return self.unmount(),
                 Err(RecvTimeoutError::Timeout) => continue,
-                Err(RecvTimeoutError::Disconnected) if tx_guard.is_some() => continue,
-                Err(RecvTimeoutError::Disconnected) => return self.unmount(),
+                Err(RecvTimeoutError::Disconnected) => continue,
             }
         }
     }
