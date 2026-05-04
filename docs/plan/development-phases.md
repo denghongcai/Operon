@@ -5177,6 +5177,11 @@ Completed:
   dump recent FSKit/LiveFS/macFUSE unified logs after `/Volumes` smoke still
   hung in `fuser::spawn_mount2`, narrowing the remaining macOS issue to the
   FSKit service-registration/XPC layer.
+- Record the hosted macOS FSKit blocker: refreshed FSKit smoke reaches the
+  macOS service layer, but unified logs report `Hello FSClient! entitlement no`
+  followed by macFUSE daemon mount and server-advertise failures. Remaining
+  macOS live validation requires either a runner-safe entitlement/registration
+  path or a host where the macFUSE kernel backend is approved and loaded.
 
 Remaining:
 
