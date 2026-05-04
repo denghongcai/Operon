@@ -36,6 +36,7 @@ require_file crates/operon-mount/src/windows.rs
 require_pattern 'FSP_FILE_SYSTEM_INTERFACE' crates/operon-mount/src/windows.rs
 require_pattern 'FspFileSystemCreate' crates/operon-mount/src/windows.rs
 require_pattern 'CreateEx: Some\(create_ex_cb\)' crates/operon-mount/src/windows.rs
+require_pattern 'Overwrite: Some\(overwrite_cb\)' crates/operon-mount/src/windows.rs
 require_pattern 'windows_name_to_remote_path' crates/operon-mount/src/windows.rs
 require_pattern 'write_to_eof' crates/operon-mount/src/windows.rs
 require_pattern 'cfg\(any\(target_os = "linux", target_os = "macos"\)\)' crates/operon-cli/Cargo.toml

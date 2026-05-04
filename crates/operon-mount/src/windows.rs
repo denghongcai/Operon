@@ -244,12 +244,13 @@ fn start_winfsp_mount(
         trace_mount_event(
             "interface_before_create",
             format!(
-                "get_volume_info={} get_security_by_name={} create={} create_ex={} open={} read_directory={} get_dir_info_by_name={}",
+                "get_volume_info={} get_security_by_name={} create={} create_ex={} open={} overwrite={} read_directory={} get_dir_info_by_name={}",
                 (*interface).GetVolumeInfo.is_some(),
                 (*interface).GetSecurityByName.is_some(),
                 (*interface).Create.is_some(),
                 (*interface).CreateEx.is_some(),
                 (*interface).Open.is_some(),
+                (*interface).Overwrite.is_some(),
                 (*interface).ReadDirectory.is_some(),
                 (*interface).GetDirInfoByName.is_some(),
             ),
@@ -285,12 +286,13 @@ fn start_winfsp_mount(
             trace_mount_event(
                 "interface_after_create",
                 format!(
-                    "interface_ptr={active_interface:p} get_volume_info={} get_security_by_name={} create={} create_ex={} open={} read_directory={} get_dir_info_by_name={}",
+                    "interface_ptr={active_interface:p} get_volume_info={} get_security_by_name={} create={} create_ex={} open={} overwrite={} read_directory={} get_dir_info_by_name={}",
                     (*active_interface).GetVolumeInfo.is_some(),
                     (*active_interface).GetSecurityByName.is_some(),
                     (*active_interface).Create.is_some(),
                     (*active_interface).CreateEx.is_some(),
                     (*active_interface).Open.is_some(),
+                    (*active_interface).Overwrite.is_some(),
                     (*active_interface).ReadDirectory.is_some(),
                     (*active_interface).GetDirInfoByName.is_some(),
                 ),
@@ -359,6 +361,7 @@ fn winfsp_interface() -> FSP_FILE_SYSTEM_INTERFACE {
         Create: Some(create_cb),
         CreateEx: Some(create_ex_cb),
         Open: Some(open_cb),
+        Overwrite: Some(overwrite_cb),
         Cleanup: Some(cleanup_cb),
         Close: Some(close_cb),
         Read: Some(read_cb),
@@ -563,6 +566,41 @@ unsafe extern "C" fn open_cb(
         Ok(stat) => {
             trace_mount_event("open", stat.path.clone());
             write_context(file_context, &stat);
+            write_file_info(file_info, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn overwrite_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    _file_attributes: UINT32,
+    _replace_file_attributes: u8,
+    allocation_size: UINT64,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    if file_context.is_null() {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    trace_mount_event(
+        "overwrite",
+        format!("path={} allocation_size={allocation_size}", context.path),
+    );
+    if context.is_dir {
+        return STATUS_FILE_IS_A_DIRECTORY;
+    }
+
+    match fs
+        .core
+        .truncate(&context.path, 0)
+        .map_err(ntstatus_for_error)
+    {
+        Ok(stat) => {
             write_file_info(file_info, &stat);
             STATUS_SUCCESS
         }

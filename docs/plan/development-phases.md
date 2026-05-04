@@ -5201,6 +5201,13 @@ Completed:
   function` for `fsutil volumeinfo O:\` and `dir O:\` before any adapter
   callback entry. The next targeted Windows smoke should include
   `FspFileSystemCreate`, mount-point, dispatcher, and WinFsp debug output.
+- Register the Windows WinFsp `Overwrite` callback after direct-interface
+  diagnostics showed `FspFileSystemCreate`, mount-point registration,
+  dispatcher startup, and all create/open callback slots were present, but
+  WinFsp v2.1 still returned `STATUS_INVALID_DEVICE_REQUEST` before adapter
+  callback entry. The root cause is WinFsp's create/open dispatch precondition:
+  `Create/CreateEx`, `Open`, and `Overwrite/OverwriteEx` must all be registered
+  before `FspFileSystemOpCreate` will dispatch root opens.
 
 Remaining:
 
