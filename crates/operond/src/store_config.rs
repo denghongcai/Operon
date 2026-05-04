@@ -59,9 +59,9 @@ mod tests {
 
     #[test]
     fn store_path_must_stay_under_config_dir() {
-        let base = unique_temp_dir("operond-store-path-test");
-        let config_dir = base.join("config");
-        let outside = base.join("outside");
+        let base = tempfile::tempdir().expect("temp dir");
+        let config_dir = base.path().join("config");
+        let outside = base.path().join("outside");
         fs::create_dir_all(&config_dir).expect("config dir");
         fs::create_dir_all(&outside).expect("outside dir");
 
@@ -74,14 +74,13 @@ mod tests {
         assert!(denied
             .to_string()
             .contains("must stay under config directory"));
-        let _ = fs::remove_dir_all(base);
     }
 
     #[cfg(unix)]
     #[test]
     fn store_path_rejects_symlink() {
-        let base = unique_temp_dir("operond-store-symlink-test");
-        let config_dir = base.join("config");
+        let base = tempfile::tempdir().expect("temp dir");
+        let config_dir = base.path().join("config");
         fs::create_dir_all(&config_dir).expect("config dir");
         let target = config_dir.join("target.jsonl");
         let link = config_dir.join("store.jsonl");
@@ -90,17 +89,5 @@ mod tests {
         let denied = resolve_store_path(&config_dir, Some(Path::new("store.jsonl")))
             .expect_err("symlink store path should be denied");
         assert!(denied.to_string().contains("must not be a symlink"));
-        let _ = fs::remove_dir_all(base);
-    }
-
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ))
     }
 }

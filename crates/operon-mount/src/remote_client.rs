@@ -32,9 +32,13 @@ impl GrpcRemoteFs {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
-        let uri = operon_grpc_client::grpc_channel_uri(&endpoint.endpoint)?;
-        let builder = Channel::from_shared(uri)?;
-        let channel = block_on_runtime(&runtime, async { builder.connect().await })?;
+        let channel = block_on_runtime(&runtime, async {
+            operon_grpc_client::connect_channel(
+                &endpoint,
+                operon_grpc_client::DEFAULT_CONNECT_TIMEOUT,
+            )
+            .await
+        })?;
         Ok(Self {
             endpoint,
             channel,

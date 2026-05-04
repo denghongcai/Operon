@@ -4895,7 +4895,61 @@ Remaining:
   when practical because CI runners may not allow persistent service
   registration.
 
-## Phase 90: v0.13.6 Mount Adapter Strategy
+## Phase 90: v0.13.6 Test Hardening
+
+Status: Completed.
+
+Goal: turn the recent test-coverage review into targeted, high-signal coverage
+for the parts of Operon that are most likely to regress silently: Linux mount
+adapter behavior, network service checks, shared gRPC client helpers, CLI
+negative paths, and test cleanup reliability.
+
+Detailed plan: `docs/plan/v0.13.6-test-hardening.md`.
+
+Planned:
+
+- add focused mount adapter tests for error mapping and testable FUSE or remote
+  client behavior while keeping live kernel mount behavior in Linux validation
+  scripts.
+- add deterministic TCP/UDP service-check coverage and fix the TCP success
+  reason text that currently uses UDP wording.
+- add `operon-grpc-client` chunk-boundary, metadata, and connection-deadline
+  coverage.
+- extend compiled-binary CLI integration tests with representative negative
+  paths.
+- replace targeted manual temporary-directory cleanup with RAII cleanup.
+- remove duplicate token-generation coverage by making onboard tests assert
+  onboard-specific behavior.
+- refresh `docs/quality/test-coverage-audit.md` to match current coverage and
+  the gaps closed by this phase.
+
+Completed:
+
+- Added deterministic TCP/UDP service-check coverage in
+  [`operon-network`](../../crates/operon-network) and fixed the TCP success
+  reason string.
+- Added `operon-grpc-client` chunk-boundary, metadata, and connection-deadline
+  coverage, and routed the Linux mount remote client through the shared deadline
+  helper.
+- Added `operon-mount` focused tests for errno mapping and FUSE helper behavior
+  that can be tested without a live kernel mount.
+- Added compiled-binary CLI negative-path tests for clap errors, missing
+  arguments, malformed config, and invalid endpoint schemes.
+- Replaced targeted manual temporary-directory cleanup with `tempfile::TempDir`.
+- Replaced duplicate onboard token-generation coverage with onboard-specific
+  token-file/config-reference coverage.
+- Refreshed [`docs/quality/test-coverage-audit.md`](../quality/test-coverage-audit.md).
+- Added
+  [`scripts/verify-v0.13.6-test-hardening.sh`](../../scripts/verify-v0.13.6-test-hardening.sh)
+  and wired it into consolidated CI validation.
+
+Remaining:
+
+- No v0.13.6 test-hardening work remains.
+- Numeric line-coverage thresholds, macFUSE, WinFsp, and CLI UX redesign remain
+  outside this phase.
+
+## Phase 91: v0.13.7 Mount Adapter Strategy
 
 Status: Planned.
 
@@ -4903,7 +4957,7 @@ Goal: decide whether and how Operon should pursue macFUSE and WinFsp mount
 adapters without blurring the existing boundary between core filesystem RPCs
 and platform-specific live mount integrations.
 
-Detailed plan: `docs/plan/v0.13.6-mount-adapter-strategy.md`.
+Detailed plan: `docs/plan/v0.13.7-mount-adapter-strategy.md`.
 
 Planned:
 
@@ -4918,7 +4972,7 @@ Planned:
 
 Remaining:
 
-- All v0.13.6 mount adapter strategy work remains.
+- All v0.13.7 mount adapter strategy work remains.
 - macFUSE and WinFsp implementation remain outside this strategy phase.
 
 ## Planning Principle

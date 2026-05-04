@@ -151,6 +151,13 @@ Windows target build, and keeps README, DEVELOPMENT, AGENTS, and phase docs in
 sync. The focused script is
 `scripts/verify-v0.13.5-daemon-service-management.sh`.
 
+The v0.13.6 test hardening validation checks focused service-check coverage in
+`operon-network`, shared gRPC client chunk/metadata/connect-deadline coverage,
+Linux mount errno/FUSE helper coverage, compiled-binary CLI negative-path
+coverage, targeted `TempDir` cleanup, duplicate onboard token-test cleanup, and
+the refreshed coverage audit. The focused script is
+`scripts/verify-v0.13.6-test-hardening.sh`.
+
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store
 queries, secret use, service health checks, streaming fs, exec stdin/log streams,

@@ -919,6 +919,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "tokio",
  "tonic",
 ]
@@ -959,6 +960,7 @@ dependencies = [
  "operon-core",
  "operon-network",
  "operon-protocol",
+ "tokio",
  "tonic",
 ]
 
@@ -1016,6 +1018,7 @@ dependencies = [
  "libc",
  "operon-core",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1039,6 +1042,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "tokio",
  "tokio-util",
  "tonic",

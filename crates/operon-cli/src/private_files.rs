@@ -86,7 +86,6 @@ fn validate_private_file_target(path: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
@@ -113,8 +112,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn private_file_refuses_broad_existing_permissions() {
-        let base = unique_temp_dir("operon-private-file-test");
-        let path = base.join("token");
+        let base = tempfile::tempdir().expect("temp dir");
+        let path = base.path().join("token");
         fs::write(&path, "old\n").expect("write");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("chmod");
 
@@ -122,33 +121,17 @@ mod tests {
             write_private_file(&path, "new\n").expect_err("broad token file should be rejected");
 
         assert!(error.to_string().contains("refusing to write private file"));
-        let _ = fs::remove_dir_all(base);
     }
 
     #[cfg(unix)]
     #[test]
     fn private_file_is_written_with_owner_only_permissions() {
-        let base = unique_temp_dir("operon-private-file-write-test");
-        let path = base.join("token");
+        let base = tempfile::tempdir().expect("temp dir");
+        let path = base.path().join("token");
 
         write_private_file(&path, "new\n").expect("write private file");
 
         let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
-        let _ = fs::remove_dir_all(base);
-    }
-
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "{}-{}-{}",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("system time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&path).expect("create temp dir");
-        path
     }
 }

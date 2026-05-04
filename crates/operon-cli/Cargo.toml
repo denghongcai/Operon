@@ -32,3 +32,6 @@ tonic.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 operon-mount = { path = "../operon-mount" }
+
+[dev-dependencies]
+tempfile.workspace = true

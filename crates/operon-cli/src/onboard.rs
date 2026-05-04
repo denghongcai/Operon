@@ -594,13 +594,6 @@ mod tests {
     }
 
     #[test]
-    fn generated_token_is_hex_encoded() {
-        let token = private_files::generate_token().expect("token");
-        assert_eq!(token.len(), 64);
-        assert!(token.chars().all(|value| value.is_ascii_hexdigit()));
-    }
-
-    #[test]
     fn client_only_noninteractive_does_not_invent_token() {
         let plan =
             build_onboard_plan(test_args(OnboardRole::Client), &mut NoopPrompt).expect("plan");
@@ -642,19 +635,31 @@ mod tests {
             .contains("advertise_lan=true"));
     }
 
+    #[test]
+    fn daemon_onboard_plan_writes_private_token_file_and_references_it() {
+        let plan =
+            build_onboard_plan(test_args(OnboardRole::Daemon), &mut NoopPrompt).expect("plan");
+        let token_file = plan
+            .files
+            .iter()
+            .find(|file| file.path.ends_with("token"))
+            .expect("token file");
+        let config = plan
+            .files
+            .iter()
+            .find(|file| file.path.ends_with("config.yaml"))
+            .expect("config file");
+
+        assert!(token_file.private);
+        assert!(config.content.contains("token_file: token"));
+        assert!(!config.content.contains("token:"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn private_generated_file_refuses_broad_existing_permissions() {
-        let base = std::env::temp_dir().join(format!(
-            "operon-onboard-private-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("system time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&base).expect("dir");
-        let path = base.join("token");
+        let base = tempfile::tempdir().expect("temp dir");
+        let path = base.path().join("token");
         fs::write(&path, "old\n").expect("write");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("chmod");
 
@@ -666,22 +671,13 @@ mod tests {
         .expect_err("broad token file should be rejected");
 
         assert!(error.to_string().contains("refusing to write private file"));
-        let _ = fs::remove_dir_all(base);
     }
 
     #[cfg(unix)]
     #[test]
     fn private_generated_file_is_written_with_owner_only_permissions() {
-        let base = std::env::temp_dir().join(format!(
-            "operon-onboard-private-write-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("system time")
-                .as_nanos()
-        ));
-        fs::create_dir_all(&base).expect("dir");
-        let path = base.join("token");
+        let base = tempfile::tempdir().expect("temp dir");
+        let path = base.path().join("token");
 
         write_generated_file(&GeneratedFile {
             path: path.clone(),
@@ -692,6 +688,5 @@ mod tests {
 
         let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
-        let _ = fs::remove_dir_all(base);
     }
 }

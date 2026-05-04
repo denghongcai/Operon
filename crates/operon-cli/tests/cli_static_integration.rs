@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, process::Command};
 
 fn operon() -> Command {
     Command::new(env!("CARGO_BIN_EXE_operon"))
@@ -47,8 +47,8 @@ fn completion_generation_supports_bash_and_zsh() {
 
 #[test]
 fn init_config_then_explain_json_is_machine_readable() {
-    let base = unique_temp_dir("operon-cli-static-integration");
-    let config = base.join("config.yaml");
+    let base = tempfile::tempdir().expect("temp dir");
+    let config = base.path().join("config.yaml");
 
     let init = operon()
         .args(["--quiet", "init", "config"])
@@ -74,14 +74,12 @@ fn init_config_then_explain_json_is_machine_readable() {
         .as_str()
         .expect("auth string")
         .starts_with("token_file:"));
-
-    let _ = fs::remove_dir_all(base);
 }
 
 #[test]
 fn config_unknown_fields_warn_without_blocking_command() {
-    let base = unique_temp_dir("operon-cli-config-warning");
-    let config = base.join("config.yaml");
+    let base = tempfile::tempdir().expect("temp dir");
+    let config = base.path().join("config.yaml");
     fs::write(
         &config,
         r#"
@@ -105,17 +103,15 @@ client:
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("local\tgrpc://127.0.0.1:7789"));
     assert!(stderr(&output).contains("client.nodes.local.provider"));
-
-    let _ = fs::remove_dir_all(base);
 }
 
 #[test]
 fn onboard_summary_includes_completion_guidance() {
-    let base = unique_temp_dir("operon-cli-onboard-integration");
+    let base = tempfile::tempdir().expect("temp dir");
 
     let output = operon()
         .args(["onboard", "--yes", "--output-dir"])
-        .arg(&base)
+        .arg(base.path())
         .output()
         .expect("run onboard");
     assert!(output.status.success(), "stderr={}", stderr(&output));
@@ -123,24 +119,74 @@ fn onboard_summary_includes_completion_guidance() {
     assert!(stdout.contains("Shell completion:"));
     assert!(stdout.contains("operon completion bash"));
     assert!(stdout.contains("operon completion zsh"));
+}
 
-    let _ = fs::remove_dir_all(base);
+#[test]
+fn unknown_command_exits_nonzero_with_clap_error() {
+    let output = operon()
+        .arg("definitely-not-a-command")
+        .output()
+        .expect("run unknown command");
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("unrecognized subcommand"));
+}
+
+#[test]
+fn missing_required_arguments_exit_nonzero() {
+    let output = operon()
+        .args(["fs", "read"])
+        .output()
+        .expect("run incomplete fs read");
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("required"));
+}
+
+#[test]
+fn malformed_config_exits_nonzero_for_config_loading_command() {
+    let base = tempfile::tempdir().expect("temp dir");
+    let config = base.path().join("config.yaml");
+    fs::write(&config, "version: [\n").expect("write malformed config");
+
+    let output = operon()
+        .arg("--config")
+        .arg(&config)
+        .args(["node", "list"])
+        .output()
+        .expect("run node list");
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("while parsing"));
+}
+
+#[test]
+fn invalid_endpoint_scheme_is_rejected_before_rpc() {
+    let base = tempfile::tempdir().expect("temp dir");
+    let config = base.path().join("config.yaml");
+    fs::write(
+        &config,
+        r#"
+version: 1
+client:
+  nodes:
+    local:
+      endpoint: http://127.0.0.1:7789
+"#,
+    )
+    .expect("write config");
+
+    let output = operon()
+        .arg("--config")
+        .arg(&config)
+        .args(["node", "ping", "local"])
+        .output()
+        .expect("run node ping");
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("only grpc:// and grpcs:// endpoints are supported"));
 }
 
 fn stderr(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stderr).to_string()
-}
-
-fn unique_temp_dir(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!(
-        "{}-{}-{}",
-        name,
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos()
-    ));
-    fs::create_dir_all(&path).expect("create temp dir");
-    path
 }

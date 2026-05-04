@@ -44,8 +44,6 @@ mod state;
 mod store_config;
 
 #[cfg(test)]
-use audit::now_ms;
-#[cfg(test)]
 use audit::record_audit_capability;
 use audit::{bounded_audit_events, record_audit};
 use defaults::{capabilities_from_policy, default_policy};
@@ -320,10 +318,6 @@ mod tests {
         }
     }
 
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("{name}-{}-{}", std::process::id(), now_ms()))
-    }
-
     #[test]
     fn service_management_clap_exposes_commands_without_background_start() {
         let mut command = Args::command();
@@ -427,8 +421,8 @@ mod tests {
 
     #[test]
     fn empty_exec_request_is_rejected_before_spawn() {
-        let base = unique_temp_dir("operond-empty-exec-test");
-        let workspace = base.join("workspace");
+        let base = tempfile::tempdir().expect("temp dir");
+        let workspace = base.path().join("workspace");
         fs::create_dir_all(&workspace).expect("workspace");
         let state = test_state(test_policy(), workspace);
         let error = start_exec(
@@ -445,13 +439,12 @@ mod tests {
 
         assert_eq!(error.code(), tonic::Code::InvalidArgument);
         assert!(error.message().contains("requires command or argv"));
-        let _ = fs::remove_dir_all(base);
     }
 
     #[tokio::test]
     async fn read_range_reads_only_requested_bytes() {
-        let base = unique_temp_dir("operond-read-range-test");
-        let workspace = base.join("workspace");
+        let base = tempfile::tempdir().expect("temp dir");
+        let workspace = base.path().join("workspace");
         fs::create_dir_all(&workspace).expect("workspace");
         fs::write(workspace.join("data.bin"), b"0123456789").expect("file");
         let state = test_state(default_policy(), workspace);
@@ -461,13 +454,12 @@ mod tests {
             .expect("read range");
 
         assert_eq!(chunk.data, b"3456");
-        let _ = fs::remove_dir_all(base);
     }
 
     #[tokio::test]
     async fn list_fs_returns_deterministic_pages() {
-        let base = unique_temp_dir("operond-list-fs-page-test");
-        let workspace = base.join("workspace");
+        let base = tempfile::tempdir().expect("temp dir");
+        let workspace = base.path().join("workspace");
         fs::create_dir_all(&workspace).expect("workspace");
         fs::write(workspace.join("b.txt"), "b").expect("b");
         fs::write(workspace.join("a.txt"), "a").expect("a");
@@ -504,14 +496,12 @@ mod tests {
             .await
             .expect_err("invalid token");
         assert_eq!(invalid.code(), tonic::Code::InvalidArgument);
-
-        let _ = fs::remove_dir_all(base);
     }
 
     #[tokio::test]
     async fn mkdir_creates_missing_parent_directories() {
-        let base = unique_temp_dir("operond-mkdir-all-test");
-        let workspace = base.join("workspace");
+        let base = tempfile::tempdir().expect("temp dir");
+        let workspace = base.path().join("workspace");
         fs::create_dir_all(&workspace).expect("workspace");
         let state = test_state(default_policy(), workspace.clone());
 
@@ -520,7 +510,6 @@ mod tests {
             .expect("mkdir nested");
 
         assert!(workspace.join("a/b/c").is_dir());
-        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
@@ -587,13 +576,9 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn delete_removes_leaf_symlink_not_target() {
-        let base = std::env::temp_dir().join(format!(
-            "operond-delete-link-test-{}-{}",
-            std::process::id(),
-            now_ms()
-        ));
-        let workspace = base.join("workspace");
-        let outside = base.join("outside");
+        let base = tempfile::tempdir().expect("temp dir");
+        let workspace = base.path().join("workspace");
+        let outside = base.path().join("outside");
         fs::create_dir_all(&workspace).expect("workspace");
         fs::create_dir_all(&outside).expect("outside");
         let target = outside.join("secret.txt");
@@ -614,7 +599,6 @@ mod tests {
             fs::read_to_string(target).expect("target still exists"),
             "secret"
         );
-        let _ = fs::remove_dir_all(base);
     }
 
     #[test]

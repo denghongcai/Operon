@@ -50,10 +50,7 @@ pub async fn check_tcp_service(service: &ServiceDefinition, timeout: Duration) -
     .await;
     let latency_ms = started.elapsed().as_millis();
     let (ok, reason) = match result {
-        Ok(Ok(_)) => (
-            true,
-            Some("udp socket connected; datagram response not verified".to_string()),
-        ),
+        Ok(Ok(_)) => (true, Some("tcp service reachable".to_string())),
         Ok(Err(error)) => (false, Some(error.to_string())),
         Err(_) => (false, Some("service check timed out".to_string())),
     };
@@ -143,6 +140,8 @@ fn discovery_record_from_info(info: &ResolvedService) -> DiscoveryRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use operon_core::{ServicePermissions, ServiceProtocol};
+    use tokio::net::TcpListener;
 
     #[test]
     fn service_removed_event_removes_discovered_record() {
@@ -191,5 +190,89 @@ mod tests {
             record.capabilities,
             vec!["fs:workspace".to_string(), "exec:default".to_string()]
         );
+    }
+
+    #[tokio::test]
+    async fn tcp_service_check_reports_tcp_reachability_on_success() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let port = listener.local_addr().expect("local addr").port();
+        let accept = tokio::spawn(async move {
+            let _ = listener.accept().await;
+        });
+
+        let check = check_tcp_service(
+            &test_service("tcp-ok", port, ServiceProtocol::Tcp),
+            Duration::from_secs(1),
+        )
+        .await;
+
+        assert!(check.ok);
+        assert_eq!(check.reason.as_deref(), Some("tcp service reachable"));
+        accept.await.expect("accept task");
+    }
+
+    #[tokio::test]
+    async fn tcp_service_check_reports_connect_failures() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let port = listener.local_addr().expect("local addr").port();
+        drop(listener);
+
+        let check = check_tcp_service(
+            &test_service("tcp-refused", port, ServiceProtocol::Tcp),
+            Duration::from_secs(1),
+        )
+        .await;
+
+        assert!(!check.ok);
+        assert!(check
+            .reason
+            .as_deref()
+            .is_some_and(|reason| !reason.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn udp_service_check_reports_socket_connect_success() {
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0")
+            .await
+            .expect("udp socket");
+        let port = socket.local_addr().expect("local addr").port();
+
+        let check = check_udp_service(
+            &test_service("udp-ok", port, ServiceProtocol::Udp),
+            Duration::from_secs(1),
+        )
+        .await;
+
+        assert!(check.ok);
+        assert_eq!(check.reason, None);
+    }
+
+    #[tokio::test]
+    async fn udp_service_check_reports_resolution_failures() {
+        let mut service = test_service("udp-bad", 53, ServiceProtocol::Udp);
+        service.host = "not a valid host name".to_string();
+
+        let check = check_udp_service(&service, Duration::from_secs(1)).await;
+
+        assert!(!check.ok);
+        assert!(check
+            .reason
+            .as_deref()
+            .is_some_and(|reason| !reason.is_empty()));
+    }
+
+    fn test_service(id: &str, port: u16, protocol: ServiceProtocol) -> ServiceDefinition {
+        ServiceDefinition {
+            id: id.to_string(),
+            name: id.to_string(),
+            host: "127.0.0.1".to_string(),
+            port,
+            protocol,
+            description: String::new(),
+            permissions: ServicePermissions {
+                check: true,
+                forward: true,
+            },
+        }
     }
 }

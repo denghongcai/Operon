@@ -558,8 +558,145 @@ impl fuser::Filesystem for OperonFuseFs {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::BTreeMap,
+        ffi::OsStr,
+        sync::{Arc, Mutex},
+    };
+
+    use operon_core::FsList;
+
+    use super::*;
+
     #[test]
     fn mount_capability_constant_is_exported_at_crate_root() {
         assert_eq!(crate::MOUNT_CAPABILITY, "mount");
+    }
+
+    #[test]
+    fn lookup_child_fetches_remote_stat_and_caches_inode() {
+        let remote = Arc::new(MockRemoteFs::new([file_stat("/file.txt", 12)]));
+        let fs = OperonFuseFs::new(remote.clone(), dir_stat("/"));
+
+        let entry = fs
+            .lookup_child(fuser::INodeNo::ROOT, OsStr::new("file.txt"))
+            .expect("lookup child");
+        let attr = fs.file_attr(&entry);
+
+        assert_eq!(entry.path, "/file.txt");
+        assert_eq!(entry.size, 12);
+        assert_eq!(attr.kind, fuser::FileType::RegularFile);
+        assert_eq!(attr.size, 12);
+        assert_eq!(remote.stat_calls(), vec!["/file.txt".to_string()]);
+        assert_eq!(fs.inode(entry.ino).expect("cached inode").path, "/file.txt");
+    }
+
+    #[test]
+    fn lookup_child_rejects_escape_names_before_remote_stat() {
+        let remote = Arc::new(MockRemoteFs::new([]));
+        let fs = OperonFuseFs::new(remote.clone(), dir_stat("/"));
+
+        let error = fs
+            .lookup_child(fuser::INodeNo::ROOT, OsStr::new(".."))
+            .expect_err("escape child name should be rejected");
+
+        assert!(error.to_string().contains("invalid child path name"));
+        assert!(remote.stat_calls().is_empty());
+    }
+
+    #[test]
+    fn file_attr_maps_directories_with_directory_permissions() {
+        let remote = Arc::new(MockRemoteFs::new([]));
+        let fs = OperonFuseFs::new(remote, dir_stat("/"));
+        let entry = fs.inode(fuser::INodeNo::ROOT).expect("root inode");
+
+        let attr = fs.file_attr(&entry);
+
+        assert_eq!(attr.kind, fuser::FileType::Directory);
+        assert_eq!(attr.perm, 0o755);
+        assert_eq!(attr.nlink, 2);
+        assert_eq!(attr.size, 0);
+    }
+
+    struct MockRemoteFs {
+        stats: BTreeMap<String, FsStat>,
+        stat_calls: Mutex<Vec<String>>,
+    }
+
+    impl MockRemoteFs {
+        fn new(stats: impl IntoIterator<Item = FsStat>) -> Self {
+            Self {
+                stats: stats
+                    .into_iter()
+                    .map(|stat| (stat.path.clone(), stat))
+                    .collect(),
+                stat_calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn stat_calls(&self) -> Vec<String> {
+            self.stat_calls.lock().expect("stat calls").clone()
+        }
+    }
+
+    impl RemoteFs for MockRemoteFs {
+        fn stat(&self, path: &str) -> anyhow::Result<FsStat> {
+            self.stat_calls
+                .lock()
+                .expect("stat calls")
+                .push(path.to_string());
+            self.stats
+                .get(path)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("missing stat for {path}"))
+        }
+
+        fn list(&self, _path: &str) -> anyhow::Result<FsList> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+
+        fn read_range(&self, _path: &str, _offset: u64, _size: u32) -> anyhow::Result<Vec<u8>> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+
+        fn write_range(&self, _path: &str, _offset: u64, _data: &[u8]) -> anyhow::Result<u64> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+
+        fn truncate(&self, _path: &str, _size: u64) -> anyhow::Result<FsStat> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+
+        fn mkdir(&self, _path: &str) -> anyhow::Result<FsStat> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+
+        fn delete(&self, _path: &str) -> anyhow::Result<()> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+
+        fn rename(&self, _from_path: &str, _to_path: &str) -> anyhow::Result<()> {
+            unimplemented!("not needed by focused FUSE helper tests")
+        }
+    }
+
+    fn dir_stat(path: &str) -> FsStat {
+        FsStat {
+            path: path.to_string(),
+            is_file: false,
+            is_dir: true,
+            size: 0,
+            version: "dir-version".to_string(),
+        }
+    }
+
+    fn file_stat(path: &str, size: u64) -> FsStat {
+        FsStat {
+            path: path.to_string(),
+            is_file: true,
+            is_dir: false,
+            size,
+            version: "file-version".to_string(),
+        }
     }
 }

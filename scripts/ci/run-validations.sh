@@ -77,6 +77,7 @@ validations=(
   "core|v0.12.5 CLI gRPC Maintainability Cleanup Validation|scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh"
   "core|v0.13.4 CI Validation Consolidation|scripts/verify-v0.13.4-ci-validation-consolidation.sh"
   "core|v0.13.5 Daemon Service Management Validation|scripts/verify-v0.13.5-daemon-service-management.sh"
+  "core|v0.13.6 Test Hardening Validation|scripts/verify-v0.13.6-test-hardening.sh"
 )
 
 failures=()

@@ -108,8 +108,8 @@ mod tests {
 
     #[test]
     fn init_config_writes_referenced_starter_files() {
-        let base = unique_temp_dir("operon-init-config-test");
-        let config_path = base.join("config.yaml");
+        let base = tempfile::tempdir().expect("temp dir");
+        let config_path = base.path().join("config.yaml");
 
         init_config(
             config_path.clone(),
@@ -133,31 +133,19 @@ mod tests {
         let endpoint = config
             .endpoint("local", &config_dir)
             .expect("client endpoint");
-        let secrets: BTreeMap<String, String> =
-            serde_yaml::from_str(&fs::read_to_string(base.join("secrets.yaml")).expect("secrets"))
-                .expect("secrets yaml");
+        let secrets: BTreeMap<String, String> = serde_yaml::from_str(
+            &fs::read_to_string(base.path().join("secrets.yaml")).expect("secrets"),
+        )
+        .expect("secrets yaml");
 
         assert_eq!(token.len(), 64);
         assert_eq!(endpoint.token.as_deref(), Some(token.as_str()));
         assert!(secrets.is_empty());
-        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
     fn init_config_documents_loopback_lan_advertise_default() {
         assert!(init_advertise_lan_note().contains("advertise_lan=false"));
         assert!(init_advertise_lan_note().contains("loopback/local"));
-    }
-
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "{}-{}-{}",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("system time")
-                .as_nanos()
-        ))
     }
 }

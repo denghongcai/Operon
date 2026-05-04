@@ -296,10 +296,15 @@ Operon should not own:
     implements the Windows Service Control Manager protocol. Platform smoke CI
     runs daemon service-management tests on macOS and Windows.
 
-- `docs/plan/v0.13.6-mount-adapter-strategy.md`
-  - Planned v0.13.6 scope for macFUSE and WinFsp mount adapter strategy,
+- `docs/plan/v0.13.6-test-hardening.md`
+  - Completed v0.13.6 scope for focused test hardening across Linux mount adapter
+    behavior, network service checks, shared gRPC client helpers, CLI negative
+    paths, RAII test cleanup, duplicate token-test cleanup, and coverage docs.
+
+- `docs/plan/v0.13.7-mount-adapter-strategy.md`
+  - Planned v0.13.7 scope for macFUSE and WinFsp mount adapter strategy,
     dependency, packaging, CI, and support-boundary decisions after daemon
-    service management.
+    service management and test hardening.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -785,3 +790,13 @@ Defer:
   Manager protocol and maps SCM stop/shutdown controls to daemon shutdown.
   Platform smoke CI covers the daemon service-management tests on macOS and
   Windows. Nothing remains in v0.13.5.
+- Latest phase status update: v0.13.6 completed Test Hardening.
+  `operon-network` now has deterministic TCP/UDP service-check tests and TCP
+  success reports TCP reachability. `operon-grpc-client` has chunk-boundary,
+  metadata, and connection-deadline coverage, and the Linux mount remote client
+  uses the same deadline helper. `operon-mount` has focused errno/FUSE helper
+  tests, CLI compiled-binary integration has negative-path coverage, targeted
+  tests use `TempDir` cleanup, duplicate onboard token-generation coverage was
+  replaced with onboard-specific token-file/config-reference coverage, and
+  [`scripts/verify-v0.13.6-test-hardening.sh`](scripts/verify-v0.13.6-test-hardening.sh)
+  is wired into consolidated validation. Nothing remains in v0.13.6.

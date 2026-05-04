@@ -173,10 +173,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn append_record_rejects_symlink_store_path() {
-        let base = unique_temp_dir("operon-store-symlink-test");
-        std::fs::create_dir_all(&base).expect("base dir");
-        let target = base.join("target.jsonl");
-        let link = base.join("link.jsonl");
+        let base = tempfile::tempdir().expect("temp dir");
+        let target = base.path().join("target.jsonl");
+        let link = base.path().join("link.jsonl");
         std::os::unix::fs::symlink(&target, &link).expect("symlink");
 
         let error = append_record(Some(&link), &serde_json::json!({"kind": "audit"}))
@@ -184,27 +183,23 @@ mod tests {
 
         assert!(error.to_string().contains("failed to append store record"));
         assert!(!target.exists());
-        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]
     fn append_record_writes_json_line() {
-        let base = unique_temp_dir("operon-store-append-test");
-        std::fs::create_dir_all(&base).expect("base dir");
-        let store = base.join("store.jsonl");
+        let base = tempfile::tempdir().expect("temp dir");
+        let store = base.path().join("store.jsonl");
 
         append_record(Some(&store), &serde_json::json!({"kind": "audit"})).expect("append record");
 
         let content = std::fs::read_to_string(&store).expect("store content");
         assert_eq!(content, "{\"kind\":\"audit\"}\n");
-        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]
     fn store_writer_can_disable_fsync_for_tests() {
-        let base = unique_temp_dir("operon-store-writer-test");
-        std::fs::create_dir_all(&base).expect("base dir");
-        let store = base.join("store.jsonl");
+        let base = tempfile::tempdir().expect("temp dir");
+        let store = base.path().join("store.jsonl");
         let writer = StoreWriter::new(Some(store.clone())).with_fsync_policy(FsyncPolicy::Disabled);
 
         writer
@@ -213,14 +208,12 @@ mod tests {
 
         let content = std::fs::read_to_string(&store).expect("store content");
         assert_eq!(content, "{\"kind\":\"exec\"}\n");
-        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]
     fn load_audit_events_reads_persisted_audit_records_in_order() {
-        let base = unique_temp_dir("operon-store-audit-load-test");
-        std::fs::create_dir_all(&base).expect("base dir");
-        let store = base.join("store.jsonl");
+        let base = tempfile::tempdir().expect("temp dir");
+        let store = base.path().join("store.jsonl");
         let first = test_audit_event("stat", 100);
         let second = test_audit_event("read", 200);
 
@@ -254,14 +247,12 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].action, "stat");
         assert_eq!(events[1].action, "read");
-        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]
     fn load_exec_logs_reads_persisted_log_records_by_exec() {
-        let base = unique_temp_dir("operon-store-exec-log-load-test");
-        std::fs::create_dir_all(&base).expect("base dir");
-        let store = base.join("store.jsonl");
+        let base = tempfile::tempdir().expect("temp dir");
+        let store = base.path().join("store.jsonl");
         let first = test_exec_log("stdout", b"hello".to_vec(), 0);
         let second = test_exec_log("stderr", b"warn".to_vec(), 1);
 
@@ -301,7 +292,6 @@ mod tests {
         assert_eq!(exec_logs[0].stream, "stdout");
         assert_eq!(exec_logs[0].data, b"hello");
         assert_eq!(exec_logs[1].sequence, 1);
-        let _ = std::fs::remove_dir_all(base);
     }
 
     fn test_audit_event(action: &str, timestamp_ms: u64) -> AuditEvent {
@@ -325,16 +315,5 @@ mod tests {
             data,
             sequence,
         }
-    }
-
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ))
     }
 }

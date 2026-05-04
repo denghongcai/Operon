@@ -423,8 +423,8 @@ mod tests {
 
     #[test]
     fn config_explain_summarizes_unified_config_without_secret_values() {
-        let base = unique_temp_dir("operon-config-explain-test");
-        let config_path = base.join("config.yaml");
+        let base = tempfile::tempdir().expect("temp dir");
+        let config_path = base.path().join("config.yaml");
 
         init_config(
             config_path.clone(),
@@ -438,12 +438,12 @@ mod tests {
         let explain = ConfigExplain::from_config(&config_path, &config);
 
         assert_eq!(explain.path, config_path.display().to_string());
-        assert_eq!(explain.config_dir, base.display().to_string());
+        assert_eq!(explain.config_dir, base.path().display().to_string());
         let daemon = explain.daemon.expect("daemon explain");
         assert_eq!(daemon.node_id, "local");
         assert_eq!(
             daemon.auth,
-            format!("token_file:{}", base.join("token").display())
+            format!("token_file:{}", base.path().join("token").display())
         );
         assert!(!daemon.auth.contains("token: "));
         assert_eq!(explain.client.nodes.len(), 1);
@@ -479,23 +479,10 @@ mod tests {
                 && grant.resource == "local-daemon"
                 && grant.allowed
         }));
-        let expected_secrets = base.join("secrets.yaml").display().to_string();
+        let expected_secrets = base.path().join("secrets.yaml").display().to_string();
         assert_eq!(
             explain.secrets.expect("secrets").file.as_deref(),
             Some(expected_secrets.as_str())
         );
-        let _ = std::fs::remove_dir_all(base);
-    }
-
-    fn unique_temp_dir(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "{}-{}-{}",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .expect("system time")
-                .as_nanos()
-        ))
     }
 }
