@@ -131,7 +131,7 @@ policy:
     services: []
 "@ | Set-Content -Path $Config -NoNewline
 
-    & cargo build -q -p operond -p operon-cli --locked
+    & cargo build -q -p operond -p operon-cli --locked --features operon-mount/winfsp-debug
     if ($LASTEXITCODE -ne 0) {
         throw "cargo build failed"
     }

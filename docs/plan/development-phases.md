@@ -5126,6 +5126,10 @@ Completed:
   volume information, and add per-job/live-script timeouts so hung macOS or
   Windows live-smoke runs fail with diagnostics instead of blocking release
   validation.
+- Add a diagnostic-only `operon-mount/winfsp-debug` feature and enable it in the
+  Windows live-smoke build after double buffering did not change behavior; this
+  keeps normal release builds quiet while letting the next failed smoke include
+  WinFsp dispatcher/debug output.
 
 Remaining:
 

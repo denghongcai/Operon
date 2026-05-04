@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [features]
 macos-no-mount = ["fuser/macos-no-mount"]
+winfsp-debug = ["winfsp_wrs/debug"]
 
 [dependencies]
 anyhow.workspace = true
