@@ -4704,25 +4704,35 @@ Remaining:
 
 ## Phase 84: v0.13 Release Publication and Public Verification
 
-Status: Planned.
+Status: Completed.
 
 Goal: publish the current cross-platform preview release from `main` and verify
 the public artifacts end to end instead of stopping at source-tree CI.
 
 Detailed plan: `docs/plan/v0.13-release-publication.md`.
 
-Planned:
+Completed:
 
-- ensure the release commit is merged to `main` and all version surfaces align.
-- confirm `CI` and `CodeQL` are green on the release commit.
-- create the release tag from `main` and let `Draft Release` produce Linux,
-  macOS, Windows, SDK, and checksum assets.
-- publish the GitHub Release, run `Verify Release Artifacts`, and validate the
-  README Quickstart against the public release.
+- Published public GitHub Release
+  [`v0.13.1`](https://github.com/denghongcai/Operon/releases/tag/v0.13.1)
+  from release commit `e41309015f9765ea0a3ebd54dc539940c6ef9af9` after
+  confirming `main`, `origin/main`, and the release tag all pointed at the same
+  commit.
+- Confirmed `CI` and `CodeQL` were green on the release commit before
+  publication, and confirmed the tag-triggered `CI` run also passed.
+- Confirmed the `Draft Release` workflow produced Linux x86_64, Linux arm64,
+  Linux armv7, macOS x86_64, macOS aarch64, Windows x86_64, TypeScript SDK,
+  and `SHA256SUMS` assets.
+- Published the release and ran
+  [`Verify Release Artifacts`](https://github.com/denghongcai/Operon/actions/runs/25316126490)
+  against public tag `v0.13.1`; Linux, macOS, and Windows verification all
+  passed.
+- Ran README Quickstart release validation against public tag `v0.13.1` with
+  [`scripts/verify-readme-quickstart-docker.sh`](../../scripts/verify-readme-quickstart-docker.sh).
 
 Remaining:
 
-- All v0.13 release publication work remains.
+- No v0.13 release publication work remains.
 - npm, crates.io, code-signing, notarization, installers, and package manager
   automation remain outside this phase.
 

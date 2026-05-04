@@ -267,7 +267,7 @@ Operon should not own:
     modularization.
 
 - `docs/plan/v0.13-release-publication.md`
-  - Planned v0.13 scope for publishing from `main`, verifying public release
+  - Completed v0.13 scope for publishing from `main`, verifying public release
     artifacts, and validating README Quickstart against the public release.
 
 - `docs/plan/v0.13.1-windows-pty-validation.md`
@@ -479,7 +479,7 @@ Operon should not own:
   macOS/Windows core runtime candidate support, added platform smoke CI entries,
   kept release artifacts and mount support Linux-only, and kept interactive PTY
   direction on `portable-pty`.
-- Next planned milestone: v0.13 Release Publication and Public Verification.
+- Next planned milestone: v0.13.2 Windows Private File ACL Enforcement.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -810,3 +810,12 @@ Defer:
   place. CI has a Windows-safe unsupported-decision test and
   [`scripts/verify-v0.13.1-windows-pty-validation.sh`](scripts/verify-v0.13.1-windows-pty-validation.sh)
   is wired into consolidated validation. Nothing remains in v0.13.1.
+- Latest phase status update: v0.13 completed Release Publication and Public
+  Verification. Public GitHub Release
+  [`v0.13.1`](https://github.com/denghongcai/Operon/releases/tag/v0.13.1)
+  was published from `main` commit
+  `e41309015f9765ea0a3ebd54dc539940c6ef9af9` after `CI` and `CodeQL` passed.
+  The `Draft Release` workflow produced Linux, macOS, Windows, TypeScript SDK,
+  and checksum assets; `Verify Release Artifacts` passed on Linux, macOS, and
+  Windows; and README Quickstart release validation passed against the public
+  tag. Nothing remains in v0.13.
