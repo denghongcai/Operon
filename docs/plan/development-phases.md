@@ -5113,6 +5113,10 @@ Completed:
 - Add opt-in Windows mount callback tracing through `OPERON_MOUNT_TRACE` and
   expand the Windows live-smoke diagnostics to print drive and mounted-root
   state after the mounted process starts but does not expose expected files.
+- Harden Windows live-smoke diagnostics so native `dir` / drive-probe failures
+  do not suppress daemon and mount callback logs; the latest evidence shows the
+  WinFsp drive letter exists but root directory access returns `Incorrect
+  function`.
 
 Remaining:
 

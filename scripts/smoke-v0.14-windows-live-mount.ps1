@@ -32,6 +32,25 @@ function Write-LogFile {
     }
 }
 
+function Invoke-DiagnosticCommand {
+    param($Label, [scriptblock]$Command)
+    Write-Host "=== $Label ==="
+    try {
+        $output = & $Command 2>&1 | Out-String
+        if ([string]::IsNullOrWhiteSpace($output)) {
+            Write-Host "<empty>"
+        } else {
+            Write-Host $output
+        }
+        if ($global:LASTEXITCODE -ne 0) {
+            Write-Host "$Label exit code: $global:LASTEXITCODE"
+            $global:LASTEXITCODE = 0
+        }
+    } catch {
+        Write-Host "$Label diagnostic failed: $($_.Exception.Message)"
+    }
+}
+
 function Dump-Diagnostics {
     Write-Host "temporary smoke directory: $($Tmp.FullName)"
     Write-Host "mount point: $MountPoint"
@@ -43,16 +62,16 @@ function Dump-Diagnostics {
     }
     Get-Service -Name "WinFsp*" -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
     Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Format-Table -AutoSize | Out-String | Write-Host
-    & cmd.exe /c "fsutil fsinfo drives" 2>&1 | Write-Host
-    if ($MountPoint) {
-        & cmd.exe /c "dir $MountPoint\" 2>&1 | Write-Host
-        Get-ChildItem -Force "$MountPoint\" -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
-    }
-    Get-ChildItem -Force $Tmp.FullName -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
     Write-LogFile "daemon stdout" $DaemonLog
     Write-LogFile "daemon stderr" $DaemonErr
     Write-LogFile "mount stdout" $MountLog
     Write-LogFile "mount stderr" $MountErr
+    Invoke-DiagnosticCommand "fsutil drives" { & cmd.exe /c "fsutil fsinfo drives" }
+    if ($MountPoint) {
+        Invoke-DiagnosticCommand "cmd dir mount root" { & cmd.exe /c "dir $MountPoint\" }
+        Invoke-DiagnosticCommand "powershell list mount root" { Get-ChildItem -Force "$MountPoint\" | Format-List }
+    }
+    Get-ChildItem -Force $Tmp.FullName -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
 }
 
 function Stop-ChildProcess {
