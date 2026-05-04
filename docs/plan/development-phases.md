@@ -4426,21 +4426,21 @@ Remaining:
 - No v0.11.3 work remains.
 - macOS and Windows release artifacts remain future release/distribution work.
 
-## Later Candidate Work
+## Phase 78: v0.12 Release / Distribution Readiness
 
-Status: Candidate backlog. The next post-v0.11.3 phase has not been approved
-yet.
+Status: Planned.
 
-### Candidate A: Release / Distribution Readiness
+Goal: make the public release surface match the v0.11.3 platform decisions, or
+explicitly narrow the pre-1.0 supported target set so users do not infer
+unsupported macOS or Windows parity.
 
-Purpose: make the public release surface match the architecture decision, or
-explicitly narrow the pre-1.0 supported target set.
+Detailed plan: `docs/plan/v0.12-release-distribution-readiness.md`.
 
-Possible scope:
+Planned:
 
 - decide whether pre-1.0 releases remain Linux-only or expand to macOS and
-  Windows CLI/daemon binaries.
-- if expanding, add release matrix jobs, packaging, checksum, and smoke
+  Windows core daemon/CLI preview binaries.
+- if expanding, add release matrix jobs, packaging, checksums, and smoke
   validation for selected macOS and Windows targets.
 - if staying Linux-only for now, update architecture and release docs so the
   target set is explicit rather than aspirational.
@@ -4448,10 +4448,70 @@ Possible scope:
   daemon version, and runtime health version aligned.
 - keep README Quickstart and release validation scripts in sync with the
   supported target set.
+- keep Linux FUSE mount support Linux-only and defer macFUSE/WinFsp adapter
+  work.
 
-Why this matters: the architecture decisions list macOS and Windows as initial
-binary targets, while the current draft release workflow builds Linux
-`x86_64`, `aarch64`, and `armv7` archives.
+Remaining:
+
+- Entire phase remains to be implemented.
+
+## Phase 79: v0.12.1 Platform Parity Hardening
+
+Status: Planned.
+
+Goal: close the highest-risk macOS and Windows behavior gaps after the release
+target decision, without claiming full parity for Linux-only mount or
+`openat2(RESOLVE_BENEATH)` workspace containment.
+
+Detailed plan: `docs/plan/v0.12.1-platform-parity-hardening.md`.
+
+Planned:
+
+- define Windows private token/config file semantics using ACL checks or clear
+  diagnostics.
+- assess and, if needed, implement Windows Job Object based exec process-tree
+  cancellation.
+- add macOS and Windows `portable-pty` interactive session smoke coverage.
+- extend `operon doctor` with platform caveats for mount support, private file
+  permissions, exec cancellation, PTY validation, and firewall-sensitive
+  service forwarding.
+- update README, `PROTOCOL.md`, runtime API docs, architecture docs, and
+  validation scripts for any changed platform guarantee.
+
+Remaining:
+
+- Entire phase remains to be implemented.
+
+## Phase 80: v0.12.2 Maintainability Cleanup
+
+Status: Planned.
+
+Goal: perform behavior-preserving cleanup around the remaining large daemon and
+CLI surfaces after release/platform hardening, so future feature work stays
+localized and easier to validate.
+
+Detailed plan: `docs/plan/v0.12.2-maintainability-cleanup.md`.
+
+Planned:
+
+- reassess large-file hotspots, currently including
+  [`operond/src/main.rs`](../../crates/operond/src/main.rs),
+  [`operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs),
+  [`operond/src/exec_session.rs`](../../crates/operond/src/exec_session.rs),
+  [`operon-cli/src/commands/exec.rs`](../../crates/operon-cli/src/commands/exec.rs),
+  and [`operon-cli/src/commands/config.rs`](../../crates/operon-cli/src/commands/config.rs).
+- move remaining daemon RPC routing clusters behind focused service modules.
+- continue extracting shared CLI gRPC request/stream helpers behind command
+  family boundaries.
+- split exec command/session UI responsibilities where terminal I/O, TTY
+  sizing, resize forwarding, and rendering are still coupled.
+- split config explain/render/init helper responsibilities where the current
+  command file still mixes them.
+- add maintainability validation coverage for the new module boundaries.
+
+Remaining:
+
+- Entire phase remains to be implemented.
 
 ## Planning Principle
 

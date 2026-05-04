@@ -239,6 +239,19 @@ Operon should not own:
   - v0.10.5 scope for daemon service tunnel module boundaries and CLI service
     forwarding gRPC helper boundaries.
 
+- `docs/plan/v0.12-release-distribution-readiness.md`
+  - v0.12 planned scope for deciding and aligning Linux/macOS/Windows public
+    release artifacts, packaging, checksums, smoke validation, and release docs.
+
+- `docs/plan/v0.12.1-platform-parity-hardening.md`
+  - v0.12.1 planned scope for Windows private-file semantics, Windows exec
+    cancellation, macOS/Windows `portable-pty` smoke coverage, and
+    platform-aware doctor diagnostics.
+
+- `docs/plan/v0.12.2-maintainability-cleanup.md`
+  - v0.12.2 planned scope for behavior-preserving daemon router, CLI gRPC,
+    exec command/session UI, and config command cleanup.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -410,7 +423,8 @@ Operon should not own:
   macOS/Windows core runtime candidate support, added platform smoke CI entries,
   kept release artifacts and mount support Linux-only, and kept interactive PTY
   direction on `portable-pty`.
-- Next planned milestone: define the next phase after v0.11.3.
+- Next planned milestones: v0.12 Release / Distribution Readiness, v0.12.1
+  Platform Parity Hardening, and v0.12.2 Maintainability Cleanup.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -659,3 +673,6 @@ Defer:
   platform-specific, and
   [`scripts/verify-v0.11.3-platform-capability-matrix.sh`](scripts/verify-v0.11.3-platform-capability-matrix.sh)
   covers the docs, CI, and shell-default evidence. Nothing remains in v0.11.3.
+- Latest planning update: v0.12 Release / Distribution Readiness, v0.12.1
+  Platform Parity Hardening, and v0.12.2 Maintainability Cleanup are recorded
+  as planned follow-up phases after v0.11.3. Implementation has not started.
