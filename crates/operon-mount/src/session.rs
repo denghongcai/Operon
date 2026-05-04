@@ -1,5 +1,7 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 
+#[cfg(target_os = "macos")]
+use std::process::Command;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -91,6 +93,7 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         fuser::MountOption::NoSuid,
         fuser::MountOption::NoExec,
     ];
+    add_platform_mount_options(&mut config.mount_options);
     config.n_threads = Some(4);
     trace_mount_event("spawn_mount2_start", mount_point.display().to_string());
     let session = fuser::spawn_mount2(fs, &mount_point, &config)
@@ -109,4 +112,63 @@ fn ensure_mount_point(path: &Path) -> anyhow::Result<()> {
         anyhow::bail!("mount point `{}` is not a directory", path.display());
     }
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn add_platform_mount_options(options: &mut Vec<fuser::MountOption>) {
+    if let Some(backend) = macos_mount_backend() {
+        trace_mount_event("macos_backend", backend.clone());
+        options.push(fuser::MountOption::CUSTOM(format!("backend={backend}")));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn add_platform_mount_options(_options: &mut Vec<fuser::MountOption>) {}
+
+#[cfg(target_os = "macos")]
+fn macos_mount_backend() -> Option<String> {
+    match std::env::var("OPERON_MOUNT_MACOS_BACKEND") {
+        Ok(value) if value.eq_ignore_ascii_case("kernel") || value.is_empty() => return None,
+        Ok(value) => return Some(value),
+        Err(_) => {}
+    }
+
+    let version = Command::new("sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok())?;
+    if macos_supports_fskit(version.trim()) {
+        Some("fskit".to_string())
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_supports_fskit(version: &str) -> bool {
+    let mut parts = version.split('.');
+    let major = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0);
+    let minor = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0);
+    major > 15 || (major == 15 && minor >= 4)
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod macos_tests {
+    use super::macos_supports_fskit;
+
+    #[test]
+    fn macos_fskit_support_starts_at_15_4() {
+        assert!(!macos_supports_fskit("14.7.1"));
+        assert!(!macos_supports_fskit("15.3.9"));
+        assert!(macos_supports_fskit("15.4"));
+        assert!(macos_supports_fskit("15.7.4"));
+        assert!(macos_supports_fskit("26.0"));
+    }
 }

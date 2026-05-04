@@ -5164,6 +5164,11 @@ Completed:
   macOS smoke script now attempts macFUSE kernel-extension loading, records
   macFUSE/kext readiness diagnostics, and enables Unix mount trace points around
   remote connection, root stat, and `fuser::spawn_mount2`.
+- Select macFUSE's `backend=fskit` mount option by default on macOS 15.4+ after
+  live-smoke evidence showed GitHub-hosted macOS 15.7.4 installs macFUSE 5.2.0
+  but does not load the kernel extension, leaving `spawn_mount2` hung before the
+  mount completes. `OPERON_MOUNT_MACOS_BACKEND=kernel` remains available for
+  explicit kernel-backend validation.
 
 Remaining:
 

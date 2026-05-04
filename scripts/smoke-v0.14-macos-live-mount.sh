@@ -101,6 +101,12 @@ start_watchdog() {
 }
 
 ensure_macfuse_runtime() {
+  export OPERON_MOUNT_MACOS_BACKEND="${OPERON_MOUNT_MACOS_BACKEND:-fskit}"
+  echo "macOS mount backend: $OPERON_MOUNT_MACOS_BACKEND" >&2
+  if [[ "$OPERON_MOUNT_MACOS_BACKEND" != "kernel" ]]; then
+    return 0
+  fi
+
   local macos_major
   macos_major="$(sw_vers -productVersion | cut -d. -f1)"
   local kext_path="/Library/Filesystems/macfuse.fs/Contents/Extensions/${macos_major}/macfuse.kext"
