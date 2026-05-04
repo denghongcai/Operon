@@ -5154,10 +5154,15 @@ Completed:
   still returns `STATUS_INVALID_DEVICE_REQUEST` before any adapter callback.
 - Align the Windows WinFsp adapter with conservative official sample-style
   volume/interface defaults after live-smoke diagnostics showed registered
-  callback flags but no adapter callback dispatch: expose base `Create` instead
-  of `CreateEx`, use case-insensitive search, persistent ACLs,
+  callback flags but no adapter callback dispatch: use case-insensitive search,
+  persistent ACLs,
   post-cleanup-when-modified-only, and an explicit volume creation time while
   retaining double buffering.
+- Re-enable the Windows WinFsp `CreateEx` callback after local binding
+  inspection showed the current WinFsp interface includes `CreateEx` and newer
+  Rust host wrappers dispatch creates through that trampoline; the adapter now
+  exposes both `Create` and `CreateEx` while delegating both to the same
+  existing-path open-or-create behavior.
 - Narrow the latest macOS live-smoke failure to the FUSE mount/handshake
   boundary: daemon and mount process stay alive, but the mountpoint never enters
   the system mount table and CLI output never reaches the post-mount line. The

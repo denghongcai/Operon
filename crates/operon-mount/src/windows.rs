@@ -173,7 +173,7 @@ impl FileSystemInterface for OperonWinFspFs {
     const GET_VOLUME_INFO_DEFINED: bool = true;
     const GET_SECURITY_BY_NAME_DEFINED: bool = true;
     const CREATE_DEFINED: bool = true;
-    const CREATE_EX_DEFINED: bool = false;
+    const CREATE_EX_DEFINED: bool = true;
     const OPEN_DEFINED: bool = true;
     const CLEANUP_DEFINED: bool = true;
     const CLOSE_DEFINED: bool = true;
