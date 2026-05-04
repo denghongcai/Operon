@@ -88,6 +88,10 @@ jobs:
       - name: Test daemon exec cancellation guarantee
         run: cargo test -p operond --locked exec_cancellation_guarantee_matches_platform
 
+      - name: Test daemon Windows Job Object cancellation
+        if: runner.os == 'Windows'
+        run: cargo test -p operond --locked windows_job_object_cancellation_terminates_descendant_process
+
       - name: Test CLI private file platform model
         run: cargo test -p operon-cli --locked private_file_security_model_is_platform_specific
 
@@ -218,6 +222,12 @@ jobs:
             script: scripts/verify-v0.12.1-platform-parity-hardening.sh
           - name: v0.12.2 Maintainability Cleanup Validation
             script: scripts/verify-v0.12.2-maintainability-cleanup.sh
+          - name: v0.12.3 Windows Exec Process Tree Cancellation Validation
+            script: scripts/verify-v0.12.3-windows-exec-process-tree-cancellation.sh
+          - name: v0.12.4 Release Artifact Verification Validation
+            script: scripts/verify-v0.12.4-release-artifact-verification.sh
+          - name: v0.12.5 CLI gRPC Maintainability Cleanup Validation
+            script: scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

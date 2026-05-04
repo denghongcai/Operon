@@ -253,6 +253,23 @@ Operon should not own:
   - v0.12.2 completed scope for behavior-preserving daemon runtime router and
     CLI exec argument/session UI cleanup.
 
+- `docs/plan/v0.12.3-windows-exec-process-tree-cancellation.md`
+  - v0.12.3 completed scope for Windows Job Object based exec process-tree
+    cancellation and platform cancellation diagnostics.
+
+- `docs/plan/v0.12.4-release-artifact-verification.md`
+  - v0.12.4 completed scope for verifying public GitHub Release artifacts,
+    checksums, README Quickstart alignment, and cross-platform binary smoke
+    checks.
+
+- `docs/plan/v0.12.5-cli-grpc-maintainability-cleanup.md`
+  - v0.12.5 completed scope for behavior-preserving CLI gRPC helper
+    modularization.
+
+- `docs/plan/v0.13-mount-adapter-strategy.md`
+  - Planned v0.13 scope for macFUSE and WinFsp mount adapter strategy,
+    dependency, packaging, CI, and support-boundary decisions.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -424,7 +441,7 @@ Operon should not own:
   macOS/Windows core runtime candidate support, added platform smoke CI entries,
   kept release artifacts and mount support Linux-only, and kept interactive PTY
   direction on `portable-pty`.
-- Next planned milestone: define the next phase after v0.12.2.
+- Next planned milestone: v0.13 Mount Adapter Strategy.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -681,9 +698,10 @@ Defer:
   architecture docs, and aligns versions to `0.12.2` / `v0.12.2`.
 - Latest phase status update: v0.12.1 completed Platform Parity Hardening.
   `operon doctor` reports platform caveats, Windows private-file handling
-  reports an ACL warning, Windows exec cancellation is documented as
-  direct-child best-effort, and cross-platform `portable-pty` smoke coverage is
-  in CI. Windows Job Object cancellation and macFUSE/WinFsp remain deferred.
+  reports an ACL warning, and cross-platform `portable-pty` smoke coverage is
+  in CI. Windows exec cancellation was initially documented as direct-child
+  best-effort in this phase and is superseded by the v0.12.3 Job Object work;
+  macFUSE/WinFsp remain deferred.
 - Latest phase status update: v0.12.2 completed Maintainability Cleanup.
   Daemon gRPC runtime routing now lives in [`runtime.rs`](crates/operond/src/runtime.rs),
   CLI exec shell/argv helpers live in
@@ -691,3 +709,20 @@ Defer:
   [`exec_session.rs`](crates/operon-cli/src/commands/exec_session.rs), and
   [`scripts/verify-v0.12.2-maintainability-cleanup.sh`](scripts/verify-v0.12.2-maintainability-cleanup.sh)
   covers the module boundaries. Nothing remains in v0.12.2.
+- Latest phase status update: v0.12.3 completed Windows Exec Process-Tree
+  Cancellation. Windows non-interactive exec cancellation now assigns spawned
+  processes to a Job Object and terminates the process tree through
+  `TerminateJobObject`, while Unix process-group behavior remains unchanged.
+  CI includes Windows compile coverage and a Windows-only descendant-process
+  cancellation smoke test. Nothing remains in v0.12.3.
+- Latest phase status update: v0.12.4 completed Release Artifact Verification.
+  [`scripts/verify-release-artifacts.sh`](scripts/verify-release-artifacts.sh)
+  downloads public GitHub Release assets for a tag, verifies `SHA256SUMS`,
+  checks the expected Linux/macOS/Windows/SDK asset set, and smoke-tests the
+  current platform archive. The manual `Verify Release Artifacts` workflow runs
+  the same verifier on Linux, macOS, and Windows. Nothing remains in v0.12.4.
+- Latest phase status update: v0.12.5 completed CLI gRPC Maintainability
+  Cleanup. CLI gRPC filesystem, non-session exec, service list/check, and audit
+  helpers now live in focused modules, while
+  [`grpc.rs`](crates/operon-cli/src/grpc.rs) remains the compatibility and
+  shared connection/context surface. Nothing remains in v0.12.5.

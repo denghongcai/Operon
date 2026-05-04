@@ -4567,6 +4567,158 @@ Remaining:
   command rendering remain future maintainability candidates if those surfaces
   grow.
 
+## Phase 81: v0.12.3 Windows Exec Process-Tree Cancellation
+
+Status: Completed.
+
+Goal: bring Windows non-interactive exec cancellation closer to the Unix
+process-group guarantee by validating and, if practical, implementing Job
+Object based process-tree termination.
+
+Detailed plan: `docs/plan/v0.12.3-windows-exec-process-tree-cancellation.md`.
+
+Planned:
+
+- design the smallest Windows Job Object integration needed for daemon exec
+  process-tree cancellation.
+- preserve Unix process-group behavior and existing non-Windows fallback
+  behavior.
+- add Windows-focused validation that cancellation terminates descendant
+  processes, not only the direct child.
+- update `operon doctor`, `PROTOCOL.md`, runtime API docs, README platform
+  notes, and validation scripts with the implemented Windows guarantee.
+
+Completed:
+
+- Added a Windows-only Job Object guard in
+  [`exec_runtime.rs`](../../crates/operond/src/exec_runtime.rs) for
+  non-interactive exec cancellation and timeout termination.
+- Preserved Unix process-group cancellation and non-Windows direct-child
+  fallback behavior.
+- Added Windows compile validation and a Windows-only descendant-process
+  cancellation smoke test.
+- Updated `operon doctor`, README, `PROTOCOL.md`, runtime API docs, CI, and
+  validation scripts for the current Windows Job Object process-tree
+  cancellation guarantee.
+- Added
+  [`scripts/verify-v0.12.3-windows-exec-process-tree-cancellation.sh`](../../scripts/verify-v0.12.3-windows-exec-process-tree-cancellation.sh).
+
+Remaining:
+
+- No v0.12.3 work remains.
+- Windows private-file ACL enforcement and WinFsp mount support remain outside
+  this phase.
+
+## Phase 82: v0.12.4 Release Artifact Verification
+
+Status: Completed.
+
+Goal: close the loop between source-tree validation and public release
+usability by verifying published GitHub Release artifacts after they are
+created.
+
+Detailed plan: `docs/plan/v0.12.4-release-artifact-verification.md`.
+
+Planned:
+
+- add a release-tag verification path that downloads public GitHub Release
+  assets and validates `SHA256SUMS`.
+- smoke-test extracted Linux, macOS, and Windows core runtime preview binaries
+  from release artifacts.
+- keep Linux FUSE and GLIBC baseline checks separate from macOS/Windows core
+  runtime preview checks.
+- keep README Quickstart artifact names and maintainer release validation
+  commands aligned with the release workflow.
+
+Completed:
+
+- Added [`scripts/verify-release-artifacts.sh`](../../scripts/verify-release-artifacts.sh)
+  to download public GitHub Release assets, verify `SHA256SUMS`, enforce the
+  expected Linux/macOS/Windows/SDK asset set, and smoke-test the current
+  platform archive.
+- Added the manual `Verify Release Artifacts` GitHub Actions workflow for
+  Linux, macOS, and Windows runners.
+- Added
+  [`scripts/verify-v0.12.4-release-artifact-verification.sh`](../../scripts/verify-v0.12.4-release-artifact-verification.sh)
+  and wired it into CI and DEVELOPMENT.md.
+- Updated release documentation so maintainers run
+  `scripts/verify-release-artifacts.sh <tag>` after publishing.
+
+Remaining:
+
+- No v0.12.4 work remains.
+- npm, crates.io, code-signing, notarization, and installer automation remain
+  outside this phase.
+
+## Phase 83: v0.12.5 CLI gRPC Maintainability Cleanup
+
+Status: Completed.
+
+Goal: continue behavior-preserving maintainability cleanup by splitting the
+remaining large CLI gRPC helper surface into focused modules before more
+protocol and operator features accumulate there.
+
+Detailed plan: `docs/plan/v0.12.5-cli-grpc-maintainability-cleanup.md`.
+
+Planned:
+
+- reassess `crates/operon-cli/src/grpc.rs` responsibility clusters including
+  channel construction, auth metadata, node selection, filesystem streams, exec
+  streams, service tunnel helpers, and diagnostics helpers.
+- move stable helper clusters behind focused CLI modules while preserving
+  existing command output, JSON contracts, stream semantics, and error wording.
+- colocate moved unit tests with their new modules.
+- add maintainability validation coverage for the resulting CLI gRPC module
+  boundaries.
+
+Completed:
+
+- Kept [`grpc.rs`](../../crates/operon-cli/src/grpc.rs) as the CLI gRPC
+  compatibility and shared connection/context surface.
+- Moved filesystem helpers into
+  [`grpc_fs.rs`](../../crates/operon-cli/src/grpc_fs.rs).
+- Moved non-session exec helper RPCs into
+  [`grpc_exec_api.rs`](../../crates/operon-cli/src/grpc_exec_api.rs).
+- Moved service list/check helpers into
+  [`grpc_service_api.rs`](../../crates/operon-cli/src/grpc_service_api.rs).
+- Moved audit listing into
+  [`grpc_audit.rs`](../../crates/operon-cli/src/grpc_audit.rs).
+- Added
+  [`scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh`](../../scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
+Remaining:
+
+- No v0.12.5 work remains.
+- Config command rendering and deeper onboard splitting remain future
+  maintainability candidates.
+
+## Phase 84: v0.13 Mount Adapter Strategy
+
+Status: Planned.
+
+Goal: decide whether and how Operon should pursue macFUSE and WinFsp mount
+adapters without blurring the existing boundary between core filesystem RPCs
+and platform-specific live mount integrations.
+
+Detailed plan: `docs/plan/v0.13-mount-adapter-strategy.md`.
+
+Planned:
+
+- document macFUSE and WinFsp dependency, permission, packaging, and CI
+  implications.
+- keep mount adapters framed as optional convenience layers over the Core FS
+  Protocol unless a separate product decision changes that boundary.
+- compare implementation paths: continue Linux-only mount support, macFUSE
+  first, WinFsp first, or shared adapter abstraction first.
+- define validation expectations for read, write, range read, directory
+  listing, error mapping, cancellation, and permission-denied behavior.
+
+Remaining:
+
+- All v0.13 strategy work remains.
+- macFUSE and WinFsp implementation remain outside this strategy phase.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

@@ -190,6 +190,7 @@ pub(crate) async fn run_exec_task(task: ExecTask) {
             return;
         }
     };
+    let child_group = ExecChildGroup::attach(&child);
 
     if let Some(stdin) = child.stdin.take() {
         tokio::spawn(pump_exec_stdin(task.stdin_rx, stdin));
@@ -221,11 +222,11 @@ pub(crate) async fn run_exec_task(task: ExecTask) {
     let (exec_status, exit_code) = tokio::select! {
         status = child.wait() => exec_status_from_wait(status, &task.execs, &task.logs, &task.log_events, &task.store_writer, &task.exec_id),
         _ = task.cancel_rx => {
-            terminate_child(&mut child).await;
+            terminate_child(&mut child, &child_group).await;
             (ExecStatus::Cancelled, None)
         }
         _ = time::sleep(std::time::Duration::from_secs(task.timeout_secs)) => {
-            terminate_child(&mut child).await;
+            terminate_child(&mut child, &child_group).await;
             (ExecStatus::TimedOut, None)
         }
     };
@@ -319,14 +320,23 @@ fn configure_exec_process_group(command: &mut TokioCommand) {
 #[cfg(not(unix))]
 fn configure_exec_process_group(_command: &mut TokioCommand) {}
 
-pub(crate) async fn terminate_child(child: &mut Child) {
+pub(crate) async fn terminate_child(child: &mut Child, child_group: &ExecChildGroup) {
     #[cfg(unix)]
     {
+        let _ = child_group;
         terminate_child_process_group(child).await
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
+        if !child_group.terminate() {
+            terminate_direct_child(child).await;
+        }
+    }
+
+    #[cfg(all(not(unix), not(windows)))]
+    {
+        let _ = child_group;
         terminate_direct_child(child).await
     }
 }
@@ -343,12 +353,127 @@ fn exec_cancellation_guarantee_for_platform() -> &'static str {
 
 #[cfg(all(test, windows))]
 fn exec_cancellation_guarantee_for_platform() -> &'static str {
-    "direct-child-best-effort"
+    "job-object-process-tree"
 }
 
 #[cfg(all(test, not(unix), not(windows)))]
 fn exec_cancellation_guarantee_for_platform() -> &'static str {
     "direct-child-best-effort"
+}
+
+pub(crate) struct ExecChildGroup {
+    #[cfg(windows)]
+    job: Option<WindowsJobObject>,
+}
+
+impl ExecChildGroup {
+    fn attach(child: &Child) -> Self {
+        #[cfg(windows)]
+        {
+            Self {
+                job: WindowsJobObject::assign_child(child),
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            let _ = child;
+            Self {}
+        }
+    }
+}
+
+#[cfg(windows)]
+impl ExecChildGroup {
+    fn terminate(&self) -> bool {
+        let Some(job) = &self.job else {
+            return false;
+        };
+        job.terminate()
+    }
+}
+
+#[cfg(not(windows))]
+impl ExecChildGroup {}
+
+#[cfg(windows)]
+struct WindowsJobObject {
+    handle: usize,
+}
+
+#[cfg(windows)]
+impl WindowsJobObject {
+    fn assign_child(child: &Child) -> Option<Self> {
+        use std::ptr;
+        use windows_sys::Win32::{
+            Foundation::{CloseHandle, HANDLE},
+            System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW},
+        };
+
+        let handle = unsafe { CreateJobObjectW(ptr::null(), ptr::null()) };
+        if handle.is_null() {
+            tracing::warn!(
+                "failed to create Windows Job Object for exec process tree: {}",
+                std::io::Error::last_os_error()
+            );
+            return None;
+        }
+
+        let Some(process) = child.raw_handle() else {
+            unsafe {
+                CloseHandle(handle);
+            }
+            tracing::warn!(
+                "failed to assign exec process to Windows Job Object: missing child process handle"
+            );
+            return None;
+        };
+        let process = process as HANDLE;
+        let assigned = unsafe { AssignProcessToJobObject(handle, process) };
+        if assigned == 0 {
+            let error = std::io::Error::last_os_error();
+            unsafe {
+                CloseHandle(handle);
+            }
+            tracing::warn!("failed to assign exec process to Windows Job Object: {error}");
+            return None;
+        }
+
+        Some(Self {
+            handle: handle as usize,
+        })
+    }
+
+    fn terminate(&self) -> bool {
+        use windows_sys::Win32::System::JobObjects::TerminateJobObject;
+
+        let terminated = unsafe { TerminateJobObject(self.handle(), 1) };
+        if terminated == 0 {
+            tracing::warn!(
+                "failed to terminate Windows exec Job Object: {}",
+                std::io::Error::last_os_error()
+            );
+            return false;
+        }
+        true
+    }
+
+    fn handle(&self) -> windows_sys::Win32::Foundation::HANDLE {
+        self.handle as windows_sys::Win32::Foundation::HANDLE
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WindowsJobObject {
+    fn drop(&mut self) {
+        let closed = unsafe { windows_sys::Win32::Foundation::CloseHandle(self.handle()) };
+        if closed == 0 {
+            tracing::warn!(
+                "failed to close Windows exec Job Object handle: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -797,10 +922,52 @@ mod tests {
         assert_eq!(exec_cancellation_guarantee(), "process-group");
 
         #[cfg(windows)]
-        assert_eq!(exec_cancellation_guarantee(), "direct-child-best-effort");
+        assert_eq!(exec_cancellation_guarantee(), "job-object-process-tree");
 
         #[cfg(all(not(unix), not(windows)))]
         assert_eq!(exec_cancellation_guarantee(), "direct-child-best-effort");
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_job_object_cancellation_terminates_descendant_process() {
+        use std::{fs, time::Duration};
+
+        let marker = std::env::temp_dir().join(format!(
+            "operon-job-object-marker-{}.txt",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&marker);
+        let marker_arg = marker.display().to_string().replace('\'', "''");
+        let child_command = format!(
+            "Start-Sleep -Seconds 3; Set-Content -LiteralPath '{}' -Value child",
+            marker_arg
+        );
+        let parent_command = format!(
+            "start \"\" /B powershell.exe -NoProfile -Command \"{}\" & timeout /T 30 /NOBREAK > NUL",
+            child_command.replace('"', "\\\"")
+        );
+
+        let mut command = TokioCommand::new("cmd.exe");
+        command
+            .arg("/C")
+            .arg(parent_command)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        let mut child = command.spawn().expect("spawn parent process");
+        let child_group = ExecChildGroup::attach(&child);
+
+        time::sleep(Duration::from_millis(500)).await;
+        terminate_child(&mut child, &child_group).await;
+        time::sleep(Duration::from_secs(4)).await;
+
+        assert!(
+            !marker.exists(),
+            "descendant process survived Job Object termination and wrote {}",
+            marker.display()
+        );
     }
 
     #[test]

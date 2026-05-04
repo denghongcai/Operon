@@ -16,7 +16,7 @@ require_pattern 'private_file_security_model' crates/operon-cli/src/private_file
 require_pattern 'windows-acl-warning' crates/operon-cli/src/private_files.rs
 require_pattern 'windows-acl-not-verified-warning' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'exec_cancellation_guarantee' crates/operond/src/exec_runtime.rs
-require_pattern 'direct-child-best-effort' crates/operond/src/exec_runtime.rs
+require_pattern 'job-object-process-tree' crates/operond/src/exec_runtime.rs
 require_pattern 'process-group' crates/operond/src/exec_runtime.rs
 require_pattern 'exec_session_portable_pty_smoke_outputs_and_exits' crates/operond/src/exec_session.rs
 require_pattern 'portable-pty-smoke-validated' crates/operon-cli/src/commands/doctor.rs
@@ -30,7 +30,7 @@ require_pattern 'v0.12.1 Platform Parity Hardening Validation' .github/workflows
 require_pattern 'Windows' README.md
 require_pattern 'private token/config handling currently reports an ACL warning' README.md
 require_pattern 'Windows non-interactive exec' PROTOCOL.md
-require_pattern 'cancellation is direct-child best-effort' PROTOCOL.md
+require_pattern 'Job Object process-tree termination' PROTOCOL.md
 require_pattern 'portable-pty smoke validation' docs/architecture/runtime-api.md
 
 cargo test -p operond --locked exec_cancellation_guarantee_matches_platform

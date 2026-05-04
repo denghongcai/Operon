@@ -1,0 +1,33 @@
+name: Verify Release Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify, for example v0.12.2"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-release-artifacts:
+    name: Verify Release Artifacts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify release artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/verify-release-artifacts.sh "${{ inputs.tag }}" "${{ github.repository }}"

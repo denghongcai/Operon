@@ -153,7 +153,7 @@ fn exec_cancellation_diagnostic() -> &'static str {
 
 #[cfg(windows)]
 fn exec_cancellation_diagnostic() -> &'static str {
-    "direct-child-best-effort"
+    "job-object-process-tree-termination"
 }
 
 #[cfg(all(not(unix), not(windows)))]

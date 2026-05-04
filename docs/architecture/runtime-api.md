@@ -93,8 +93,9 @@ Runtime schema constraints:
   for macOS and Windows depend on portable-pty smoke validation for session
   start, output, resize, and exit behavior.
 - Exec cancellation guarantees are platform-specific: Unix-like platforms use
-  process-group termination, while Windows is direct-child best-effort until a
-  Job Object implementation is added and validated.
+  process-group termination, while Windows uses Job Object process-tree
+  termination with a direct-child kill fallback if Job Object setup fails for a
+  specific process.
 - `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
   unary random-read API for mount adapters and generated clients that need
   offset/size reads.

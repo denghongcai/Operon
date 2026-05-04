@@ -440,8 +440,9 @@ Current public release artifacts cover Linux `x86_64`, Linux `arm64`, Linux
 `armv7`, macOS `x86_64`, macOS `aarch64`, and Windows `x86_64`. macOS and
 Windows prebuilt archives are core runtime previews for daemon/CLI, gRPC,
 config, filesystem RPC, exec, service, audit, trace, graph, and SDK protocol
-flows. Linux FUSE mount support remains Linux-only; macFUSE and WinFsp are
-deferred adapter work.
+flows. Windows non-interactive exec cancellation uses Job Object process-tree
+termination. Linux FUSE mount support remains Linux-only; macFUSE and WinFsp
+are deferred adapter work.
 
 For contributor setup, validation commands, release automation, detailed config
 reference, and current phase tracking, see:

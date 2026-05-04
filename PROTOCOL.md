@@ -380,10 +380,11 @@ abstraction.
 
 Platform guarantees are intentionally explicit. Linux and Unix-like exec
 cancellation uses process-group termination. Windows non-interactive exec
-cancellation is direct-child best-effort until a Job Object implementation is
-added and validated. Linux remains the only supported mount-adapter platform;
-macOS and Windows filesystem RPCs are core runtime operations, not macFUSE or
-WinFsp mounts.
+cancellation uses Job Object process-tree termination, with a direct-child kill
+fallback only if the daemon cannot create or assign the Job Object for that
+process. Linux remains the only supported mount-adapter platform; macOS and
+Windows filesystem RPCs are core runtime operations, not macFUSE or WinFsp
+mounts.
 
 ## Errors
 

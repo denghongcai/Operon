@@ -85,6 +85,9 @@ scripts/verify-v0.11.3-platform-capability-matrix.sh
 scripts/verify-v0.12-release-distribution-readiness.sh
 scripts/verify-v0.12.1-platform-parity-hardening.sh
 scripts/verify-v0.12.2-maintainability-cleanup.sh
+scripts/verify-v0.12.3-windows-exec-process-tree-cancellation.sh
+scripts/verify-v0.12.4-release-artifact-verification.sh
+scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
@@ -110,6 +113,18 @@ The v0.12.2 maintainability cleanup validation checks that daemon gRPC runtime
 routing lives in a focused runtime module, CLI exec argv/shell argument helpers
 and PTY session UI live in focused command modules, and behavior-preserving
 tests still pass.
+
+The v0.12.3 Windows exec process-tree cancellation validation checks the
+Windows Job Object integration, platform diagnostics, Windows CI coverage, and
+protocol documentation for the current cancellation guarantee.
+
+The v0.12.4 release artifact verification validation checks the public release
+asset verifier, the manual GitHub Actions workflow, expected artifact names,
+checksum validation, and release smoke command coverage.
+
+The v0.12.5 CLI gRPC maintainability validation checks that the CLI gRPC
+compatibility surface delegates filesystem, exec, service, and audit helpers to
+focused modules while preserving behavior-covered tests.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store
@@ -259,10 +274,22 @@ git push origin v0.x.y
 ```
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
-`armv7` binary tarballs, a JavaScript SDK tarball, and `SHA256SUMS`. macOS and
-Windows are candidate core runtime platforms in CI smoke work, but the current
-release workflow does not publish macOS or Windows binary archives. Draft
+`armv7` binary tarballs, macOS `x86_64` and `aarch64` binary tarballs, a
+Windows `x86_64` binary zip, a JavaScript SDK tarball, and `SHA256SUMS`. Draft
 releases are intentionally left unpublished for manual review.
+
+After publishing a release, verify the public assets from the release download
+surface:
+
+```bash
+scripts/verify-release-artifacts.sh <tag>
+```
+
+The same verification can be started from GitHub Actions with the
+`Verify Release Artifacts` workflow. It downloads the public Release assets,
+checks `SHA256SUMS`, verifies the expected Linux/macOS/Windows/SDK asset set,
+and smoke-tests the current platform's extracted `operon` and `operond`
+binaries.
 
 Version policy:
 
