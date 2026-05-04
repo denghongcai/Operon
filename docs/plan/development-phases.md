@@ -5047,6 +5047,12 @@ Completed:
 - Aligned the public release line to `0.13.8` / `v0.13.8` across Rust crate
   versions, the TypeScript SDK package version, `PROTOCOL_VERSION`, CLI version
   tests, and validation scripts before publication.
+- Published `v0.13.8` from the `main` commit
+  `71956cfdde79fb5ba1c9497bd9c19f7a19664762`.
+- Validated the release with successful main CI, main CodeQL, tag CI, Draft
+  Release asset generation, post-publication artifact verification on Ubuntu,
+  macOS, and Windows, and README Quickstart Docker validation against the
+  public `v0.13.8` release.
 
 Remaining:
 
