@@ -30,12 +30,16 @@ reject_pattern '^async fn exec_' crates/operon-cli/src/main.rs
 reject_pattern '^async fn service_' crates/operon-cli/src/main.rs
 reject_pattern '^fn audit_' crates/operon-cli/src/main.rs
 
-for module in errors fuse_fs inode_table path remote_client session; do
+for module in errors fuse_fs inode_table path session; do
   require_file "crates/operon-mount/src/${module}.rs"
   require_pattern "^mod ${module};" crates/operon-mount/src/lib.rs
 done
-require_pattern '#!\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
-require_pattern 'pub trait RemoteFs' crates/operon-mount/src/remote_client.rs
+require_file crates/operon-mount/src/mount_core.rs
+require_file crates/operon-mount/src/remote_client.rs
+require_pattern 'pub mod mount_core;' crates/operon-mount/src/lib.rs
+require_pattern 'pub mod remote_client;' crates/operon-mount/src/lib.rs
+require_pattern 'pub use mount_core::RemoteFs' crates/operon-mount/src/lib.rs
+require_pattern 'pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 
 for module in audit auth fs_service exec_runtime pagination service_forward state; do
   require_file "crates/operond/src/${module}.rs"

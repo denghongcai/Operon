@@ -220,7 +220,11 @@ proto/
 Mount support is an adapter over the Core FS Protocol. FUSE, macFUSE, and WinFsp
 should adapt OS filesystem calls into Operon filesystem operations; they should
 not become the core VFS model. The current implementation provides a Linux FUSE
-adapter; macFUSE and WinFsp remain future adapter work.
+adapter; v0.13.7 research keeps supported live mounts Linux-only before v1.0.
+v0.13.8 adds a shared mount-core boundary for platform-neutral remote filesystem
+behavior. macFUSE FSKit is the first experimental non-Linux candidate after that
+boundary; WinFsp should prefer its native API later, after packaging and license
+review.
 
 Current shape:
 
@@ -397,7 +401,7 @@ claims beyond core runtime preview:
 | non-interactive exec | target argv-first parity; shell defaults are platform-specific |
 | interactive exec sessions | supported through `portable-pty` on Unix-like platforms; explicitly unsupported on Windows for this release line |
 | TCP/UDP service forwarding | target parity, with firewall caveats in diagnostics |
-| mount adapter | defer; Linux FUSE remains the only supported mount adapter |
+| mount adapter | Linux FUSE remains the only supported live mount before v1.0; shared mount-core exists; macFUSE FSKit is the first experimental candidate; WinFsp native API remains later work |
 | private config/token permissions | Windows ACL-aware validation for Operon-generated sensitive files; accepted trustees are current user, Administrators, and SYSTEM |
 
 Extended target set:

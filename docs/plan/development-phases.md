@@ -4989,7 +4989,7 @@ Remaining:
 
 ## Phase 91: v0.13.7 Mount Adapter Strategy
 
-Status: Planned.
+Status: Completed.
 
 Goal: decide whether and how Operon should pursue macFUSE and WinFsp mount
 adapters without blurring the existing boundary between core filesystem RPCs
@@ -4997,21 +4997,61 @@ and platform-specific live mount integrations.
 
 Detailed plan: `docs/plan/v0.13.7-mount-adapter-strategy.md`.
 
-Planned:
+Completed:
 
-- document macFUSE and WinFsp dependency, permission, packaging, and CI
+- Documented macFUSE and WinFsp dependency, permission, packaging, and CI
   implications.
-- keep mount adapters framed as optional convenience layers over the Core FS
+- Kept mount adapters framed as optional convenience layers over the Core FS
   Protocol unless a separate product decision changes that boundary.
-- compare implementation paths: continue Linux-only mount support, macFUSE
+- Compared implementation paths: continue Linux-only mount support, macFUSE
   first, WinFsp first, or shared adapter abstraction first.
-- define validation expectations for read, write, range read, directory
+- Defined validation expectations for read, write, range read, directory
   listing, error mapping, cancellation, and permission-denied behavior.
+- Decided supported live mounts remain Linux-only before v1.0.
+- Decided the next mount implementation phase should extract a shared
+  mount-core boundary before any macFUSE or WinFsp adapter.
+- Decided macFUSE FSKit is the first experimental non-Linux adapter candidate,
+  while macFUSE kernel backend stays a manual fallback and WinFsp should prefer
+  the native API after packaging and license review.
 
 Remaining:
 
-- All v0.13.7 mount adapter strategy work remains.
+- No v0.13.7 strategy work remains.
 - macFUSE and WinFsp implementation remain outside this strategy phase.
+- Shared mount-core extraction was completed later in v0.13.8.
+
+## Phase 92: v0.13.8 Mount Core Boundary
+
+Status: Completed.
+
+Goal: extract the platform-neutral mount adapter boundary before attempting
+macFUSE FSKit or WinFsp native implementation.
+
+Detailed plan: `docs/plan/v0.13.8-mount-core-boundary.md`.
+
+Completed:
+
+- Added `crates/operon-mount/src/mount_core.rs` as the platform-neutral mount
+  boundary for `RemoteFs`, remote path normalization, child-name validation, and
+  child path joining.
+- Moved the public `RemoteFs` contract out of the gRPC client module and made
+  the gRPC-backed client implement `mount_core::RemoteFs`.
+- Removed the crate-root Linux gate from `operon-mount` while keeping Linux
+  FUSE adapter modules, inode table, and session management behind Linux
+  `cfg` gates.
+- Preserved current Linux FUSE behavior while making mount-core unit tests
+  runnable without a live kernel mount.
+- Added `scripts/verify-v0.13.8-mount-core-boundary.sh` and wired it into the
+  consolidated validation runner.
+- Kept macFUSE FSKit and WinFsp native adapter implementation deferred.
+- Aligned the public release line to `0.13.8` / `v0.13.8` across Rust crate
+  versions, the TypeScript SDK package version, `PROTOCOL_VERSION`, CLI version
+  tests, and validation scripts before publication.
+
+Remaining:
+
+- No v0.13.8 mount-core boundary work remains.
+- macFUSE and WinFsp implementation remain outside this phase.
 
 ## Planning Principle
 

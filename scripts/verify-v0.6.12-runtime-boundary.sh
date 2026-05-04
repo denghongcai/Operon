@@ -16,11 +16,13 @@ rg -n 'exec_log_snapshot_event' crates/operond/src/exec_service.rs
 rg -n 'exec_log_complete_event' crates/operond/src/exec_service.rs
 
 rg -n "\\[target\\.'cfg\\(target_os = \"linux\"\\)'\\.dependencies\\]" crates/operon-mount/Cargo.toml
-rg -n '^#!\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
+rg -n '^#\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
+rg -n '^pub mod mount_core;' crates/operon-mount/src/lib.rs
+rg -n '^pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 
 rg -n 'export type ExecLogStreamEvent' packages/sdk-js/src/index.ts
 rg -n 'streamExecLogEvents' packages/sdk-js/src/index.ts
-rg -n 'PROTOCOL_VERSION: &str = "v0.13.1"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.13.8"' crates/operon-protocol/src/lib.rs
 
 cargo test -p operon-store --locked
 cargo test -p operond --locked

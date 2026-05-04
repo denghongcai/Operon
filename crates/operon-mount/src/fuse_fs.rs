@@ -12,8 +12,8 @@ use operon_core::FsStat;
 use crate::{
     errors::errno_for_error,
     inode_table::{InodeEntry, InodeTable},
+    mount_core::RemoteFs,
     path::{join_remote_child, validate_child_name},
-    remote_client::RemoteFs,
 };
 
 const TTL: Duration = Duration::from_secs(1);

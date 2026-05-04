@@ -8,27 +8,18 @@ use operon_protocol::runtime::v1::{
 };
 use tonic::transport::Channel;
 
+use crate::mount_core::RemoteFs;
+
 const DEFAULT_LIST_PAGE_SIZE: u32 = 1000;
 
-pub trait RemoteFs: Send + Sync {
-    fn stat(&self, path: &str) -> anyhow::Result<FsStat>;
-    fn list(&self, path: &str) -> anyhow::Result<FsList>;
-    fn read_range(&self, path: &str, offset: u64, size: u32) -> anyhow::Result<Vec<u8>>;
-    fn write_range(&self, path: &str, offset: u64, data: &[u8]) -> anyhow::Result<u64>;
-    fn truncate(&self, path: &str, size: u64) -> anyhow::Result<FsStat>;
-    fn mkdir(&self, path: &str) -> anyhow::Result<FsStat>;
-    fn delete(&self, path: &str) -> anyhow::Result<()>;
-    fn rename(&self, from_path: &str, to_path: &str) -> anyhow::Result<()>;
-}
-
-pub(crate) struct GrpcRemoteFs {
+pub struct GrpcRemoteFs {
     endpoint: NodeEndpoint,
     channel: Channel,
     runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl GrpcRemoteFs {
-    pub(crate) fn connect(endpoint: NodeEndpoint) -> anyhow::Result<Self> {
+    pub fn connect(endpoint: NodeEndpoint) -> anyhow::Result<Self> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;

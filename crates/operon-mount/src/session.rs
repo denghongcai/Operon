@@ -12,8 +12,8 @@ use operon_network::NodeEndpoint;
 
 use crate::{
     fuse_fs::OperonFuseFs,
-    path::normalize_remote_path,
-    remote_client::{GrpcRemoteFs, RemoteFs},
+    mount_core::{normalize_remote_path, RemoteFs},
+    remote_client::GrpcRemoteFs,
 };
 
 #[derive(Debug, Clone)]

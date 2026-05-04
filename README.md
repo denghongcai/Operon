@@ -466,7 +466,8 @@ Windows prebuilt archives are core runtime previews for daemon/CLI, gRPC,
 config, filesystem RPC, exec, service, audit, trace, graph, and SDK protocol
 flows. Windows non-interactive exec cancellation uses Job Object process-tree
 termination. Linux FUSE mount support remains Linux-only; macFUSE and WinFsp
-are deferred adapter work.
+are researched future adapter paths. A shared mount-core boundary now exists,
+and macFUSE FSKit remains the first experimental non-Linux candidate.
 
 For contributor setup, validation commands, release automation, detailed config
 reference, and current phase tracking, see:

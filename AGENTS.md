@@ -304,9 +304,16 @@ Operon should not own:
     paths, RAII test cleanup, duplicate token-test cleanup, and coverage docs.
 
 - `docs/plan/v0.13.7-mount-adapter-strategy.md`
-  - Planned v0.13.7 scope for macFUSE and WinFsp mount adapter strategy,
-    dependency, packaging, CI, and support-boundary decisions after daemon
-    service management and test hardening.
+  - Completed v0.13.7 scope for macFUSE and WinFsp mount adapter strategy,
+    dependency, packaging, CI, and support-boundary decisions. Supported live
+    mounts remain Linux-only before v1.0; macFUSE FSKit is the first
+    experimental candidate after the v0.13.8 shared mount-core boundary, and
+    WinFsp should prefer the native API after packaging and license review.
+
+- `docs/plan/v0.13.8-mount-core-boundary.md`
+  - Completed v0.13.8 scope for extracting platform-neutral `RemoteFs` and path
+    behavior before attempting macFUSE FSKit or WinFsp native adapter
+    implementation.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -479,7 +486,16 @@ Operon should not own:
   macOS/Windows core runtime candidate support, added platform smoke CI entries,
   kept release artifacts and mount support Linux-only, and kept interactive PTY
   direction on `portable-pty`.
-- Next planned milestone: v0.13.7 Mount Adapter Strategy.
+- Completed mount adapter strategy milestone: v0.13.7 documented current
+  macFUSE 5.2.0, FSKit, kernel-backend, Apple kext, WinFsp 2025/v2.1,
+  native-vs-FUSE, service architecture, Rust binding, packaging, license, and
+  CI implications. Live mount support remains Linux-only before v1.0.
+- Completed mount-core boundary milestone: v0.13.8 moved platform-neutral
+  `RemoteFs` and path validation into `operon-mount::mount_core`, removed the
+  crate-root Linux gate, kept Linux FUSE adapter/session modules Linux-gated,
+  added validation, and aligned the public release line to `0.13.8` /
+  `v0.13.8`.
+- Next planned milestone: not yet selected after v0.13.8.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.

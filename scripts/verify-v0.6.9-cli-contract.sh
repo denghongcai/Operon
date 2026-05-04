@@ -32,8 +32,8 @@ PORT="18869"
 
 mkdir -p "$WORKSPACE_DIR"
 
-cargo run -q -p operon-cli -- --version | grep -q "0.13.1"
-cargo run -q -p operond -- --version | grep -q "0.13.1"
+cargo run -q -p operon-cli -- --version | grep -q "0.13.8"
+cargo run -q -p operond -- --version | grep -q "0.13.8"
 
 cat >"$CONFIG_PATH" <<YAML
 version: 1
@@ -83,7 +83,7 @@ for _ in $(seq 1 50); do
 done
 
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" node ping local \
-  | grep -q "version=v0.13.1"
+  | grep -q "version=v0.13.8"
 
 json_exec_output="$TMP_DIR/exec-run.json"
 cargo run -q -p operon-cli -- --config "$CONFIG_PATH" --json exec run local \

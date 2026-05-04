@@ -81,6 +81,8 @@ validations=(
   "core|v0.13.1 Windows PTY Validation|scripts/verify-v0.13.1-windows-pty-validation.sh"
   "core|v0.13.2 Windows Private File ACL Validation|scripts/verify-v0.13.2-windows-private-file-acl.sh"
   "core|v0.13.3 Config and Onboard Maintainability Validation|scripts/verify-v0.13.3-config-onboard-maintainability.sh"
+  "core|v0.13.7 Mount Adapter Strategy Validation|scripts/verify-v0.13.7-mount-adapter-strategy.sh"
+  "core|v0.13.8 Mount Core Boundary Validation|scripts/verify-v0.13.8-mount-core-boundary.sh"
 )
 
 failures=()
