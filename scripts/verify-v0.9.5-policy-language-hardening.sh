@@ -27,7 +27,7 @@ require_pattern 'policy_decision_audit_reason_includes_reason_code' crates/opero
 require_pattern 'denied_exec_policy_audit_uses_reason_code' crates/operond/src/main.rs
 
 require_pattern 'effective_grants' crates/operon-cli/src/commands/config.rs
-require_pattern 'effective grants' crates/operon-cli/src/commands/config.rs
+require_pattern 'effective grants' crates/operon-cli/src/commands/config/explain.rs
 require_pattern 'policy vocabulary' DEVELOPMENT.md
 require_pattern 'policy decision vocabulary' PROTOCOL.md
 require_pattern 'Policy decisions' docs/architecture/runtime-api.md

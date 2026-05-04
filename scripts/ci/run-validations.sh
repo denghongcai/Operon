@@ -79,6 +79,8 @@ validations=(
   "core|v0.13.5 Daemon Service Management Validation|scripts/verify-v0.13.5-daemon-service-management.sh"
   "core|v0.13.6 Test Hardening Validation|scripts/verify-v0.13.6-test-hardening.sh"
   "core|v0.13.1 Windows PTY Validation|scripts/verify-v0.13.1-windows-pty-validation.sh"
+  "core|v0.13.2 Windows Private File ACL Validation|scripts/verify-v0.13.2-windows-private-file-acl.sh"
+  "core|v0.13.3 Config and Onboard Maintainability Validation|scripts/verify-v0.13.3-config-onboard-maintainability.sh"
 )
 
 failures=()

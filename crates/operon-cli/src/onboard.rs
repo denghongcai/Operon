@@ -14,6 +14,10 @@ use operon_core::DiscoveryList;
 
 use crate::{private_files, OutputMode};
 
+mod plan;
+mod render;
+mod write;
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum OnboardRole {
     Daemon,
@@ -102,12 +106,10 @@ impl CapabilityGrant {
 
 pub(crate) fn run(args: OnboardArgs, output: OutputMode) -> anyhow::Result<()> {
     let mut prompt = StdioPrompt;
-    let plan = build_onboard_plan(args, &mut prompt)?;
+    let plan = plan::build_onboard_plan(args, &mut prompt)?;
 
     fs::create_dir_all(&plan.output_dir)?;
-    for file in &plan.files {
-        write_generated_file(file)?;
-    }
+    write::write_plan_files(&plan.files)?;
 
     if output.json {
         crate::print_json(&plan.summary())?;
@@ -117,29 +119,7 @@ pub(crate) fn run(args: OnboardArgs, output: OutputMode) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!("Wrote:");
-    for file in &plan.files {
-        println!("  {}", file.path.display());
-    }
-
-    if let Some(command) = &plan.daemon_command {
-        println!();
-        println!("Next:");
-        println!("  {command}");
-        println!("  {}", onboard_advertise_lan_note());
-    }
-
-    println!();
-    println!("Equivalent CLI:");
-    for command in &plan.equivalent_cli {
-        println!("  {command}");
-    }
-
-    println!();
-    println!("Shell completion:");
-    for command in &plan.completion_commands {
-        println!("  {command}");
-    }
+    render::print_onboard_plan(&plan);
 
     Ok(())
 }
@@ -155,22 +135,7 @@ struct OnboardPlan {
 
 impl OnboardPlan {
     fn summary(&self) -> OnboardSummary {
-        OnboardSummary {
-            role: format!("{:?}", self.role).to_ascii_lowercase(),
-            output_dir: self.output_dir.display().to_string(),
-            files: self
-                .files
-                .iter()
-                .map(|file| file.path.display().to_string())
-                .collect(),
-            daemon_command: self.daemon_command.clone(),
-            equivalent_cli: self.equivalent_cli.clone(),
-            completion_commands: self.completion_commands.clone(),
-            advertise_lan_default: matches!(self.role, OnboardRole::Daemon | OnboardRole::Both)
-                .then_some(true),
-            advertise_lan_note: matches!(self.role, OnboardRole::Daemon | OnboardRole::Both)
-                .then(|| onboard_advertise_lan_note().to_string()),
-        }
+        render::onboard_plan_summary(self)
     }
 }
 
@@ -215,7 +180,10 @@ impl Prompt for StdioPrompt {
     }
 }
 
-fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Result<OnboardPlan> {
+fn build_onboard_plan_inner(
+    args: OnboardArgs,
+    prompt: &mut impl Prompt,
+) -> anyhow::Result<OnboardPlan> {
     let role = args.role;
     let interactive = !args.yes;
     let output_dir = if interactive {
@@ -370,20 +338,9 @@ fn build_onboard_plan(args: OnboardArgs, prompt: &mut impl Prompt) -> anyhow::Re
         files,
         daemon_command,
         equivalent_cli,
-        completion_commands: completion_setup_commands(),
+        completion_commands: render::completion_setup_commands(),
         role,
     })
-}
-
-fn completion_setup_commands() -> Vec<String> {
-    vec![
-        "mkdir -p ~/.local/share/bash-completion/completions && operon completion bash > ~/.local/share/bash-completion/completions/operon".to_string(),
-        "mkdir -p ~/.zfunc && operon completion zsh > ~/.zfunc/_operon".to_string(),
-    ]
-}
-
-fn onboard_advertise_lan_note() -> &'static str {
-    "advertise_lan=true: onboarding advertises daemon endpoints on LAN for first-run discovery"
 }
 
 fn prompt_capability_grants(prompt: &mut impl Prompt) -> anyhow::Result<CapabilityGrant> {
@@ -595,8 +552,8 @@ mod tests {
 
     #[test]
     fn client_only_noninteractive_does_not_invent_token() {
-        let plan =
-            build_onboard_plan(test_args(OnboardRole::Client), &mut NoopPrompt).expect("plan");
+        let plan = plan::build_onboard_plan(test_args(OnboardRole::Client), &mut NoopPrompt)
+            .expect("plan");
         let nodes = plan
             .files
             .iter()
@@ -608,7 +565,8 @@ mod tests {
 
     #[test]
     fn onboard_summary_includes_shell_completion_commands() {
-        let plan = build_onboard_plan(test_args(OnboardRole::Both), &mut NoopPrompt).expect("plan");
+        let plan =
+            plan::build_onboard_plan(test_args(OnboardRole::Both), &mut NoopPrompt).expect("plan");
         let summary = plan.summary();
 
         assert!(summary
@@ -623,8 +581,8 @@ mod tests {
 
     #[test]
     fn onboard_summary_documents_lan_advertise_default_for_daemon() {
-        let plan =
-            build_onboard_plan(test_args(OnboardRole::Daemon), &mut NoopPrompt).expect("plan");
+        let plan = plan::build_onboard_plan(test_args(OnboardRole::Daemon), &mut NoopPrompt)
+            .expect("plan");
         let summary = plan.summary();
 
         assert_eq!(summary.advertise_lan_default, Some(true));
@@ -637,8 +595,8 @@ mod tests {
 
     #[test]
     fn daemon_onboard_plan_writes_private_token_file_and_references_it() {
-        let plan =
-            build_onboard_plan(test_args(OnboardRole::Daemon), &mut NoopPrompt).expect("plan");
+        let plan = plan::build_onboard_plan(test_args(OnboardRole::Daemon), &mut NoopPrompt)
+            .expect("plan");
         let token_file = plan
             .files
             .iter()

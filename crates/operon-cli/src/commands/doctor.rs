@@ -141,7 +141,7 @@ fn mount_adapter_diagnostic() -> &'static str {
 fn private_file_protection_diagnostic() -> &'static str {
     match private_files::private_file_security_model() {
         "unix-owner-only-mode" => "unix-owner-only-mode-0600",
-        "windows-acl-warning" => "windows-acl-not-verified-warning",
+        "windows-acl-verified" => "windows-acl-verified",
         _ => "private-file-permission-warning",
     }
 }
@@ -359,6 +359,8 @@ mod tests {
 
         assert!(!report.mount_adapter.is_empty());
         assert!(!report.private_file_protection.is_empty());
+        #[cfg(windows)]
+        assert_eq!(report.private_file_protection, "windows-acl-verified");
         assert!(!report.exec_cancellation.is_empty());
         #[cfg(windows)]
         assert_eq!(report.pty_sessions, "windows-exec-session-unsupported");

@@ -922,6 +922,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tonic",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

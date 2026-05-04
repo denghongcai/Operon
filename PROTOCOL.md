@@ -385,7 +385,9 @@ cancellation uses Job Object process-tree termination, with a direct-child kill
 fallback only if the daemon cannot create or assign the Job Object for that
 process. Linux remains the only supported mount-adapter platform; macOS and
 Windows filesystem RPCs are core runtime operations, not macFUSE or WinFsp
-mounts.
+mounts. Windows token and config files are checked with ACL-aware private-file
+validation when Operon creates or overwrites sensitive files; the accepted ACL
+scope is the current user, Administrators, and SYSTEM.
 
 ## Errors
 

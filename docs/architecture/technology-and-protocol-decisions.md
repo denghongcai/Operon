@@ -398,7 +398,7 @@ claims beyond core runtime preview:
 | interactive exec sessions | supported through `portable-pty` on Unix-like platforms; explicitly unsupported on Windows for this release line |
 | TCP/UDP service forwarding | target parity, with firewall caveats in diagnostics |
 | mount adapter | defer; Linux FUSE remains the only supported mount adapter |
-| private config/token permissions | add Windows ACL semantics or warn before claiming parity |
+| private config/token permissions | Windows ACL-aware validation for Operon-generated sensitive files; accepted trustees are current user, Administrators, and SYSTEM |
 
 Extended target set:
 

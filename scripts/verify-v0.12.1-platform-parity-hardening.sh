@@ -13,8 +13,8 @@ require_pattern 'Phase 79: v0.12.1 Platform Parity Hardening' docs/plan/developm
 require_pattern 'No v0.12.1 work remains' docs/plan/development-phases.md
 
 require_pattern 'private_file_security_model' crates/operon-cli/src/private_files.rs
-require_pattern 'windows-acl-warning' crates/operon-cli/src/private_files.rs
-require_pattern 'windows-acl-not-verified-warning' crates/operon-cli/src/commands/doctor.rs
+require_pattern 'windows-acl-verified' crates/operon-cli/src/private_files.rs
+require_pattern 'windows-acl-verified' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'exec_cancellation_guarantee' crates/operond/src/exec_runtime.rs
 require_pattern 'job-object-process-tree' crates/operond/src/exec_runtime.rs
 require_pattern 'process-group' crates/operond/src/exec_runtime.rs
@@ -32,7 +32,7 @@ require_pattern 'cargo test -p operon-cli --locked private_file_security_model_i
 require_pattern 'v0.12.1 Platform Parity Hardening Validation' scripts/ci/run-validations.sh
 
 require_pattern 'Windows' README.md
-require_pattern 'private token/config handling currently reports an ACL warning' README.md
+require_pattern 'token and config private-file handling uses ACL-aware validation' README.md
 require_pattern 'Windows non-interactive exec' PROTOCOL.md
 require_pattern 'Job Object process-tree termination' PROTOCOL.md
 require_pattern 'Windows interactive exec sessions are explicitly unsupported' docs/architecture/runtime-api.md

@@ -103,6 +103,14 @@ jobs:
       - name: Test CLI private file platform model
         run: cargo test -p operon-cli --locked private_file_security_model_is_platform_specific
 
+      - name: Test CLI Windows private file ACL model
+        if: runner.os == 'Windows'
+        run: cargo test -p operon-cli --locked windows_private_file_acl_model
+
+      - name: Test CLI Windows private file ACL write
+        if: runner.os == 'Windows'
+        run: cargo test -p operon-cli --locked windows_private_file_is_written_with_verified_acl
+
       - name: Test CLI session dimensions
         run: cargo test -p operon-cli --locked exec_session_terminal_dimensions
 
