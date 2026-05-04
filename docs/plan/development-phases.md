@@ -5117,6 +5117,10 @@ Completed:
   do not suppress daemon and mount callback logs; the latest evidence shows the
   WinFsp drive letter exists but root directory access returns `Incorrect
   function`.
+- Add WinFsp volume-info and dispatcher-stopped callback trace points plus
+  `mountvol` / `fsutil fsinfo drivetype` / `fsutil fsinfo volumeinfo`
+  diagnostics so the next live-smoke run can separate mount-manager exposure
+  from adapter callback dispatch and volume metadata failures.
 
 Remaining:
 

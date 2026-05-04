@@ -173,8 +173,10 @@ impl FileSystemInterface for OperonWinFspFs {
     const GET_SECURITY_DEFINED: bool = true;
     const READ_DIRECTORY_DEFINED: bool = true;
     const GET_DIR_INFO_BY_NAME_DEFINED: bool = true;
+    const DISPATCHER_STOPPED_DEFINED: bool = true;
 
     fn get_volume_info(&self) -> Result<VolumeInfo, NTSTATUS> {
+        trace_mount_event("get_volume_info", self.root_path.clone());
         VolumeInfo::new(1 << 40, 1 << 39, u16str!("Operon")).map_err(|_| STATUS_INVALID_PARAMETER)
     }
 
@@ -412,6 +414,10 @@ impl FileSystemInterface for OperonWinFspFs {
             join_remote_child(&file_context.path, &child).map_err(|_| STATUS_INVALID_PARAMETER)?;
         let stat = self.core.stat(&path).map_err(ntstatus_for_error)?;
         Ok(file_info_for_stat(&stat))
+    }
+
+    fn dispatcher_stopped(&self, normally: bool) {
+        trace_mount_event("dispatcher_stopped", format!("normally={normally}"));
     }
 }
 

@@ -67,7 +67,10 @@ function Dump-Diagnostics {
     Write-LogFile "mount stdout" $MountLog
     Write-LogFile "mount stderr" $MountErr
     Invoke-DiagnosticCommand "fsutil drives" { & cmd.exe /c "fsutil fsinfo drives" }
+    Invoke-DiagnosticCommand "mountvol" { & cmd.exe /c "mountvol" }
     if ($MountPoint) {
+        Invoke-DiagnosticCommand "fsutil drive type" { & cmd.exe /c "fsutil fsinfo drivetype $MountPoint\" }
+        Invoke-DiagnosticCommand "fsutil volume info" { & cmd.exe /c "fsutil fsinfo volumeinfo $MountPoint\" }
         Invoke-DiagnosticCommand "cmd dir mount root" { & cmd.exe /c "dir $MountPoint\" }
         Invoke-DiagnosticCommand "powershell list mount root" { Get-ChildItem -Force "$MountPoint\" | Format-List }
     }
