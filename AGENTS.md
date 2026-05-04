@@ -266,9 +266,31 @@ Operon should not own:
   - v0.12.5 completed scope for behavior-preserving CLI gRPC helper
     modularization.
 
-- `docs/plan/v0.13-mount-adapter-strategy.md`
-  - Planned v0.13 scope for macFUSE and WinFsp mount adapter strategy,
-    dependency, packaging, CI, and support-boundary decisions.
+- `docs/plan/v0.13-release-publication.md`
+  - Planned v0.13 scope for publishing from `main`, verifying public release
+    artifacts, and validating README Quickstart against the public release.
+
+- `docs/plan/v0.13.1-windows-pty-validation.md`
+  - Planned v0.13.1 scope for turning Windows PTY validation from deferred
+    status into a runner-safe supported/degraded/unsupported decision.
+
+- `docs/plan/v0.13.2-windows-private-file-acl.md`
+  - Planned v0.13.2 scope for Windows ACL-aware token/config private-file
+    validation and diagnostics.
+
+- `docs/plan/v0.13.3-config-onboard-maintainability.md`
+  - Planned v0.13.3 scope for behavior-preserving config and onboard
+    plan/render/write boundary cleanup.
+
+- `docs/plan/v0.13.4-ci-validation-consolidation.md`
+  - Completed v0.13.4 scope for consolidating version-scoped CI validation
+    jobs into one `Validation` job while keeping individual validation scripts.
+
+- `docs/plan/v0.13.5-mount-adapter-strategy.md`
+  - Planned v0.13.5 scope for macFUSE and WinFsp mount adapter strategy,
+    dependency, packaging, CI, and support-boundary decisions after the
+    release, Windows PTY, Windows ACL, config/onboard cleanup, and CI
+    consolidation phases.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -441,7 +463,7 @@ Operon should not own:
   macOS/Windows core runtime candidate support, added platform smoke CI entries,
   kept release artifacts and mount support Linux-only, and kept interactive PTY
   direction on `portable-pty`.
-- Next planned milestone: v0.13 Mount Adapter Strategy.
+- Next planned milestone: v0.13 Release Publication and Public Verification.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -472,6 +494,12 @@ Operon should not own:
   and AGENTS.md in the same task when affected.
 - Run [`scripts/verify-docs-help-skills-sync.sh`](scripts/verify-docs-help-skills-sync.sh) after changes that touch CLI
   help, docs, skills, endpoint/discovery behavior, or AGENTS.md rules.
+- CI version validation scripts are maintained as separate `scripts/verify-*.sh`
+  files but must be wired through
+  [`scripts/ci/run-validations.sh`](scripts/ci/run-validations.sh), not as new
+  version-specific GitHub Actions matrix jobs. Add a separate workflow job only
+  when the validation needs a materially different OS, permission model, service
+  container, or trigger.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 
@@ -698,10 +726,10 @@ Defer:
   architecture docs, and aligns versions to `0.12.2` / `v0.12.2`.
 - Latest phase status update: v0.12.1 completed Platform Parity Hardening.
   `operon doctor` reports platform caveats, Windows private-file handling
-  reports an ACL warning, and cross-platform `portable-pty` smoke coverage is
-  in CI. Windows exec cancellation was initially documented as direct-child
-  best-effort in this phase and is superseded by the v0.12.3 Job Object work;
-  macFUSE/WinFsp remain deferred.
+  reports an ACL warning, Unix-like `portable-pty` smoke coverage is in CI, and
+  Windows PTY validation is reported as deferred. Windows exec cancellation was
+  initially documented as direct-child best-effort in this phase and is
+  superseded by the v0.12.3 Job Object work; macFUSE/WinFsp remain deferred.
 - Latest phase status update: v0.12.2 completed Maintainability Cleanup.
   Daemon gRPC runtime routing now lives in [`runtime.rs`](crates/operond/src/runtime.rs),
   CLI exec shell/argv helpers live in
@@ -726,3 +754,9 @@ Defer:
   helpers now live in focused modules, while
   [`grpc.rs`](crates/operon-cli/src/grpc.rs) remains the compatibility and
   shared connection/context surface. Nothing remains in v0.12.5.
+- Latest phase status update: v0.13.4 completed CI Validation Consolidation.
+  Version-scoped validation scripts remain separate, but CI runs them through
+  [`scripts/ci/run-validations.sh`](scripts/ci/run-validations.sh) from one
+  `Validation` job with grouped logs and a final failure summary. Future
+  version validation additions must extend that runner unless they require a
+  distinct OS, permission model, service container, or trigger.

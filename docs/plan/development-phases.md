@@ -4702,7 +4702,146 @@ Remaining:
 - Config command rendering and deeper onboard splitting remain future
   maintainability candidates.
 
-## Phase 84: v0.13 Mount Adapter Strategy
+## Phase 84: v0.13 Release Publication and Public Verification
+
+Status: Planned.
+
+Goal: publish the current cross-platform preview release from `main` and verify
+the public artifacts end to end instead of stopping at source-tree CI.
+
+Detailed plan: `docs/plan/v0.13-release-publication.md`.
+
+Planned:
+
+- ensure the release commit is merged to `main` and all version surfaces align.
+- confirm `CI` and `CodeQL` are green on the release commit.
+- create the release tag from `main` and let `Draft Release` produce Linux,
+  macOS, Windows, SDK, and checksum assets.
+- publish the GitHub Release, run `Verify Release Artifacts`, and validate the
+  README Quickstart against the public release.
+
+Remaining:
+
+- All v0.13 release publication work remains.
+- npm, crates.io, code-signing, notarization, installers, and package manager
+  automation remain outside this phase.
+
+## Phase 85: v0.13.1 Windows PTY Validation
+
+Status: Planned.
+
+Goal: replace the current Windows PTY validation deferral with an explicit,
+runner-safe decision: supported, degraded, or intentionally unsupported for the
+current release line.
+
+Detailed plan: `docs/plan/v0.13.1-windows-pty-validation.md`.
+
+Planned:
+
+- reproduce or isolate the Windows `portable-pty` smoke hang without allowing
+  CI to hang indefinitely.
+- decide whether Windows `exec session` is supported, degraded, or unsupported
+  for this release line.
+- update `operon doctor`, README, `PROTOCOL.md`, and runtime API docs with the
+  exact Windows PTY status.
+- add a Windows-safe validation path for the chosen status while preserving
+  Unix-like PTY smoke coverage.
+
+Remaining:
+
+- All v0.13.1 Windows PTY validation work remains.
+- Replacing `portable-pty` and redesigning terminal UX remain outside this
+  phase.
+
+## Phase 86: v0.13.2 Windows Private File ACL Enforcement
+
+Status: Planned.
+
+Goal: move Windows token/config private-file handling from warning-only
+diagnostics to real ACL-aware validation where practical.
+
+Detailed plan: `docs/plan/v0.13.2-windows-private-file-acl.md`.
+
+Planned:
+
+- define the Windows ACL conditions Operon treats as private enough for
+  token/config files.
+- add Windows ACL inspection for sensitive files generated or consumed by CLI
+  and onboard flows.
+- update `operon doctor` with verified Windows ACL status or actionable
+  remediation.
+- add Windows-focused validation and update docs for the implemented guarantee.
+
+Remaining:
+
+- All v0.13.2 Windows ACL work remains.
+- Secret-manager integration and general Windows permission management remain
+  outside this phase.
+
+## Phase 87: v0.13.3 Config and Onboard Maintainability Cleanup
+
+Status: Planned.
+
+Goal: reduce future config UX change cost by splitting the remaining config and
+onboard command responsibilities into clearer plan, render, and write
+boundaries.
+
+Detailed plan: `docs/plan/v0.13.3-config-onboard-maintainability.md`.
+
+Planned:
+
+- reassess `crates/operon-cli/src/commands/config.rs` responsibility clusters
+  and split config explain collection/rendering/dispatch where behavior can be
+  preserved.
+- reassess `crates/operon-cli/src/commands/onboard.rs` plan/write/render
+  responsibilities while keeping onboarding a wrapper over normal config files.
+- preserve generated config shape, token-file behavior, CLI text output, JSON
+  output, and error wording.
+- add focused maintainability validation for the extracted boundaries.
+
+Remaining:
+
+- All v0.13.3 config/onboard cleanup work remains.
+- Config schema redesign, endpoint/discovery behavior changes, and new
+  onboarding product flows remain outside this phase.
+
+## Phase 88: v0.13.4 CI Validation Consolidation
+
+Status: Completed.
+
+Goal: reduce GitHub Actions job sprawl by consolidating version-scoped
+validation jobs into one validation job while keeping each validation script
+separate and easy to maintain.
+
+Detailed plan: `docs/plan/v0.13.4-ci-validation-consolidation.md`.
+
+Planned:
+
+- add a single runner script that executes existing `scripts/verify-*.sh`
+  validation scripts in stable order with GitHub Actions log grouping.
+- replace the version-scoped validation matrix with one `Validation` job.
+- collect validation failures and report a final summary instead of stopping at
+  the first failing script.
+- document that future version validation scripts extend the consolidated
+  runner instead of adding new matrix jobs unless a distinct OS, permission
+  model, service container, or trigger is required.
+
+Completed:
+
+- Added [`scripts/ci/run-validations.sh`](../../scripts/ci/run-validations.sh)
+  as the consolidated validation runner.
+- Replaced the `.github/workflows/ci.yml` version validation matrix with one
+  `Validation` job while preserving separate `Rust`, `TypeScript`, and
+  platform smoke jobs.
+- Updated contributor and agent guidance for future version validation
+  additions.
+
+Remaining:
+
+- No v0.13.4 CI validation consolidation work remains.
+- Release-draft and release-artifact verification workflows remain separate.
+
+## Phase 89: v0.13.5 Mount Adapter Strategy
 
 Status: Planned.
 
@@ -4710,7 +4849,7 @@ Goal: decide whether and how Operon should pursue macFUSE and WinFsp mount
 adapters without blurring the existing boundary between core filesystem RPCs
 and platform-specific live mount integrations.
 
-Detailed plan: `docs/plan/v0.13-mount-adapter-strategy.md`.
+Detailed plan: `docs/plan/v0.13.5-mount-adapter-strategy.md`.
 
 Planned:
 
@@ -4725,7 +4864,7 @@ Planned:
 
 Remaining:
 
-- All v0.13 strategy work remains.
+- All v0.13.5 mount adapter strategy work remains.
 - macFUSE and WinFsp implementation remain outside this strategy phase.
 
 ## Planning Principle

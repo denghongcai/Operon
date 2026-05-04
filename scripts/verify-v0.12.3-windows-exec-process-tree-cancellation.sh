@@ -24,7 +24,7 @@ require_pattern 'job-object-process-tree-termination' crates/operon-cli/src/comm
 
 require_pattern 'windows_job_object_cancellation_terminates_descendant_process' .github/workflows/ci.yml
 require_pattern "runner.os == 'Windows'" .github/workflows/ci.yml
-require_pattern 'v0.12.3 Windows Exec Process Tree Cancellation Validation' .github/workflows/ci.yml
+require_pattern 'v0.12.3 Windows Exec Process Tree Cancellation Validation' scripts/ci/run-validations.sh
 
 require_pattern 'Windows non-interactive exec cancellation uses Job Object process-tree' README.md
 require_pattern 'Job Object process-tree termination' PROTOCOL.md

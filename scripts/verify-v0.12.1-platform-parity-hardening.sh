@@ -27,7 +27,7 @@ require_pattern "if: runner.os != 'Windows'" .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits' .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked exec_cancellation_guarantee_matches_platform' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-cli --locked private_file_security_model_is_platform_specific' .github/workflows/ci.yml
-require_pattern 'v0.12.1 Platform Parity Hardening Validation' .github/workflows/ci.yml
+require_pattern 'v0.12.1 Platform Parity Hardening Validation' scripts/ci/run-validations.sh
 
 require_pattern 'Windows' README.md
 require_pattern 'private token/config handling currently reports an ACL warning' README.md

@@ -46,7 +46,7 @@ if (( grpc_lines > 260 )); then
   exit 1
 fi
 
-require_pattern 'v0.12.5 CLI gRPC Maintainability Cleanup Validation' .github/workflows/ci.yml
+require_pattern 'v0.12.5 CLI gRPC Maintainability Cleanup Validation' scripts/ci/run-validations.sh
 
 cargo test -p operon-cli --locked chunks_write_requests_use_target_then_data_chunks
 cargo test -p operon-cli --locked with_auth_includes_execution_context_metadata

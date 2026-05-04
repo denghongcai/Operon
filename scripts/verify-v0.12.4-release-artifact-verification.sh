@@ -32,7 +32,7 @@ require_pattern 'scripts/verify-release-artifacts.sh' .github/workflows/verify-r
 require_pattern 'scripts/verify-release-artifacts.sh <tag>' DEVELOPMENT.md
 require_pattern 'Verify Release Artifacts' DEVELOPMENT.md
 require_pattern 'README Quickstart' docs/plan/v0.12.4-release-artifact-verification.md
-require_pattern 'v0.12.4 Release Artifact Verification Validation' .github/workflows/ci.yml
+require_pattern 'v0.12.4 Release Artifact Verification Validation' scripts/ci/run-validations.sh
 
 bash -n scripts/verify-release-artifacts.sh
 scripts/verify-release-artifacts.sh --dry-run v0.12.2 >/dev/null

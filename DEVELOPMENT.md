@@ -45,50 +45,32 @@ cargo test --workspace --locked
 cargo clippy --workspace --locked -- -D warnings
 pnpm typecheck
 pnpm test
-scripts/verify-v0.5-docker.sh
-scripts/verify-v0.6-linux-mount.sh
-scripts/verify-v0.6.1-linux-write-mount.sh
-scripts/verify-v0.6.2-cli-fs-cleanup.sh
-scripts/verify-v0.6.3-fs-copy.sh
-scripts/verify-v0.6.4-onboard.sh
-scripts/verify-v0.6.7-runtime.sh
-scripts/verify-v0.6.9-cli-contract.sh
-scripts/verify-v0.6.10-runtime-hardening.sh
-scripts/verify-v0.6.11-governance.sh
-scripts/verify-v0.6.12-runtime-boundary.sh
-scripts/verify-v0.7-service-forwarding.sh
-scripts/verify-v0.7.1-udp-datagram-forwarding.sh
-scripts/verify-v0.8-agent-skills.sh
-scripts/verify-v0.8.1-integration-coverage.sh
-scripts/verify-v0.8.3-read-range-release-cleanup.sh
-scripts/verify-v0.8.4-modularization.sh
-scripts/verify-v0.8.5-core-domain-modules.sh
-scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
-scripts/verify-readme-quickstart-docker.sh
-scripts/verify-release-glibc-baseline.sh
-scripts/verify-docs-help-skills-sync.sh
-scripts/verify-v0.9-endpoint-model.sh
-scripts/verify-post-v0.9-discovery-ux.sh
-scripts/verify-policy-derived-capabilities.sh
-scripts/verify-v0.9.3-store-backed-audit-visibility.sh
-scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
-scripts/verify-v0.9.5-policy-language-hardening.sh
-scripts/verify-v0.9.6-capability-diagnostics.sh
-scripts/verify-v0.10-exec-unification.sh
-scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh
-scripts/verify-v0.10.2-operator-diagnostics.sh
-scripts/verify-v0.11-exec-session.sh
-scripts/verify-v0.10.4-maintainability-cleanup.sh
-scripts/verify-v0.11.2-exec-session-hardening.sh
-scripts/verify-v0.10.5-maintainability-cleanup.sh
-scripts/verify-v0.11.3-platform-capability-matrix.sh
-scripts/verify-v0.12-release-distribution-readiness.sh
-scripts/verify-v0.12.1-platform-parity-hardening.sh
-scripts/verify-v0.12.2-maintainability-cleanup.sh
-scripts/verify-v0.12.3-windows-exec-process-tree-cancellation.sh
-scripts/verify-v0.12.4-release-artifact-verification.sh
-scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh
+scripts/ci/run-validations.sh
 ```
+
+The consolidated validation runner executes the version-scoped
+`scripts/verify-*.sh` checks in a stable order, keeps each script in a separate
+GitHub Actions log group, and reports all failing scripts at the end. New
+version validation scripts should be added to `scripts/ci/run-validations.sh`
+instead of adding another GitHub Actions matrix entry. Add a separate CI job
+only when the validation needs a materially different OS, permission model,
+service container, or trigger.
+
+The runner keeps these validation scripts individually runnable for focused
+local checks, including:
+
+- `scripts/verify-v0.9-endpoint-model.sh`
+- `scripts/verify-post-v0.9-discovery-ux.sh`
+- `scripts/verify-policy-derived-capabilities.sh`
+- `scripts/verify-v0.9.3-store-backed-audit-visibility.sh`
+- `scripts/verify-v0.10-exec-unification.sh`
+- `scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh`
+- `scripts/verify-v0.10.2-operator-diagnostics.sh`
+- `scripts/verify-v0.10.4-maintainability-cleanup.sh`
+- `scripts/verify-v0.10.5-maintainability-cleanup.sh`
+- `scripts/verify-v0.11-exec-session.sh`
+- `scripts/verify-v0.11.2-exec-session-hardening.sh`
+- `scripts/verify-v0.11.3-platform-capability-matrix.sh`
 
 The README quickstart Docker validation installs the latest public release in a
 fresh Ubuntu 20.04 environment, runs the user-facing Quickstart, installs the
@@ -125,6 +107,12 @@ checksum validation, and release smoke command coverage.
 The v0.12.5 CLI gRPC maintainability validation checks that the CLI gRPC
 compatibility surface delegates filesystem, exec, service, and audit helpers to
 focused modules while preserving behavior-covered tests.
+
+The v0.13.4 CI validation consolidation keeps individual validation scripts as
+the maintenance boundary while running them through
+`scripts/ci/run-validations.sh` from one CI `Validation` job.
+`scripts/verify-v0.13.4-ci-validation-consolidation.sh` checks the runner,
+workflow shape, and future validation-addition rules.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store

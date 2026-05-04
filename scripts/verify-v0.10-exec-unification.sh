@@ -26,7 +26,7 @@ require_pattern 'Execution Capability Unification' docs/plan/v0.10-exec-unificat
 require_pattern 'exec.session' docs/plan/v0.10-exec-unification.md
 require_pattern 'PTY/TTY' docs/plan/v0.10-exec-unification.md
 require_pattern 'scripts/verify-v0.10-exec-unification.sh' DEVELOPMENT.md
-require_pattern 'scripts/verify-v0.10-exec-unification.sh' .github/workflows/ci.yml
+require_pattern 'scripts/verify-v0.10-exec-unification.sh' scripts/ci/run-validations.sh
 require_pattern 'PROTOCOL_VERSION: &str = "v0.12.2"' crates/operon-protocol/src/lib.rs
 require_pattern '"version": "0.12.2"' packages/sdk-js/package.json
 

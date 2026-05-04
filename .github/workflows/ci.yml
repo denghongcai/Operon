@@ -127,108 +127,11 @@ jobs:
         run: pnpm -r test
 
   validation:
-    name: ${{ matrix.name }}
+    name: Validation
     runs-on: ubuntu-latest
     needs:
       - rust
       - typescript
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: v0.5 Docker Validation
-            script: scripts/verify-v0.5-docker.sh
-          - name: v0.6 Linux Mount Validation
-            script: scripts/verify-v0.6-linux-mount.sh
-          - name: v0.6.1 Linux Write Mount Validation
-            script: scripts/verify-v0.6.1-linux-write-mount.sh
-          - name: v0.6.2 CLI FS Cleanup Validation
-            script: scripts/verify-v0.6.2-cli-fs-cleanup.sh
-          - name: v0.6.3 FS Copy Validation
-            script: scripts/verify-v0.6.3-fs-copy.sh
-          - name: v0.6.4/v0.6.5 Onboard and Unified Config Validation
-            script: scripts/verify-v0.6.4-onboard.sh
-          - name: v0.6.7/v0.6.8/v0.6.12 Runtime and Protocol Validation
-            script: scripts/verify-v0.6.7-runtime.sh
-          - name: v0.6.9 CLI Contract Validation
-            script: scripts/verify-v0.6.9-cli-contract.sh
-          - name: v0.6.10 Runtime Hardening Validation
-            script: scripts/verify-v0.6.10-runtime-hardening.sh
-          - name: v0.6.11 Governance Validation
-            script: scripts/verify-v0.6.11-governance.sh
-          - name: v0.6.12 Runtime Boundary Validation
-            script: scripts/verify-v0.6.12-runtime-boundary.sh
-            node: true
-          - name: v0.7 Service Forwarding Validation
-            script: scripts/verify-v0.7-service-forwarding.sh
-          - name: v0.7.1 UDP Datagram Forwarding Validation
-            script: scripts/verify-v0.7.1-udp-datagram-forwarding.sh
-          - name: v0.8 Agent Skills Validation
-            script: scripts/verify-v0.8-agent-skills.sh
-          - name: v0.8.1 Integration Coverage Validation
-            script: scripts/verify-v0.8.1-integration-coverage.sh
-          - name: v0.8.3 Read Range and Release Cleanup Validation
-            script: scripts/verify-v0.8.3-read-range-release-cleanup.sh
-            node: true
-          - name: v0.8.4 Modularization Validation
-            script: scripts/verify-v0.8.4-modularization.sh
-          - name: v0.8.5 Core Domain Module Validation
-            script: scripts/verify-v0.8.5-core-domain-modules.sh
-          - name: v0.8.6 Runtime CLI Client Modularization Validation
-            script: scripts/verify-v0.8.6-runtime-cli-client-modularization.sh
-            node: true
-          - name: Release GLIBC Baseline Validation
-            script: scripts/verify-release-glibc-baseline.sh
-          - name: Docs Help Skills Sync Validation
-            script: scripts/verify-docs-help-skills-sync.sh
-          - name: v0.9 Endpoint Model Validation
-            script: scripts/verify-v0.9-endpoint-model.sh
-          - name: Post-v0.9 Discovery UX Validation
-            script: scripts/verify-post-v0.9-discovery-ux.sh
-          - name: Policy-Derived Capability Validation
-            script: scripts/verify-policy-derived-capabilities.sh
-          - name: v0.9.3 Store-Backed Audit Visibility Validation
-            script: scripts/verify-v0.9.3-store-backed-audit-visibility.sh
-          - name: v0.9.4 Runtime Hardening Consolidation Validation
-            script: scripts/verify-v0.9.4-runtime-hardening-consolidation.sh
-            node: true
-          - name: v0.9.5 Policy Language Hardening Validation
-            script: scripts/verify-v0.9.5-policy-language-hardening.sh
-          - name: v0.9.6 Capability Diagnostics Validation
-            script: scripts/verify-v0.9.6-capability-diagnostics.sh
-            node: true
-          - name: v0.10 Exec Unification Validation
-            script: scripts/verify-v0.10-exec-unification.sh
-            node: true
-          - name: v0.10.1 Filesystem Consistency and Workspace Hardening Validation
-            script: scripts/verify-v0.10.1-fs-consistency-workspace-hardening.sh
-            node: true
-          - name: v0.10.2 Operator Diagnostics Validation
-            script: scripts/verify-v0.10.2-operator-diagnostics.sh
-            node: true
-          - name: v0.11 Exec Session Validation
-            script: scripts/verify-v0.11-exec-session.sh
-            node: true
-          - name: v0.10.4 Maintainability Cleanup Validation
-            script: scripts/verify-v0.10.4-maintainability-cleanup.sh
-          - name: v0.11.2 Exec Session Hardening Validation
-            script: scripts/verify-v0.11.2-exec-session-hardening.sh
-          - name: v0.10.5 Maintainability Cleanup Validation
-            script: scripts/verify-v0.10.5-maintainability-cleanup.sh
-          - name: v0.11.3 Platform Capability Matrix Validation
-            script: scripts/verify-v0.11.3-platform-capability-matrix.sh
-          - name: v0.12 Release Distribution Readiness Validation
-            script: scripts/verify-v0.12-release-distribution-readiness.sh
-          - name: v0.12.1 Platform Parity Hardening Validation
-            script: scripts/verify-v0.12.1-platform-parity-hardening.sh
-          - name: v0.12.2 Maintainability Cleanup Validation
-            script: scripts/verify-v0.12.2-maintainability-cleanup.sh
-          - name: v0.12.3 Windows Exec Process Tree Cancellation Validation
-            script: scripts/verify-v0.12.3-windows-exec-process-tree-cancellation.sh
-          - name: v0.12.4 Release Artifact Verification Validation
-            script: scripts/verify-v0.12.4-release-artifact-verification.sh
-          - name: v0.12.5 CLI gRPC Maintainability Cleanup Validation
-            script: scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -245,21 +148,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler ripgrep
 
       - name: Setup pnpm
-        if: ${{ matrix.node == true }}
         uses: pnpm/action-setup@v6
         with:
           version: 10.33.2
 
       - name: Setup Node
-        if: ${{ matrix.node == true }}
         uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
 
       - name: Install Node dependencies
-        if: ${{ matrix.node == true }}
         run: pnpm install --frozen-lockfile
 
-      - name: Run validation
-        run: ${{ matrix.script }}
+      - name: Run validations
+        run: scripts/ci/run-validations.sh

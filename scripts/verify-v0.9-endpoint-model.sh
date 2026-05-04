@@ -11,7 +11,7 @@ require_file docs/plan/v0.9-acceptance.md
 require_pattern 'Status: Completed' docs/plan/v0.9-acceptance.md
 require_pattern 'v0.9 Endpoint Model Acceptance' docs/plan/development-phases.md
 require_pattern 'scripts/verify-v0.9-endpoint-model.sh' DEVELOPMENT.md
-require_pattern 'scripts/verify-v0.9-endpoint-model.sh' .github/workflows/ci.yml
+require_pattern 'scripts/verify-v0.9-endpoint-model.sh' scripts/ci/run-validations.sh
 
 reject_pattern 'provider:' examples/config.yaml
 reject_pattern 'provider-specific API adapters' README.md

@@ -15,7 +15,7 @@ require_pattern 'bounded_audit_events_keeps_recent_persisted_events' crates/oper
 require_pattern 'load_audit_events_reads_persisted_audit_records_in_order' crates/operon-store/src/lib.rs
 require_pattern 'v0.9.3 Store-Backed Audit Visibility' docs/plan/development-phases.md
 require_pattern 'scripts/verify-v0.9.3-store-backed-audit-visibility.sh' DEVELOPMENT.md
-require_pattern 'scripts/verify-v0.9.3-store-backed-audit-visibility.sh' .github/workflows/ci.yml
+require_pattern 'scripts/verify-v0.9.3-store-backed-audit-visibility.sh' scripts/ci/run-validations.sh
 require_pattern 'store-backed audit validation' DEVELOPMENT.md
 
 cargo test -p operon-store --locked load_audit_events_reads_persisted_audit_records_in_order
