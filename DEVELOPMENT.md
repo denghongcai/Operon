@@ -50,11 +50,19 @@ scripts/ci/run-validations.sh
 
 The consolidated validation runner executes the version-scoped
 `scripts/verify-*.sh` checks in a stable order, keeps each script in a separate
-GitHub Actions log group, and reports all failing scripts at the end. New
-version validation scripts should be added to `scripts/ci/run-validations.sh`
-instead of adding another GitHub Actions matrix entry. Add a separate CI job
-only when the validation needs a materially different OS, permission model,
-service container, or trigger.
+GitHub Actions log group, and reports all failing scripts at the end. In CI,
+the runner is split into grouped `Validation` jobs for `core`, `runtime`, `sdk`,
+and `linux-system` so unrelated validation sets can run in parallel without
+returning to one job per version. New version validation scripts should be added
+to `scripts/ci/run-validations.sh` and assigned to the narrowest existing group
+instead of adding another version-specific GitHub Actions matrix entry. Add a
+separate CI job only when the validation needs a materially different OS,
+permission model, service container, or trigger.
+
+CI sets `OPERON_SKIP_SDK_TESTS=1` for grouped validation jobs because the
+separate `TypeScript` job already runs `pnpm -r test`. Individual validation
+scripts should remain independently runnable locally and may run
+`@operon/sdk` tests by default when that environment variable is not set.
 
 The runner keeps these validation scripts individually runnable for focused
 local checks, including:
@@ -110,9 +118,9 @@ focused modules while preserving behavior-covered tests.
 
 The v0.13.4 CI validation consolidation keeps individual validation scripts as
 the maintenance boundary while running them through
-`scripts/ci/run-validations.sh` from one CI `Validation` job.
+`scripts/ci/run-validations.sh` from grouped CI `Validation` jobs.
 `scripts/verify-v0.13.4-ci-validation-consolidation.sh` checks the runner,
-workflow shape, and future validation-addition rules.
+workflow shape, SDK test deduplication, and future validation-addition rules.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store

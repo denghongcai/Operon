@@ -65,7 +65,11 @@ cargo test -p operon-grpc-client --locked
 cargo test -p operon-cli --locked
 cargo test -p operon-mount --locked
 cargo test -p operond --locked
-pnpm --filter @operon/sdk test
+if [[ "${OPERON_SKIP_SDK_TESTS:-}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --filter @operon/sdk test
+fi
 
 cargo run --quiet -p operon-cli -- --help | rg -q '  graph '
 cargo run --quiet -p operon-cli -- --help | rg -q '  workflow '

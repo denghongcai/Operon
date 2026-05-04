@@ -31,7 +31,11 @@ cargo test -p operon-core --locked capability_diagnostic_request_serializes_opti
 cargo test -p operon-protocol --locked policy_decision_round_trips_through_grpc_shape
 cargo test -p operond --locked capability_diagnostics
 cargo test -p operon-cli --locked capability_explain
-pnpm --filter @operon/sdk test
+if [[ "${OPERON_SKIP_SDK_TESTS:-}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --filter @operon/sdk test
+fi
 bash scripts/verify-docs-help-skills-sync.sh
 
 echo "v0.9.6 capability diagnostics validation passed"

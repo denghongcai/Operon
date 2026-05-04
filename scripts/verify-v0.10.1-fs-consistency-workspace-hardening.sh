@@ -41,6 +41,10 @@ cargo test -p operon-protocol --locked fs_version_and_precondition_round_trip_th
 cargo test -p operond --locked fs_service::tests
 cargo test -p operon-fs --locked traversal_hardening_strategy_is_explicit
 cargo test -p operon-grpc-client --locked chunks_write_target_can_include_expected_version
-pnpm --filter @operon/sdk test
+if [[ "${OPERON_SKIP_SDK_TESTS:-}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --filter @operon/sdk test
+fi
 
 echo "v0.10.1 filesystem consistency and workspace hardening validation passed"

@@ -4810,8 +4810,8 @@ Remaining:
 Status: Completed.
 
 Goal: reduce GitHub Actions job sprawl by consolidating version-scoped
-validation jobs into one validation job while keeping each validation script
-separate and easy to maintain.
+validation jobs into a small grouped validation matrix while keeping each
+validation script separate and easy to maintain.
 
 Detailed plan: `docs/plan/v0.13.4-ci-validation-consolidation.md`.
 
@@ -4819,20 +4819,27 @@ Planned:
 
 - add a single runner script that executes existing `scripts/verify-*.sh`
   validation scripts in stable order with GitHub Actions log grouping.
-- replace the version-scoped validation matrix with one `Validation` job.
+- replace the version-scoped validation matrix with grouped `Validation` jobs
+  for `core`, `runtime`, `sdk`, and `linux-system`.
 - collect validation failures and report a final summary instead of stopping at
   the first failing script.
 - document that future version validation scripts extend the consolidated
-  runner instead of adding new matrix jobs unless a distinct OS, permission
-  model, service container, or trigger is required.
+  runner and choose an existing group instead of adding new version-specific
+  matrix jobs unless a distinct OS, permission model, service container, or
+  trigger is required.
+- skip duplicate `@operon/sdk` unit tests in validation CI after the separate
+  `TypeScript` job has already run `pnpm -r test`.
 
 Completed:
 
 - Added [`scripts/ci/run-validations.sh`](../../scripts/ci/run-validations.sh)
   as the consolidated validation runner.
-- Replaced the `.github/workflows/ci.yml` version validation matrix with one
-  `Validation` job while preserving separate `Rust`, `TypeScript`, and
+- Replaced the `.github/workflows/ci.yml` version validation matrix with four
+  grouped `Validation` jobs while preserving separate `Rust`, `TypeScript`, and
   platform smoke jobs.
+- Set validation CI to use `OPERON_SKIP_SDK_TESTS=1`, avoiding duplicate SDK
+  unit-test runs after the `TypeScript` job while keeping local validation
+  scripts independently runnable with SDK tests enabled by default.
 - Updated contributor and agent guidance for future version validation
   additions.
 

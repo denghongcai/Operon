@@ -41,6 +41,10 @@ PY
 cargo test -p operon-protocol --locked
 cargo test -p operond --locked
 cargo test -p operon-mount --locked
-pnpm --filter @operon/sdk test
+if [[ "${OPERON_SKIP_SDK_TESTS:-}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --filter @operon/sdk test
+fi
 
 echo "v0.8.3 read-range and release cleanup validation passed"

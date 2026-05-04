@@ -284,7 +284,8 @@ Operon should not own:
 
 - `docs/plan/v0.13.4-ci-validation-consolidation.md`
   - Completed v0.13.4 scope for consolidating version-scoped CI validation
-    jobs into one `Validation` job while keeping individual validation scripts.
+    jobs into grouped `Validation` jobs while keeping individual validation
+    scripts.
 
 - `docs/plan/v0.13.5-mount-adapter-strategy.md`
   - Planned v0.13.5 scope for macFUSE and WinFsp mount adapter strategy,
@@ -496,10 +497,14 @@ Operon should not own:
   help, docs, skills, endpoint/discovery behavior, or AGENTS.md rules.
 - CI version validation scripts are maintained as separate `scripts/verify-*.sh`
   files but must be wired through
-  [`scripts/ci/run-validations.sh`](scripts/ci/run-validations.sh), not as new
-  version-specific GitHub Actions matrix jobs. Add a separate workflow job only
-  when the validation needs a materially different OS, permission model, service
-  container, or trigger.
+  [`scripts/ci/run-validations.sh`](scripts/ci/run-validations.sh), assigned to
+  the narrowest existing validation group, and not added as new
+  version-specific GitHub Actions matrix jobs. CI validation uses
+  `OPERON_SKIP_SDK_TESTS=1` because the `TypeScript` job already runs
+  `pnpm -r test`; keep individual scripts locally runnable with SDK tests
+  enabled by default when that variable is unset. Add a separate workflow job
+  only when the validation needs a materially different OS, permission model,
+  service container, or trigger.
 - `operon onboard` is only a guided wrapper over normal config files and CLI setup primitives; keep command-style configuration available for scripts and CI.
 - `config.yaml` is the only supported runtime config format. CLI and daemon settings can be separate sections, but they should stay under the same config entrypoint with file references for sensitive values.
 
@@ -756,7 +761,10 @@ Defer:
   shared connection/context surface. Nothing remains in v0.12.5.
 - Latest phase status update: v0.13.4 completed CI Validation Consolidation.
   Version-scoped validation scripts remain separate, but CI runs them through
-  [`scripts/ci/run-validations.sh`](scripts/ci/run-validations.sh) from one
-  `Validation` job with grouped logs and a final failure summary. Future
-  version validation additions must extend that runner unless they require a
-  distinct OS, permission model, service container, or trigger.
+  [`scripts/ci/run-validations.sh`](scripts/ci/run-validations.sh) from grouped
+  `Validation` jobs with per-script logs and a final failure summary. CI skips
+  duplicate SDK unit tests after the `TypeScript` job has run `pnpm -r test`,
+  while local validation scripts keep SDK tests enabled by default. Future
+  version validation additions must extend that runner and choose an existing
+  group unless they require a distinct OS, permission model, service container,
+  or trigger.

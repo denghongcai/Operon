@@ -50,7 +50,11 @@ cargo test -p operon-cli --locked argv_exec_request_keeps_arguments_unescaped
 cargo test -p operon-cli --locked lan_advertise_default
 cargo test -p operon-fs --locked traversal_hardening
 cargo test -p operon-fs --locked symlink_parent_escape
-pnpm --filter @operon/sdk test
+if [[ "${OPERON_SKIP_SDK_TESTS:-}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --filter @operon/sdk test
+fi
 bash scripts/verify-docs-help-skills-sync.sh
 
 echo "v0.9.4 runtime hardening consolidation validation passed"
