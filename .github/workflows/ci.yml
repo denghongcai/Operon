@@ -82,6 +82,15 @@ jobs:
       - name: Test daemon platform shell defaults
         run: cargo test -p operond --locked shell_invocation_matches_platform
 
+      - name: Test daemon PTY smoke
+        run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
+
+      - name: Test daemon exec cancellation guarantee
+        run: cargo test -p operond --locked exec_cancellation_guarantee_matches_platform
+
+      - name: Test CLI private file platform model
+        run: cargo test -p operon-cli --locked private_file_security_model_is_platform_specific
+
       - name: Test CLI session dimensions
         run: cargo test -p operon-cli --locked exec_session_terminal_dimensions
 
@@ -203,6 +212,12 @@ jobs:
             script: scripts/verify-v0.10.5-maintainability-cleanup.sh
           - name: v0.11.3 Platform Capability Matrix Validation
             script: scripts/verify-v0.11.3-platform-capability-matrix.sh
+          - name: v0.12 Release Distribution Readiness Validation
+            script: scripts/verify-v0.12-release-distribution-readiness.sh
+          - name: v0.12.1 Platform Parity Hardening Validation
+            script: scripts/verify-v0.12.1-platform-parity-hardening.sh
+          - name: v0.12.2 Maintainability Cleanup Validation
+            script: scripts/verify-v0.12.2-maintainability-cleanup.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6

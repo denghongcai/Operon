@@ -331,6 +331,26 @@ pub(crate) async fn terminate_child(child: &mut Child) {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn exec_cancellation_guarantee() -> &'static str {
+    exec_cancellation_guarantee_for_platform()
+}
+
+#[cfg(all(test, unix))]
+fn exec_cancellation_guarantee_for_platform() -> &'static str {
+    "process-group"
+}
+
+#[cfg(all(test, windows))]
+fn exec_cancellation_guarantee_for_platform() -> &'static str {
+    "direct-child-best-effort"
+}
+
+#[cfg(all(test, not(unix), not(windows)))]
+fn exec_cancellation_guarantee_for_platform() -> &'static str {
+    "direct-child-best-effort"
+}
+
 #[cfg(unix)]
 pub(crate) async fn terminate_child_process_group(child: &mut Child) {
     let Some(pid) = child.id().map(|pid| pid as libc::pid_t) else {
@@ -770,6 +790,18 @@ pub(crate) fn exec_log_buffers_from_persisted_logs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exec_cancellation_guarantee_matches_platform() {
+        #[cfg(unix)]
+        assert_eq!(exec_cancellation_guarantee(), "process-group");
+
+        #[cfg(windows)]
+        assert_eq!(exec_cancellation_guarantee(), "direct-child-best-effort");
+
+        #[cfg(all(not(unix), not(windows)))]
+        assert_eq!(exec_cancellation_guarantee(), "direct-child-best-effort");
+    }
 
     #[test]
     fn exec_shell_invocation_matches_platform() {

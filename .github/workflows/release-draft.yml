@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-rust:
-    name: Build Rust (${{ matrix.arch }})
+  build-rust-linux:
+    name: Build Rust Linux (${{ matrix.arch }})
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
@@ -112,6 +112,110 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  build-rust-native:
+    name: Build Rust Native (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: macos-x86_64
+            archive: tar
+            binary_suffix: ""
+          - os: macos-15
+            target: aarch64-apple-darwin
+            arch: macos-aarch64
+            archive: tar
+            binary_suffix: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: windows-x86_64
+            archive: zip
+            binary_suffix: ".exe"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.target }}
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
+          repo-token: ${{ github.token }}
+
+      - name: Install Rust target
+        run: rustup target add "${{ matrix.target }}"
+
+      - name: Build Rust binaries
+        run: cargo build --release --locked --target "${{ matrix.target }}" -p operon-cli -p operond
+
+      - name: Smoke Rust binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${{ matrix.binary_suffix }}"
+          target="${{ matrix.target }}"
+          "target/$target/release/operon$suffix" --version
+          "target/$target/release/operond$suffix" --version
+          "target/$target/release/operon$suffix" --help >/dev/null
+          "target/$target/release/operon$suffix" doctor --help >/dev/null
+          "target/$target/release/operon$suffix" exec --help >/dev/null
+
+      - name: Package Rust binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          target="${{ matrix.target }}"
+          arch="${{ matrix.arch }}"
+          suffix="${{ matrix.binary_suffix }}"
+          dist_dir="$PWD/dist"
+          binary_dir="$dist_dir/operon-${tag}-${arch}"
+
+          rm -rf "$dist_dir"
+          mkdir -p "$binary_dir"
+          cp "target/$target/release/operon$suffix" "$binary_dir/operon$suffix"
+          cp "target/$target/release/operond$suffix" "$binary_dir/operond$suffix"
+          cp README.md PROTOCOL.md "$binary_dir/"
+          if [[ -f LICENSE ]]; then
+            cp LICENSE "$binary_dir/"
+          fi
+
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            python - <<PY
+import pathlib
+import zipfile
+
+dist = pathlib.Path(r"$dist_dir")
+name = "operon-${tag}-${arch}"
+with zipfile.ZipFile(dist / f"{name}.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+    for path in sorted((dist / name).rglob("*")):
+        if path.is_file():
+            archive.write(path, path.relative_to(dist))
+PY
+          else
+            tar -C "$dist_dir" -czf "$dist_dir/operon-${tag}-${arch}.tar.gz" "operon-${tag}-${arch}"
+          fi
+
+      - name: Upload Rust archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: operon-${{ github.ref_name }}-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
   build-sdk:
     name: Build TypeScript SDK
     runs-on: ubuntu-latest
@@ -163,7 +267,8 @@ jobs:
     name: Draft GitHub Release
     runs-on: ubuntu-latest
     needs:
-      - build-rust
+      - build-rust-linux
+      - build-rust-native
       - build-sdk
     steps:
       - name: Checkout
@@ -181,7 +286,7 @@ jobs:
           set -euo pipefail
 
           cd "$PWD/dist"
-          sha256sum *.tar.gz > SHA256SUMS
+          sha256sum *.tar.gz *.zip > SHA256SUMS
 
       - name: Create or update draft release
         env:

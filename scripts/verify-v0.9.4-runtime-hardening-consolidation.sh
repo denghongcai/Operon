@@ -12,7 +12,7 @@ require_pattern 'Status: Completed' docs/plan/v0.9.4-runtime-hardening-consolida
 require_pattern 'v0.9.4 Runtime Hardening Consolidation' docs/plan/development-phases.md
 require_pattern 'No v0.9.4 work remains' docs/plan/development-phases.md
 
-require_pattern 'PROTOCOL_VERSION: &str = "v0.11.0"' crates/operon-protocol/src/lib.rs
+require_pattern 'PROTOCOL_VERSION: &str = "v0.12.2"' crates/operon-protocol/src/lib.rs
 require_pattern 'repeated string argv = 6' proto/operon/runtime.proto
 require_pattern 'argv: value.argv' crates/operon-protocol/src/lib.rs
 require_pattern 'Execute CLI words as argv without shell parsing' crates/operon-cli/src/main.rs
@@ -20,7 +20,7 @@ require_pattern 'exec run .*argv' README.md
 require_pattern 'argv\?: string\[\]' packages/sdk-js/src/index.ts
 require_pattern 'argv: string\[\]' packages/sdk-js/src/generated/operon/runtime.ts
 require_pattern 'exec_run_request_preserves_argv_execution_fields' crates/operon-protocol/src/lib.rs
-require_pattern 'argv_exec_request_keeps_arguments_unescaped' crates/operon-cli/src/commands/exec.rs
+require_pattern 'argv_exec_request_keeps_arguments_unescaped' crates/operon-cli/src/commands/exec_args.rs
 
 require_pattern 'load_exec_logs' crates/operon-store/src/lib.rs
 require_pattern 'exec_log_buffers_from_persisted_logs' crates/operond/src/exec_runtime.rs

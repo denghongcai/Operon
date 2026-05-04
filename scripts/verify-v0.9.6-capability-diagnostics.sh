@@ -15,12 +15,12 @@ require_pattern 'No v0.9.6 work remains' docs/plan/development-phases.md
 require_pattern 'rpc ExplainCapability\(CapabilityDiagnosticRequest\) returns \(PolicyDecision\)' proto/operon/runtime.proto
 require_pattern 'message CapabilityDiagnosticRequest' proto/operon/runtime.proto
 require_pattern 'message PolicyDecision' proto/operon/runtime.proto
-require_pattern 'PROTOCOL_VERSION: &str = "v0.11.0"' crates/operon-protocol/src/lib.rs
+require_pattern 'PROTOCOL_VERSION: &str = "v0.12.2"' crates/operon-protocol/src/lib.rs
 
 require_pattern 'struct CapabilityDiagnosticRequest' crates/operon-core/src/policy.rs
 require_pattern 'policy_decision_round_trips_through_grpc_shape' crates/operon-protocol/src/lib.rs
 require_pattern 'explain_capability_decision' crates/operond/src/capability_diagnostics.rs
-require_pattern 'async fn explain_capability' crates/operond/src/main.rs
+require_pattern 'async fn explain_capability' crates/operond/src/runtime.rs
 require_pattern 'CapabilityCommand::Explain' crates/operon-cli/src/main.rs
 require_pattern 'pub async fn explain_capability' crates/operon-cli/src/grpc.rs
 require_pattern 'explainCapability' packages/sdk-js/src/index.ts

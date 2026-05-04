@@ -3,17 +3,10 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::Context as _;
-use crossterm::{
-    terminal::{disable_raw_mode, enable_raw_mode},
-    tty::IsTty as _,
-};
-use operon_core::{
-    ExecList, ExecLogList, ExecRecord, ExecRunRequest, ExecSessionEvent, ExecSessionStart,
-    ExecStatus, ExecStdin, ExecStdinClose,
-};
+use operon_core::{ExecList, ExecLogList, ExecRecord, ExecStatus, ExecStdin, ExecStdinClose};
 
 use crate::{
+    commands::exec_args,
     grpc, grpc_exec,
     output::{print_json, OutputMode},
     target::load_endpoint,
@@ -31,29 +24,9 @@ pub(crate) struct ExecRunInput {
     pub(crate) output: OutputMode,
 }
 
-pub(crate) struct ExecSessionInput {
-    pub(crate) config_path: PathBuf,
-    pub(crate) node_id: String,
-    pub(crate) cwd: Option<String>,
-    pub(crate) timeout_secs: u64,
-    pub(crate) secrets: Vec<String>,
-    pub(crate) argv: bool,
-    pub(crate) rows: Option<u16>,
-    pub(crate) cols: Option<u16>,
-    pub(crate) content: Option<String>,
-    pub(crate) command: Vec<String>,
-    pub(crate) output: OutputMode,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct TerminalDimensions {
-    rows: u16,
-    cols: u16,
-}
-
 pub(crate) async fn run(input: ExecRunInput) -> anyhow::Result<()> {
     let endpoint = load_endpoint(input.config_path.clone(), &input.node_id)?;
-    let request = exec_run_request_from_cli(
+    let request = exec_args::run_request_from_cli(
         input.command,
         input.argv,
         input.cwd,
@@ -198,130 +171,6 @@ pub(crate) async fn stdin(
     Ok(())
 }
 
-pub(crate) async fn session(input: ExecSessionInput) -> anyhow::Result<()> {
-    let endpoint = load_endpoint(input.config_path, &input.node_id)?;
-    let dimensions = local_terminal_dimensions_or_default(input.rows, input.cols);
-    let start = ExecSessionStart {
-        command: if input.argv {
-            String::new()
-        } else {
-            exec_command_from_cli_args(&input.command)
-        },
-        argv: if input.argv {
-            input.command
-        } else {
-            Vec::new()
-        },
-        cwd: input.cwd,
-        timeout_secs: Some(input.timeout_secs),
-        secrets: input.secrets,
-        rows: dimensions.rows,
-        cols: dimensions.cols,
-    };
-    let mut stdout = io::stdout();
-    let event = match input.content {
-        Some(content) => {
-            grpc_exec::open_exec_session_to_writer(
-                &endpoint,
-                start,
-                grpc_exec::ExecSessionInputSource::Inline(content.into_bytes()),
-                &mut stdout,
-            )
-            .await?
-        }
-        None => {
-            let _raw_mode = RawModeGuard::enable_if_tty()?;
-            grpc_exec::open_exec_session_to_writer(
-                &endpoint,
-                start,
-                grpc_exec::ExecSessionInputSource::LocalStdin {
-                    forward_resize: io::stdin().is_tty(),
-                },
-                &mut stdout,
-            )
-            .await?
-        }
-    };
-    finish_session(event, input.output)
-}
-
-fn finish_session(event: ExecSessionEvent, output: OutputMode) -> anyhow::Result<()> {
-    if output.json {
-        print_json(&event)?;
-    } else if !output.quiet {
-        print_session_terminal(&event);
-    }
-    ensure_session_succeeded(&event)
-}
-
-pub(crate) fn local_terminal_dimensions_or_default(
-    rows: Option<u16>,
-    cols: Option<u16>,
-) -> TerminalDimensions {
-    let terminal_size = io::stdin()
-        .is_tty()
-        .then(crossterm::terminal::size)
-        .and_then(Result::ok);
-    TerminalDimensions {
-        rows: rows
-            .or_else(|| terminal_size.map(|(_, rows)| rows))
-            .unwrap_or(24),
-        cols: cols
-            .or_else(|| terminal_size.map(|(cols, _)| cols))
-            .unwrap_or(80),
-    }
-}
-
-fn ensure_session_succeeded(event: &ExecSessionEvent) -> anyhow::Result<()> {
-    match event {
-        ExecSessionEvent::Exit(exit) if matches!(exit.status, ExecStatus::Succeeded) => Ok(()),
-        ExecSessionEvent::Exit(exit) => {
-            let exit_code = exit
-                .exit_code
-                .map(|code| code.to_string())
-                .unwrap_or_else(|| "-".to_string());
-            anyhow::bail!(
-                "exec session {} ended with status {:?} exit_code={}",
-                exit.exec_id,
-                exit.status,
-                exit_code
-            )
-        }
-        _ => anyhow::bail!("exec session ended without exit event"),
-    }
-}
-
-fn print_session_terminal(event: &ExecSessionEvent) {
-    if let ExecSessionEvent::Exit(exit) = event {
-        eprintln!(
-            "{} session {:?} exit_code={:?}",
-            exit.exec_id, exit.status, exit.exit_code
-        );
-    }
-}
-
-struct RawModeGuard {
-    enabled: bool,
-}
-
-impl RawModeGuard {
-    fn enable_if_tty() -> anyhow::Result<Self> {
-        let enabled = io::stdin().is_tty();
-        if enabled {
-            enable_raw_mode().context("enable local terminal raw mode")?;
-        }
-        Ok(Self { enabled })
-    }
-}
-
-impl Drop for RawModeGuard {
-    fn drop(&mut self) {
-        if self.enabled {
-            let _ = disable_raw_mode();
-        }
-    }
-}
-
 pub(crate) async fn cancel(
     config_path: PathBuf,
     node_id: &str,
@@ -348,49 +197,6 @@ pub(crate) async fn load(
 ) -> anyhow::Result<ExecRecord> {
     let endpoint = load_endpoint(config_path, node_id)?;
     grpc::get_exec(&endpoint, exec_id).await
-}
-
-fn exec_command_from_cli_args(args: &[String]) -> String {
-    if args.len() == 1 {
-        return args[0].clone();
-    }
-    args.iter()
-        .map(|arg| shell_escape_arg(arg))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn shell_escape_arg(arg: &str) -> String {
-    if arg.is_empty() {
-        return "''".to_string();
-    }
-    if arg.bytes().all(|byte| {
-        byte.is_ascii_alphanumeric()
-            || matches!(byte, b'_' | b'-' | b'.' | b'/' | b':' | b'=' | b'@')
-    }) {
-        return arg.to_string();
-    }
-    format!("'{}'", arg.replace('\'', "'\\''"))
-}
-
-fn exec_run_request_from_cli(
-    command: Vec<String>,
-    argv: bool,
-    cwd: Option<String>,
-    timeout_secs: u64,
-    secrets: Vec<String>,
-) -> ExecRunRequest {
-    ExecRunRequest {
-        command: if argv {
-            String::new()
-        } else {
-            exec_command_from_cli_args(&command)
-        },
-        argv: if argv { command } else { Vec::new() },
-        cwd,
-        timeout_secs: Some(timeout_secs),
-        secrets,
-    }
 }
 
 async fn wait_for_exec(
@@ -443,59 +249,6 @@ fn print_status(record: &ExecRecord) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn exec_command_preserves_single_shell_command_string() {
-        let command = exec_command_from_cli_args(&["echo hello | cat".to_string()]);
-
-        assert_eq!(command, "echo hello | cat");
-    }
-
-    #[test]
-    fn exec_command_shell_escapes_multiple_cli_args() {
-        let command = exec_command_from_cli_args(&[
-            "printf".to_string(),
-            "hello world".to_string(),
-            "it's ok".to_string(),
-        ]);
-
-        assert_eq!(command, "printf 'hello world' 'it'\\''s ok'");
-    }
-
-    #[test]
-    fn argv_exec_request_keeps_arguments_unescaped() {
-        let request = exec_run_request_from_cli(
-            vec!["printf".to_string(), "hello world".to_string()],
-            true,
-            None,
-            30,
-            Vec::new(),
-        );
-
-        assert_eq!(request.command, "");
-        assert_eq!(request.argv, vec!["printf", "hello world"]);
-    }
-
-    #[test]
-    fn exec_session_terminal_dimensions_use_explicit_overrides() {
-        let dimensions = local_terminal_dimensions_or_default(Some(33), Some(120));
-
-        assert_eq!(
-            dimensions,
-            TerminalDimensions {
-                rows: 33,
-                cols: 120
-            }
-        );
-    }
-
-    #[test]
-    fn exec_session_terminal_dimensions_default_when_unattached() {
-        let dimensions = local_terminal_dimensions_or_default(None, None);
-
-        assert!(dimensions.rows > 0);
-        assert!(dimensions.cols > 0);
-    }
 
     #[test]
     fn failed_terminal_exec_returns_cli_error() {

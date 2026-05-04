@@ -6,6 +6,7 @@ use operon_core::{CapabilityDiagnosticRequest, CapabilityKind, PolicyDecision, S
 use crate::{
     grpc,
     output::{print_json, OutputMode},
+    private_files,
 };
 
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
@@ -13,8 +14,20 @@ const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
 #[derive(Debug, serde::Serialize)]
 pub(crate) struct DoctorReport {
     config_path: String,
+    platform: DoctorPlatformReport,
     config_warnings: Vec<String>,
     nodes: Vec<DoctorNodeReport>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DoctorPlatformReport {
+    os: String,
+    arch: String,
+    mount_adapter: String,
+    private_file_protection: String,
+    exec_cancellation: String,
+    pty_sessions: String,
+    service_forwarding: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -82,6 +95,7 @@ pub(crate) async fn run(
 
     let report = DoctorReport {
         config_path: config_path.display().to_string(),
+        platform: platform_report(),
         config_warnings: loaded
             .warnings
             .into_iter()
@@ -99,6 +113,56 @@ pub(crate) async fn run(
     }
     print_report(&report);
     Ok(())
+}
+
+fn platform_report() -> DoctorPlatformReport {
+    DoctorPlatformReport {
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+        mount_adapter: mount_adapter_diagnostic().to_string(),
+        private_file_protection: private_file_protection_diagnostic().to_string(),
+        exec_cancellation: exec_cancellation_diagnostic().to_string(),
+        pty_sessions: pty_session_diagnostic().to_string(),
+        service_forwarding: "service forwarding depends on local and remote firewall policy"
+            .to_string(),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn mount_adapter_diagnostic() -> &'static str {
+    "linux-fuse-supported"
+}
+
+#[cfg(not(target_os = "linux"))]
+fn mount_adapter_diagnostic() -> &'static str {
+    "mount-adapter-deferred"
+}
+
+fn private_file_protection_diagnostic() -> &'static str {
+    match private_files::private_file_security_model() {
+        "unix-owner-only-mode" => "unix-owner-only-mode-0600",
+        "windows-acl-warning" => "windows-acl-not-verified-warning",
+        _ => "private-file-permission-warning",
+    }
+}
+
+#[cfg(unix)]
+fn exec_cancellation_diagnostic() -> &'static str {
+    "process-group-termination"
+}
+
+#[cfg(windows)]
+fn exec_cancellation_diagnostic() -> &'static str {
+    "direct-child-best-effort"
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn exec_cancellation_diagnostic() -> &'static str {
+    "direct-child-best-effort"
+}
+
+fn pty_session_diagnostic() -> &'static str {
+    "portable-pty-smoke-validated"
 }
 
 async fn diagnose_node(
@@ -205,6 +269,16 @@ fn diagnostic_request_for_capability(
 }
 
 fn print_report(report: &DoctorReport) {
+    println!(
+        "platform os={} arch={} mount={} private_files={} exec_cancel={} pty={} service_forwarding={}",
+        report.platform.os,
+        report.platform.arch,
+        report.platform.mount_adapter,
+        report.platform.private_file_protection,
+        report.platform.exec_cancellation,
+        report.platform.pty_sessions,
+        report.platform.service_forwarding
+    );
     for warning in &report.config_warnings {
         println!("config warning: unknown field {warning}");
     }
@@ -271,5 +345,16 @@ mod tests {
         assert_eq!(request.capability_id, "service:web");
         assert_eq!(request.action, "check");
         assert_eq!(request.resource, "web");
+    }
+
+    #[test]
+    fn platform_report_contains_operator_caveats() {
+        let report = platform_report();
+
+        assert!(!report.mount_adapter.is_empty());
+        assert!(!report.private_file_protection.is_empty());
+        assert!(!report.exec_cancellation.is_empty());
+        assert_eq!(report.pty_sessions, "portable-pty-smoke-validated");
+        assert!(report.service_forwarding.contains("firewall"));
     }
 }

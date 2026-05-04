@@ -21,10 +21,10 @@ require_pattern 'cargo check --workspace --locked' .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked shell_invocation_matches_platform' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-cli --locked exec_session_terminal_dimensions' .github/workflows/ci.yml
 
-require_pattern 'Current public release artifacts are Linux-only' README.md
-require_pattern 'macOS and Windows are candidate core runtime platforms' README.md
+require_pattern 'macOS and Windows prebuilt' README.md
+require_pattern 'archives are core runtime previews' README.md
 require_pattern 'Linux FUSE mount support remains' README.md
-require_pattern 'Linux-only; macFUSE and WinFsp are deferred adapter work' README.md
+require_pattern 'Linux FUSE mount support remains Linux-only' README.md
 require_pattern 'validate through the existing `portable-pty` abstraction' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'future macOS and' PROTOCOL.md
 require_pattern 'Windows validation should continue through the existing `portable-pty`' PROTOCOL.md

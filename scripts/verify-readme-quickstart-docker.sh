@@ -39,11 +39,13 @@ export HOME=/home/operon
 
 VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
 test -n "$VERSION" || { echo "failed to resolve latest Operon release" >&2; exit 1; }
-case "$(uname -m)" in
-  x86_64) ARCH=linux-x86_64 ;;
-  aarch64|arm64) ARCH=linux-arm64 ;;
-  armv7l|armv7*) ARCH=linux-armv7 ;;
-  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) ARCH=linux-x86_64 ;;
+  Linux-aarch64|Linux-arm64) ARCH=linux-arm64 ;;
+  Linux-armv7l|Linux-armv7*) ARCH=linux-armv7 ;;
+  Darwin-x86_64) ARCH=macos-x86_64 ;;
+  Darwin-arm64) ARCH=macos-aarch64 ;;
+  *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 
 curl -fsSL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/operon-${VERSION}-${ARCH}.tar.gz" -o /tmp/operon.tar.gz

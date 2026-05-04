@@ -532,4 +532,58 @@ mod tests {
 
         assert!(rx.try_recv().is_err());
     }
+
+    #[test]
+    fn exec_session_portable_pty_smoke_outputs_and_exits() {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("open pty");
+        pair.master
+            .resize(PtySize {
+                rows: 30,
+                cols: 100,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("resize pty");
+
+        let mut command = CommandBuilder::new(session_shell_program());
+        command.arg(session_shell_arg());
+        command.arg("echo operon-pty-smoke");
+
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .expect("spawn pty command");
+        let mut reader = pair.master.try_clone_reader().expect("clone pty reader");
+        let (tx, rx) = std_mpsc::channel();
+        thread::spawn(move || {
+            let mut buffer = [0_u8; 1024];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(count) => {
+                        let output = String::from_utf8_lossy(&buffer[..count]).to_string();
+                        let _ = tx.send(output.clone());
+                        if output.contains("operon-pty-smoke") {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let status = child.wait().expect("wait pty child");
+        assert!(status.success());
+
+        let output = rx.recv_timeout(Duration::from_secs(5)).expect("pty output");
+        assert!(output.contains("operon-pty-smoke"));
+    }
 }

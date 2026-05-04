@@ -89,6 +89,12 @@ Runtime schema constraints:
   variants.
 - `OpenExecSession` uses explicit start, input, and resize request envelopes
   and started, output, and exit response envelopes.
+- `OpenExecSession` uses the existing `portable-pty` backend; release claims
+  for macOS and Windows depend on portable-pty smoke validation for session
+  start, output, resize, and exit behavior.
+- Exec cancellation guarantees are platform-specific: Unix-like platforms use
+  process-group termination, while Windows is direct-child best-effort until a
+  Job Object implementation is added and validated.
 - `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
   unary random-read API for mount adapters and generated clients that need
   offset/size reads.

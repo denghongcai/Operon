@@ -383,10 +383,11 @@ macos-aarch64
 windows-x86_64
 ```
 
-Current public release automation only builds Linux archives. macOS and Windows
-are candidate core runtime platforms covered by CI smoke checks; before macOS or
-Windows artifacts are published, the project should use the platform capability
-matrix below as the release gate:
+Current public release automation builds Linux archives plus macOS and Windows
+core runtime preview archives. The preview target covers daemon and CLI runtime
+behavior, not mount parity. macOS and Windows are covered by CI smoke checks and
+the platform capability matrix below remains the release gate for expanding
+claims beyond core runtime preview:
 
 | Capability group | macOS / Windows first-pass stance |
 | --- | --- |

@@ -240,17 +240,18 @@ Operon should not own:
     forwarding gRPC helper boundaries.
 
 - `docs/plan/v0.12-release-distribution-readiness.md`
-  - v0.12 planned scope for deciding and aligning Linux/macOS/Windows public
-    release artifacts, packaging, checksums, smoke validation, and release docs.
+  - v0.12 completed scope for Linux/macOS/Windows public release artifacts,
+    packaging, checksums, smoke validation, release docs, and version
+    alignment.
 
 - `docs/plan/v0.12.1-platform-parity-hardening.md`
-  - v0.12.1 planned scope for Windows private-file semantics, Windows exec
-    cancellation, macOS/Windows `portable-pty` smoke coverage, and
+  - v0.12.1 completed scope for Windows private-file semantics, Windows exec
+    cancellation guarantees, macOS/Windows `portable-pty` smoke coverage, and
     platform-aware doctor diagnostics.
 
 - `docs/plan/v0.12.2-maintainability-cleanup.md`
-  - v0.12.2 planned scope for behavior-preserving daemon router, CLI gRPC,
-    exec command/session UI, and config command cleanup.
+  - v0.12.2 completed scope for behavior-preserving daemon runtime router and
+    CLI exec argument/session UI cleanup.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -423,8 +424,7 @@ Operon should not own:
   macOS/Windows core runtime candidate support, added platform smoke CI entries,
   kept release artifacts and mount support Linux-only, and kept interactive PTY
   direction on `portable-pty`.
-- Next planned milestones: v0.12 Release / Distribution Readiness, v0.12.1
-  Platform Parity Hardening, and v0.12.2 Maintainability Cleanup.
+- Next planned milestone: define the next phase after v0.12.2.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -673,6 +673,21 @@ Defer:
   platform-specific, and
   [`scripts/verify-v0.11.3-platform-capability-matrix.sh`](scripts/verify-v0.11.3-platform-capability-matrix.sh)
   covers the docs, CI, and shell-default evidence. Nothing remains in v0.11.3.
-- Latest planning update: v0.12 Release / Distribution Readiness, v0.12.1
-  Platform Parity Hardening, and v0.12.2 Maintainability Cleanup are recorded
-  as planned follow-up phases after v0.11.3. Implementation has not started.
+- Latest phase status update: v0.12 completed Release / Distribution
+  Readiness. Draft release automation now builds Linux `x86_64`/`arm64`/`armv7`
+  archives plus macOS `x86_64`/`aarch64` and Windows `x86_64` core runtime
+  preview archives, smoke-tests native daemon/CLI binaries, generates
+  checksums, keeps mount and GLIBC validation Linux-only, updates README and
+  architecture docs, and aligns versions to `0.12.2` / `v0.12.2`.
+- Latest phase status update: v0.12.1 completed Platform Parity Hardening.
+  `operon doctor` reports platform caveats, Windows private-file handling
+  reports an ACL warning, Windows exec cancellation is documented as
+  direct-child best-effort, and cross-platform `portable-pty` smoke coverage is
+  in CI. Windows Job Object cancellation and macFUSE/WinFsp remain deferred.
+- Latest phase status update: v0.12.2 completed Maintainability Cleanup.
+  Daemon gRPC runtime routing now lives in [`runtime.rs`](crates/operond/src/runtime.rs),
+  CLI exec shell/argv helpers live in
+  [`exec_args.rs`](crates/operon-cli/src/commands/exec_args.rs), CLI PTY session UI lives in
+  [`exec_session.rs`](crates/operon-cli/src/commands/exec_session.rs), and
+  [`scripts/verify-v0.12.2-maintainability-cleanup.sh`](scripts/verify-v0.12.2-maintainability-cleanup.sh)
+  covers the module boundaries. Nothing remains in v0.12.2.

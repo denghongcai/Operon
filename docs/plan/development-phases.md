@@ -4424,11 +4424,12 @@ Completed:
 Remaining:
 
 - No v0.11.3 work remains.
-- macOS and Windows release artifacts remain future release/distribution work.
+- macOS and Windows release artifacts were intentionally deferred out of
+  v0.11.3 and are addressed by the v0.12 release/distribution phase.
 
 ## Phase 78: v0.12 Release / Distribution Readiness
 
-Status: Planned.
+Status: Completed.
 
 Goal: make the public release surface match the v0.11.3 platform decisions, or
 explicitly narrow the pre-1.0 supported target set so users do not infer
@@ -4451,13 +4452,33 @@ Planned:
 - keep Linux FUSE mount support Linux-only and defer macFUSE/WinFsp adapter
   work.
 
+Completed:
+
+- Expanded public release automation from Linux-only to Linux plus macOS and
+  Windows core runtime preview artifacts.
+- Kept Linux release targets for `linux-x86_64`, `linux-arm64`, and
+  `linux-armv7`.
+- Added native preview release targets for `macos-x86_64`, `macos-aarch64`,
+  and `windows-x86_64`.
+- Kept Linux and macOS archives as `.tar.gz`; packaged Windows archives as
+  `.zip`.
+- Added native daemon/CLI version and help smoke checks for release artifacts.
+- Updated README install instructions, Project Status, architecture docs, and
+  quickstart validation target detection.
+- Added [`scripts/verify-v0.12-release-distribution-readiness.sh`](../../scripts/verify-v0.12-release-distribution-readiness.sh)
+  and wired it into CI and DEVELOPMENT.md.
+- Bumped Rust crate versions, TypeScript SDK package version, CLI version, and
+  runtime health `PROTOCOL_VERSION` to `0.12.2` / `v0.12.2` across the
+  combined v0.12 through v0.12.2 implementation.
+
 Remaining:
 
-- Entire phase remains to be implemented.
+- No v0.12 work remains.
+- Linux FUSE remains the only supported mount adapter.
 
 ## Phase 79: v0.12.1 Platform Parity Hardening
 
-Status: Planned.
+Status: Completed.
 
 Goal: close the highest-risk macOS and Windows behavior gaps after the release
 target decision, without claiming full parity for Linux-only mount or
@@ -4478,13 +4499,30 @@ Planned:
 - update README, `PROTOCOL.md`, runtime API docs, architecture docs, and
   validation scripts for any changed platform guarantee.
 
+Completed:
+
+- Added platform-specific private-file diagnostics for Unix owner-only mode and
+  Windows ACL warning semantics.
+- Documented Windows non-interactive exec cancellation as direct-child
+  best-effort until Job Object process-tree cancellation is implemented.
+- Added daemon exec cancellation guarantee tests.
+- Added cross-platform `portable-pty` smoke validation for session start,
+  resize, output, and exit behavior.
+- Extended `operon doctor` with platform caveats for mount support,
+  private-file protection, exec cancellation, PTY validation, and service
+  forwarding firewall sensitivity.
+- Added [`scripts/verify-v0.12.1-platform-parity-hardening.sh`](../../scripts/verify-v0.12.1-platform-parity-hardening.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
 Remaining:
 
-- Entire phase remains to be implemented.
+- No v0.12.1 work remains.
+- Windows Job Object process-tree cancellation remains future hardening.
+- macFUSE and WinFsp mount adapters remain deferred.
 
 ## Phase 80: v0.12.2 Maintainability Cleanup
 
-Status: Planned.
+Status: Completed.
 
 Goal: perform behavior-preserving cleanup around the remaining large daemon and
 CLI surfaces after release/platform hardening, so future feature work stays
@@ -4509,9 +4547,25 @@ Planned:
   command file still mixes them.
 - add maintainability validation coverage for the new module boundaries.
 
+Completed:
+
+- Added [`runtime.rs`](../../crates/operond/src/runtime.rs) for daemon gRPC
+  runtime method routing and removed the `OperonRuntime` implementation from
+  [`operond/src/main.rs`](../../crates/operond/src/main.rs).
+- Added [`exec_args.rs`](../../crates/operon-cli/src/commands/exec_args.rs) for
+  CLI exec shell/argv conversion and request construction.
+- Added [`exec_session.rs`](../../crates/operon-cli/src/commands/exec_session.rs)
+  for CLI PTY session UI, local TTY sizing, raw mode, resize forwarding, and
+  result rendering.
+- Added [`scripts/verify-v0.12.2-maintainability-cleanup.sh`](../../scripts/verify-v0.12.2-maintainability-cleanup.sh)
+  and wired it into CI and DEVELOPMENT.md.
+
 Remaining:
 
-- Entire phase remains to be implemented.
+- No v0.12.2 work remains.
+- [`operon-cli/src/grpc.rs`](../../crates/operon-cli/src/grpc.rs) and config
+  command rendering remain future maintainability candidates if those surfaces
+  grow.
 
 ## Planning Principle
 

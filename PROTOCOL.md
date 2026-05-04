@@ -378,6 +378,13 @@ event resources. The first implementation is Unix PTY focused; future macOS and
 Windows validation should continue through the existing `portable-pty`
 abstraction.
 
+Platform guarantees are intentionally explicit. Linux and Unix-like exec
+cancellation uses process-group termination. Windows non-interactive exec
+cancellation is direct-child best-effort until a Job Object implementation is
+added and validated. Linux remains the only supported mount-adapter platform;
+macOS and Windows filesystem RPCs are core runtime operations, not macFUSE or
+WinFsp mounts.
+
 ## Errors
 
 Clients should handle normal gRPC status codes:

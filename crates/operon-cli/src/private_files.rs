@@ -22,6 +22,25 @@ pub(crate) fn generate_token() -> anyhow::Result<String> {
     Ok(token)
 }
 
+pub(crate) fn private_file_security_model() -> &'static str {
+    private_file_security_model_for_platform()
+}
+
+#[cfg(unix)]
+fn private_file_security_model_for_platform() -> &'static str {
+    "unix-owner-only-mode"
+}
+
+#[cfg(windows)]
+fn private_file_security_model_for_platform() -> &'static str {
+    "windows-acl-warning"
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn private_file_security_model_for_platform() -> &'static str {
+    "basic-create-warning"
+}
+
 #[cfg(unix)]
 pub(crate) fn write_private_file(path: &Path, content: &str) -> anyhow::Result<()> {
     validate_private_file_target(path)?;
@@ -77,6 +96,18 @@ mod tests {
         let token = generate_token().expect("token");
         assert_eq!(token.len(), 64);
         assert!(token.chars().all(|value| value.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn private_file_security_model_is_platform_specific() {
+        #[cfg(unix)]
+        assert_eq!(private_file_security_model(), "unix-owner-only-mode");
+
+        #[cfg(windows)]
+        assert_eq!(private_file_security_model(), "windows-acl-warning");
+
+        #[cfg(all(not(unix), not(windows)))]
+        assert_eq!(private_file_security_model(), "basic-create-warning");
     }
 
     #[cfg(unix)]

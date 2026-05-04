@@ -3,6 +3,8 @@ pub(crate) mod capability;
 pub(crate) mod config;
 pub(crate) mod doctor;
 pub(crate) mod exec;
+pub(crate) mod exec_args;
+pub(crate) mod exec_session;
 pub(crate) mod fs;
 pub(crate) mod init;
 pub(crate) mod mount;

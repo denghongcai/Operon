@@ -663,7 +663,7 @@ async fn main() -> anyhow::Result<()> {
                 content,
                 command,
             } => {
-                commands::exec::session(commands::exec::ExecSessionInput {
+                commands::exec_session::session(commands::exec_session::ExecSessionInput {
                     config_path,
                     node_id,
                     cwd,

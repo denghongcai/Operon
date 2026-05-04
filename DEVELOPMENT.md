@@ -82,6 +82,9 @@ scripts/verify-v0.10.4-maintainability-cleanup.sh
 scripts/verify-v0.11.2-exec-session-hardening.sh
 scripts/verify-v0.10.5-maintainability-cleanup.sh
 scripts/verify-v0.11.3-platform-capability-matrix.sh
+scripts/verify-v0.12-release-distribution-readiness.sh
+scripts/verify-v0.12.1-platform-parity-hardening.sh
+scripts/verify-v0.12.2-maintainability-cleanup.sh
 ```
 
 The README quickstart Docker validation installs the latest public release in a
@@ -93,6 +96,20 @@ The release glibc baseline validation keeps Linux release builds on an Ubuntu
 20.04 / glibc 2.31 baseline, pins a modern `protoc` because Ubuntu 20.04's
 package is too old for proto3 optional fields, and can inspect built binaries
 for accidental newer GLIBC symbol requirements.
+
+The v0.12 release distribution readiness validation checks that draft releases
+build Linux, macOS, and Windows daemon/CLI archives, smoke-test native binaries,
+generate checksums, and keep README and architecture release target language in
+sync. GLIBC baseline and mount validation remain Linux-only.
+
+The v0.12.1 platform parity hardening validation checks Windows private-file
+diagnostic warnings, Windows exec cancellation guarantee wording, cross-platform
+`portable-pty` smoke coverage, and platform caveats in `operon doctor`.
+
+The v0.12.2 maintainability cleanup validation checks that daemon gRPC runtime
+routing lives in a focused runtime module, CLI exec argv/shell argument helpers
+and PTY session UI live in focused command modules, and behavior-preserving
+tests still pass.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store

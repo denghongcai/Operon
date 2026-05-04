@@ -111,9 +111,10 @@ a secret, forward a local service, or inspect an execution trace.
 
 ## Quickstart
 
-Install the latest Linux release binary. Current public release artifacts are
-Linux-only; macOS and Windows are candidate core runtime platforms but do not
-have published prebuilt archives yet.
+Install the latest release binary. Linux and macOS release archives use
+`.tar.gz`; Windows release archives use `.zip`. macOS and Windows prebuilt
+archives are core runtime previews for the daemon and CLI surface. Linux FUSE
+mount support remains Linux-only.
 
 The prebuilt Linux archives are glibc-based and currently target glibc 2.31 or
 newer, such as Ubuntu 20.04+.
@@ -121,10 +122,12 @@ newer, such as Ubuntu 20.04+.
 ```bash
 VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
 test -n "$VERSION" || { echo "failed to resolve latest Operon release" >&2; exit 1; }
-case "$(uname -m)" in
-  x86_64) ARCH=linux-x86_64 ;;
-  aarch64|arm64) ARCH=linux-arm64 ;;
-  armv7l|armv7*) ARCH=linux-armv7 ;;
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) ARCH=linux-x86_64 ;;
+  Linux-aarch64|Linux-arm64) ARCH=linux-arm64 ;;
+  Linux-armv7l|Linux-armv7*) ARCH=linux-armv7 ;;
+  Darwin-x86_64) ARCH=macos-x86_64 ;;
+  Darwin-arm64) ARCH=macos-aarch64 ;;
   *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
@@ -132,6 +135,20 @@ curl -fL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/ope
 tar -xzf /tmp/operon.tar.gz -C /tmp
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
+```
+
+On Windows PowerShell:
+
+```powershell
+$Version = if ($env:OPERON_VERSION) { $env:OPERON_VERSION } else { (Invoke-RestMethod https://api.github.com/repos/denghongcai/Operon/releases/latest).tag_name }
+$Arch = "windows-x86_64"
+$Archive = "$env:TEMP\operon.zip"
+$InstallRoot = "$env:LOCALAPPDATA\Operon"
+Invoke-WebRequest "https://github.com/denghongcai/Operon/releases/download/$Version/operon-$Version-$Arch.zip" -OutFile $Archive
+Expand-Archive -Path $Archive -DestinationPath $env:TEMP -Force
+New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
+Copy-Item "$env:TEMP\operon-$Version-$Arch\operon.exe" $InstallRoot -Force
+Copy-Item "$env:TEMP\operon-$Version-$Arch\operond.exe" $InstallRoot -Force
 ```
 
 Create a local workspace and guided config:
@@ -368,7 +385,11 @@ ask a daemon why one action is allowed or denied.
 For first-pass troubleshooting, run `operon doctor` or
 `operon --json doctor`. Doctor reports config warnings, endpoint/auth health,
 runtime protocol version mismatches, capability diagnostics, and service health
-checks from one command.
+checks from one command. Doctor also reports platform caveats: Linux-only mount
+support, private token/config file protection, exec cancellation guarantees,
+PTY validation state, and service forwarding firewall sensitivity. Windows
+private token/config handling currently reports an ACL warning instead of
+claiming Unix-style owner-mode parity.
 
 ---
 
@@ -415,11 +436,12 @@ Operon is usable today as a pre-1.0 runtime. The current release includes:
 - TCP and UDP service forwarding over existing node connections.
 - mDNS endpoint discovery for local networks.
 
-Current public release artifacts are Linux-only for `x86_64`, `arm64`, and
-`armv7`. macOS and Windows are candidate core runtime platforms covered by CI
-smoke planning for daemon/CLI, gRPC, config, filesystem RPC, exec, service,
-audit, trace, graph, and SDK protocol flows. Linux FUSE mount support remains
-Linux-only; macFUSE and WinFsp are deferred adapter work.
+Current public release artifacts cover Linux `x86_64`, Linux `arm64`, Linux
+`armv7`, macOS `x86_64`, macOS `aarch64`, and Windows `x86_64`. macOS and
+Windows prebuilt archives are core runtime previews for daemon/CLI, gRPC,
+config, filesystem RPC, exec, service, audit, trace, graph, and SDK protocol
+flows. Linux FUSE mount support remains Linux-only; macFUSE and WinFsp are
+deferred adapter work.
 
 For contributor setup, validation commands, release automation, detailed config
 reference, and current phase tracking, see:
