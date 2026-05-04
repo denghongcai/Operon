@@ -5246,6 +5246,10 @@ Completed:
   diagnostic lane, while the self-hosted path targets a runner labeled
   `self-hosted`, `macOS`, and `macfuse` where macFUSE is already installed,
   approved, and loaded for release-gate validation.
+- Check the repository Actions runner registry before dispatching the
+  self-hosted macOS live-smoke lane. The registry currently reports
+  `total_count: 0`, so no `self-hosted`/`macOS`/`macfuse` runner is available
+  and no queued self-hosted workflow run was created.
 
 Remaining:
 
