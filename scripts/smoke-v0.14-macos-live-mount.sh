@@ -23,6 +23,7 @@ WATCHDOG_PID=""
 SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-900}"
 OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
+MACFUSE_BIN="/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app/Contents/MacOS/macfuse"
 
 dump_diagnostics() {
   (
@@ -36,6 +37,7 @@ dump_diagnostics() {
     ls -la /Library/Filesystems/macfuse.fs/Contents/Extensions >&2 || true
     kmutil showloaded --list-only 2>/dev/null | grep -i macfuse >&2 || true
     kextstat 2>/dev/null | grep -i macfuse >&2 || true
+    log show --last 3m --style compact --predicate 'subsystem in {"com.apple.FSKit", "com.apple.LiveFS", "io.macfuse"}' >&2 || true
     if [[ -n "$DAEMON_PID" ]]; then
       ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
     fi
@@ -106,6 +108,9 @@ ensure_macfuse_runtime() {
   export OPERON_MOUNT_MACOS_BACKEND="${OPERON_MOUNT_MACOS_BACKEND:-fskit}"
   echo "macOS mount backend: $OPERON_MOUNT_MACOS_BACKEND" >&2
   if [[ "$OPERON_MOUNT_MACOS_BACKEND" != "kernel" ]]; then
+    if [[ -x "$MACFUSE_BIN" ]]; then
+      sudo "$MACFUSE_BIN" install --components file-system-extensions --force >&2 || true
+    fi
     return 0
   fi
 

@@ -5173,6 +5173,10 @@ Completed:
   mount requests outside `/Volumes` with an actionable error after macFUSE
   documentation and CI evidence showed `/var/folders/.../mount` cannot work for
   the FSKit backend.
+- Refresh macFUSE's file-system-extension component before FSKit live smoke and
+  dump recent FSKit/LiveFS/macFUSE unified logs after `/Volumes` smoke still
+  hung in `fuser::spawn_mount2`, narrowing the remaining macOS issue to the
+  FSKit service-registration/XPC layer.
 
 Remaining:
 
