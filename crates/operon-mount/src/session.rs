@@ -93,7 +93,7 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         fuser::MountOption::NoSuid,
         fuser::MountOption::NoExec,
     ];
-    add_platform_mount_options(&mut config.mount_options);
+    add_platform_mount_options(&mut config.mount_options, &mount_point)?;
     config.n_threads = Some(4);
     trace_mount_event("spawn_mount2_start", mount_point.display().to_string());
     let session = fuser::spawn_mount2(fs, &mount_point, &config)
@@ -115,15 +115,29 @@ fn ensure_mount_point(path: &Path) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn add_platform_mount_options(options: &mut Vec<fuser::MountOption>) {
+fn add_platform_mount_options(
+    options: &mut Vec<fuser::MountOption>,
+    mount_point: &Path,
+) -> anyhow::Result<()> {
     if let Some(backend) = macos_mount_backend() {
+        if backend.eq_ignore_ascii_case("fskit") && !mount_point.starts_with("/Volumes") {
+            anyhow::bail!(
+                "macFUSE FSKit backend requires a mount point under /Volumes; choose /Volumes/<name> or set OPERON_MOUNT_MACOS_BACKEND=kernel after enabling the macFUSE kernel extension"
+            );
+        }
         trace_mount_event("macos_backend", backend.clone());
         options.push(fuser::MountOption::CUSTOM(format!("backend={backend}")));
     }
+    Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
-fn add_platform_mount_options(_options: &mut Vec<fuser::MountOption>) {}
+fn add_platform_mount_options(
+    _options: &mut Vec<fuser::MountOption>,
+    _mount_point: &Path,
+) -> anyhow::Result<()> {
+    Ok(())
+}
 
 #[cfg(target_os = "macos")]
 fn macos_mount_backend() -> Option<String> {

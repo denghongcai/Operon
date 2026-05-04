@@ -5169,6 +5169,10 @@ Completed:
   but does not load the kernel extension, leaving `spawn_mount2` hung before the
   mount completes. `OPERON_MOUNT_MACOS_BACKEND=kernel` remains available for
   explicit kernel-backend validation.
+- Move macOS FSKit live-smoke mount points under `/Volumes` and reject FSKit
+  mount requests outside `/Volumes` with an actionable error after macFUSE
+  documentation and CI evidence showed `/var/folders/.../mount` cannot work for
+  the FSKit backend.
 
 Remaining:
 

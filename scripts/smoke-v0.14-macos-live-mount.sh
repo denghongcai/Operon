@@ -13,7 +13,8 @@ TMP_DIR="$(mktemp -d)"
 WORKSPACE="$TMP_DIR/workspace"
 STORE="$TMP_DIR/store.jsonl"
 CONFIG="$TMP_DIR/config.yaml"
-MOUNT_DIR="$TMP_DIR/mount"
+MOUNT_NAME="operon-v014-macos-live-mount-$$"
+MOUNT_DIR="/Volumes/$MOUNT_NAME"
 MOUNT_LOG="$TMP_DIR/mount.log"
 DAEMON_LOG="$TMP_DIR/daemon.log"
 DAEMON_PID=""
@@ -75,6 +76,7 @@ cleanup() {
   if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then
     umount "$MOUNT_DIR" >/dev/null 2>&1 || true
   fi
+  sudo rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
   if [[ -n "$DAEMON_PID" ]] && kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
     kill "$DAEMON_PID" >/dev/null 2>&1
     for _ in $(seq 1 5); do
@@ -185,7 +187,9 @@ wait_for_mount() {
   return 1
 }
 
-mkdir -p "$WORKSPACE" "$MOUNT_DIR"
+mkdir -p "$WORKSPACE"
+sudo mkdir -p "$MOUNT_DIR"
+sudo chown "$(id -u):$(id -g)" "$MOUNT_DIR"
 printf "seed" >"$WORKSPACE/seed.txt"
 write_config
 start_watchdog
