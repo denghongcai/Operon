@@ -6,11 +6,25 @@ on:
       - "v*"
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
+  v014-release-gate:
+    name: v0.14 Release Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify v0.14 release gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/verify-v0.14-release-gates.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_REPOSITORY"
+
   build-rust-linux:
     name: Build Rust Linux (${{ matrix.arch }})
+    needs: v014-release-gate
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
@@ -114,6 +128,7 @@ jobs:
 
   build-rust-native:
     name: Build Rust Native (${{ matrix.arch }})
+    needs: v014-release-gate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -213,6 +228,7 @@ jobs:
 
   build-sdk:
     name: Build TypeScript SDK
+    needs: v014-release-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

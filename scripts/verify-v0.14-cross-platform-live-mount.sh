@@ -11,6 +11,7 @@ require_file docs/plan/v0.14-cross-platform-live-mount.md
 require_file docs/plan/v0.14-macos-live-smoke-runbook.md
 require_file .github/workflows/v0.14-live-mount-smoke.yml
 require_file scripts/preflight-v0.14-macos-macfuse-host.sh
+require_file scripts/verify-v0.14-release-gates.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
@@ -55,7 +56,13 @@ require_pattern 'PROTOCOL_VERSION: &str = "v0\.14\.0"' crates/operon-protocol/sr
 require_pattern '"version": "0\.14\.0"' packages/sdk-js/package.json
 require_pattern 'cargo test -p operon-mount --locked --features macos-no-mount' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-mount --locked' .github/workflows/ci.yml
+require_pattern 'actions: read' .github/workflows/release-draft.yml
 require_pattern 'brew install --cask macfuse' .github/workflows/release-draft.yml
+require_pattern 'v014-release-gate' .github/workflows/release-draft.yml
+require_pattern 'scripts/verify-v0.14-release-gates.sh "\$GITHUB_REF_NAME" "\$GITHUB_SHA" "\$GITHUB_REPOSITORY"' .github/workflows/release-draft.yml
+require_pattern 'MACOS_JOB_NAME="macOS macFUSE Live Mount \(self-hosted\)"' scripts/verify-v0.14-release-gates.sh
+require_pattern 'missing v0\.14 release gate' scripts/verify-v0.14-release-gates.sh
+require_pattern 'v0\.14 macOS live mount release gate passed' scripts/verify-v0.14-release-gates.sh
 require_pattern 'brew install --cask macfuse' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
@@ -75,7 +82,10 @@ require_pattern 'macFUSE kernel backend requires the macFUSE kernel extension to
 require_pattern 'macFUSE FSKit backend requires macOS 15\.4 or newer' scripts/preflight-v0.14-macos-macfuse-host.sh
 
 bash -n scripts/preflight-v0.14-macos-macfuse-host.sh
+bash -n scripts/verify-v0.14-release-gates.sh
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
+
+scripts/verify-v0.14-release-gates.sh v0.13.1 HEAD >/dev/null
 
 rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu >/dev/null
 

@@ -5262,6 +5262,10 @@ Completed:
   host-preflight, self-hosted runner labels, workflow dispatch command, success
   evidence, and failure-log handling needed to execute the remaining macOS
   release gate once a suitable host is available.
+- Add a tag-triggered release workflow guard through
+  `scripts/verify-v0.14-release-gates.sh` so `v0.14*` release drafts fail
+  before artifact builds unless the exact release commit has a successful
+  self-hosted macOS macFUSE live-smoke run.
 
 Remaining:
 

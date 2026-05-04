@@ -908,7 +908,11 @@ Defer:
   actionable output. Use
   [`docs/plan/v0.14-macos-live-smoke-runbook.md`](docs/plan/v0.14-macos-live-smoke-runbook.md)
   for the host setup, dispatch command, and evidence to record once a suitable
-  runner exists. A GitHub-hosted
+  runner exists. The tag-triggered release workflow runs
+  [`scripts/verify-v0.14-release-gates.sh`](scripts/verify-v0.14-release-gates.sh)
+  before artifact builds, so `v0.14*` release drafts fail unless the exact
+  release commit has a successful self-hosted macOS macFUSE live-smoke run. A
+  GitHub-hosted
   `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
   job log, so the workflow now tees macOS smoke output to an uploaded artifact
