@@ -100,6 +100,19 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     })?;
     let context = OperonWinFspFs::new(MountAdapterCore::new(remote_fs), remote_root)?;
     trace_mount_event("start", options.mount_point.display().to_string());
+    trace_mount_event(
+        "callback_flags",
+        format!(
+            "get_volume_info={} get_security_by_name={} create={} create_ex={} open={} read_directory={} get_dir_info_by_name={}",
+            OperonWinFspFs::GET_VOLUME_INFO_DEFINED,
+            OperonWinFspFs::GET_SECURITY_BY_NAME_DEFINED,
+            OperonWinFspFs::CREATE_DEFINED,
+            OperonWinFspFs::CREATE_EX_DEFINED,
+            OperonWinFspFs::OPEN_DEFINED,
+            OperonWinFspFs::READ_DIRECTORY_DEFINED,
+            OperonWinFspFs::GET_DIR_INFO_BY_NAME_DEFINED,
+        ),
+    );
     let file_system = FileSystem::start(
         Params {
             volume_params: volume_params(),
@@ -159,7 +172,7 @@ impl FileSystemInterface for OperonWinFspFs {
 
     const GET_VOLUME_INFO_DEFINED: bool = true;
     const GET_SECURITY_BY_NAME_DEFINED: bool = true;
-    const CREATE_DEFINED: bool = true;
+    const CREATE_DEFINED: bool = false;
     const CREATE_EX_DEFINED: bool = true;
     const OPEN_DEFINED: bool = true;
     const CLEANUP_DEFINED: bool = true;
@@ -186,6 +199,7 @@ impl FileSystemInterface for OperonWinFspFs {
         file_name: &U16CStr,
         _find_reparse_point: impl Fn() -> Option<FileAttributes>,
     ) -> Result<(FileAttributes, PSecurityDescriptor, bool), NTSTATUS> {
+        trace_mount_event("get_security_by_name_enter", file_name.to_string_lossy());
         let stat = self.stat_for_name(file_name)?;
         trace_mount_event("get_security_by_name", stat.path.clone());
         Ok((attributes_for_stat(&stat), self.security.as_ptr(), false))
@@ -198,7 +212,7 @@ impl FileSystemInterface for OperonWinFspFs {
         _security_descriptor: SecurityDescriptor,
     ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
         let path = self.path_for_name(file_name)?;
-        trace_mount_event("create", path.clone());
+        trace_mount_event("create_enter", path.clone());
         let stat = match self.core.stat(&path) {
             Ok(stat) => stat,
             Err(_) => if create_file_info
@@ -226,6 +240,7 @@ impl FileSystemInterface for OperonWinFspFs {
         _buffer: &[u8],
         _extra_buffer_is_reparse_point: bool,
     ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
+        trace_mount_event("create_ex_enter", file_name.to_string_lossy());
         self.create(file_name, create_file_info, security_descriptor)
     }
 
@@ -235,6 +250,7 @@ impl FileSystemInterface for OperonWinFspFs {
         create_options: CreateOptions,
         _granted_access: FileAccessRights,
     ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
+        trace_mount_event("open_enter", file_name.to_string_lossy());
         let stat = self.stat_for_name(file_name)?;
         trace_mount_event("open", stat.path.clone());
         if stat.is_dir && create_options.is(CreateOptions::FILE_NON_DIRECTORY_FILE) {

@@ -5140,6 +5140,13 @@ Completed:
 - Harden completion validation in the v0.8.1 integration coverage and v0.8
   agent-skills scripts so completion output is written to temporary files before
   `grep` assertions, avoiding `clap_complete` broken-pipe panics in CI.
+- Add the next live-smoke diagnostic checkpoint after the latest manual run:
+  macOS now dumps diagnostics immediately when the seed file is not exposed and
+  uses bounded process cleanup instead of waiting indefinitely for a stuck mount
+  process; Windows now logs callback flags and callback entry before remote
+  filesystem calls, reduces the seed-exposure wait window, and narrows create
+  dispatch to WinFsp `CreateEx` so the next failure clearly shows whether
+  dispatch reaches the adapter.
 
 Remaining:
 

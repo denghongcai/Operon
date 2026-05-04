@@ -174,7 +174,7 @@ policy:
     }
 
     $mounted = $false
-    for ($i = 0; $i -lt 60; $i++) {
+    for ($i = 0; $i -lt 20; $i++) {
         if ($Mount.HasExited) {
             Dump-Diagnostics
             throw "mount process exited before exposing seed file"

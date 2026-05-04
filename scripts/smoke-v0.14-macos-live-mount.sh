@@ -50,6 +50,17 @@ cleanup() {
   fi
   if [[ -n "$MOUNT_PID" ]] && kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
     kill -INT "$MOUNT_PID" >/dev/null 2>&1
+    for _ in $(seq 1 5); do
+      kill -0 "$MOUNT_PID" >/dev/null 2>&1 || break
+      sleep 1
+    done
+    if kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
+      kill -TERM "$MOUNT_PID" >/dev/null 2>&1 || true
+      sleep 1
+    fi
+    if kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
+      kill -KILL "$MOUNT_PID" >/dev/null 2>&1 || true
+    fi
     wait "$MOUNT_PID" >/dev/null 2>&1 || true
   fi
   if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then
@@ -57,6 +68,13 @@ cleanup() {
   fi
   if [[ -n "$DAEMON_PID" ]] && kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
     kill "$DAEMON_PID" >/dev/null 2>&1
+    for _ in $(seq 1 5); do
+      kill -0 "$DAEMON_PID" >/dev/null 2>&1 || break
+      sleep 1
+    done
+    if kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
+      kill -KILL "$DAEMON_PID" >/dev/null 2>&1 || true
+    fi
     wait "$DAEMON_PID" >/dev/null 2>&1 || true
   fi
   rm -rf "$TMP_DIR"
@@ -123,13 +141,18 @@ wait_for_node() {
 
 wait_for_mount() {
   for _ in $(seq 1 30); do
+    if [[ -n "$MOUNT_PID" ]] && ! kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
+      echo "mount process exited before exposing seed file" >&2
+      dump_diagnostics
+      return 1
+    fi
     if [[ -f "$MOUNT_DIR/seed.txt" ]]; then
       return 0
     fi
     sleep 1
   done
   echo "mount did not expose seed file" >&2
-  cat "$MOUNT_LOG" >&2 || true
+  dump_diagnostics
   return 1
 }
 
