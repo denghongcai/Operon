@@ -9,6 +9,7 @@ use operon_core::{DiscoveryList, DiscoveryRecord, ServiceCheck, ServiceDefinitio
 pub use operon_config::NodeEndpoint;
 
 pub const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
+const UDP_SOCKET_CONNECT_REASON: &str = "udp socket connected; datagram response not verified";
 
 pub fn discover_lan_nodes(timeout: Duration) -> anyhow::Result<DiscoveryList> {
     let mdns = ServiceDaemon::new()?;
@@ -69,7 +70,7 @@ pub async fn check_udp_service(service: &ServiceDefinition, timeout: Duration) -
     let result = tokio::time::timeout(timeout, connect_udp_socket(&address)).await;
     let latency_ms = started.elapsed().as_millis();
     let (ok, reason) = match result {
-        Ok(Ok(_)) => (true, None),
+        Ok(Ok(_)) => (true, Some(UDP_SOCKET_CONNECT_REASON.to_string())),
         Ok(Err(error)) => (false, Some(error.to_string())),
         Err(_) => (false, Some("service check timed out".to_string())),
     };
@@ -244,7 +245,7 @@ mod tests {
         .await;
 
         assert!(check.ok);
-        assert_eq!(check.reason, None);
+        assert_eq!(check.reason.as_deref(), Some(UDP_SOCKET_CONNECT_REASON));
     }
 
     #[tokio::test]

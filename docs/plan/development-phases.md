@@ -4928,6 +4928,9 @@ Completed:
 - Added deterministic TCP/UDP service-check coverage in
   [`operon-network`](../../crates/operon-network) and fixed the TCP success
   reason string.
+- Followed up on CI validation by preserving the explicit UDP socket-connect
+  caveat on successful UDP checks while keeping the corrected TCP success
+  reason.
 - Added `operon-grpc-client` chunk-boundary, metadata, and connection-deadline
   coverage, and routed the Linux mount remote client through the shared deadline
   helper.
