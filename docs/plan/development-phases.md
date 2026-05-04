@@ -5147,6 +5147,11 @@ Completed:
   filesystem calls, reduces the seed-exposure wait window, and narrows create
   dispatch to WinFsp `CreateEx` so the next failure clearly shows whether
   dispatch reaches the adapter.
+- Fix the macOS live-smoke diagnostic helper so it runs `set +e` in a subshell;
+  the latest live-smoke evidence showed diagnostics were disabling `errexit`
+  globally and could let a missing seed file continue into later test steps.
+  Windows live-smoke evidence now shows callback flags are present but WinFsp
+  still returns `STATUS_INVALID_DEVICE_REQUEST` before any adapter callback.
 
 Remaining:
 

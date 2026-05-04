@@ -24,22 +24,24 @@ OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
 
 dump_diagnostics() {
-  set +e
-  echo "temporary smoke directory: $TMP_DIR" >&2
-  echo "mount directory: $MOUNT_DIR" >&2
-  if [[ -n "$DAEMON_PID" ]]; then
-    ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
-  fi
-  if [[ -n "$MOUNT_PID" ]]; then
-    ps -p "$MOUNT_PID" -o pid,stat,command >&2 || true
-  fi
-  mount >&2 || true
-  echo "=== daemon log ===" >&2
-  cat "$DAEMON_LOG" >&2 || true
-  echo "=== mount log ===" >&2
-  cat "$MOUNT_LOG" >&2 || true
-  echo "=== temp files ===" >&2
-  find "$TMP_DIR" -maxdepth 2 -print >&2 || true
+  (
+    set +e
+    echo "temporary smoke directory: $TMP_DIR" >&2
+    echo "mount directory: $MOUNT_DIR" >&2
+    if [[ -n "$DAEMON_PID" ]]; then
+      ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
+    fi
+    if [[ -n "$MOUNT_PID" ]]; then
+      ps -p "$MOUNT_PID" -o pid,stat,command >&2 || true
+    fi
+    mount >&2 || true
+    echo "=== daemon log ===" >&2
+    cat "$DAEMON_LOG" >&2 || true
+    echo "=== mount log ===" >&2
+    cat "$MOUNT_LOG" >&2 || true
+    echo "=== temp files ===" >&2
+    find "$TMP_DIR" -maxdepth 2 -print >&2 || true
+  )
 }
 
 cleanup() {
