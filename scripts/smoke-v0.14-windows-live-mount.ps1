@@ -17,6 +17,38 @@ $MountPoint = $null
 $OperondExe = Join-Path $Root "target\debug\operond.exe"
 $OperonExe = Join-Path $Root "target\debug\operon.exe"
 
+function Write-LogFile {
+    param($Label, $Path)
+    Write-Host "=== $Label ($Path) ==="
+    if (Test-Path $Path) {
+        $content = Get-Content $Path -Raw -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($content)) {
+            Write-Host "<empty>"
+        } else {
+            Write-Host $content
+        }
+    } else {
+        Write-Host "<missing>"
+    }
+}
+
+function Dump-Diagnostics {
+    Write-Host "temporary smoke directory: $($Tmp.FullName)"
+    Write-Host "mount point: $MountPoint"
+    if ($null -ne $Daemon) {
+        Write-Host "daemon pid: $($Daemon.Id), exited: $($Daemon.HasExited), exit_code: $(if ($Daemon.HasExited) { $Daemon.ExitCode } else { '<running>' })"
+    }
+    if ($null -ne $Mount) {
+        Write-Host "mount pid: $($Mount.Id), exited: $($Mount.HasExited), exit_code: $(if ($Mount.HasExited) { $Mount.ExitCode } else { '<running>' })"
+    }
+    Get-Service -Name "WinFsp*" -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+    Get-ChildItem -Force $Tmp.FullName -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+    Write-LogFile "daemon stdout" $DaemonLog
+    Write-LogFile "daemon stderr" $DaemonErr
+    Write-LogFile "mount stdout" $MountLog
+    Write-LogFile "mount stderr" $MountErr
+}
+
 function Stop-ChildProcess {
     param($Process)
     if ($null -ne $Process -and -not $Process.HasExited) {
@@ -106,8 +138,7 @@ policy:
     $mounted = $false
     for ($i = 0; $i -lt 60; $i++) {
         if ($Mount.HasExited) {
-            Get-Content $MountLog -ErrorAction SilentlyContinue | Write-Error
-            Get-Content $MountErr -ErrorAction SilentlyContinue | Write-Error
+            Dump-Diagnostics
             throw "mount process exited before exposing seed file"
         }
         if (Test-Path "$MountPoint\seed.txt") {
@@ -117,8 +148,7 @@ policy:
         Start-Sleep -Seconds 1
     }
     if (-not $mounted) {
-        Get-Content $MountLog -ErrorAction SilentlyContinue | Write-Error
-        Get-Content $MountErr -ErrorAction SilentlyContinue | Write-Error
+        Dump-Diagnostics
         throw "mount did not expose seed file"
     }
 
@@ -152,6 +182,9 @@ policy:
     Remove-Item "$MountPoint\dir"
 
     Write-Host "v0.14 Windows live mount smoke passed"
+} catch {
+    Dump-Diagnostics
+    throw
 } finally {
     Cleanup
 }
