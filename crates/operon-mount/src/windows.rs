@@ -240,6 +240,21 @@ fn start_winfsp_mount(
     context: OperonWinFspFs,
 ) -> Result<WinFspMountHandles, NTSTATUS> {
     let interface = Box::into_raw(Box::new(winfsp_interface()));
+    unsafe {
+        trace_mount_event(
+            "interface_before_create",
+            format!(
+                "get_volume_info={} get_security_by_name={} create={} create_ex={} open={} read_directory={} get_dir_info_by_name={}",
+                (*interface).GetVolumeInfo.is_some(),
+                (*interface).GetSecurityByName.is_some(),
+                (*interface).Create.is_some(),
+                (*interface).CreateEx.is_some(),
+                (*interface).Open.is_some(),
+                (*interface).ReadDirectory.is_some(),
+                (*interface).GetDirInfoByName.is_some(),
+            ),
+        );
+    }
     let volume_params = volume_params();
     let mut file_system = std::ptr::null_mut();
     let device_name = u16cstr!("WinFsp.Disk");
@@ -263,6 +278,24 @@ fn start_winfsp_mount(
     let context = Box::into_raw(Box::new(context));
     unsafe {
         (*file_system).UserContext = context.cast();
+        let active_interface = (*file_system).Interface;
+        if active_interface.is_null() {
+            trace_mount_event("interface_after_create", "interface_ptr=NULL");
+        } else {
+            trace_mount_event(
+                "interface_after_create",
+                format!(
+                    "interface_ptr={active_interface:p} get_volume_info={} get_security_by_name={} create={} create_ex={} open={} read_directory={} get_dir_info_by_name={}",
+                    (*active_interface).GetVolumeInfo.is_some(),
+                    (*active_interface).GetSecurityByName.is_some(),
+                    (*active_interface).Create.is_some(),
+                    (*active_interface).CreateEx.is_some(),
+                    (*active_interface).Open.is_some(),
+                    (*active_interface).ReadDirectory.is_some(),
+                    (*active_interface).GetDirInfoByName.is_some(),
+                ),
+            );
+        }
         FspFileSystemSetOperationGuardStrategyF(
             file_system,
             FSP_FILE_SYSTEM_OPERATION_GUARD_STRATEGY_FSP_FILE_SYSTEM_OPERATION_GUARD_STRATEGY_FINE,
