@@ -5130,6 +5130,9 @@ Completed:
   Windows live-smoke build after double buffering did not change behavior; this
   keeps normal release builds quiet while letting the next failed smoke include
   WinFsp dispatcher/debug output.
+- Fix Windows WinFsp `Create` handling for existing paths after debug output
+  showed root opens arrive as `Create "" FILE_OPEN`; the adapter now returns a
+  context for existing paths before creating missing files or directories.
 
 Remaining:
 

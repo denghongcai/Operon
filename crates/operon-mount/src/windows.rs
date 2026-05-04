@@ -198,15 +198,18 @@ impl FileSystemInterface for OperonWinFspFs {
     ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
         let path = self.path_for_name(file_name)?;
         trace_mount_event("create", path.clone());
-        let stat = if create_file_info
-            .create_options
-            .is(CreateOptions::FILE_DIRECTORY_FILE)
-        {
-            self.core.mkdir(&path)
-        } else {
-            self.core.create_file(&path)
-        }
-        .map_err(ntstatus_for_error)?;
+        let stat = match self.core.stat(&path) {
+            Ok(stat) => stat,
+            Err(_) => if create_file_info
+                .create_options
+                .is(CreateOptions::FILE_DIRECTORY_FILE)
+            {
+                self.core.mkdir(&path)
+            } else {
+                self.core.create_file(&path)
+            }
+            .map_err(ntstatus_for_error)?,
+        };
 
         Ok((
             Self::file_context_for_stat(&stat),
