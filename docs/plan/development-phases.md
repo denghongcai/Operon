@@ -5133,6 +5133,13 @@ Completed:
 - Fix Windows WinFsp `Create` handling for existing paths after debug output
   showed root opens arrive as `Create "" FILE_OPEN`; the adapter now returns a
   context for existing paths before creating missing files or directories.
+- Expose the Windows WinFsp `CreateEx` callback and delegate it to the same
+  existing-path open-or-create logic after live-smoke diagnostics showed root
+  opens still returned `STATUS_INVALID_DEVICE_REQUEST` before entering adapter
+  `create` or `open` trace points.
+- Harden completion validation in the v0.8.1 integration coverage and v0.8
+  agent-skills scripts so completion output is written to temporary files before
+  `grep` assertions, avoiding `clap_complete` broken-pipe panics in CI.
 
 Remaining:
 

@@ -160,6 +160,7 @@ impl FileSystemInterface for OperonWinFspFs {
     const GET_VOLUME_INFO_DEFINED: bool = true;
     const GET_SECURITY_BY_NAME_DEFINED: bool = true;
     const CREATE_DEFINED: bool = true;
+    const CREATE_EX_DEFINED: bool = true;
     const OPEN_DEFINED: bool = true;
     const CLEANUP_DEFINED: bool = true;
     const CLOSE_DEFINED: bool = true;
@@ -215,6 +216,17 @@ impl FileSystemInterface for OperonWinFspFs {
             Self::file_context_for_stat(&stat),
             file_info_for_stat(&stat),
         ))
+    }
+
+    fn create_ex(
+        &self,
+        file_name: &U16CStr,
+        create_file_info: CreateFileInfo,
+        security_descriptor: SecurityDescriptor,
+        _buffer: &[u8],
+        _extra_buffer_is_reparse_point: bool,
+    ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
+        self.create(file_name, create_file_info, security_descriptor)
     }
 
     fn open(

@@ -112,8 +112,10 @@ PY
 "$OPERON" --config "$CONFIG_PATH" node ping local | grep -q "ok=true"
 "$OPERON" --config "$CONFIG_PATH" capability list local | grep -q "fs:workspace"
 "$OPERON" --config "$CONFIG_PATH" service check local local-daemon | grep -q "ok=true"
-"$OPERON" completion bash | grep -q "complete -F"
-"$OPERON" completion zsh | grep -q "#compdef operon"
+"$OPERON" completion bash >"$TMP_DIR/completion.bash"
+grep -q "complete -F" "$TMP_DIR/completion.bash"
+"$OPERON" completion zsh >"$TMP_DIR/completion.zsh"
+grep -q "#compdef operon" "$TMP_DIR/completion.zsh"
 
 "$OPERON" --config "$CONFIG_PATH" fs write local:/hello.txt --content "hello integration"
 "$OPERON" --config "$CONFIG_PATH" fs read local:/hello.txt >"$TMP_DIR/hello.out"

@@ -131,8 +131,10 @@ assert data["policy"]["services"][0]["protocol"] == "tcp"
 assert data["secrets"]["file"].endswith("secrets.yaml")
 '
 
-cargo run -q -p operon-cli -- completion bash | grep -q "complete -F"
-cargo run -q -p operon-cli -- completion zsh | grep -q "#compdef operon"
+cargo run -q -p operon-cli -- completion bash >"$tmpdir/completion.bash"
+grep -q "complete -F" "$tmpdir/completion.bash"
+cargo run -q -p operon-cli -- completion zsh >"$tmpdir/completion.zsh"
+grep -q "#compdef operon" "$tmpdir/completion.zsh"
 cargo run -q -p operon-cli -- onboard --yes --output-dir "$tmpdir/onboard" \
   | grep -q "operon completion zsh"
 
