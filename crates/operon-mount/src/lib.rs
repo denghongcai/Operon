@@ -1,19 +1,23 @@
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod errors;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod fuse_fs;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod inode_table;
 pub mod mount_core;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod path;
 pub mod remote_client;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod session;
+#[cfg(windows)]
+mod windows;
 
-pub use mount_core::RemoteFs;
-#[cfg(target_os = "linux")]
+pub use mount_core::{MountAdapterCore, MountDirectoryEntry, MountErrorKind, RemoteFs};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use session::{spawn_mount, MountOptions, MountSession};
+#[cfg(windows)]
+pub use windows::{spawn_mount, MountOptions, MountSession};
 
 pub const MOUNT_CAPABILITY: &str = "mount";
 

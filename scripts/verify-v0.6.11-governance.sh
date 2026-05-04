@@ -11,8 +11,9 @@ if rg -n 'expect\(".*poisoned' crates/operond/src/main.rs; then
 fi
 
 rg -n 'operon-mount = \{ path = "../operon-mount" \}' crates/operon-cli/Cargo.toml
-rg -n '\[target.'\''cfg\(target_os = "linux"\)'\''.dependencies\]' crates/operon-cli/Cargo.toml
-rg -n 'operon mount is only supported on Linux' crates/operon-cli/src/commands/mount.rs
+rg -n '\[target.'\''cfg\(any\(target_os = "linux", target_os = "macos"\)\)'\''.dependencies\]' crates/operon-cli/Cargo.toml
+rg -n '\[target.'\''cfg\(windows\)'\''.dependencies\]' crates/operon-cli/Cargo.toml
+rg -n 'fn mount_adapter_name' crates/operon-cli/src/commands/mount.rs
 
 cargo test -p operond --locked locks::tests::poisoned_lock_returns_internal_status
 cargo test -p operond --locked lan_advertise::tests::unspecified_addresses_advertise_localhost

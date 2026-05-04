@@ -1,17 +1,15 @@
-pub(crate) fn errno_for_error(error: &anyhow::Error) -> fuser::Errno {
-    if let Some(status) = error.downcast_ref::<tonic::Status>() {
-        match status.code() {
-            tonic::Code::NotFound => return fuser::Errno::ENOENT,
-            tonic::Code::PermissionDenied | tonic::Code::Unauthenticated => {
-                return fuser::Errno::EACCES;
-            }
-            tonic::Code::InvalidArgument => return fuser::Errno::EINVAL,
-            tonic::Code::FailedPrecondition => return fuser::Errno::EPERM,
-            _ => {}
-        }
-    }
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 
-    fuser::Errno::EIO
+use crate::mount_core::{classify_mount_error, MountErrorKind};
+
+pub(crate) fn errno_for_error(error: &anyhow::Error) -> fuser::Errno {
+    match classify_mount_error(error) {
+        MountErrorKind::NotFound => fuser::Errno::ENOENT,
+        MountErrorKind::PermissionDenied => fuser::Errno::EACCES,
+        MountErrorKind::InvalidInput => fuser::Errno::EINVAL,
+        MountErrorKind::FailedPrecondition => fuser::Errno::EPERM,
+        MountErrorKind::Unknown => fuser::Errno::EIO,
+    }
 }
 
 #[cfg(test)]

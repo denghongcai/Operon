@@ -21,10 +21,9 @@ require_pattern 'cargo check --workspace --locked' .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked shell_invocation_matches_platform' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-cli --locked exec_session_terminal_dimensions' .github/workflows/ci.yml
 
-require_pattern 'macOS and Windows prebuilt' README.md
-require_pattern 'archives are core runtime previews' README.md
-require_pattern 'Linux FUSE mount support remains' README.md
-require_pattern 'Linux FUSE mount support remains Linux-only' README.md
+require_pattern 'Linux FUSE, macOS macFUSE, and Windows WinFsp' README.md
+require_pattern 'macOS and Windows hosts' README.md
+require_pattern 'must have the corresponding platform runtime installed' README.md
 require_pattern 'supported through `portable-pty` on Unix-like platforms' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'Windows interactive exec sessions are' PROTOCOL.md
 require_pattern 'explicitly unsupported in this release line' PROTOCOL.md

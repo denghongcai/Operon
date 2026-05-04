@@ -1,0 +1,64 @@
+name: v0.14 Live Mount Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-live-mount:
+    name: macOS macFUSE Live Mount
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: v014-live-mount-macos
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
+          repo-token: ${{ github.token }}
+
+      - name: Install macFUSE
+        run: brew install --cask macfuse
+
+      - name: Run macOS live mount smoke
+        run: scripts/smoke-v0.14-macos-live-mount.sh
+
+  windows-live-mount:
+    name: Windows WinFsp Live Mount
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: v014-live-mount-windows
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
+          repo-token: ${{ github.token }}
+
+      - name: Install WinFsp
+        shell: powershell
+        run: choco install winfsp -y
+
+      - name: Run Windows live mount smoke
+        shell: powershell
+        run: scripts/smoke-v0.14-windows-live-mount.ps1

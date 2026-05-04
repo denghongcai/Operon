@@ -65,7 +65,14 @@ jobs:
           repo-token: ${{ github.token }}
 
       - name: Check workspace
-        run: cargo check --workspace --locked
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            cargo check --workspace --locked --features operon-mount/macos-no-mount
+          else
+            cargo check --workspace --locked
+          fi
 
       - name: Test protocol
         run: cargo test -p operon-protocol --locked
@@ -75,6 +82,16 @@ jobs:
 
       - name: Test filesystem core
         run: cargo test -p operon-fs --locked
+
+      - name: Test mount adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            cargo test -p operon-mount --locked --features macos-no-mount
+          else
+            cargo test -p operon-mount --locked
+          fi
 
       - name: Test exec policy
         run: cargo test -p operon-process --locked

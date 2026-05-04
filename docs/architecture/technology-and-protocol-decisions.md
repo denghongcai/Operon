@@ -218,19 +218,20 @@ proto/
 ## Decision 6: Mount Layer Boundary
 
 Mount support is an adapter over the Core FS Protocol. FUSE, macFUSE, and WinFsp
-should adapt OS filesystem calls into Operon filesystem operations; they should
-not become the core VFS model. The current implementation provides a Linux FUSE
-adapter; v0.13.7 research keeps supported live mounts Linux-only before v1.0.
-v0.13.8 adds a shared mount-core boundary for platform-neutral remote filesystem
-behavior. macFUSE FSKit is the first experimental non-Linux candidate after that
-boundary; WinFsp should prefer its native API later, after packaging and license
-review.
+adapt OS filesystem calls into Operon filesystem operations; they do not become
+the core VFS model. The current implementation keeps shared path validation,
+operation mapping, error classification, and remote filesystem behavior in
+`operon-mount::mount_core`. Linux and macOS use the FUSE callback adapter
+through `fuser`; macOS requires the macFUSE runtime. Windows uses a native
+WinFsp adapter backed by the MIT `winfsp_wrs` bindings; Windows hosts require
+the WinFsp runtime.
 
 Current shape:
 
 ```text
 OS Mount Adapter
-  FUSE on Linux
+  FUSE on Linux/macOS
+  WinFsp on Windows
       │
       ▼
 Core FS Protocol
@@ -401,7 +402,7 @@ claims beyond core runtime preview:
 | non-interactive exec | target argv-first parity; shell defaults are platform-specific |
 | interactive exec sessions | supported through `portable-pty` on Unix-like platforms; explicitly unsupported on Windows for this release line |
 | TCP/UDP service forwarding | target parity, with firewall caveats in diagnostics |
-| mount adapter | Linux FUSE remains the only supported live mount before v1.0; shared mount-core exists; macFUSE FSKit is the first experimental candidate; WinFsp native API remains later work |
+| mount adapter | Linux FUSE, macOS macFUSE, and Windows WinFsp live mount adapters are supported; macOS/Windows require host runtime installation and live smoke validation beyond compile/unit checks |
 | private config/token permissions | Windows ACL-aware validation for Operon-generated sensitive files; accepted trustees are current user, Administrators, and SYSTEM |
 
 Extended target set:

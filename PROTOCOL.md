@@ -383,9 +383,11 @@ Platform guarantees are intentionally explicit. Linux and Unix-like exec
 cancellation uses process-group termination. Windows non-interactive exec
 cancellation uses Job Object process-tree termination, with a direct-child kill
 fallback only if the daemon cannot create or assign the Job Object for that
-process. Linux remains the only supported mount-adapter platform; macOS and
-Windows filesystem RPCs are core runtime operations, not macFUSE or WinFsp
-mounts. Windows token and config files are checked with ACL-aware private-file
+process. Live mount adapters translate OS filesystem callbacks into the Core FS
+Protocol: Linux uses FUSE, macOS uses macFUSE, and Windows uses WinFsp. macOS
+and Windows hosts must provide those platform runtimes for `operon mount`; the
+filesystem RPCs remain the authoritative API and do not depend on mount support.
+Windows token and config files are checked with ACL-aware private-file
 validation when Operon creates or overwrites sensitive files; the accepted ACL
 scope is the current user, Administrators, and SYSTEM.
 

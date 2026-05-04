@@ -14,9 +14,9 @@ require_pattern 'No v0.13.8 mount-core boundary work remains' docs/plan/developm
 
 require_file crates/operon-mount/src/mount_core.rs
 require_pattern 'pub mod mount_core;' crates/operon-mount/src/lib.rs
-require_pattern 'pub use mount_core::RemoteFs' crates/operon-mount/src/lib.rs
+require_pattern 'pub use mount_core::\{MountAdapterCore, MountDirectoryEntry, MountErrorKind, RemoteFs\}' crates/operon-mount/src/lib.rs
 reject_pattern '^#!\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
-require_pattern '#\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
+require_pattern '#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/lib.rs
 require_pattern 'pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 require_pattern 'pub fn normalize_remote_path' crates/operon-mount/src/mount_core.rs
 require_pattern 'pub fn validate_child_name' crates/operon-mount/src/mount_core.rs

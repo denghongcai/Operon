@@ -1,4 +1,4 @@
-#![cfg(target_os = "linux")]
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 
 use std::{
     ffi::OsStr,
@@ -12,7 +12,7 @@ use operon_core::FsStat;
 use crate::{
     errors::errno_for_error,
     inode_table::{InodeEntry, InodeTable},
-    mount_core::RemoteFs,
+    mount_core::{MountAdapterCore, RemoteFs},
     path::{join_remote_child, validate_child_name},
 };
 
@@ -20,14 +20,14 @@ const TTL: Duration = Duration::from_secs(1);
 const BLOCK_SIZE: u32 = 4096;
 
 pub(crate) struct OperonFuseFs {
-    remote_fs: Arc<dyn RemoteFs>,
+    core: MountAdapterCore,
     inodes: RwLock<InodeTable>,
 }
 
 impl OperonFuseFs {
     pub(crate) fn new(remote_fs: Arc<dyn RemoteFs>, root: FsStat) -> Self {
         Self {
-            remote_fs,
+            core: MountAdapterCore::new(remote_fs),
             inodes: RwLock::new(InodeTable::new(root)),
         }
     }
@@ -51,7 +51,7 @@ impl OperonFuseFs {
         }
         let name = validate_child_name(name)?;
         let path = join_remote_child(&parent_entry.path, name)?;
-        let stat = self.remote_fs.stat(&path)?;
+        let stat = self.core.stat(&path)?;
         self.write_inodes()?.upsert(parent, name.to_string(), stat)
     }
 
@@ -127,7 +127,7 @@ impl fuser::Filesystem for OperonFuseFs {
             return;
         };
 
-        match self.remote_fs.stat(&entry.path) {
+        match self.core.stat(&entry.path) {
             Ok(stat) => {
                 let refreshed = self
                     .write_inodes()
@@ -186,7 +186,7 @@ impl fuser::Filesystem for OperonFuseFs {
         };
 
         if let Some(size) = size {
-            match self.remote_fs.truncate(&entry.path, size).and_then(|stat| {
+            match self.core.truncate(&entry.path, size).and_then(|stat| {
                 self.write_inodes()
                     .and_then(|mut table| table.upsert(entry.parent, entry.name.clone(), stat))
             }) {
@@ -229,7 +229,7 @@ impl fuser::Filesystem for OperonFuseFs {
             }
         };
         match self
-            .remote_fs
+            .core
             .mkdir(&path)
             .and_then(|stat| self.upsert_child(parent, name, stat))
         {
@@ -252,7 +252,7 @@ impl fuser::Filesystem for OperonFuseFs {
                 return;
             }
         };
-        match self.remote_fs.delete(&path) {
+        match self.core.delete(&path) {
             Ok(()) => match self.write_inodes() {
                 Ok(mut table) => {
                     table.remove_subtree(&path);
@@ -278,7 +278,7 @@ impl fuser::Filesystem for OperonFuseFs {
                 return;
             }
         };
-        match self.remote_fs.delete(&path) {
+        match self.core.delete(&path) {
             Ok(()) => match self.write_inodes() {
                 Ok(mut table) => {
                     table.remove_subtree(&path);
@@ -329,11 +329,14 @@ impl fuser::Filesystem for OperonFuseFs {
                 return;
             }
         };
-        match self.remote_fs.rename(&from_path, &to_path) {
+        match self.core.rename(&from_path, &to_path) {
             Ok(()) => match self.write_inodes() {
                 Ok(mut table) => {
-                    table.remove_subtree(&from_path);
                     table.remove_subtree(&to_path);
+                    if let Ok(name) = validate_child_name(newname) {
+                        let _ =
+                            table.rename_subtree(&from_path, &to_path, newparent, name.to_string());
+                    }
                     reply.ok();
                 }
                 Err(error) => reply.error(errno_for_error(&error)),
@@ -371,7 +374,7 @@ impl fuser::Filesystem for OperonFuseFs {
             reply.error(fuser::Errno::EISDIR);
             return;
         }
-        match self.remote_fs.read_range(&entry.path, offset, size) {
+        match self.core.read_file(&entry.path, offset, size) {
             Ok(data) => reply.data(&data),
             Err(error) => reply.error(errno_for_error(&error)),
         }
@@ -397,9 +400,9 @@ impl fuser::Filesystem for OperonFuseFs {
             reply.error(fuser::Errno::EISDIR);
             return;
         }
-        match self.remote_fs.write_range(&entry.path, offset, data) {
+        match self.core.write_file(&entry.path, offset, data) {
             Ok(bytes_written) => {
-                if let Ok(stat) = self.remote_fs.stat(&entry.path) {
+                if let Ok(stat) = self.core.stat(&entry.path) {
                     match self.write_inodes() {
                         Ok(mut table) => {
                             let _ = table.upsert(entry.parent, entry.name, stat);
@@ -433,7 +436,7 @@ impl fuser::Filesystem for OperonFuseFs {
             return;
         }
 
-        let list = match self.remote_fs.list(&parent.path) {
+        let list = match self.core.list_dir(&parent.path) {
             Ok(list) => list,
             Err(error) => {
                 reply.error(errno_for_error(&error));
@@ -454,19 +457,13 @@ impl fuser::Filesystem for OperonFuseFs {
                     return;
                 }
             };
-            for item in list.entries {
-                let kind = if item.is_dir {
+            for item in list {
+                let kind = if item.stat.is_dir {
                     fuser::FileType::Directory
                 } else {
                     fuser::FileType::RegularFile
                 };
-                let stat = FsStat {
-                    path: item.path,
-                    is_file: item.is_file,
-                    is_dir: item.is_dir,
-                    size: item.size,
-                    version: item.version,
-                };
+                let stat = item.stat;
                 match table.upsert(parent.ino, item.name.clone(), stat) {
                     Ok(entry) => entries.push((entry.ino, kind, item.name)),
                     Err(error) => {
@@ -539,9 +536,8 @@ impl fuser::Filesystem for OperonFuseFs {
             }
         };
         match self
-            .remote_fs
-            .write_range(&path, 0, &[])
-            .and_then(|_| self.remote_fs.stat(&path))
+            .core
+            .create_file(&path)
             .and_then(|stat| self.upsert_child(parent, name, stat))
         {
             Ok(entry) => reply.created(

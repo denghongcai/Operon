@@ -305,15 +305,21 @@ Operon should not own:
 
 - `docs/plan/v0.13.7-mount-adapter-strategy.md`
   - Completed v0.13.7 scope for macFUSE and WinFsp mount adapter strategy,
-    dependency, packaging, CI, and support-boundary decisions. Supported live
-    mounts remain Linux-only before v1.0; macFUSE FSKit is the first
-    experimental candidate after the v0.13.8 shared mount-core boundary, and
-    WinFsp should prefer the native API after packaging and license review.
+    dependency, packaging, CI, and support-boundary decisions. Its Linux-only
+    pre-v1.0 support decision is superseded by the v0.14 cross-platform live
+    mount plan.
 
 - `docs/plan/v0.13.8-mount-core-boundary.md`
   - Completed v0.13.8 scope for extracting platform-neutral `RemoteFs` and path
     behavior before attempting macFUSE FSKit or WinFsp native adapter
     implementation.
+
+- `docs/plan/v0.14-cross-platform-live-mount.md`
+  - In-progress v0.14 scope for making live mount a complete core capability
+    across Linux, macOS, and Windows. Shared mount-core behavior, Unix
+    FUSE/macFUSE gating, Windows WinFsp adapter code, CLI dispatch, doctor
+    diagnostics, docs, and validation wiring are implemented; macOS and Windows
+    live smoke remain.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -489,13 +495,21 @@ Operon should not own:
 - Completed mount adapter strategy milestone: v0.13.7 documented current
   macFUSE 5.2.0, FSKit, kernel-backend, Apple kext, WinFsp 2025/v2.1,
   native-vs-FUSE, service architecture, Rust binding, packaging, license, and
-  CI implications. Live mount support remains Linux-only before v1.0.
+  CI implications. Its Linux-only pre-v1.0 support decision is superseded by
+  the v0.14 cross-platform live mount plan.
 - Completed mount-core boundary milestone: v0.13.8 moved platform-neutral
   `RemoteFs` and path validation into `operon-mount::mount_core`, removed the
   crate-root Linux gate, kept Linux FUSE adapter/session modules Linux-gated,
   added validation, and aligned the public release line to `0.13.8` /
   `v0.13.8`.
-- Next planned milestone: not yet selected after v0.13.8.
+- In-progress mount milestone: v0.14 is making live mount a complete core
+  Operon capability across Linux, macOS, and Windows. Shared mount-core
+  operation mapping, Unix FUSE/macFUSE gating, native Windows WinFsp adapter
+  code through MIT `winfsp_wrs`, CLI dispatch, doctor diagnostics, docs, release
+  workflow wiring, and validation coverage are implemented. macOS live smoke
+  with macFUSE and Windows live smoke with WinFsp remain before release
+  publication.
+- Next planned milestone: v0.14 Cross-Platform Live Mount.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -854,3 +868,21 @@ Defer:
   focused tests, and
   [`scripts/verify-v0.13.3-config-onboard-maintainability.sh`](scripts/verify-v0.13.3-config-onboard-maintainability.sh)
   is wired into consolidated validation. Nothing remains in v0.13.3.
+- Latest phase status update: v0.14 Cross-Platform Live Mount is in progress.
+  [`operon-mount`](crates/operon-mount) now has shared
+  `MountAdapterCore` operation mapping and error classification, Linux/macOS
+  FUSE adapter gating through `fuser`, and a Windows native WinFsp adapter using
+  MIT `winfsp_wrs`. `operon mount` dispatches to Linux FUSE, macOS macFUSE, or
+  Windows WinFsp builds; `operon doctor` reports platform runtime requirements.
+  CI validation is wired through
+  [`scripts/verify-v0.14-cross-platform-live-mount.sh`](scripts/verify-v0.14-cross-platform-live-mount.sh),
+  and the current implementation checkpoint has passed the `core`, `runtime`,
+  and `linux-system` consolidated validation groups. Linux FUSE rename now
+  preserves inode mappings so post-rename `stat` and `unlink` operations keep
+  working through cached kernel dentries. Rust crate versions, TypeScript SDK
+  package metadata, CLI version output, and `PROTOCOL_VERSION` are aligned to
+  `0.14.0` / `v0.14.0`. A manual Actions live-smoke workflow is present at
+  [`.github/workflows/v0.14-live-mount-smoke.yml`](.github/workflows/v0.14-live-mount-smoke.yml)
+  for macOS macFUSE and Windows WinFsp validation.
+  Remaining v0.14 work: run macOS live smoke on a macFUSE host, run Windows
+  live smoke on a WinFsp host, then publish and verify a release.

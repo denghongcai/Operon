@@ -152,6 +152,11 @@ jobs:
           version: "25.3"
           repo-token: ${{ github.token }}
 
+      - name: Install macFUSE build dependency
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install --cask macfuse
+
       - name: Install Rust target
         run: rustup target add "${{ matrix.target }}"
 

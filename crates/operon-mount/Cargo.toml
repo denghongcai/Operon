@@ -1,10 +1,13 @@
 [package]
 name = "operon-mount"
-version = "0.13.8"
+version = "0.14.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+[features]
+macos-no-mount = ["fuser/macos-no-mount"]
 
 [dependencies]
 anyhow.workspace = true
@@ -17,6 +20,9 @@ operon-protocol = { path = "../operon-protocol" }
 tokio.workspace = true
 tonic.workspace = true
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 fuser.workspace = true
 libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winfsp_wrs = "0.4.1"

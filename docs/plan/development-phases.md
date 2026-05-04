@@ -5059,6 +5059,51 @@ Remaining:
 - No v0.13.8 mount-core boundary work remains.
 - macFUSE and WinFsp implementation remain outside this phase.
 
+## Phase 93: v0.14 Cross-Platform Live Mount
+
+Status: In progress.
+
+Goal: make live mount a complete core Operon capability across Linux, macOS,
+and Windows instead of treating non-Linux mount support as deferred convenience
+work.
+
+Detailed plan: `docs/plan/v0.14-cross-platform-live-mount.md`.
+
+Completed:
+
+- Supersede the v0.13.7 Linux-only pre-v1.0 support decision for live mounts.
+- Expand the shared `mount_core` boundary so platform adapters reuse common
+  path validation, operation mapping, stat/list/read/write/truncate,
+  mkdir/delete/rename semantics, error classification, and cancellation tests.
+- Convert the Linux-only FUSE adapter boundary into a Unix FUSE adapter that
+  preserves Linux behavior and enables macOS/macFUSE implementation.
+- Add macOS live mount support with compile/unit validation and a live smoke
+  gate for macFUSE runtime behavior.
+- Add Windows live mount support through a native WinFsp adapter, using an
+  Apache-2.0-compatible dependency path such as MIT-compatible bindings or
+  direct FFI rather than adding GPLv3 bindings without an explicit license
+  decision.
+- Replace the current non-Linux `operon mount` error with platform-aware mount
+  support and missing-runtime diagnostics.
+- Extend `operon doctor`, README, PROTOCOL, runtime API docs, repo-local
+  skills, AGENTS guidance, validation scripts, and release documentation to
+  match the implemented mount support boundary.
+- Preserve Linux FUSE inode mappings across rename callbacks so kernel dentries
+  remain valid for post-rename `stat` and `unlink` operations.
+- Align Rust crate versions, the TypeScript SDK package version, CLI version
+  output, and `PROTOCOL_VERSION` to `0.14.0` / `v0.14.0`.
+- Add a manual Actions live-smoke workflow for macOS macFUSE and Windows WinFsp
+  validation.
+- Validate the current implementation checkpoint with the `core`, `runtime`,
+  and `linux-system` consolidated validation groups.
+
+Remaining:
+
+- Run macOS live smoke on a host with macFUSE installed.
+- Run Windows live smoke on a host with WinFsp installed.
+- Publish and verify a release only after live smoke and release artifact
+  validation pass.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

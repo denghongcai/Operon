@@ -1,6 +1,6 @@
 [package]
 name = "operon-cli"
-version = "0.13.8"
+version = "0.14.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -30,10 +30,11 @@ serde_yaml.workspace = true
 tokio.workspace = true
 tonic.workspace = true
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 operon-mount = { path = "../operon-mount" }
 
 [target.'cfg(windows)'.dependencies]
+operon-mount = { path = "../operon-mount" }
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
 [dev-dependencies]

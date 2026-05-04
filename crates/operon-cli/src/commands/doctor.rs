@@ -133,9 +133,19 @@ fn mount_adapter_diagnostic() -> &'static str {
     "linux-fuse-supported"
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn mount_adapter_diagnostic() -> &'static str {
-    "mount-adapter-deferred"
+    "macos-macfuse-supported-runtime-required"
+}
+
+#[cfg(windows)]
+fn mount_adapter_diagnostic() -> &'static str {
+    "windows-winfsp-supported-runtime-required"
+}
+
+#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), not(windows)))]
+fn mount_adapter_diagnostic() -> &'static str {
+    "mount-adapter-unsupported-platform"
 }
 
 fn private_file_protection_diagnostic() -> &'static str {
@@ -358,6 +368,18 @@ mod tests {
         let report = platform_report();
 
         assert!(!report.mount_adapter.is_empty());
+        #[cfg(target_os = "linux")]
+        assert_eq!(report.mount_adapter, "linux-fuse-supported");
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            report.mount_adapter,
+            "macos-macfuse-supported-runtime-required"
+        );
+        #[cfg(windows)]
+        assert_eq!(
+            report.mount_adapter,
+            "windows-winfsp-supported-runtime-required"
+        );
         assert!(!report.private_file_protection.is_empty());
         #[cfg(windows)]
         assert_eq!(report.private_file_protection, "windows-acl-verified");
