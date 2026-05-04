@@ -5158,6 +5158,12 @@ Completed:
   of `CreateEx`, use case-insensitive search, persistent ACLs,
   post-cleanup-when-modified-only, and an explicit volume creation time while
   retaining double buffering.
+- Narrow the latest macOS live-smoke failure to the FUSE mount/handshake
+  boundary: daemon and mount process stay alive, but the mountpoint never enters
+  the system mount table and CLI output never reaches the post-mount line. The
+  macOS smoke script now attempts macFUSE kernel-extension loading, records
+  macFUSE/kext readiness diagnostics, and enables Unix mount trace points around
+  remote connection, root stat, and `fuser::spawn_mount2`.
 
 Remaining:
 

@@ -28,6 +28,13 @@ dump_diagnostics() {
     set +e
     echo "temporary smoke directory: $TMP_DIR" >&2
     echo "mount directory: $MOUNT_DIR" >&2
+    sw_vers >&2 || true
+    uname -a >&2 || true
+    pkg-config --modversion fuse >&2 || true
+    ls -la /Library/Filesystems/macfuse.fs >&2 || true
+    ls -la /Library/Filesystems/macfuse.fs/Contents/Extensions >&2 || true
+    kmutil showloaded --list-only 2>/dev/null | grep -i macfuse >&2 || true
+    kextstat 2>/dev/null | grep -i macfuse >&2 || true
     if [[ -n "$DAEMON_PID" ]]; then
       ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
     fi
@@ -91,6 +98,20 @@ start_watchdog() {
     kill -TERM "$$" >/dev/null 2>&1 || true
   ) &
   WATCHDOG_PID="$!"
+}
+
+ensure_macfuse_runtime() {
+  local macos_major
+  macos_major="$(sw_vers -productVersion | cut -d. -f1)"
+  local kext_path="/Library/Filesystems/macfuse.fs/Contents/Extensions/${macos_major}/macfuse.kext"
+
+  if [[ -d "$kext_path" ]]; then
+    sudo /usr/bin/kmutil load -p "$kext_path" >/dev/null 2>&1 || true
+  fi
+
+  if ! kmutil showloaded --list-only 2>/dev/null | grep -qi macfuse; then
+    echo "macFUSE kernel extension is not loaded; attempting mount for diagnostics" >&2
+  fi
 }
 
 write_config() {
@@ -162,6 +183,7 @@ mkdir -p "$WORKSPACE" "$MOUNT_DIR"
 printf "seed" >"$WORKSPACE/seed.txt"
 write_config
 start_watchdog
+ensure_macfuse_runtime
 
 cargo build -q -p operond -p operon-cli --locked
 
@@ -169,7 +191,7 @@ cargo build -q -p operond -p operon-cli --locked
 DAEMON_PID="$!"
 wait_for_node
 
-"$OPERON_BIN" --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
+OPERON_MOUNT_TRACE=1 "$OPERON_BIN" --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
 MOUNT_PID="$!"
 wait_for_mount
 

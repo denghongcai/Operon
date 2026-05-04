@@ -18,6 +18,12 @@ use crate::{
     remote_client::GrpcRemoteFs,
 };
 
+fn trace_mount_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
+    if std::env::var_os("OPERON_MOUNT_TRACE").is_some() {
+        eprintln!("operon-mount unix {}: {}", event.as_ref(), detail.as_ref());
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MountOptions {
     pub endpoint: NodeEndpoint,
@@ -63,10 +69,15 @@ impl MountSession {
 pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     let remote_root = normalize_remote_path(&options.remote_path)?;
     let mount_point = options.mount_point;
+    trace_mount_event("start", mount_point.display().to_string());
     ensure_mount_point(&mount_point)?;
+    trace_mount_event("mount_point_ready", mount_point.display().to_string());
 
+    trace_mount_event("remote_connect_start", remote_root.clone());
     let remote_fs = Arc::new(GrpcRemoteFs::connect(options.endpoint)?);
+    trace_mount_event("remote_connect_ok", remote_root.clone());
     let root = remote_fs.stat(&remote_root)?;
+    trace_mount_event("remote_root_stat", root.path.clone());
     if !root.is_dir {
         anyhow::bail!("mount root `{remote_root}` is not a directory");
     }
@@ -81,8 +92,10 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         fuser::MountOption::NoExec,
     ];
     config.n_threads = Some(4);
+    trace_mount_event("spawn_mount2_start", mount_point.display().to_string());
     let session = fuser::spawn_mount2(fs, &mount_point, &config)
         .with_context(|| format!("failed to mount {}", mount_point.display()))?;
+    trace_mount_event("spawn_mount2_ok", mount_point.display().to_string());
 
     Ok(MountSession { session })
 }
