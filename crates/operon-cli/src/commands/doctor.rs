@@ -161,8 +161,14 @@ fn exec_cancellation_diagnostic() -> &'static str {
     "direct-child-best-effort"
 }
 
+#[cfg(not(windows))]
 fn pty_session_diagnostic() -> &'static str {
     "portable-pty-smoke-validated"
+}
+
+#[cfg(windows)]
+fn pty_session_diagnostic() -> &'static str {
+    "portable-pty-validation-deferred"
 }
 
 async fn diagnose_node(

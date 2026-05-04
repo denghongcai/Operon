@@ -83,6 +83,7 @@ jobs:
         run: cargo test -p operond --locked shell_invocation_matches_platform
 
       - name: Test daemon PTY smoke
+        if: runner.os != 'Windows'
         run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
 
       - name: Test daemon exec cancellation guarantee

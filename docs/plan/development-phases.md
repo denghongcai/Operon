@@ -4492,7 +4492,8 @@ Planned:
   diagnostics.
 - assess and, if needed, implement Windows Job Object based exec process-tree
   cancellation.
-- add macOS and Windows `portable-pty` interactive session smoke coverage.
+- add macOS `portable-pty` interactive session smoke coverage and report
+  Windows PTY validation as deferred until a runner-safe smoke path exists.
 - extend `operon doctor` with platform caveats for mount support, private file
   permissions, exec cancellation, PTY validation, and firewall-sensitive
   service forwarding.
@@ -4506,8 +4507,9 @@ Completed:
 - Documented Windows non-interactive exec cancellation as direct-child
   best-effort until Job Object process-tree cancellation is implemented.
 - Added daemon exec cancellation guarantee tests.
-- Added cross-platform `portable-pty` smoke validation for session start,
-  resize, output, and exit behavior.
+- Added `portable-pty` smoke validation for session start, resize, output, and
+  exit behavior on Unix-like CI runners; Windows PTY validation is reported as
+  deferred instead of blocking CI on a hanging smoke test.
 - Extended `operon doctor` with platform caveats for mount support,
   private-file protection, exec cancellation, PTY validation, and service
   forwarding firewall sensitivity.
