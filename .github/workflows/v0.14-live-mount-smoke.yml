@@ -20,14 +20,22 @@ on:
         options:
           - fskit
           - kernel
+      macos_runner:
+        description: "macOS runner for live mount smoke"
+        type: choice
+        required: true
+        default: hosted
+        options:
+          - hosted
+          - self-hosted-macfuse
 
 permissions:
   contents: read
 
 jobs:
-  macos-live-mount:
-    name: macOS macFUSE Live Mount
-    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos' }}
+  macos-hosted-live-mount:
+    name: macOS macFUSE Live Mount (hosted)
+    if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && inputs.macos_runner == 'hosted' }}
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -50,6 +58,61 @@ jobs:
 
       - name: Install macFUSE
         run: brew install --cask macfuse
+
+      - name: Run macOS live mount smoke
+        id: macos-smoke
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+        run: |
+          set -o pipefail
+          log_path="$RUNNER_TEMP/v0.14-macos-live-mount-${OPERON_MOUNT_MACOS_BACKEND}.log"
+          echo "macOS live mount backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS live mount log: ${log_path}"
+          set +e
+          scripts/smoke-v0.14-macos-live-mount.sh 2>&1 | tee "$log_path"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "macOS live mount smoke exit code: ${status}"
+          exit "$status"
+
+      - name: Upload macOS live mount smoke log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v0.14-macos-live-mount-${{ inputs.macos_backend }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/v0.14-macos-live-mount-${{ inputs.macos_backend }}.log
+          if-no-files-found: warn
+
+  macos-self-hosted-live-mount:
+    name: macOS macFUSE Live Mount (self-hosted)
+    if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && inputs.macos_runner == 'self-hosted-macfuse' }}
+    runs-on: [self-hosted, macOS, macfuse]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: v014-live-mount-macos-self-hosted
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
+          repo-token: ${{ github.token }}
+
+      - name: Check macFUSE runtime
+        run: |
+          sw_vers
+          test -d /Library/Filesystems/macfuse.fs
+          pkg-config --modversion fuse
+          kmutil showloaded --list-only 2>/dev/null | grep -i macfuse || true
+          kextstat 2>/dev/null | grep -i macfuse || true
 
       - name: Run macOS live mount smoke
         id: macos-smoke

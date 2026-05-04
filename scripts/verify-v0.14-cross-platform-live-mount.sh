@@ -13,7 +13,7 @@ require_file scripts/smoke-v0.14-macos-live-mount.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
 require_pattern 'Status: In progress' docs/plan/v0.14-cross-platform-live-mount.md
-require_pattern 'macOS live smoke on a host with macFUSE installed remains' docs/plan/v0.14-cross-platform-live-mount.md
+require_pattern 'macOS live smoke on a host with macFUSE installed, approved, and loaded' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'docs/plan/v0.14-cross-platform-live-mount.md' AGENTS.md
 require_pattern 'v0.14 Cross-Platform Live Mount' AGENTS.md
 require_pattern 'Linux FUSE, macOS macFUSE, and Windows WinFsp' README.md
@@ -52,6 +52,10 @@ require_pattern 'cargo test -p operon-mount --locked' .github/workflows/ci.yml
 require_pattern 'brew install --cask macfuse' .github/workflows/release-draft.yml
 require_pattern 'brew install --cask macfuse' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'self-hosted-macfuse' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'runs-on: \[self-hosted, macOS, macfuse\]' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'Check macFUSE runtime' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macOS live mount smoke exit code' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'actions/upload-artifact@v7' .github/workflows/v0.14-live-mount-smoke.yml

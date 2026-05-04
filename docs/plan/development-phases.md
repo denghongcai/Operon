@@ -5241,10 +5241,17 @@ Completed:
   the same root-cause evidence: the hosted runner does not load the macFUSE
   kernel extension, the seed file is not exposed, and Operon reaches
   `spawn_mount2_start`.
+- Add a `macos_runner=hosted|self-hosted-macfuse` input to the manual v0.14
+  live-smoke workflow. The hosted path remains the current GitHub runner
+  diagnostic lane, while the self-hosted path targets a runner labeled
+  `self-hosted`, `macOS`, and `macfuse` where macFUSE is already installed,
+  approved, and loaded for release-gate validation.
 
 Remaining:
 
-- Run macOS live smoke on a host with macFUSE installed.
+- Run macOS live smoke on a host with macFUSE installed, approved, and loaded,
+  either manually or through the `self-hosted`/`macOS`/`macfuse` Actions runner
+  lane.
 - Publish and verify a release only after live smoke and release artifact
   validation pass.
 

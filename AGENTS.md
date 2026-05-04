@@ -889,7 +889,12 @@ Defer:
   GitHub-hosted `macos-latest` still fails at the macFUSE FSKit/LiveFS service
   boundary; the workflow supports `macos_backend=fskit|kernel`, with the kernel
   backend intended for a host where the macFUSE kernel extension is approved and
-  loaded. A GitHub-hosted `macos_backend=kernel` check in run `25340391127`
+  loaded. The workflow also supports
+  `macos_runner=hosted|self-hosted-macfuse`; use the `self-hosted-macfuse`
+  lane only when a runner labeled `self-hosted`, `macOS`, and `macfuse` is
+  available with macFUSE installed, approved, and loaded, because GitHub-hosted
+  macOS runners remain diagnostic-only for this release gate. A GitHub-hosted
+  `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
   job log, so the workflow now tees macOS smoke output to an uploaded artifact
   and prints the smoke exit code for the next diagnostic run. The first
