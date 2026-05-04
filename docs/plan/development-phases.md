@@ -5106,6 +5106,10 @@ Completed:
 - Initialize WinFsp through `winfsp_wrs::init()` before starting the Windows
   adapter so the delayed WinFsp DLL is loaded from the installed runtime
   directory before the first WinFsp API call.
+- Add Windows-only `winfsp_wrs_build` build scripts for `operon-cli` and
+  `operon-mount` so the MSVC linker marks the WinFsp DLL as delayed-load; this
+  lets `winfsp_wrs::init()` run before the loader resolves the installed WinFsp
+  runtime DLL.
 
 Remaining:
 

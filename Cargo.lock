@@ -1018,6 +1018,7 @@ dependencies = [
  "tokio",
  "tonic",
  "windows-sys 0.61.2",
+ "winfsp_wrs_build",
 ]
 
 [[package]]
@@ -1076,6 +1077,7 @@ dependencies = [
  "tokio",
  "tonic",
  "winfsp_wrs",
+ "winfsp_wrs_build",
 ]
 
 [[package]]
@@ -2461,6 +2463,12 @@ dependencies = [
  "windows-sys 0.52.0",
  "winfsp_wrs_sys",
 ]
+
+[[package]]
+name = "winfsp_wrs_build"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9548e1180e2778ccb318107599704c2e69407e286d4a98a0649ec85440ac2e76"
 
 [[package]]
 name = "winfsp_wrs_sys"

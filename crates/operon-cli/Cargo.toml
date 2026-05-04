@@ -37,5 +37,8 @@ operon-mount = { path = "../operon-mount" }
 operon-mount = { path = "../operon-mount" }
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
+[target.'cfg(windows)'.build-dependencies]
+winfsp_wrs_build = "0.4.1"
+
 [dev-dependencies]
 tempfile.workspace = true

@@ -26,3 +26,6 @@ libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 winfsp_wrs = "0.4.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winfsp_wrs_build = "0.4.1"
