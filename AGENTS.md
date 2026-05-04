@@ -318,8 +318,13 @@ Operon should not own:
   - In-progress v0.14 scope for making live mount a complete core capability
     across Linux, macOS, and Windows. Shared mount-core behavior, Unix
     FUSE/macFUSE gating, Windows WinFsp adapter code, CLI dispatch, doctor
-    diagnostics, docs, and validation wiring are implemented; macOS and Windows
-    live smoke remain.
+    diagnostics, docs, and validation wiring are implemented; Windows live
+    smoke passed and macOS live smoke remains.
+
+- `docs/plan/v0.14-macos-live-smoke-runbook.md`
+  - Runbook for the remaining v0.14 macOS release gate on a host with a working
+    macFUSE runtime. Covers preflight, required self-hosted runner labels,
+    workflow dispatch, success evidence, and failure-log handling.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -900,7 +905,10 @@ Defer:
   [`scripts/preflight-v0.14-macos-macfuse-host.sh`](scripts/preflight-v0.14-macos-macfuse-host.sh)
   before the full live smoke so missing macFUSE, missing `pkg-config fuse`,
   unsupported FSKit OS versions, and unloaded kernel backends fail early with
-  actionable output. A GitHub-hosted
+  actionable output. Use
+  [`docs/plan/v0.14-macos-live-smoke-runbook.md`](docs/plan/v0.14-macos-live-smoke-runbook.md)
+  for the host setup, dispatch command, and evidence to record once a suitable
+  runner exists. A GitHub-hosted
   `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
   job log, so the workflow now tees macOS smoke output to an uploaded artifact

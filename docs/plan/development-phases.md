@@ -5069,6 +5069,9 @@ work.
 
 Detailed plan: `docs/plan/v0.14-cross-platform-live-mount.md`.
 
+macOS release-gate runbook:
+`docs/plan/v0.14-macos-live-smoke-runbook.md`.
+
 Completed:
 
 - Supersede the v0.13.7 Linux-only pre-v1.0 support decision for live mounts.
@@ -5255,6 +5258,10 @@ Completed:
   when macFUSE is missing, `pkg-config fuse` is unavailable, the selected
   FSKit backend is running on macOS before 15.4, or the selected kernel backend
   does not have the macFUSE kernel extension approved and loaded.
+- Add `docs/plan/v0.14-macos-live-smoke-runbook.md` with the concrete
+  host-preflight, self-hosted runner labels, workflow dispatch command, success
+  evidence, and failure-log handling needed to execute the remaining macOS
+  release gate once a suitable host is available.
 
 Remaining:
 

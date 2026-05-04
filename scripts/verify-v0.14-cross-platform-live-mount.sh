@@ -8,6 +8,7 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.14-cross-platform-live-mount.md
+require_file docs/plan/v0.14-macos-live-smoke-runbook.md
 require_file .github/workflows/v0.14-live-mount-smoke.yml
 require_file scripts/preflight-v0.14-macos-macfuse-host.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
@@ -15,7 +16,11 @@ require_file scripts/smoke-v0.14-windows-live-mount.ps1
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
 require_pattern 'Status: In progress' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'macOS live smoke on a host with macFUSE installed, approved, and loaded' docs/plan/v0.14-cross-platform-live-mount.md
+require_pattern 'v0.14 macOS live mount smoke passed' docs/plan/v0.14-macos-live-smoke-runbook.md
+require_pattern 'macos_runner=self-hosted-macfuse' docs/plan/v0.14-macos-live-smoke-runbook.md
+require_pattern 'scripts/preflight-v0.14-macos-macfuse-host.sh' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'docs/plan/v0.14-cross-platform-live-mount.md' AGENTS.md
+require_pattern 'docs/plan/v0.14-macos-live-smoke-runbook.md' AGENTS.md
 require_pattern 'v0.14 Cross-Platform Live Mount' AGENTS.md
 require_pattern 'Linux FUSE, macOS macFUSE, and Windows WinFsp' README.md
 require_pattern 'Linux uses FUSE, macOS uses macFUSE, and Windows uses WinFsp' PROTOCOL.md
