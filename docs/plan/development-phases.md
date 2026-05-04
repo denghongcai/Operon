@@ -5103,6 +5103,9 @@ Completed:
   that cannot install a Ctrl-C handler or lose the shutdown channel do not
   immediately terminate live mount processes, and expand Windows live-smoke
   diagnostics for daemon, mount, process, and WinFsp service state.
+- Initialize WinFsp through `winfsp_wrs::init()` before starting the Windows
+  adapter so the delayed WinFsp DLL is loaded from the installed runtime
+  directory before the first WinFsp API call.
 
 Remaining:
 

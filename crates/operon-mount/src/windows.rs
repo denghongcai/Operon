@@ -72,6 +72,8 @@ impl MountSession {
 }
 
 pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
+    winfsp_wrs::init().map_err(|error| anyhow::anyhow!("failed to initialize WinFsp: {error}"))?;
+
     let remote_root = normalize_remote_path(&options.remote_path)?;
     let remote_fs = Arc::new(GrpcRemoteFs::connect(options.endpoint)?);
     let root = remote_fs.stat(&remote_root)?;
