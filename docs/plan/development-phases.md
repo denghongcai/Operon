@@ -5110,6 +5110,9 @@ Completed:
   `operon-mount` so the MSVC linker marks the WinFsp DLL as delayed-load; this
   lets `winfsp_wrs::init()` run before the loader resolves the installed WinFsp
   runtime DLL.
+- Add opt-in Windows mount callback tracing through `OPERON_MOUNT_TRACE` and
+  expand the Windows live-smoke diagnostics to print drive and mounted-root
+  state after the mounted process starts but does not expose expected files.
 
 Remaining:
 

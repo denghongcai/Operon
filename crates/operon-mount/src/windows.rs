@@ -71,6 +71,16 @@ impl MountSession {
     }
 }
 
+fn trace_mount_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
+    if std::env::var_os("OPERON_MOUNT_TRACE").is_some() {
+        eprintln!(
+            "operon-mount windows {}: {}",
+            event.as_ref(),
+            detail.as_ref()
+        );
+    }
+}
+
 pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     winfsp_wrs::init().map_err(|error| anyhow::anyhow!("failed to initialize WinFsp: {error}"))?;
 
@@ -89,6 +99,7 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         )
     })?;
     let context = OperonWinFspFs::new(MountAdapterCore::new(remote_fs), remote_root)?;
+    trace_mount_event("start", options.mount_point.display().to_string());
     let file_system = FileSystem::start(
         Params {
             volume_params: volume_params(),
@@ -173,6 +184,7 @@ impl FileSystemInterface for OperonWinFspFs {
         _find_reparse_point: impl Fn() -> Option<FileAttributes>,
     ) -> Result<(FileAttributes, PSecurityDescriptor, bool), NTSTATUS> {
         let stat = self.stat_for_name(file_name)?;
+        trace_mount_event("get_security_by_name", stat.path.clone());
         Ok((attributes_for_stat(&stat), self.security.as_ptr(), false))
     }
 
@@ -183,6 +195,7 @@ impl FileSystemInterface for OperonWinFspFs {
         _security_descriptor: SecurityDescriptor,
     ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
         let path = self.path_for_name(file_name)?;
+        trace_mount_event("create", path.clone());
         let stat = if create_file_info
             .create_options
             .is(CreateOptions::FILE_DIRECTORY_FILE)
@@ -206,6 +219,7 @@ impl FileSystemInterface for OperonWinFspFs {
         _granted_access: FileAccessRights,
     ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
         let stat = self.stat_for_name(file_name)?;
+        trace_mount_event("open", stat.path.clone());
         if stat.is_dir && create_options.is(CreateOptions::FILE_NON_DIRECTORY_FILE) {
             return Err(STATUS_FILE_IS_A_DIRECTORY);
         }
@@ -356,12 +370,17 @@ impl FileSystemInterface for OperonWinFspFs {
             return Err(STATUS_NOT_A_DIRECTORY);
         }
         let marker = marker.map(|value| value.to_string_lossy());
+        trace_mount_event(
+            "read_directory",
+            format!("path={} marker={marker:?}", file_context.path),
+        );
         let mut seen_marker = marker.is_none();
         let entries = self
             .core
             .list_dir(&file_context.path)
             .map_err(ntstatus_for_error)?;
         for entry in entries {
+            trace_mount_event("read_directory_entry", entry.name.clone());
             if !seen_marker {
                 seen_marker = marker.as_deref() == Some(entry.name.as_str());
                 continue;
@@ -385,6 +404,10 @@ impl FileSystemInterface for OperonWinFspFs {
             return Err(STATUS_NOT_A_DIRECTORY);
         }
         let child = file_name.to_string_lossy();
+        trace_mount_event(
+            "get_dir_info_by_name",
+            format!("parent={} child={child}", file_context.path),
+        );
         let path =
             join_remote_child(&file_context.path, &child).map_err(|_| STATUS_INVALID_PARAMETER)?;
         let stat = self.core.stat(&path).map_err(ntstatus_for_error)?;

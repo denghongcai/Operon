@@ -42,6 +42,12 @@ function Dump-Diagnostics {
         Write-Host "mount pid: $($Mount.Id), exited: $($Mount.HasExited), exit_code: $(if ($Mount.HasExited) { $Mount.ExitCode } else { '<running>' })"
     }
     Get-Service -Name "WinFsp*" -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+    Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Format-Table -AutoSize | Out-String | Write-Host
+    & cmd.exe /c "fsutil fsinfo drives" 2>&1 | Write-Host
+    if ($MountPoint) {
+        & cmd.exe /c "dir $MountPoint\" 2>&1 | Write-Host
+        Get-ChildItem -Force "$MountPoint\" -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+    }
     Get-ChildItem -Force $Tmp.FullName -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
     Write-LogFile "daemon stdout" $DaemonLog
     Write-LogFile "daemon stderr" $DaemonErr
@@ -133,7 +139,17 @@ policy:
         throw "no free drive letter for WinFsp mount"
     }
 
-    $Mount = Start-Process -FilePath $OperonExe -ArgumentList @("--config", $Config, "mount", "windows-live:/", "--to", $MountPoint) -RedirectStandardOutput $MountLog -RedirectStandardError $MountErr -PassThru -NoNewWindow
+    $previousMountTrace = $env:OPERON_MOUNT_TRACE
+    $env:OPERON_MOUNT_TRACE = "1"
+    try {
+        $Mount = Start-Process -FilePath $OperonExe -ArgumentList @("--config", $Config, "mount", "windows-live:/", "--to", $MountPoint) -RedirectStandardOutput $MountLog -RedirectStandardError $MountErr -PassThru -NoNewWindow
+    } finally {
+        if ($null -eq $previousMountTrace) {
+            Remove-Item Env:\OPERON_MOUNT_TRACE -ErrorAction SilentlyContinue
+        } else {
+            $env:OPERON_MOUNT_TRACE = $previousMountTrace
+        }
+    }
 
     $mounted = $false
     for ($i = 0; $i -lt 60; $i++) {
