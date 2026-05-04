@@ -93,6 +93,9 @@ jobs:
         if: runner.os == 'Windows'
         run: cargo test -p operond --locked windows_job_object_cancellation_terminates_descendant_process
 
+      - name: Test daemon service management
+        run: cargo test -p operond --locked service_management
+
       - name: Test CLI private file platform model
         run: cargo test -p operon-cli --locked private_file_security_model_is_platform_specific
 

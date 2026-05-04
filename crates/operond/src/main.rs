@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use std::{
     collections::BTreeMap,
     env, fs,
+    future::Future,
     path::{Path, PathBuf},
     sync::{atomic::AtomicU64, Arc, Mutex},
 };
@@ -37,6 +38,7 @@ mod pagination;
 mod runtime;
 mod service_datagram_forward;
 mod service_forward;
+mod service_manager;
 mod service_tcp_forward;
 mod state;
 mod store_config;
@@ -81,6 +83,31 @@ struct Args {
 #[derive(Debug, Subcommand)]
 enum Command {
     Start(StartArgs),
+    #[command(about = "Install and control operond through the platform service manager")]
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ServiceCommand {
+    #[command(about = "Install a platform-native operond service entry")]
+    Install(ServiceInstallArgs),
+    #[command(about = "Start the installed operond service")]
+    Start,
+    #[command(about = "Stop the installed operond service")]
+    Stop,
+    #[command(about = "Show the installed operond service status")]
+    Status,
+    #[command(about = "Uninstall the platform-native operond service entry")]
+    Uninstall,
+    #[cfg(any(test, windows))]
+    #[command(
+        hide = true,
+        about = "Run operond under the Windows Service Control Manager"
+    )]
+    Run(ServiceRunArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -89,16 +116,54 @@ struct StartArgs {
     config: Option<PathBuf>,
 }
 
+#[derive(Debug, Parser)]
+struct ServiceInstallArgs {
+    #[arg(long)]
+    config: PathBuf,
+}
+
+#[cfg(any(test, windows))]
+#[derive(Debug, Parser)]
+struct ServiceRunArgs {
+    #[arg(long)]
+    config: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     match Args::parse().command {
         Command::Start(args) => start(args).await,
+        Command::Service { command } => {
+            service(command)?;
+            Ok(())
+        }
+    }
+}
+
+fn service(command: ServiceCommand) -> anyhow::Result<()> {
+    match command {
+        ServiceCommand::Install(args) => service_manager::install(&args.config),
+        ServiceCommand::Start => service_manager::start(),
+        ServiceCommand::Stop => service_manager::stop(),
+        ServiceCommand::Status => service_manager::status(),
+        ServiceCommand::Uninstall => service_manager::uninstall(),
+        #[cfg(windows)]
+        ServiceCommand::Run(args) => service_manager::run(&args.config),
+        #[cfg(all(test, not(windows)))]
+        ServiceCommand::Run(_) => anyhow::bail!("Windows service run is only available on Windows"),
     }
 }
 
 async fn start(args: StartArgs) -> anyhow::Result<()> {
+    start_with_shutdown(args, shutdown_signal()).await
+}
+
+async fn start_with_shutdown<F>(args: StartArgs, shutdown: F) -> anyhow::Result<()>
+where
+    F: Future<Output = ()>,
+{
     let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
     let config = OperonConfig::load(&config_path)?;
     let config_dir = OperonConfig::config_dir(&config_path);
@@ -160,7 +225,7 @@ async fn start(args: StartArgs) -> anyhow::Result<()> {
     tracing::info!("operond gRPC listening on {}", daemon.grpc_listen);
     Server::builder()
         .add_service(OperonRuntimeServer::new(GrpcRuntime { state }))
-        .serve_with_shutdown(daemon.grpc_listen, shutdown_signal())
+        .serve_with_shutdown(daemon.grpc_listen, shutdown)
         .await?;
 
     drop(mdns);
@@ -190,6 +255,7 @@ fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>>
 mod tests {
     use super::*;
     use crate::exec_runtime::{append_exec_log, finish_exec, start_exec};
+    use clap::CommandFactory;
     use tokio::sync::broadcast;
 
     fn test_policy() -> PolicyConfig {
@@ -256,6 +322,87 @@ mod tests {
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("{name}-{}-{}", std::process::id(), now_ms()))
+    }
+
+    #[test]
+    fn service_management_clap_exposes_commands_without_background_start() {
+        let mut command = Args::command();
+        let service = command
+            .find_subcommand_mut("service")
+            .expect("service subcommand should exist");
+
+        for name in ["install", "start", "stop", "status", "uninstall"] {
+            service
+                .find_subcommand_mut(name)
+                .unwrap_or_else(|| panic!("service {name} subcommand should exist"));
+        }
+
+        let start = command
+            .find_subcommand_mut("start")
+            .expect("start subcommand should exist");
+        assert!(start
+            .get_arguments()
+            .all(|arg| arg.get_long() != Some("background")));
+    }
+
+    #[test]
+    fn service_management_systemd_unit_runs_foreground_start_with_explicit_config() {
+        let unit = service_manager::render_systemd_user_unit(
+            Path::new("/opt/operon/bin/operond"),
+            Path::new("/home/alice/.operon/config.yaml"),
+        );
+
+        assert!(unit.contains(
+            "ExecStart=/opt/operon/bin/operond start --config /home/alice/.operon/config.yaml"
+        ));
+        assert!(unit.contains("Restart=on-failure"));
+        assert!(!unit.contains("background"));
+        assert!(!unit.contains("token:"));
+    }
+
+    #[test]
+    fn service_management_launchd_plist_runs_foreground_start_with_explicit_config() {
+        let plist = service_manager::render_launchd_user_plist(
+            Path::new("/Applications/Operon/operond"),
+            Path::new("/Users/alice/.operon/config.yaml"),
+        );
+
+        assert!(plist.contains("<key>ProgramArguments</key>"));
+        assert!(plist.contains("<string>/Applications/Operon/operond</string>"));
+        assert!(plist.contains("<string>start</string>"));
+        assert!(plist.contains("<string>--config</string>"));
+        assert!(plist.contains("<string>/Users/alice/.operon/config.yaml</string>"));
+        assert!(plist.contains("<key>KeepAlive</key>"));
+        assert!(!plist.contains("background"));
+        assert!(!plist.contains("token:"));
+    }
+
+    #[test]
+    fn service_management_windows_registration_runs_service_protocol_entrypoint() {
+        let args = service_manager::windows_service_create_args(
+            Path::new(r"C:\Program Files\Operon\operond.exe"),
+            Path::new(r"C:\Users\alice\.operon\config.yaml"),
+        );
+
+        assert!(args.iter().any(|arg| arg == "create"));
+        assert!(args.iter().any(|arg| arg == "OperonDaemon"));
+        assert!(args.iter().any(|arg| arg.contains(
+            r#""C:\Program Files\Operon\operond.exe" service run --config "C:\Users\alice\.operon\config.yaml""#
+        )));
+        assert!(!args.iter().any(|arg| arg.contains("start --config")));
+    }
+
+    #[test]
+    fn service_management_windows_service_run_subcommand_is_hidden() {
+        let mut command = Args::command();
+        let service = command
+            .find_subcommand_mut("service")
+            .expect("service subcommand should exist");
+        let run = service
+            .find_subcommand_mut("run")
+            .expect("service run subcommand should exist");
+
+        assert!(run.is_hide_set());
     }
 
     #[test]

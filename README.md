@@ -170,6 +170,21 @@ Start the daemon. This command runs in the foreground:
 operond start
 ```
 
+For a managed local daemon on Linux or macOS, install a platform-native user
+service that still runs the same foreground daemon entrypoint under systemd or
+launchd supervision:
+
+```bash
+operond service install --config "$HOME/.operon/config.yaml"
+operond service start
+operond service status
+```
+
+`operond service stop` and `operond service uninstall` control the same
+supervisor entry. On Windows, `operond service install --config <path>`
+registers a real Windows Service entrypoint and may require an elevated shell
+depending on local service-control policy.
+
 In another terminal, verify the local node:
 
 ```bash
@@ -390,6 +405,11 @@ support, private token/config file protection, exec cancellation guarantees,
 PTY validation state, and service forwarding firewall sensitivity. Windows
 private token/config handling currently reports an ACL warning instead of
 claiming Unix-style owner-mode parity.
+
+For daemon process management, `operond service status` delegates to the
+platform supervisor: user-level systemd on Linux, launchd user agents on macOS,
+and the Windows Service Control Manager on Windows. `operond start` remains the
+foreground runtime command and does not have a `--background` mode.
 
 ---
 

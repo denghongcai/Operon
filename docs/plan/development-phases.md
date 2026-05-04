@@ -4848,7 +4848,54 @@ Remaining:
 - No v0.13.4 CI validation consolidation work remains.
 - Release-draft and release-artifact verification workflows remain separate.
 
-## Phase 89: v0.13.5 Mount Adapter Strategy
+## Phase 89: v0.13.5 Daemon Service Management
+
+Status: Completed.
+
+Goal: give `operond` a first-class managed daemon setup path without adding a
+traditional `operond start --background` mode.
+
+Detailed plan: `docs/plan/v0.13.5-daemon-service-management.md`.
+
+Planned:
+
+- add `operond service install/start/stop/status/uninstall`.
+- keep `operond start` as the foreground runtime command and avoid
+  `operond start --background`.
+- support platform-native supervision: Linux systemd user units, macOS launchd
+  user agents, and a Windows Service entrypoint that speaks the Service Control
+  Manager protocol.
+- generate service definitions that call `operond start --config <path>` with
+  explicit config paths and no embedded secrets.
+- document service management in README, DEVELOPMENT, AGENTS, and validation
+  guidance.
+
+Completed:
+
+- Added `operond service install/start/stop/status/uninstall`.
+- Kept `operond start` as the foreground runtime command with no
+  `--background` flag.
+- Added Linux user-level systemd unit installation/control.
+- Added macOS launchd user-agent installation/control.
+- Added a Windows Service Control Manager entrypoint through
+  `operond service run --config <path>` instead of pretending the foreground
+  `operond start` command is a Windows Service.
+- Added service definition rendering tests, command-surface tests, and
+  `scripts/verify-v0.13.5-daemon-service-management.sh`.
+- Added platform smoke CI coverage for daemon service-management tests on
+  macOS and Windows.
+- Updated README, DEVELOPMENT, AGENTS, and
+  `docs/plan/v0.13.5-daemon-service-management.md`.
+
+Remaining:
+
+- No v0.13.5 daemon service management work remains.
+- Background self-daemonization remains outside the product model.
+- Elevated Windows install/start/stop smoke remains a manual pre-release check
+  when practical because CI runners may not allow persistent service
+  registration.
+
+## Phase 90: v0.13.6 Mount Adapter Strategy
 
 Status: Planned.
 
@@ -4856,7 +4903,7 @@ Goal: decide whether and how Operon should pursue macFUSE and WinFsp mount
 adapters without blurring the existing boundary between core filesystem RPCs
 and platform-specific live mount integrations.
 
-Detailed plan: `docs/plan/v0.13.5-mount-adapter-strategy.md`.
+Detailed plan: `docs/plan/v0.13.6-mount-adapter-strategy.md`.
 
 Planned:
 
@@ -4871,7 +4918,7 @@ Planned:
 
 Remaining:
 
-- All v0.13.5 mount adapter strategy work remains.
+- All v0.13.6 mount adapter strategy work remains.
 - macFUSE and WinFsp implementation remain outside this strategy phase.
 
 ## Planning Principle

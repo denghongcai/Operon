@@ -33,6 +33,26 @@ operond start --config examples/config.yaml
 operon --config examples/config.yaml node list
 ```
 
+For a managed local daemon, use the daemon service command surface instead of
+adding a self-daemonizing flag:
+
+```bash
+operond service install --config examples/config.yaml
+operond service start
+operond service status
+operond service stop
+operond service uninstall
+```
+
+On Linux this writes a user-level systemd unit. On macOS this writes a launchd
+user-agent plist. Both generated definitions invoke the same foreground command,
+`operond start --config <path>`, and keep tokens or other secrets in the
+existing config file references instead of embedding secret values in the
+service definition. On Windows, install registers `operond service run
+--config <path>` with the Service Control Manager; that hidden entrypoint
+implements the Windows Service protocol and starts the same daemon runtime
+under SCM stop/shutdown control.
+
 ## Full Validation
 
 Run the full validation:
@@ -121,6 +141,15 @@ the maintenance boundary while running them through
 `scripts/ci/run-validations.sh` from grouped CI `Validation` jobs.
 `scripts/verify-v0.13.4-ci-validation-consolidation.sh` checks the runner,
 workflow shape, SDK test deduplication, and future validation-addition rules.
+
+The v0.13.5 daemon service management validation checks the
+`operond service install/start/stop/status/uninstall` help surface, verifies
+that `operond start` remains foreground-only without `--background`, covers the
+rendered Linux systemd and macOS launchd definitions, checks that Windows
+registration points at `operond service run --config <path>`, cross-checks the
+Windows target build, and keeps README, DEVELOPMENT, AGENTS, and phase docs in
+sync. The focused script is
+`scripts/verify-v0.13.5-daemon-service-management.sh`.
 
 The Docker validation starts two reachable `operond` nodes, exercises
 capabilities through the CLI, checks auth, policy, audit filters, store

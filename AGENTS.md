@@ -287,11 +287,19 @@ Operon should not own:
     jobs into grouped `Validation` jobs while keeping individual validation
     scripts.
 
-- `docs/plan/v0.13.5-mount-adapter-strategy.md`
-  - Planned v0.13.5 scope for macFUSE and WinFsp mount adapter strategy,
-    dependency, packaging, CI, and support-boundary decisions after the
-    release, Windows PTY, Windows ACL, config/onboard cleanup, and CI
-    consolidation phases.
+- `docs/plan/v0.13.5-daemon-service-management.md`
+  - Completed v0.13.5 scope for `operond service install/start/stop/status/uninstall`
+    through platform-native supervision while explicitly keeping
+    `operond start` foreground-only and avoiding `operond start --background`.
+    Linux uses user-level systemd, macOS uses launchd user agents, and Windows
+    uses a hidden `operond service run --config <path>` entrypoint that
+    implements the Windows Service Control Manager protocol. Platform smoke CI
+    runs daemon service-management tests on macOS and Windows.
+
+- `docs/plan/v0.13.6-mount-adapter-strategy.md`
+  - Planned v0.13.6 scope for macFUSE and WinFsp mount adapter strategy,
+    dependency, packaging, CI, and support-boundary decisions after daemon
+    service management.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -768,3 +776,12 @@ Defer:
   version validation additions must extend that runner and choose an existing
   group unless they require a distinct OS, permission model, service container,
   or trigger.
+- Latest phase status update: v0.13.5 completed Daemon Service Management.
+  `operond service install/start/stop/status/uninstall` now manages
+  platform-native supervisor entries for Linux user-level systemd and macOS
+  launchd user agents. `operond start` remains foreground-only with no
+  `--background` flag. Windows service management registers
+  `operond service run --config <path>`, which implements the Service Control
+  Manager protocol and maps SCM stop/shutdown controls to daemon shutdown.
+  Platform smoke CI covers the daemon service-management tests on macOS and
+  Windows. Nothing remains in v0.13.5.

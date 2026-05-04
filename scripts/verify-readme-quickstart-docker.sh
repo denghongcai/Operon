@@ -53,6 +53,13 @@ tar -xzf /tmp/operon.tar.gz -C /tmp
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
 
+operond service --help >/tmp/operond-service-help.txt
+operond service install --help >/tmp/operond-service-install-help.txt
+if operond start --help | grep -q -- '--background'; then
+  echo "operond start help unexpectedly exposes --background" >&2
+  exit 1
+fi
+
 mkdir -p "$HOME/operon-workspace" "$HOME/.operon"
 operon onboard \
   --yes \
