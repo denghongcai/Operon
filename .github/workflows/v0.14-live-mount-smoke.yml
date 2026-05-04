@@ -10,6 +10,7 @@ jobs:
   macos-live-mount:
     name: macOS macFUSE Live Mount
     runs-on: macos-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -37,6 +38,7 @@ jobs:
   windows-live-mount:
     name: Windows WinFsp Live Mount
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6

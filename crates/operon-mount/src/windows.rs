@@ -429,6 +429,7 @@ fn volume_params() -> VolumeParams {
         .set_unicode_on_disk(true)
         .set_persistent_acls(false)
         .set_read_only_volume(false)
+        .set_always_use_double_buffering(true)
         .set_max_component_length(255)
         .set_sector_size(4096)
         .set_sectors_per_allocation_unit(1)

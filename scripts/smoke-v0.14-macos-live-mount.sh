@@ -18,11 +18,36 @@ MOUNT_LOG="$TMP_DIR/mount.log"
 DAEMON_LOG="$TMP_DIR/daemon.log"
 DAEMON_PID=""
 MOUNT_PID=""
+WATCHDOG_PID=""
+SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-900}"
 OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
 
+dump_diagnostics() {
+  set +e
+  echo "temporary smoke directory: $TMP_DIR" >&2
+  echo "mount directory: $MOUNT_DIR" >&2
+  if [[ -n "$DAEMON_PID" ]]; then
+    ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
+  fi
+  if [[ -n "$MOUNT_PID" ]]; then
+    ps -p "$MOUNT_PID" -o pid,stat,command >&2 || true
+  fi
+  mount >&2 || true
+  echo "=== daemon log ===" >&2
+  cat "$DAEMON_LOG" >&2 || true
+  echo "=== mount log ===" >&2
+  cat "$MOUNT_LOG" >&2 || true
+  echo "=== temp files ===" >&2
+  find "$TMP_DIR" -maxdepth 2 -print >&2 || true
+}
+
 cleanup() {
   set +e
+  if [[ -n "$WATCHDOG_PID" ]] && kill -0 "$WATCHDOG_PID" >/dev/null 2>&1; then
+    kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
+    wait "$WATCHDOG_PID" >/dev/null 2>&1 || true
+  fi
   if [[ -n "$MOUNT_PID" ]] && kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
     kill -INT "$MOUNT_PID" >/dev/null 2>&1
     wait "$MOUNT_PID" >/dev/null 2>&1 || true
@@ -37,6 +62,16 @@ cleanup() {
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
+trap 'dump_diagnostics; exit 124' TERM
+
+start_watchdog() {
+  (
+    sleep "$SMOKE_TIMEOUT_SECS"
+    echo "macOS live mount smoke timed out after ${SMOKE_TIMEOUT_SECS}s" >&2
+    kill -TERM "$$" >/dev/null 2>&1 || true
+  ) &
+  WATCHDOG_PID="$!"
+}
 
 write_config() {
   cat >"$CONFIG" <<YAML
@@ -101,6 +136,7 @@ wait_for_mount() {
 mkdir -p "$WORKSPACE" "$MOUNT_DIR"
 printf "seed" >"$WORKSPACE/seed.txt"
 write_config
+start_watchdog
 
 cargo build -q -p operond -p operon-cli --locked
 

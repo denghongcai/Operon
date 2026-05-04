@@ -5121,6 +5121,11 @@ Completed:
   `mountvol` / `fsutil fsinfo drivetype` / `fsutil fsinfo volumeinfo`
   diagnostics so the next live-smoke run can separate mount-manager exposure
   from adapter callback dispatch and volume metadata failures.
+- Enable WinFsp double buffering in the Windows volume parameters after live
+  smoke showed fixed-drive registration but no adapter callback dispatch for
+  volume information, and add per-job/live-script timeouts so hung macOS or
+  Windows live-smoke runs fail with diagnostics instead of blocking release
+  validation.
 
 Remaining:
 
