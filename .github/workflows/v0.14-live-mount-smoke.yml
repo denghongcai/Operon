@@ -107,12 +107,10 @@ jobs:
           repo-token: ${{ github.token }}
 
       - name: Check macFUSE runtime
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
         run: |
-          sw_vers
-          test -d /Library/Filesystems/macfuse.fs
-          pkg-config --modversion fuse
-          kmutil showloaded --list-only 2>/dev/null | grep -i macfuse || true
-          kextstat 2>/dev/null | grep -i macfuse || true
+          scripts/preflight-v0.14-macos-macfuse-host.sh
 
       - name: Run macOS live mount smoke
         id: macos-smoke

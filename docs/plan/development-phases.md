@@ -5250,6 +5250,11 @@ Completed:
   self-hosted macOS live-smoke lane. The registry currently reports
   `total_count: 0`, so no `self-hosted`/`macOS`/`macfuse` runner is available
   and no queued self-hosted workflow run was created.
+- Add `scripts/preflight-v0.14-macos-macfuse-host.sh` and wire it into the
+  self-hosted macOS live-smoke lane so a real release-gate host fails early
+  when macFUSE is missing, `pkg-config fuse` is unavailable, the selected
+  FSKit backend is running on macOS before 15.4, or the selected kernel backend
+  does not have the macFUSE kernel extension approved and loaded.
 
 Remaining:
 

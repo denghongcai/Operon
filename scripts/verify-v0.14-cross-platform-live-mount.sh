@@ -9,6 +9,7 @@ source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.14-cross-platform-live-mount.md
 require_file .github/workflows/v0.14-live-mount-smoke.yml
+require_file scripts/preflight-v0.14-macos-macfuse-host.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
@@ -56,6 +57,7 @@ require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'self-hosted-macfuse' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'runs-on: \[self-hosted, macOS, macfuse\]' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'Check macFUSE runtime' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'scripts/preflight-v0.14-macos-macfuse-host.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macOS live mount smoke exit code' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'actions/upload-artifact@v7' .github/workflows/v0.14-live-mount-smoke.yml
@@ -64,7 +66,10 @@ require_pattern 'scripts/smoke-v0.14-macos-live-mount.sh' .github/workflows/v0.1
 require_pattern 'scripts/smoke-v0.14-windows-live-mount.ps1' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'wait_for_process_exit' scripts/smoke-v0.14-macos-live-mount.sh
+require_pattern 'macFUSE kernel backend requires the macFUSE kernel extension to be approved and loaded' scripts/preflight-v0.14-macos-macfuse-host.sh
+require_pattern 'macFUSE FSKit backend requires macOS 15\.4 or newer' scripts/preflight-v0.14-macos-macfuse-host.sh
 
+bash -n scripts/preflight-v0.14-macos-macfuse-host.sh
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
 
 rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu >/dev/null

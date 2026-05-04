@@ -895,7 +895,12 @@ Defer:
   available with macFUSE installed, approved, and loaded, because GitHub-hosted
   macOS runners remain diagnostic-only for this release gate. The repository
   Actions runner registry currently reports `total_count: 0`, so do not
-  dispatch `self-hosted-macfuse` until such a runner exists. A GitHub-hosted
+  dispatch `self-hosted-macfuse` until such a runner exists. The self-hosted
+  lane runs
+  [`scripts/preflight-v0.14-macos-macfuse-host.sh`](scripts/preflight-v0.14-macos-macfuse-host.sh)
+  before the full live smoke so missing macFUSE, missing `pkg-config fuse`,
+  unsupported FSKit OS versions, and unloaded kernel backends fail early with
+  actionable output. A GitHub-hosted
   `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
   job log, so the workflow now tees macOS smoke output to an uploaded artifact
