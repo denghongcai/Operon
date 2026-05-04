@@ -5221,6 +5221,13 @@ Completed:
   live-smoke workflow so macOS validation can explicitly target the hosted
   runner FSKit path or a kernel backend on a host where the macFUSE kernel
   extension is approved and loaded.
+- Run the manual `macos_backend=kernel` workflow on GitHub-hosted
+  `macos-latest` for commit `9d3c4df` in run `25340391127`; it failed during
+  the macOS smoke step after macFUSE installation reported the kernel-extension
+  approval requirement, and GitHub did not publish the failing step body in the
+  job log. The workflow now wraps the macOS smoke script with explicit
+  stdout/stderr tee logging, prints the smoke exit code, and uploads the smoke
+  log artifact on success or failure.
 
 Remaining:
 

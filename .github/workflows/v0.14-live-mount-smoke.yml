@@ -52,9 +52,28 @@ jobs:
         run: brew install --cask macfuse
 
       - name: Run macOS live mount smoke
+        id: macos-smoke
         env:
           OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
-        run: scripts/smoke-v0.14-macos-live-mount.sh
+        run: |
+          set -o pipefail
+          log_path="$RUNNER_TEMP/v0.14-macos-live-mount-${OPERON_MOUNT_MACOS_BACKEND}.log"
+          echo "macOS live mount backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS live mount log: ${log_path}"
+          set +e
+          scripts/smoke-v0.14-macos-live-mount.sh 2>&1 | tee "$log_path"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "macOS live mount smoke exit code: ${status}"
+          exit "$status"
+
+      - name: Upload macOS live mount smoke log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v0.14-macos-live-mount-${{ inputs.macos_backend }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/v0.14-macos-live-mount-${{ inputs.macos_backend }}.log
+          if-no-files-found: warn
 
   windows-live-mount:
     name: Windows WinFsp Live Mount

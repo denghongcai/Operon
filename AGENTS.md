@@ -889,5 +889,9 @@ Defer:
   GitHub-hosted `macos-latest` still fails at the macFUSE FSKit/LiveFS service
   boundary; the workflow supports `macos_backend=fskit|kernel`, with the kernel
   backend intended for a host where the macFUSE kernel extension is approved and
-  loaded. Remaining v0.14 work: run macOS live smoke on a working macFUSE host,
-  then publish and verify a release.
+  loaded. A GitHub-hosted `macos_backend=kernel` check in run `25340391127`
+  failed during the smoke step without publishing that step body in the GitHub
+  job log, so the workflow now tees macOS smoke output to an uploaded artifact
+  and prints the smoke exit code for the next diagnostic run. Remaining v0.14
+  work: run macOS live smoke on a working macFUSE host, then publish and verify
+  a release.
