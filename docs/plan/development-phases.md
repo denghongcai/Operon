@@ -5235,6 +5235,12 @@ Completed:
   showed smoke cleanup could wait without a bound for the stuck mount process
   until job timeout, so the macOS smoke script now uses a shorter default
   watchdog and bounded process cleanup waits.
+- Re-run the bounded-cleanup `macos_backend=kernel` workflow for commit
+  `1ed85f2` in run `25341745841`; it now fails cleanly with an uploaded
+  artifact and explicit `macOS live mount smoke exit code: 1`, while preserving
+  the same root-cause evidence: the hosted runner does not load the macFUSE
+  kernel extension, the seed file is not exposed, and Operon reaches
+  `spawn_mount2_start`.
 
 Remaining:
 

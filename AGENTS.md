@@ -896,6 +896,8 @@ Defer:
   artifact-backed kernel run `25340798030` confirmed the hosted runner keeps the
   macFUSE kernel extension unloaded and reaches `spawn_mount2_start` before the
   seed file remains hidden; it also exposed an unbounded smoke cleanup wait, so
-  the macOS smoke script now uses bounded cleanup waits. Remaining v0.14 work:
-  run macOS live smoke on a working macFUSE host, then publish and verify a
-  release.
+  the macOS smoke script now uses bounded cleanup waits. Follow-up run
+  `25341745841` fails cleanly with an uploaded artifact and explicit exit code
+  instead of timing out, preserving the same hosted-runner macFUSE runtime
+  evidence. Remaining v0.14 work: run macOS live smoke on a working macFUSE
+  host, then publish and verify a release.
