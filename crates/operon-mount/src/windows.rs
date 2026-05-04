@@ -252,6 +252,7 @@ fn start_winfsp_mount(
             &mut file_system,
         )
     };
+    trace_mount_event("fs_create", format!("status={status:#x}"));
     if status != STATUS_SUCCESS {
         unsafe {
             drop(Box::from_raw(interface));
@@ -268,8 +269,17 @@ fn start_winfsp_mount(
         );
     }
 
+    enable_winfsp_debug_log(file_system);
+
     let status =
         unsafe { FspFileSystemSetMountPoint(file_system, mount_point.as_ptr().cast_mut()) };
+    trace_mount_event(
+        "set_mount_point",
+        format!(
+            "status={status:#x} mount_point={}",
+            mount_point.to_string_lossy()
+        ),
+    );
     if status != STATUS_SUCCESS {
         unsafe {
             drop(Box::from_raw(context));
@@ -280,6 +290,7 @@ fn start_winfsp_mount(
     }
 
     let status = unsafe { FspFileSystemStartDispatcher(file_system, 0) };
+    trace_mount_event("start_dispatcher", format!("status={status:#x}"));
     if status != STATUS_SUCCESS {
         unsafe {
             FspFileSystemRemoveMountPoint(file_system);
@@ -295,6 +306,17 @@ fn start_winfsp_mount(
         interface,
         context,
     })
+}
+
+fn enable_winfsp_debug_log(_file_system: *mut FSP_FILE_SYSTEM) {
+    #[cfg(feature = "winfsp-debug")]
+    unsafe {
+        use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE};
+
+        winfsp_wrs_sys::FspDebugLogSetHandle(GetStdHandle(STD_ERROR_HANDLE));
+        winfsp_wrs_sys::FspFileSystemSetDebugLogF(_file_system, u32::MAX);
+        trace_mount_event("winfsp_debug", "enabled");
+    }
 }
 
 fn winfsp_interface() -> FSP_FILE_SYSTEM_INTERFACE {

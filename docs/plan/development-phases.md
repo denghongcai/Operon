@@ -5196,6 +5196,11 @@ Completed:
   `STATUS_INVALID_DEVICE_REQUEST` before any adapter callback trace. The direct
   adapter now owns callback entry tracing and explicit WinFsp
   dispatcher/context/interface cleanup.
+- Add direct WinFsp status and debug logging after the first direct-interface
+  smoke still registered `O:\` as a fixed drive but returned `Incorrect
+  function` for `fsutil volumeinfo O:\` and `dir O:\` before any adapter
+  callback entry. The next targeted Windows smoke should include
+  `FspFileSystemCreate`, mount-point, dispatcher, and WinFsp debug output.
 
 Remaining:
 
