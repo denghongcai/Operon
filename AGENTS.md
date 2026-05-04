@@ -506,9 +506,10 @@ Operon should not own:
   Operon capability across Linux, macOS, and Windows. Shared mount-core
   operation mapping, Unix FUSE/macFUSE gating, native Windows WinFsp adapter
   code through MIT `winfsp_wrs`, CLI dispatch, doctor diagnostics, docs, release
-  workflow wiring, and validation coverage are implemented. macOS live smoke
-  with macFUSE and Windows live smoke with WinFsp remain before release
-  publication.
+  workflow wiring, and validation coverage are implemented. Windows live smoke
+  passed on GitHub-hosted `windows-latest`; macOS live smoke remains blocked on
+  hosted-runner macFUSE FSKit/LiveFS entitlement and requires a macOS host with
+  a working macFUSE backend before release publication.
 - Next planned milestone: v0.14 Cross-Platform Live Mount.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -883,6 +884,10 @@ Defer:
   package metadata, CLI version output, and `PROTOCOL_VERSION` are aligned to
   `0.14.0` / `v0.14.0`. A manual Actions live-smoke workflow is present at
   [`.github/workflows/v0.14-live-mount-smoke.yml`](.github/workflows/v0.14-live-mount-smoke.yml)
-  for macOS macFUSE and Windows WinFsp validation.
-  Remaining v0.14 work: run macOS live smoke on a macFUSE host, run Windows
-  live smoke on a WinFsp host, then publish and verify a release.
+  for macOS macFUSE and Windows WinFsp validation. Windows live smoke passed on
+  GitHub-hosted `windows-latest` in run `25339076348`. macOS live smoke on
+  GitHub-hosted `macos-latest` still fails at the macFUSE FSKit/LiveFS service
+  boundary; the workflow supports `macos_backend=fskit|kernel`, with the kernel
+  backend intended for a host where the macFUSE kernel extension is approved and
+  loaded. Remaining v0.14 work: run macOS live smoke on a working macFUSE host,
+  then publish and verify a release.
