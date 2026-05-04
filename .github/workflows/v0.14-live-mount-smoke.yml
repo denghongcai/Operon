@@ -2,6 +2,16 @@ name: v0.14 Live Mount Smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "Live mount platform to smoke"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - macos
+          - windows
 
 permissions:
   contents: read
@@ -9,6 +19,7 @@ permissions:
 jobs:
   macos-live-mount:
     name: macOS macFUSE Live Mount
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos' }}
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -37,6 +48,7 @@ jobs:
 
   windows-live-mount:
     name: Windows WinFsp Live Mount
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'windows' }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:

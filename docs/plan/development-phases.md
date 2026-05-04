@@ -5163,6 +5163,9 @@ Completed:
   Rust host wrappers dispatch creates through that trampoline; the adapter now
   exposes both `Create` and `CreateEx` while delegating both to the same
   existing-path open-or-create behavior.
+- Add a `platform=all|macos|windows` input to the manual v0.14 live-smoke
+  workflow so Windows WinFsp checkpoints can run independently while the macOS
+  hosted-runner FSKit entitlement/registration blocker remains unresolved.
 - Narrow the latest macOS live-smoke failure to the FUSE mount/handshake
   boundary: daemon and mount process stay alive, but the mountpoint never enters
   the system mount table and CLI output never reaches the post-mount line. The
