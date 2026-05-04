@@ -4728,7 +4728,7 @@ Remaining:
 
 ## Phase 85: v0.13.1 Windows PTY Validation
 
-Status: Planned.
+Status: Completed.
 
 Goal: replace the current Windows PTY validation deferral with an explicit,
 runner-safe decision: supported, degraded, or intentionally unsupported for the
@@ -4747,11 +4747,26 @@ Planned:
 - add a Windows-safe validation path for the chosen status while preserving
   Unix-like PTY smoke coverage.
 
+Completed:
+
+- Chose an explicit `unsupported` status for Windows interactive exec sessions
+  in this release line while preserving non-interactive Windows exec and Job
+  Object cancellation support.
+- Added a Windows `UNIMPLEMENTED` daemon response before opening PTY sessions
+  so clients fail clearly instead of hanging.
+- Updated `operon doctor` to report `windows-exec-session-unsupported` on
+  Windows, with Unix-like platforms still reporting validated `portable-pty`
+  smoke coverage.
+- Added a Windows-safe CI test for the unsupported decision and kept Unix-like
+  `portable-pty` smoke validation.
+- Updated README, `PROTOCOL.md`, runtime API docs, architecture docs, and
+  [`scripts/verify-v0.13.1-windows-pty-validation.sh`](../../scripts/verify-v0.13.1-windows-pty-validation.sh).
+
 Remaining:
 
-- All v0.13.1 Windows PTY validation work remains.
-- Replacing `portable-pty` and redesigning terminal UX remain outside this
-  phase.
+- No v0.13.1 Windows PTY validation work remains.
+- Replacing `portable-pty`, adding a Windows-specific PTY backend, and
+  redesigning terminal UX remain outside this phase.
 
 ## Phase 86: v0.13.2 Windows Private File ACL Enforcement
 

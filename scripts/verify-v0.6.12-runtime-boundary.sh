@@ -20,7 +20,7 @@ rg -n '^#!\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
 
 rg -n 'export type ExecLogStreamEvent' packages/sdk-js/src/index.ts
 rg -n 'streamExecLogEvents' packages/sdk-js/src/index.ts
-rg -n 'PROTOCOL_VERSION: &str = "v0.12.2"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.13.1"' crates/operon-protocol/src/lib.rs
 
 cargo test -p operon-store --locked
 cargo test -p operond --locked

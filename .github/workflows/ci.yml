@@ -86,6 +86,10 @@ jobs:
         if: runner.os != 'Windows'
         run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
 
+      - name: Test daemon Windows PTY unsupported decision
+        if: runner.os == 'Windows'
+        run: cargo test -p operond --locked windows_exec_session_is_explicitly_unsupported
+
       - name: Test daemon exec cancellation guarantee
         run: cargo test -p operond --locked exec_cancellation_guarantee_matches_platform
 

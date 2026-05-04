@@ -168,7 +168,7 @@ fn pty_session_diagnostic() -> &'static str {
 
 #[cfg(windows)]
 fn pty_session_diagnostic() -> &'static str {
-    "portable-pty-validation-deferred"
+    "windows-exec-session-unsupported"
 }
 
 async fn diagnose_node(
@@ -360,6 +360,9 @@ mod tests {
         assert!(!report.mount_adapter.is_empty());
         assert!(!report.private_file_protection.is_empty());
         assert!(!report.exec_cancellation.is_empty());
+        #[cfg(windows)]
+        assert_eq!(report.pty_sessions, "windows-exec-session-unsupported");
+        #[cfg(not(windows))]
         assert_eq!(report.pty_sessions, "portable-pty-smoke-validated");
         assert!(report.service_forwarding.contains("firewall"));
     }

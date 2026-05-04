@@ -395,7 +395,7 @@ claims beyond core runtime preview:
 | filesystem RPCs | target normal file and directory parity |
 | workspace containment | document fallback semantics; Linux `openat2` remains stronger |
 | non-interactive exec | target argv-first parity; shell defaults are platform-specific |
-| interactive exec sessions | validate through the existing `portable-pty` abstraction |
+| interactive exec sessions | supported through `portable-pty` on Unix-like platforms; explicitly unsupported on Windows for this release line |
 | TCP/UDP service forwarding | target parity, with firewall caveats in diagnostics |
 | mount adapter | defer; Linux FUSE remains the only supported mount adapter |
 | private config/token permissions | add Windows ACL semantics or warn before claiming parity |

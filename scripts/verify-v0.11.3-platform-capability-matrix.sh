@@ -25,9 +25,9 @@ require_pattern 'macOS and Windows prebuilt' README.md
 require_pattern 'archives are core runtime previews' README.md
 require_pattern 'Linux FUSE mount support remains' README.md
 require_pattern 'Linux FUSE mount support remains Linux-only' README.md
-require_pattern 'validate through the existing `portable-pty` abstraction' docs/architecture/technology-and-protocol-decisions.md
-require_pattern 'future macOS and' PROTOCOL.md
-require_pattern 'Windows validation should continue through the existing `portable-pty`' PROTOCOL.md
+require_pattern 'supported through `portable-pty` on Unix-like platforms' docs/architecture/technology-and-protocol-decisions.md
+require_pattern 'Windows interactive exec sessions are' PROTOCOL.md
+require_pattern 'explicitly unsupported in this release line' PROTOCOL.md
 require_pattern 'Mount adapter | Linux FUSE supported | Deferred macFUSE | Deferred WinFsp' docs/plan/v0.11.3-platform-capability-matrix.md
 
 require_pattern 'fn exec_shell_program' crates/operond/src/exec_runtime.rs

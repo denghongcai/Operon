@@ -384,7 +384,9 @@ Current capability areas:
 
 - Filesystem read, write, list, copy, mutation, and Linux FUSE mount access.
 - Exec execution with logs, stdin, cancellation, timeouts, scoped secrets, and
-  Unix PTY-backed interactive sessions when policy enables `exec.session`.
+  Unix-like PTY-backed interactive sessions when policy enables `exec.session`.
+  Windows interactive exec sessions are explicitly unsupported in this release
+  line; use non-interactive `exec run` on Windows.
 - Service metadata, TCP health checks, TCP forwarding, and UDP/datagram
   forwarding over existing Operon node connections.
 - Audit, trace, and graph inspection.
@@ -402,9 +404,10 @@ For first-pass troubleshooting, run `operon doctor` or
 runtime protocol version mismatches, capability diagnostics, and service health
 checks from one command. Doctor also reports platform caveats: Linux-only mount
 support, private token/config file protection, exec cancellation guarantees,
-PTY validation state, and service forwarding firewall sensitivity. Windows
+PTY session support, and service forwarding firewall sensitivity. Windows
 private token/config handling currently reports an ACL warning instead of
-claiming Unix-style owner-mode parity.
+claiming Unix-style owner-mode parity, and Windows PTY sessions report
+`windows-exec-session-unsupported`.
 
 For daemon process management, `operond service status` delegates to the
 platform supervisor: user-level systemd on Linux, launchd user agents on macOS,

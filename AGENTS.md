@@ -271,8 +271,10 @@ Operon should not own:
     artifacts, and validating README Quickstart against the public release.
 
 - `docs/plan/v0.13.1-windows-pty-validation.md`
-  - Planned v0.13.1 scope for turning Windows PTY validation from deferred
-    status into a runner-safe supported/degraded/unsupported decision.
+  - Completed v0.13.1 scope for turning Windows PTY validation from deferred
+    status into the explicit current release decision that Windows interactive
+    exec sessions are unsupported while non-interactive Windows exec remains
+    supported.
 
 - `docs/plan/v0.13.2-windows-private-file-acl.md`
   - Planned v0.13.2 scope for Windows ACL-aware token/config private-file
@@ -800,3 +802,11 @@ Defer:
   replaced with onboard-specific token-file/config-reference coverage, and
   [`scripts/verify-v0.13.6-test-hardening.sh`](scripts/verify-v0.13.6-test-hardening.sh)
   is wired into consolidated validation. Nothing remains in v0.13.6.
+- Latest phase status update: v0.13.1 completed Windows PTY Validation.
+  Windows interactive `OpenExecSession` now returns an explicit
+  `UNIMPLEMENTED` response for this release line, and `operon doctor` reports
+  `windows-exec-session-unsupported`; Unix-like `portable-pty` smoke coverage,
+  Windows non-interactive exec, and Windows Job Object cancellation remain in
+  place. CI has a Windows-safe unsupported-decision test and
+  [`scripts/verify-v0.13.1-windows-pty-validation.sh`](scripts/verify-v0.13.1-windows-pty-validation.sh)
+  is wired into consolidated validation. Nothing remains in v0.13.1.

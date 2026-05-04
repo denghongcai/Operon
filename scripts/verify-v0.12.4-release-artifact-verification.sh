@@ -35,6 +35,6 @@ require_pattern 'README Quickstart' docs/plan/v0.12.4-release-artifact-verificat
 require_pattern 'v0.12.4 Release Artifact Verification Validation' scripts/ci/run-validations.sh
 
 bash -n scripts/verify-release-artifacts.sh
-scripts/verify-release-artifacts.sh --dry-run v0.12.2 >/dev/null
+scripts/verify-release-artifacts.sh --dry-run v0.13.1 >/dev/null
 
 echo "v0.12.4 release artifact verification validation passed"

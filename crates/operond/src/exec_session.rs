@@ -34,6 +34,10 @@ pub(crate) type ExecSessionStream = std::pin::Pin<
     Box<dyn futures_util::Stream<Item = Result<GrpcExecSessionEvent, Status>> + Send + 'static>,
 >;
 
+#[cfg(windows)]
+const WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON: &str =
+    "Windows interactive exec sessions are unsupported in this release line; use non-interactive exec run";
+
 enum SessionControl {
     Input(Vec<u8>),
     Resize(PtySize),
@@ -135,6 +139,7 @@ impl Drop for SessionStreamGuard {
 }
 
 fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<SessionHandle, Status> {
+    ensure_exec_session_platform_supported()?;
     if start.command.is_empty() && start.argv.is_empty() {
         return Err(Status::invalid_argument(
             "exec session requires command or argv",
@@ -253,6 +258,18 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
         control_tx,
         event_rx,
     })
+}
+
+#[cfg(windows)]
+fn ensure_exec_session_platform_supported() -> Result<(), Status> {
+    Err(Status::unimplemented(
+        WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON,
+    ))
+}
+
+#[cfg(not(windows))]
+fn ensure_exec_session_platform_supported() -> Result<(), Status> {
+    Ok(())
 }
 
 struct SessionTask {
@@ -533,7 +550,23 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 
+    #[cfg(windows)]
     #[test]
+    fn windows_exec_session_is_explicitly_unsupported() {
+        let error = ensure_exec_session_platform_supported().expect_err("windows unsupported");
+
+        assert_eq!(error.code(), tonic::Code::Unimplemented);
+        assert_eq!(error.message(), WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_like_exec_session_platform_is_supported() {
+        ensure_exec_session_platform_supported().expect("unix-like supported");
+    }
+
+    #[test]
+    #[cfg(not(windows))]
     fn exec_session_portable_pty_smoke_outputs_and_exits() {
         let pty_system = native_pty_system();
         let pair = pty_system
