@@ -223,8 +223,8 @@ the core VFS model. The current implementation keeps shared path validation,
 operation mapping, error classification, and remote filesystem behavior in
 `operon-mount::mount_core`. Linux and macOS use the FUSE callback adapter
 through `fuser`; macOS requires the macFUSE runtime. Windows uses a native
-WinFsp adapter backed by the MIT `winfsp_wrs` bindings; Windows hosts require
-the WinFsp runtime.
+WinFsp adapter backed by the MIT `winfsp_wrs` / `winfsp_wrs_sys` bindings;
+Windows hosts require the WinFsp runtime.
 
 Current shape:
 

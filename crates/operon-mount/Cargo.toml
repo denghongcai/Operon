@@ -26,7 +26,9 @@ fuser.workspace = true
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }
 winfsp_wrs = "0.4.1"
+winfsp_wrs_sys = "0.4.1"
 
 [target.'cfg(windows)'.build-dependencies]
 winfsp_wrs_build = "0.4.1"

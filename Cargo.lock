@@ -1076,8 +1076,10 @@ dependencies = [
  "operon-protocol",
  "tokio",
  "tonic",
+ "windows-sys 0.61.2",
  "winfsp_wrs",
  "winfsp_wrs_build",
+ "winfsp_wrs_sys",
 ]
 
 [[package]]

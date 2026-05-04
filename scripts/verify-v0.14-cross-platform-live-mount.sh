@@ -19,7 +19,7 @@ require_pattern 'v0.14 Cross-Platform Live Mount' AGENTS.md
 require_pattern 'Linux FUSE, macOS macFUSE, and Windows WinFsp' README.md
 require_pattern 'Linux uses FUSE, macOS uses macFUSE, and Windows uses WinFsp' PROTOCOL.md
 require_pattern 'native Windows WinFsp adapter' AGENTS.md
-require_pattern 'MIT `winfsp_wrs`' docs/architecture/technology-and-protocol-decisions.md
+require_pattern 'MIT `winfsp_wrs` / `winfsp_wrs_sys`' docs/architecture/technology-and-protocol-decisions.md
 
 require_pattern 'pub struct MountAdapterCore' crates/operon-mount/src/mount_core.rs
 require_pattern 'pub struct MountDirectoryEntry' crates/operon-mount/src/mount_core.rs
@@ -30,11 +30,14 @@ require_pattern '#!\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' c
 require_pattern '#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/lib.rs
 require_pattern 'macos-no-mount = \["fuser/macos-no-mount"\]' crates/operon-mount/Cargo.toml
 require_pattern 'winfsp_wrs = "0\.4\.1"' crates/operon-mount/Cargo.toml
+require_pattern 'winfsp_wrs_sys = "0\.4\.1"' crates/operon-mount/Cargo.toml
 require_pattern 'mod windows;' crates/operon-mount/src/lib.rs
 require_file crates/operon-mount/src/windows.rs
-require_pattern 'impl FileSystemInterface for OperonWinFspFs' crates/operon-mount/src/windows.rs
+require_pattern 'FSP_FILE_SYSTEM_INTERFACE' crates/operon-mount/src/windows.rs
+require_pattern 'FspFileSystemCreate' crates/operon-mount/src/windows.rs
+require_pattern 'CreateEx: Some\(create_ex_cb\)' crates/operon-mount/src/windows.rs
 require_pattern 'windows_name_to_remote_path' crates/operon-mount/src/windows.rs
-require_pattern 'WriteMode::WriteToEOF' crates/operon-mount/src/windows.rs
+require_pattern 'write_to_eof' crates/operon-mount/src/windows.rs
 require_pattern 'cfg\(any\(target_os = "linux", target_os = "macos"\)\)' crates/operon-cli/Cargo.toml
 require_pattern 'operon-mount = \{ path = "../operon-mount" \}' crates/operon-cli/Cargo.toml
 require_pattern 'macos-macfuse' crates/operon-cli/src/commands/mount.rs

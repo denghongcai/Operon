@@ -12,13 +12,26 @@ use std::{
 use anyhow::Context;
 use operon_core::FsStat;
 use operon_network::NodeEndpoint;
+use windows_sys::Win32::{
+    Foundation::{LocalFree, STATUS_BUFFER_OVERFLOW},
+    Security::{
+        Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION},
+        GetSecurityDescriptorLength,
+    },
+};
 use winfsp_wrs::{
-    u16cstr, u16str, CleanupFlags, CreateFileInfo, CreateOptions, DirInfo, FileAccessRights,
-    FileAttributes, FileInfo, FileSystem, FileSystemInterface, OperationGuardStrategy,
-    PSecurityDescriptor, Params, SecurityDescriptor, U16CStr, U16CString, VolumeInfo, VolumeParams,
-    WriteMode, NTSTATUS, STATUS_ACCESS_DENIED, STATUS_FILE_IS_A_DIRECTORY,
-    STATUS_INVALID_PARAMETER, STATUS_NOT_A_DIRECTORY, STATUS_NOT_IMPLEMENTED,
-    STATUS_OBJECT_NAME_NOT_FOUND,
+    u16cstr, u16str, CreateOptions, FileAttributes, U16CStr, U16CString, NTSTATUS,
+    STATUS_ACCESS_DENIED, STATUS_FILE_IS_A_DIRECTORY, STATUS_INVALID_PARAMETER,
+    STATUS_NOT_A_DIRECTORY, STATUS_NOT_IMPLEMENTED, STATUS_OBJECT_NAME_NOT_FOUND, STATUS_SUCCESS,
+};
+use winfsp_wrs_sys::{
+    FspCleanupDelete, FspFileSystemAddDirInfo, FspFileSystemCreate, FspFileSystemDelete,
+    FspFileSystemRemoveMountPoint, FspFileSystemSetMountPoint,
+    FspFileSystemSetOperationGuardStrategyF, FspFileSystemStartDispatcher,
+    FspFileSystemStopDispatcher, FSP_FILE_SYSTEM, FSP_FILE_SYSTEM_INTERFACE,
+    FSP_FILE_SYSTEM_OPERATION_GUARD_STRATEGY_FSP_FILE_SYSTEM_OPERATION_GUARD_STRATEGY_FINE,
+    FSP_FSCTL_DIR_INFO, FSP_FSCTL_FILE_INFO, FSP_FSCTL_VOLUME_INFO, FSP_FSCTL_VOLUME_PARAMS,
+    PSECURITY_DESCRIPTOR, PVOID, PWSTR, SIZE_T, UINT32, UINT64, ULONG,
 };
 
 use crate::{
@@ -37,7 +50,7 @@ pub struct MountOptions {
 }
 
 pub struct MountSession {
-    file_system: FileSystem,
+    handles: Option<WinFspMountHandles>,
 }
 
 impl MountSession {
@@ -65,9 +78,28 @@ impl MountSession {
         }
     }
 
-    pub fn unmount(self) -> anyhow::Result<()> {
-        self.file_system.stop();
+    pub fn unmount(mut self) -> anyhow::Result<()> {
+        self.shutdown();
         Ok(())
+    }
+
+    fn shutdown(&mut self) {
+        let Some(handles) = self.handles.take() else {
+            return;
+        };
+        unsafe {
+            FspFileSystemStopDispatcher(handles.file_system);
+            FspFileSystemRemoveMountPoint(handles.file_system);
+            FspFileSystemDelete(handles.file_system);
+            drop(Box::from_raw(handles.context));
+            drop(Box::from_raw(handles.interface));
+        }
+    }
+}
+
+impl Drop for MountSession {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
@@ -100,44 +132,26 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     })?;
     let context = OperonWinFspFs::new(MountAdapterCore::new(remote_fs), remote_root)?;
     trace_mount_event("start", options.mount_point.display().to_string());
-    trace_mount_event(
-        "callback_flags",
-        format!(
-            "get_volume_info={} get_security_by_name={} create={} create_ex={} open={} read_directory={} get_dir_info_by_name={}",
-            OperonWinFspFs::GET_VOLUME_INFO_DEFINED,
-            OperonWinFspFs::GET_SECURITY_BY_NAME_DEFINED,
-            OperonWinFspFs::CREATE_DEFINED,
-            OperonWinFspFs::CREATE_EX_DEFINED,
-            OperonWinFspFs::OPEN_DEFINED,
-            OperonWinFspFs::READ_DIRECTORY_DEFINED,
-            OperonWinFspFs::GET_DIR_INFO_BY_NAME_DEFINED,
-        ),
-    );
-    let file_system = FileSystem::start(
-        Params {
-            volume_params: volume_params(),
-            guard_strategy: OperationGuardStrategy::Fine,
-        },
-        Some(mount_point.as_ucstr()),
-        context,
-    )
-    .map_err(|status| anyhow::anyhow!("failed to start WinFsp mount: NTSTATUS {status:#x}"))?;
+    trace_mount_event("callback_flags", "direct_sys_interface=true create_ex=true");
+    let handles = start_winfsp_mount(mount_point.as_ucstr(), context)
+        .map_err(|status| anyhow::anyhow!("failed to start WinFsp mount: NTSTATUS {status:#x}"))?;
 
-    Ok(MountSession { file_system })
+    Ok(MountSession {
+        handles: Some(handles),
+    })
 }
 
 struct OperonWinFspFs {
     core: MountAdapterCore,
     root_path: String,
-    security: SecurityDescriptor,
+    security: WindowsSecurityDescriptor,
 }
 
 impl OperonWinFspFs {
     fn new(core: MountAdapterCore, root_path: String) -> anyhow::Result<Self> {
-        let security = SecurityDescriptor::from_wstr(u16cstr!(
+        let security = WindowsSecurityDescriptor::from_sddl(u16cstr!(
             "O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;WD)"
-        ))
-        .map_err(|error| anyhow::anyhow!(error))?;
+        ))?;
         Ok(Self {
             core,
             root_path,
@@ -153,13 +167,6 @@ impl OperonWinFspFs {
         let path = self.path_for_name(name)?;
         self.core.stat(&path).map_err(ntstatus_for_error)
     }
-
-    fn file_context_for_stat(stat: &FsStat) -> Arc<WindowsFileContext> {
-        Arc::new(WindowsFileContext {
-            path: stat.path.clone(),
-            is_dir: stat.is_dir,
-        })
-    }
 }
 
 struct WindowsFileContext {
@@ -167,311 +174,642 @@ struct WindowsFileContext {
     is_dir: bool,
 }
 
-impl FileSystemInterface for OperonWinFspFs {
-    type FileContext = Arc<WindowsFileContext>;
+struct WindowsSecurityDescriptor {
+    bytes: Vec<u8>,
+}
 
-    const GET_VOLUME_INFO_DEFINED: bool = true;
-    const GET_SECURITY_BY_NAME_DEFINED: bool = true;
-    const CREATE_DEFINED: bool = true;
-    const CREATE_EX_DEFINED: bool = true;
-    const OPEN_DEFINED: bool = true;
-    const CLEANUP_DEFINED: bool = true;
-    const CLOSE_DEFINED: bool = true;
-    const READ_DEFINED: bool = true;
-    const WRITE_DEFINED: bool = true;
-    const FLUSH_DEFINED: bool = true;
-    const GET_FILE_INFO_DEFINED: bool = true;
-    const SET_FILE_SIZE_DEFINED: bool = true;
-    const CAN_DELETE_DEFINED: bool = true;
-    const RENAME_DEFINED: bool = true;
-    const GET_SECURITY_DEFINED: bool = true;
-    const READ_DIRECTORY_DEFINED: bool = true;
-    const GET_DIR_INFO_BY_NAME_DEFINED: bool = true;
-    const DISPATCHER_STOPPED_DEFINED: bool = true;
-
-    fn get_volume_info(&self) -> Result<VolumeInfo, NTSTATUS> {
-        trace_mount_event("get_volume_info", self.root_path.clone());
-        VolumeInfo::new(1 << 40, 1 << 39, u16str!("Operon")).map_err(|_| STATUS_INVALID_PARAMETER)
-    }
-
-    fn get_security_by_name(
-        &self,
-        file_name: &U16CStr,
-        _find_reparse_point: impl Fn() -> Option<FileAttributes>,
-    ) -> Result<(FileAttributes, PSecurityDescriptor, bool), NTSTATUS> {
-        trace_mount_event("get_security_by_name_enter", file_name.to_string_lossy());
-        let stat = self.stat_for_name(file_name)?;
-        trace_mount_event("get_security_by_name", stat.path.clone());
-        Ok((attributes_for_stat(&stat), self.security.as_ptr(), false))
-    }
-
-    fn create(
-        &self,
-        file_name: &U16CStr,
-        create_file_info: CreateFileInfo,
-        _security_descriptor: SecurityDescriptor,
-    ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
-        let path = self.path_for_name(file_name)?;
-        trace_mount_event("create_enter", path.clone());
-        let stat = match self.core.stat(&path) {
-            Ok(stat) => stat,
-            Err(_) => if create_file_info
-                .create_options
-                .is(CreateOptions::FILE_DIRECTORY_FILE)
-            {
-                self.core.mkdir(&path)
-            } else {
-                self.core.create_file(&path)
-            }
-            .map_err(ntstatus_for_error)?,
-        };
-
-        Ok((
-            Self::file_context_for_stat(&stat),
-            file_info_for_stat(&stat),
-        ))
-    }
-
-    fn create_ex(
-        &self,
-        file_name: &U16CStr,
-        create_file_info: CreateFileInfo,
-        security_descriptor: SecurityDescriptor,
-        _buffer: &[u8],
-        _extra_buffer_is_reparse_point: bool,
-    ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
-        trace_mount_event("create_ex_enter", file_name.to_string_lossy());
-        self.create(file_name, create_file_info, security_descriptor)
-    }
-
-    fn open(
-        &self,
-        file_name: &U16CStr,
-        create_options: CreateOptions,
-        _granted_access: FileAccessRights,
-    ) -> Result<(Self::FileContext, FileInfo), NTSTATUS> {
-        trace_mount_event("open_enter", file_name.to_string_lossy());
-        let stat = self.stat_for_name(file_name)?;
-        trace_mount_event("open", stat.path.clone());
-        if stat.is_dir && create_options.is(CreateOptions::FILE_NON_DIRECTORY_FILE) {
-            return Err(STATUS_FILE_IS_A_DIRECTORY);
-        }
-        if stat.is_file && create_options.is(CreateOptions::FILE_DIRECTORY_FILE) {
-            return Err(STATUS_NOT_A_DIRECTORY);
-        }
-
-        Ok((
-            Self::file_context_for_stat(&stat),
-            file_info_for_stat(&stat),
-        ))
-    }
-
-    fn cleanup(
-        &self,
-        file_context: Self::FileContext,
-        _file_name: Option<&U16CStr>,
-        flags: CleanupFlags,
-    ) {
-        if flags.is(CleanupFlags::DELETE) {
-            let _ = self.core.delete(&file_context.path);
-        }
-    }
-
-    fn close(&self, _file_context: Self::FileContext) {}
-
-    fn read(
-        &self,
-        file_context: Self::FileContext,
-        buffer: &mut [u8],
-        offset: u64,
-    ) -> Result<usize, NTSTATUS> {
-        if file_context.is_dir {
-            return Err(STATUS_FILE_IS_A_DIRECTORY);
-        }
-        let data = self
-            .core
-            .read_file(
-                &file_context.path,
-                offset,
-                buffer.len().min(u32::MAX as usize) as u32,
+impl WindowsSecurityDescriptor {
+    fn from_sddl(sddl: &U16CStr) -> anyhow::Result<Self> {
+        let mut descriptor = std::ptr::null_mut();
+        let mut reported_len = 0;
+        let ok = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                SDDL_REVISION,
+                &mut descriptor,
+                &mut reported_len,
             )
-            .map_err(ntstatus_for_error)?;
-        let copied = data.len().min(buffer.len());
-        buffer[..copied].copy_from_slice(&data[..copied]);
-        Ok(copied)
-    }
-
-    fn write(
-        &self,
-        file_context: Self::FileContext,
-        buffer: &[u8],
-        mode: WriteMode,
-    ) -> Result<(usize, FileInfo), NTSTATUS> {
-        if file_context.is_dir {
-            return Err(STATUS_FILE_IS_A_DIRECTORY);
-        }
-        let offset = match mode {
-            WriteMode::Normal { offset } | WriteMode::ConstrainedIO { offset } => offset,
-            WriteMode::WriteToEOF => {
-                self.core
-                    .stat(&file_context.path)
-                    .map_err(ntstatus_for_error)?
-                    .size
-            }
         };
-        let written = self
-            .core
-            .write_file(&file_context.path, offset, buffer)
-            .map_err(ntstatus_for_error)?;
-        let stat = self
-            .core
-            .stat(&file_context.path)
-            .map_err(ntstatus_for_error)?;
-        Ok((
-            written.min(usize::MAX as u64) as usize,
-            file_info_for_stat(&stat),
-        ))
-    }
-
-    fn flush(&self, file_context: Self::FileContext) -> Result<FileInfo, NTSTATUS> {
-        let stat = self
-            .core
-            .stat(&file_context.path)
-            .map_err(ntstatus_for_error)?;
-        Ok(file_info_for_stat(&stat))
-    }
-
-    fn get_file_info(&self, file_context: Self::FileContext) -> Result<FileInfo, NTSTATUS> {
-        let stat = self
-            .core
-            .stat(&file_context.path)
-            .map_err(ntstatus_for_error)?;
-        Ok(file_info_for_stat(&stat))
-    }
-
-    fn set_file_size(
-        &self,
-        file_context: Self::FileContext,
-        new_size: u64,
-        _set_allocation_size: bool,
-    ) -> Result<FileInfo, NTSTATUS> {
-        if file_context.is_dir {
-            return Err(STATUS_FILE_IS_A_DIRECTORY);
+        if ok == 0 {
+            anyhow::bail!("failed to create Windows security descriptor");
         }
-        let stat = self
-            .core
-            .truncate(&file_context.path, new_size)
-            .map_err(ntstatus_for_error)?;
-        Ok(file_info_for_stat(&stat))
-    }
 
-    fn can_delete(
-        &self,
-        _file_context: Self::FileContext,
-        _file_name: &U16CStr,
-    ) -> Result<(), NTSTATUS> {
-        Ok(())
-    }
-
-    fn rename(
-        &self,
-        file_context: Self::FileContext,
-        _file_name: &U16CStr,
-        new_file_name: &U16CStr,
-        _replace_if_exists: bool,
-    ) -> Result<(), NTSTATUS> {
-        let new_path = self.path_for_name(new_file_name)?;
-        self.core
-            .rename(&file_context.path, &new_path)
-            .map_err(ntstatus_for_error)
-    }
-
-    fn get_security(
-        &self,
-        _file_context: Self::FileContext,
-    ) -> Result<PSecurityDescriptor, NTSTATUS> {
-        Ok(self.security.as_ptr())
-    }
-
-    fn read_directory(
-        &self,
-        file_context: Self::FileContext,
-        marker: Option<&U16CStr>,
-        mut add_dir_info: impl FnMut(DirInfo) -> bool,
-    ) -> Result<(), NTSTATUS> {
-        if !file_context.is_dir {
-            return Err(STATUS_NOT_A_DIRECTORY);
+        let len = unsafe { GetSecurityDescriptorLength(descriptor) as usize };
+        let mut bytes = vec![0; len];
+        unsafe {
+            std::ptr::copy_nonoverlapping(descriptor.cast::<u8>(), bytes.as_mut_ptr(), len);
+            LocalFree(descriptor.cast());
         }
-        let marker = marker.map(|value| value.to_string_lossy());
-        trace_mount_event(
-            "read_directory",
-            format!("path={} marker={marker:?}", file_context.path),
-        );
-        let mut seen_marker = marker.is_none();
-        let entries = self
-            .core
-            .list_dir(&file_context.path)
-            .map_err(ntstatus_for_error)?;
-        for entry in entries {
-            trace_mount_event("read_directory_entry", entry.name.clone());
-            if !seen_marker {
-                seen_marker = marker.as_deref() == Some(entry.name.as_str());
-                continue;
-            }
-            if !add_dir_info(DirInfo::from_str(
-                file_info_for_stat(&entry.stat),
-                &entry.name,
-            )) {
-                break;
-            }
-        }
-        Ok(())
+        Ok(Self { bytes })
     }
 
-    fn get_dir_info_by_name(
+    unsafe fn copy_to(
         &self,
-        file_context: Self::FileContext,
-        file_name: &U16CStr,
-    ) -> Result<FileInfo, NTSTATUS> {
-        if !file_context.is_dir {
-            return Err(STATUS_NOT_A_DIRECTORY);
+        security_descriptor: PSECURITY_DESCRIPTOR,
+        security_descriptor_size: *mut SIZE_T,
+    ) -> NTSTATUS {
+        if security_descriptor_size.is_null() {
+            return STATUS_SUCCESS;
         }
-        let child = file_name.to_string_lossy();
-        trace_mount_event(
-            "get_dir_info_by_name",
-            format!("parent={} child={child}", file_context.path),
-        );
-        let path =
-            join_remote_child(&file_context.path, &child).map_err(|_| STATUS_INVALID_PARAMETER)?;
-        let stat = self.core.stat(&path).map_err(ntstatus_for_error)?;
-        Ok(file_info_for_stat(&stat))
-    }
 
-    fn dispatcher_stopped(&self, normally: bool) {
-        trace_mount_event("dispatcher_stopped", format!("normally={normally}"));
+        if self.bytes.len() as SIZE_T > security_descriptor_size.read() {
+            security_descriptor_size.write(self.bytes.len() as SIZE_T);
+            return STATUS_BUFFER_OVERFLOW;
+        }
+
+        security_descriptor_size.write(self.bytes.len() as SIZE_T);
+        if !security_descriptor.is_null() {
+            std::ptr::copy_nonoverlapping(
+                self.bytes.as_ptr(),
+                security_descriptor.cast::<u8>(),
+                self.bytes.len(),
+            );
+        }
+        STATUS_SUCCESS
     }
 }
 
-fn volume_params() -> VolumeParams {
-    let mut params = VolumeParams::default();
+struct WinFspMountHandles {
+    file_system: *mut FSP_FILE_SYSTEM,
+    interface: *mut FSP_FILE_SYSTEM_INTERFACE,
+    context: *mut OperonWinFspFs,
+}
+
+fn start_winfsp_mount(
+    mount_point: &U16CStr,
+    context: OperonWinFspFs,
+) -> Result<WinFspMountHandles, NTSTATUS> {
+    let interface = Box::into_raw(Box::new(winfsp_interface()));
+    let volume_params = volume_params();
+    let mut file_system = std::ptr::null_mut();
+    let device_name = u16cstr!("WinFsp.Disk");
+
+    let status = unsafe {
+        FspFileSystemCreate(
+            device_name.as_ptr().cast_mut(),
+            &volume_params,
+            interface,
+            &mut file_system,
+        )
+    };
+    if status != STATUS_SUCCESS {
+        unsafe {
+            drop(Box::from_raw(interface));
+        }
+        return Err(status);
+    }
+
+    let context = Box::into_raw(Box::new(context));
+    unsafe {
+        (*file_system).UserContext = context.cast();
+        FspFileSystemSetOperationGuardStrategyF(
+            file_system,
+            FSP_FILE_SYSTEM_OPERATION_GUARD_STRATEGY_FSP_FILE_SYSTEM_OPERATION_GUARD_STRATEGY_FINE,
+        );
+    }
+
+    let status =
+        unsafe { FspFileSystemSetMountPoint(file_system, mount_point.as_ptr().cast_mut()) };
+    if status != STATUS_SUCCESS {
+        unsafe {
+            drop(Box::from_raw(context));
+            drop(Box::from_raw(interface));
+            FspFileSystemDelete(file_system);
+        }
+        return Err(status);
+    }
+
+    let status = unsafe { FspFileSystemStartDispatcher(file_system, 0) };
+    if status != STATUS_SUCCESS {
+        unsafe {
+            FspFileSystemRemoveMountPoint(file_system);
+            drop(Box::from_raw(context));
+            drop(Box::from_raw(interface));
+            FspFileSystemDelete(file_system);
+        }
+        return Err(status);
+    }
+
+    Ok(WinFspMountHandles {
+        file_system,
+        interface,
+        context,
+    })
+}
+
+fn winfsp_interface() -> FSP_FILE_SYSTEM_INTERFACE {
+    FSP_FILE_SYSTEM_INTERFACE {
+        GetVolumeInfo: Some(get_volume_info_cb),
+        GetSecurityByName: Some(get_security_by_name_cb),
+        Create: Some(create_cb),
+        CreateEx: Some(create_ex_cb),
+        Open: Some(open_cb),
+        Cleanup: Some(cleanup_cb),
+        Close: Some(close_cb),
+        Read: Some(read_cb),
+        Write: Some(write_cb),
+        Flush: Some(flush_cb),
+        GetFileInfo: Some(get_file_info_cb),
+        SetFileSize: Some(set_file_size_cb),
+        CanDelete: Some(can_delete_cb),
+        Rename: Some(rename_cb),
+        GetSecurity: Some(get_security_cb),
+        ReadDirectory: Some(read_directory_cb),
+        GetDirInfoByName: Some(get_dir_info_by_name_cb),
+        DispatcherStopped: Some(dispatcher_stopped_cb),
+        ..Default::default()
+    }
+}
+
+fn volume_params() -> FSP_FSCTL_VOLUME_PARAMS {
+    let mut params = FSP_FSCTL_VOLUME_PARAMS::default();
+    params.set_UmFileContextIsFullContext(0);
+    params.set_UmFileContextIsUserContext2(1);
+    params.set_CaseSensitiveSearch(0);
+    params.set_CasePreservedNames(1);
+    params.set_UnicodeOnDisk(1);
+    params.set_PersistentAcls(1);
+    params.set_PostCleanupWhenModifiedOnly(1);
+    params.set_ReadOnlyVolume(0);
+    params.set_AlwaysUseDoubleBuffering(1);
+    params.MaxComponentLength = 255;
+    params.SectorSize = 4096;
+    params.SectorsPerAllocationUnit = 1;
+    params.VolumeCreationTime = winfsp_wrs::filetime_now();
+    params.VolumeSerialNumber = 0x0A0E_0001;
+    params.FileInfoTimeout = 1000;
+    params.DirInfoTimeout = 1000;
+    params.VolumeInfoTimeout = 1000;
+    let name = u16str!("Operon").as_slice();
+    params.FileSystemName[..name.len()].copy_from_slice(name);
     params
-        .set_case_sensitive_search(false)
-        .set_case_preserved_names(true)
-        .set_unicode_on_disk(true)
-        .set_persistent_acls(true)
-        .set_post_cleanup_when_modified_only(true)
-        .set_read_only_volume(false)
-        .set_always_use_double_buffering(true)
-        .set_max_component_length(255)
-        .set_sector_size(4096)
-        .set_sectors_per_allocation_unit(1)
-        .set_volume_creation_time(winfsp_wrs::filetime_now())
-        .set_volume_serial_number(0x0A0E_0001)
-        .set_file_info_timeout(1000)
-        .set_dir_info_timeout(1000)
-        .set_volume_info_timeout(1000);
-    let _ = params.set_file_system_name(u16cstr!("Operon"));
-    params
+}
+
+unsafe fn fs_from_raw(file_system: *mut FSP_FILE_SYSTEM) -> &'static OperonWinFspFs {
+    &*((*file_system).UserContext.cast::<OperonWinFspFs>())
+}
+
+unsafe fn context_from_raw<'a>(file_context: PVOID) -> &'a WindowsFileContext {
+    &*(file_context.cast::<WindowsFileContext>())
+}
+
+unsafe fn write_context(out: *mut PVOID, stat: &FsStat) {
+    let context = Box::new(WindowsFileContext {
+        path: stat.path.clone(),
+        is_dir: stat.is_dir,
+    });
+    out.write(Box::into_raw(context).cast());
+}
+
+unsafe fn write_file_info(out: *mut FSP_FSCTL_FILE_INFO, stat: &FsStat) {
+    out.write(file_info_for_stat(stat));
+}
+
+unsafe extern "C" fn get_volume_info_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    volume_info: *mut FSP_FSCTL_VOLUME_INFO,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    trace_mount_event("get_volume_info", fs.root_path.clone());
+    let label = u16str!("Operon").as_slice();
+    let mut info = FSP_FSCTL_VOLUME_INFO {
+        TotalSize: 1 << 40,
+        FreeSize: 1 << 39,
+        VolumeLabelLength: (label.len() * 2) as u16,
+        VolumeLabel: [0; 32],
+    };
+    info.VolumeLabel[..label.len()].copy_from_slice(label);
+    volume_info.write(info);
+    STATUS_SUCCESS
+}
+
+unsafe extern "C" fn get_security_by_name_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_name: PWSTR,
+    file_attributes: *mut UINT32,
+    security_descriptor: PSECURITY_DESCRIPTOR,
+    security_descriptor_size: *mut SIZE_T,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let file_name = U16CStr::from_ptr_str(file_name);
+    trace_mount_event("get_security_by_name_enter", file_name.to_string_lossy());
+    match fs.stat_for_name(file_name) {
+        Ok(stat) => {
+            trace_mount_event("get_security_by_name", stat.path.clone());
+            if !file_attributes.is_null() {
+                file_attributes.write(attributes_for_stat(&stat).0);
+            }
+            fs.security
+                .copy_to(security_descriptor, security_descriptor_size)
+        }
+        Err(status) => status,
+    }
+}
+
+fn open_or_create(
+    fs: &OperonWinFspFs,
+    file_name: &U16CStr,
+    create_options: UINT32,
+) -> Result<FsStat, NTSTATUS> {
+    let path = fs.path_for_name(file_name)?;
+    trace_mount_event("create_or_open", path.clone());
+    let options = CreateOptions(create_options);
+    let stat = match fs.core.stat(&path) {
+        Ok(stat) => stat,
+        Err(_) => if options.is(CreateOptions::FILE_DIRECTORY_FILE) {
+            fs.core.mkdir(&path)
+        } else {
+            fs.core.create_file(&path)
+        }
+        .map_err(ntstatus_for_error)?,
+    };
+    validate_open_options(&stat, options)?;
+    Ok(stat)
+}
+
+fn validate_open_options(stat: &FsStat, create_options: CreateOptions) -> Result<(), NTSTATUS> {
+    if stat.is_dir && create_options.is(CreateOptions::FILE_NON_DIRECTORY_FILE) {
+        return Err(STATUS_FILE_IS_A_DIRECTORY);
+    }
+    if stat.is_file && create_options.is(CreateOptions::FILE_DIRECTORY_FILE) {
+        return Err(STATUS_NOT_A_DIRECTORY);
+    }
+    Ok(())
+}
+
+unsafe extern "C" fn create_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_name: PWSTR,
+    create_options: UINT32,
+    _granted_access: UINT32,
+    _file_attributes: UINT32,
+    _security_descriptor: PSECURITY_DESCRIPTOR,
+    _allocation_size: UINT64,
+    file_context: *mut PVOID,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let file_name = U16CStr::from_ptr_str(file_name);
+    trace_mount_event("create_enter", file_name.to_string_lossy());
+    match open_or_create(fs, file_name, create_options) {
+        Ok(stat) => {
+            write_context(file_context, &stat);
+            write_file_info(file_info, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn create_ex_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_name: PWSTR,
+    create_options: UINT32,
+    granted_access: UINT32,
+    file_attributes: UINT32,
+    security_descriptor: PSECURITY_DESCRIPTOR,
+    allocation_size: UINT64,
+    _extra_buffer: PVOID,
+    _extra_length: ULONG,
+    _extra_buffer_is_reparse_point: u8,
+    file_context: *mut PVOID,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    let name = U16CStr::from_ptr_str(file_name);
+    trace_mount_event("create_ex_enter", name.to_string_lossy());
+    create_cb(
+        file_system,
+        file_name,
+        create_options,
+        granted_access,
+        file_attributes,
+        security_descriptor,
+        allocation_size,
+        file_context,
+        file_info,
+    )
+}
+
+unsafe extern "C" fn open_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_name: PWSTR,
+    create_options: UINT32,
+    _granted_access: UINT32,
+    file_context: *mut PVOID,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let file_name = U16CStr::from_ptr_str(file_name);
+    trace_mount_event("open_enter", file_name.to_string_lossy());
+    match fs.stat_for_name(file_name).and_then(|stat| {
+        validate_open_options(&stat, CreateOptions(create_options))?;
+        Ok(stat)
+    }) {
+        Ok(stat) => {
+            trace_mount_event("open", stat.path.clone());
+            write_context(file_context, &stat);
+            write_file_info(file_info, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn cleanup_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    _file_name: PWSTR,
+    flags: UINT32,
+) {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    if flags & FspCleanupDelete as u32 != 0 {
+        let _ = fs.core.delete(&context.path);
+    }
+}
+
+unsafe extern "C" fn close_cb(_file_system: *mut FSP_FILE_SYSTEM, file_context: PVOID) {
+    if !file_context.is_null() {
+        drop(Box::from_raw(file_context.cast::<WindowsFileContext>()));
+    }
+}
+
+unsafe extern "C" fn read_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    buffer: PVOID,
+    offset: UINT64,
+    length: ULONG,
+    bytes_transferred: *mut ULONG,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    trace_mount_event(
+        "read",
+        format!("path={} offset={offset} length={length}", context.path),
+    );
+    if context.is_dir {
+        return STATUS_FILE_IS_A_DIRECTORY;
+    }
+    match fs
+        .core
+        .read_file(&context.path, offset, length)
+        .map_err(ntstatus_for_error)
+    {
+        Ok(data) => {
+            let copied = data.len().min(length as usize);
+            std::ptr::copy_nonoverlapping(data.as_ptr(), buffer.cast::<u8>(), copied);
+            bytes_transferred.write(copied as ULONG);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn write_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    buffer: PVOID,
+    offset: UINT64,
+    length: ULONG,
+    write_to_eof: u8,
+    _constrained_io: u8,
+    bytes_transferred: *mut ULONG,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    if context.is_dir {
+        return STATUS_FILE_IS_A_DIRECTORY;
+    }
+    let offset = if write_to_eof != 0 {
+        match fs.core.stat(&context.path) {
+            Ok(stat) => stat.size,
+            Err(error) => return ntstatus_for_error(error),
+        }
+    } else {
+        offset
+    };
+    let data = std::slice::from_raw_parts(buffer.cast::<u8>(), length as usize);
+    match fs
+        .core
+        .write_file(&context.path, offset, data)
+        .and_then(|written| fs.core.stat(&context.path).map(|stat| (written, stat)))
+        .map_err(ntstatus_for_error)
+    {
+        Ok((written, stat)) => {
+            bytes_transferred.write(written.min(u32::MAX as u64) as ULONG);
+            write_file_info(file_info, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn flush_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    if file_context.is_null() {
+        return STATUS_SUCCESS;
+    }
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    match fs.core.stat(&context.path).map_err(ntstatus_for_error) {
+        Ok(stat) => {
+            write_file_info(file_info, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn get_file_info_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    flush_cb(file_system, file_context, file_info)
+}
+
+unsafe extern "C" fn set_file_size_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    new_size: UINT64,
+    _set_allocation_size: u8,
+    file_info: *mut FSP_FSCTL_FILE_INFO,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    if context.is_dir {
+        return STATUS_FILE_IS_A_DIRECTORY;
+    }
+    match fs
+        .core
+        .truncate(&context.path, new_size)
+        .map_err(ntstatus_for_error)
+    {
+        Ok(stat) => {
+            write_file_info(file_info, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn can_delete_cb(
+    _file_system: *mut FSP_FILE_SYSTEM,
+    _file_context: PVOID,
+    _file_name: PWSTR,
+) -> NTSTATUS {
+    STATUS_SUCCESS
+}
+
+unsafe extern "C" fn rename_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    _file_name: PWSTR,
+    new_file_name: PWSTR,
+    _replace_if_exists: u8,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    let new_file_name = U16CStr::from_ptr_str(new_file_name);
+    let new_path = match fs.path_for_name(new_file_name) {
+        Ok(path) => path,
+        Err(status) => return status,
+    };
+    fs.core
+        .rename(&context.path, &new_path)
+        .map(|()| STATUS_SUCCESS)
+        .unwrap_or_else(ntstatus_for_error)
+}
+
+unsafe extern "C" fn get_security_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    _file_context: PVOID,
+    security_descriptor: PSECURITY_DESCRIPTOR,
+    security_descriptor_size: *mut SIZE_T,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    fs.security
+        .copy_to(security_descriptor, security_descriptor_size)
+}
+
+unsafe extern "C" fn read_directory_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    _pattern: PWSTR,
+    marker: PWSTR,
+    buffer: PVOID,
+    length: ULONG,
+    bytes_transferred: *mut ULONG,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    if !context.is_dir {
+        return STATUS_NOT_A_DIRECTORY;
+    }
+    let marker = if marker.is_null() {
+        None
+    } else {
+        Some(U16CStr::from_ptr_str(marker).to_string_lossy())
+    };
+    trace_mount_event(
+        "read_directory",
+        format!("path={} marker={marker:?}", context.path),
+    );
+    let entries = match fs.core.list_dir(&context.path).map_err(ntstatus_for_error) {
+        Ok(entries) => entries,
+        Err(status) => return status,
+    };
+    let mut seen_marker = marker.is_none();
+    for entry in entries {
+        if !seen_marker {
+            seen_marker = marker.as_deref() == Some(entry.name.as_str());
+            continue;
+        }
+        if !add_dir_info(buffer, length, bytes_transferred, &entry.name, &entry.stat) {
+            break;
+        }
+    }
+    STATUS_SUCCESS
+}
+
+unsafe extern "C" fn get_dir_info_by_name_cb(
+    file_system: *mut FSP_FILE_SYSTEM,
+    file_context: PVOID,
+    file_name: PWSTR,
+    dir_info: *mut FSP_FSCTL_DIR_INFO,
+) -> NTSTATUS {
+    let fs = fs_from_raw(file_system);
+    let context = context_from_raw(file_context);
+    if !context.is_dir {
+        return STATUS_NOT_A_DIRECTORY;
+    }
+    let child = U16CStr::from_ptr_str(file_name).to_string_lossy();
+    trace_mount_event(
+        "get_dir_info_by_name",
+        format!("parent={} child={child}", context.path),
+    );
+    let path = match join_remote_child(&context.path, &child) {
+        Ok(path) => path,
+        Err(_) => return STATUS_INVALID_PARAMETER,
+    };
+    match fs.core.stat(&path).map_err(ntstatus_for_error) {
+        Ok(stat) => {
+            write_dir_info(dir_info, &child, &stat);
+            STATUS_SUCCESS
+        }
+        Err(status) => status,
+    }
+}
+
+unsafe extern "C" fn dispatcher_stopped_cb(_file_system: *mut FSP_FILE_SYSTEM, normally: u8) {
+    trace_mount_event("dispatcher_stopped", format!("normally={}", normally != 0));
+}
+
+fn add_dir_info(
+    buffer: PVOID,
+    length: ULONG,
+    bytes_transferred: *mut ULONG,
+    name: &str,
+    stat: &FsStat,
+) -> bool {
+    let mut storage = dir_info_storage(name, stat);
+    unsafe {
+        FspFileSystemAddDirInfo(
+            storage.as_mut_ptr().cast::<FSP_FSCTL_DIR_INFO>(),
+            buffer,
+            length,
+            bytes_transferred,
+        ) != 0
+    }
+}
+
+fn write_dir_info(out: *mut FSP_FSCTL_DIR_INFO, name: &str, stat: &FsStat) {
+    let mut storage = dir_info_storage(name, stat);
+    unsafe {
+        std::ptr::copy_nonoverlapping(storage.as_mut_ptr(), out.cast::<u8>(), storage.len());
+    }
+}
+
+fn dir_info_storage(name: &str, stat: &FsStat) -> Vec<u8> {
+    let name: Vec<u16> = name.encode_utf16().collect();
+    let size = std::mem::size_of::<FSP_FSCTL_DIR_INFO>() + name.len() * 2;
+    let mut storage = vec![0u8; size];
+    unsafe {
+        let dir_info = storage.as_mut_ptr().cast::<FSP_FSCTL_DIR_INFO>();
+        (*dir_info).Size = size as u16;
+        (*dir_info).FileInfo = file_info_for_stat(stat);
+        std::ptr::copy_nonoverlapping(
+            name.as_ptr(),
+            (*dir_info).FileNameBuf.as_mut_ptr(),
+            name.len(),
+        );
+    }
+    storage
 }
 
 fn windows_name_to_remote_path(root: &str, name: &U16CStr) -> anyhow::Result<String> {
@@ -500,14 +838,18 @@ fn attributes_for_stat(stat: &FsStat) -> FileAttributes {
     }
 }
 
-fn file_info_for_stat(stat: &FsStat) -> FileInfo {
-    let mut info = FileInfo::default();
+fn file_info_for_stat(stat: &FsStat) -> FSP_FSCTL_FILE_INFO {
+    let mut info = FSP_FSCTL_FILE_INFO::default();
     let size = if stat.is_dir { 0 } else { stat.size };
-    info.set_file_attributes(attributes_for_stat(stat))
-        .set_allocation_size(size.div_ceil(4096) * 4096)
-        .set_file_size(size)
-        .set_time(winfsp_wrs::filetime_now())
-        .set_hard_links(1);
+    let now = winfsp_wrs::filetime_now();
+    info.FileAttributes = attributes_for_stat(stat).0;
+    info.AllocationSize = size.div_ceil(4096) * 4096;
+    info.FileSize = size;
+    info.CreationTime = now;
+    info.LastAccessTime = now;
+    info.LastWriteTime = now;
+    info.ChangeTime = now;
+    info.HardLinks = 1;
     info
 }
 

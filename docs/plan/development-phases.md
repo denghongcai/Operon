@@ -5190,6 +5190,12 @@ Completed:
   followed by macFUSE daemon mount and server-advertise failures. Remaining
   macOS live validation requires either a runner-safe entitlement/registration
   path or a host where the macFUSE kernel backend is approved and loaded.
+- Switch the Windows WinFsp adapter from the `winfsp_wrs` high-level host to
+  direct `winfsp_wrs_sys` interface registration after targeted Windows
+  live-smoke logs showed the drive was registered but root opens still returned
+  `STATUS_INVALID_DEVICE_REQUEST` before any adapter callback trace. The direct
+  adapter now owns callback entry tracing and explicit WinFsp
+  dispatcher/context/interface cleanup.
 
 Remaining:
 
