@@ -39,9 +39,10 @@ require_pattern 'sha256sum \*\.tar\.gz \*\.zip > SHA256SUMS' .github/workflows/r
 require_pattern 'Linux and macOS release archives use' README.md
 require_pattern '`.tar.gz`; Windows release archives use `.zip`' README.md
 require_pattern 'Windows release archives use `.zip`' README.md
-require_pattern 'macOS and Windows prebuilt' README.md
-require_pattern 'archives are core runtime previews' README.md
-require_pattern 'Linux FUSE mount support remains Linux-only' README.md
+require_pattern 'macOS macFUSE' README.md
+require_pattern 'Windows WinFsp' README.md
+require_pattern 'prebuilt archives include' README.md
+require_pattern 'platform live mount' README.md
 require_pattern 'macos-x86_64' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'macos-aarch64' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'windows-x86_64' docs/architecture/technology-and-protocol-decisions.md

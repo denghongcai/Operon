@@ -18,6 +18,8 @@ MOUNT_LOG="$TMP_DIR/mount.log"
 DAEMON_LOG="$TMP_DIR/daemon.log"
 DAEMON_PID=""
 MOUNT_PID=""
+OPEROND_BIN="$ROOT_DIR/target/debug/operond"
+OPERON_BIN="$ROOT_DIR/target/debug/operon"
 
 cleanup() {
   set +e
@@ -76,12 +78,12 @@ YAML
 
 wait_for_node() {
   for _ in $(seq 1 30); do
-    if cargo run -q -p operon-cli -- --config "$CONFIG" node ping macos-live >/dev/null 2>&1; then
+    if "$OPERON_BIN" --config "$CONFIG" node ping macos-live >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
   done
-  cargo run -q -p operon-cli -- --config "$CONFIG" node ping macos-live
+  "$OPERON_BIN" --config "$CONFIG" node ping macos-live
 }
 
 wait_for_mount() {
@@ -100,18 +102,20 @@ mkdir -p "$WORKSPACE" "$MOUNT_DIR"
 printf "seed" >"$WORKSPACE/seed.txt"
 write_config
 
-cargo run -q -p operond -- start --config "$CONFIG" >"$DAEMON_LOG" 2>&1 &
+cargo build -q -p operond -p operon-cli --locked
+
+"$OPEROND_BIN" start --config "$CONFIG" >"$DAEMON_LOG" 2>&1 &
 DAEMON_PID="$!"
 wait_for_node
 
-cargo run -q -p operon-cli -- --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
+"$OPERON_BIN" --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
 MOUNT_PID="$!"
 wait_for_mount
 
 grep -q "^seed$" "$MOUNT_DIR/seed.txt"
 
 printf "created through macos mount" >"$MOUNT_DIR/new.txt"
-cargo run -q -p operon-cli -- --config "$CONFIG" fs read macos-live:/new.txt >"$TMP_DIR/new-read.txt"
+"$OPERON_BIN" --config "$CONFIG" fs read macos-live:/new.txt >"$TMP_DIR/new-read.txt"
 grep -q "^created through macos mount$" "$TMP_DIR/new-read.txt"
 
 mkdir "$MOUNT_DIR/dir"
@@ -119,7 +123,7 @@ printf "abcdef" >"$MOUNT_DIR/dir/data.txt"
 truncate -s 3 "$MOUNT_DIR/dir/data.txt"
 grep -q "^abc$" "$MOUNT_DIR/dir/data.txt"
 mv "$MOUNT_DIR/dir/data.txt" "$MOUNT_DIR/dir/renamed.txt"
-cargo run -q -p operon-cli -- --config "$CONFIG" fs read macos-live:/dir/renamed.txt >"$TMP_DIR/renamed-read.txt"
+"$OPERON_BIN" --config "$CONFIG" fs read macos-live:/dir/renamed.txt >"$TMP_DIR/renamed-read.txt"
 grep -q "^abc$" "$TMP_DIR/renamed-read.txt"
 rm "$MOUNT_DIR/dir/renamed.txt"
 rmdir "$MOUNT_DIR/dir"

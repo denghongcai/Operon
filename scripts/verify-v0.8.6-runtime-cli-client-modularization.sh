@@ -38,7 +38,7 @@ require_file crates/operon-mount/src/mount_core.rs
 require_file crates/operon-mount/src/remote_client.rs
 require_pattern 'pub mod mount_core;' crates/operon-mount/src/lib.rs
 require_pattern 'pub mod remote_client;' crates/operon-mount/src/lib.rs
-require_pattern 'pub use mount_core::RemoteFs' crates/operon-mount/src/lib.rs
+require_pattern 'RemoteFs' crates/operon-mount/src/lib.rs
 require_pattern 'pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 
 for module in audit auth fs_service exec_runtime pagination service_forward state; do

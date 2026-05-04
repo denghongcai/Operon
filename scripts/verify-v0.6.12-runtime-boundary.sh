@@ -15,8 +15,8 @@ rg -n 'exec_log_complete_event' crates/operond/src/exec_runtime.rs
 rg -n 'exec_log_snapshot_event' crates/operond/src/exec_service.rs
 rg -n 'exec_log_complete_event' crates/operond/src/exec_service.rs
 
-rg -n "\\[target\\.'cfg\\(target_os = \"linux\"\\)'\\.dependencies\\]" crates/operon-mount/Cargo.toml
-rg -n '^#\[cfg\(target_os = "linux"\)\]' crates/operon-mount/src/lib.rs
+rg -n "\\[target\\.'cfg\\(any\\(target_os = \"linux\", target_os = \"macos\"\\)\\)'\\.dependencies\\]" crates/operon-mount/Cargo.toml
+rg -n '^#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/lib.rs
 rg -n '^pub mod mount_core;' crates/operon-mount/src/lib.rs
 rg -n '^pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 

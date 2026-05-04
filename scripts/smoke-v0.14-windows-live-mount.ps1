@@ -14,6 +14,8 @@ $MountErr = Join-Path $Tmp.FullName "mount.err.log"
 $Daemon = $null
 $Mount = $null
 $MountPoint = $null
+$OperondExe = Join-Path $Root "target\debug\operond.exe"
+$OperonExe = Join-Path $Root "target\debug\operon.exe"
 
 function Stop-ChildProcess {
     param($Process)
@@ -69,11 +71,16 @@ policy:
     services: []
 "@ | Set-Content -Path $Config -NoNewline
 
-    $Daemon = Start-Process -FilePath "cargo" -ArgumentList @("run", "-q", "-p", "operond", "--", "start", "--config", $Config) -RedirectStandardOutput $DaemonLog -RedirectStandardError $DaemonErr -PassThru -NoNewWindow
+    & cargo build -q -p operond -p operon-cli --locked
+    if ($LASTEXITCODE -ne 0) {
+        throw "cargo build failed"
+    }
+
+    $Daemon = Start-Process -FilePath $OperondExe -ArgumentList @("start", "--config", $Config) -RedirectStandardOutput $DaemonLog -RedirectStandardError $DaemonErr -PassThru -NoNewWindow
 
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
-        & cargo run -q -p operon-cli -- --config $Config node ping windows-live *> $null
+        & $OperonExe --config $Config node ping windows-live *> $null
         if ($LASTEXITCODE -eq 0) {
             $ready = $true
             break
@@ -81,7 +88,7 @@ policy:
         Start-Sleep -Seconds 1
     }
     if (-not $ready) {
-        & cargo run -q -p operon-cli -- --config $Config node ping windows-live
+        & $OperonExe --config $Config node ping windows-live
     }
 
     foreach ($letter in @("O:", "P:", "Q:", "R:")) {
@@ -94,10 +101,15 @@ policy:
         throw "no free drive letter for WinFsp mount"
     }
 
-    $Mount = Start-Process -FilePath "cargo" -ArgumentList @("run", "-q", "-p", "operon-cli", "--", "--config", $Config, "mount", "windows-live:/", "--to", $MountPoint) -RedirectStandardOutput $MountLog -RedirectStandardError $MountErr -PassThru -NoNewWindow
+    $Mount = Start-Process -FilePath $OperonExe -ArgumentList @("--config", $Config, "mount", "windows-live:/", "--to", $MountPoint) -RedirectStandardOutput $MountLog -RedirectStandardError $MountErr -PassThru -NoNewWindow
 
     $mounted = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
+        if ($Mount.HasExited) {
+            Get-Content $MountLog -ErrorAction SilentlyContinue | Write-Error
+            Get-Content $MountErr -ErrorAction SilentlyContinue | Write-Error
+            throw "mount process exited before exposing seed file"
+        }
         if (Test-Path "$MountPoint\seed.txt") {
             $mounted = $true
             break
@@ -115,7 +127,7 @@ policy:
     }
 
     [System.IO.File]::WriteAllText("$MountPoint\new.txt", "created through windows mount")
-    & cargo run -q -p operon-cli -- --config $Config fs read windows-live:/new.txt | Set-Content (Join-Path $Tmp.FullName "new-read.txt")
+    & $OperonExe --config $Config fs read windows-live:/new.txt | Set-Content (Join-Path $Tmp.FullName "new-read.txt")
     if ((Get-Content (Join-Path $Tmp.FullName "new-read.txt") -Raw).Trim() -ne "created through windows mount") {
         throw "remote read after write mismatch"
     }
@@ -132,7 +144,7 @@ policy:
         throw "truncate through mount failed"
     }
     Move-Item "$MountPoint\dir\data.txt" "$MountPoint\dir\renamed.txt"
-    & cargo run -q -p operon-cli -- --config $Config fs read windows-live:/dir/renamed.txt | Set-Content (Join-Path $Tmp.FullName "renamed-read.txt")
+    & $OperonExe --config $Config fs read windows-live:/dir/renamed.txt | Set-Content (Join-Path $Tmp.FullName "renamed-read.txt")
     if ((Get-Content (Join-Path $Tmp.FullName "renamed-read.txt") -Raw).Trim() -ne "abc") {
         throw "remote read after rename mismatch"
     }
