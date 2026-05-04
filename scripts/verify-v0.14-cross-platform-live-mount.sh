@@ -51,6 +51,8 @@ require_pattern 'cargo test -p operon-mount --locked --features macos-no-mount' 
 require_pattern 'cargo test -p operon-mount --locked' .github/workflows/ci.yml
 require_pattern 'brew install --cask macfuse' .github/workflows/release-draft.yml
 require_pattern 'brew install --cask macfuse' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'choco install winfsp -y' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/smoke-v0.14-macos-live-mount.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/smoke-v0.14-windows-live-mount.ps1' .github/workflows/v0.14-live-mount-smoke.yml

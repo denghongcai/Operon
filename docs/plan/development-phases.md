@@ -5208,11 +5208,23 @@ Completed:
   callback entry. The root cause is WinFsp's create/open dispatch precondition:
   `Create/CreateEx`, `Open`, and `Overwrite/OverwriteEx` must all be registered
   before `FspFileSystemOpCreate` will dispatch root opens.
+- Validate Windows live mount on GitHub-hosted `windows-latest` for commit
+  `b14a4bd` in run `25339076348`; the smoke covered drive exposure, read,
+  write, truncate, mkdir, rename, delete, remote read-back, and cleanup through
+  the WinFsp adapter.
+- Re-run macOS live smoke on GitHub-hosted `macos-latest` for commit
+  `b14a4bd` in run `25339408571` and confirm the remaining failure is still the
+  macFUSE FSKit/LiveFS service boundary: Operon reaches `spawn_mount2_start`,
+  while unified logs report an unentitled FSKit client followed by macFUSE
+  daemon mount and server-advertise failures.
+- Add a `macos_backend=fskit|kernel` workflow input for the manual v0.14
+  live-smoke workflow so macOS validation can explicitly target the hosted
+  runner FSKit path or a kernel backend on a host where the macFUSE kernel
+  extension is approved and loaded.
 
 Remaining:
 
 - Run macOS live smoke on a host with macFUSE installed.
-- Run Windows live smoke on a host with WinFsp installed.
 - Publish and verify a release only after live smoke and release artifact
   validation pass.
 

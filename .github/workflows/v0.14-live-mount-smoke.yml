@@ -12,6 +12,14 @@ on:
           - all
           - macos
           - windows
+      macos_backend:
+        description: "macFUSE backend for macOS smoke"
+        type: choice
+        required: true
+        default: fskit
+        options:
+          - fskit
+          - kernel
 
 permissions:
   contents: read
@@ -44,6 +52,8 @@ jobs:
         run: brew install --cask macfuse
 
       - name: Run macOS live mount smoke
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
         run: scripts/smoke-v0.14-macos-live-mount.sh
 
   windows-live-mount:
