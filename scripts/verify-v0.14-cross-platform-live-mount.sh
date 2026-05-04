@@ -58,6 +58,8 @@ require_pattern 'actions/upload-artifact@v7' .github/workflows/v0.14-live-mount-
 require_pattern 'choco install winfsp -y' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/smoke-v0.14-macos-live-mount.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/smoke-v0.14-windows-live-mount.ps1' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scripts/smoke-v0.14-macos-live-mount.sh
+require_pattern 'wait_for_process_exit' scripts/smoke-v0.14-macos-live-mount.sh
 
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
 

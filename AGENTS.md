@@ -892,6 +892,10 @@ Defer:
   loaded. A GitHub-hosted `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
   job log, so the workflow now tees macOS smoke output to an uploaded artifact
-  and prints the smoke exit code for the next diagnostic run. Remaining v0.14
-  work: run macOS live smoke on a working macFUSE host, then publish and verify
-  a release.
+  and prints the smoke exit code for the next diagnostic run. The first
+  artifact-backed kernel run `25340798030` confirmed the hosted runner keeps the
+  macFUSE kernel extension unloaded and reaches `spawn_mount2_start` before the
+  seed file remains hidden; it also exposed an unbounded smoke cleanup wait, so
+  the macOS smoke script now uses bounded cleanup waits. Remaining v0.14 work:
+  run macOS live smoke on a working macFUSE host, then publish and verify a
+  release.

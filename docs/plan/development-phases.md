@@ -5228,6 +5228,13 @@ Completed:
   job log. The workflow now wraps the macOS smoke script with explicit
   stdout/stderr tee logging, prints the smoke exit code, and uploads the smoke
   log artifact on success or failure.
+- Re-run the artifact-backed `macos_backend=kernel` workflow for commit
+  `4160b0c` in run `25340798030`; the artifact confirmed GitHub-hosted macOS
+  keeps the macFUSE kernel extension unloaded, Operon reaches
+  `spawn_mount2_start`, and the seed file is never exposed. That run also
+  showed smoke cleanup could wait without a bound for the stuck mount process
+  until job timeout, so the macOS smoke script now uses a shorter default
+  watchdog and bounded process cleanup waits.
 
 Remaining:
 

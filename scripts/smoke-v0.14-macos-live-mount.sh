@@ -20,7 +20,7 @@ DAEMON_LOG="$TMP_DIR/daemon.log"
 DAEMON_PID=""
 MOUNT_PID=""
 WATCHDOG_PID=""
-SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-900}"
+SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-600}"
 OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
 MACFUSE_BIN="/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app/Contents/MacOS/macfuse"
@@ -54,26 +54,39 @@ dump_diagnostics() {
   )
 }
 
+wait_for_process_exit() {
+  local pid="$1"
+  local attempts="$2"
+  for _ in $(seq 1 "$attempts"); do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      wait "$pid" >/dev/null 2>&1 || true
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 cleanup() {
   set +e
   if [[ -n "$WATCHDOG_PID" ]] && kill -0 "$WATCHDOG_PID" >/dev/null 2>&1; then
     kill "$WATCHDOG_PID" >/dev/null 2>&1 || true
-    wait "$WATCHDOG_PID" >/dev/null 2>&1 || true
+    wait_for_process_exit "$WATCHDOG_PID" 2 || true
   fi
   if [[ -n "$MOUNT_PID" ]] && kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
     kill -INT "$MOUNT_PID" >/dev/null 2>&1
-    for _ in $(seq 1 5); do
-      kill -0 "$MOUNT_PID" >/dev/null 2>&1 || break
-      sleep 1
-    done
+    wait_for_process_exit "$MOUNT_PID" 5 || true
     if kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
       kill -TERM "$MOUNT_PID" >/dev/null 2>&1 || true
-      sleep 1
+      wait_for_process_exit "$MOUNT_PID" 2 || true
     fi
     if kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
       kill -KILL "$MOUNT_PID" >/dev/null 2>&1 || true
+      wait_for_process_exit "$MOUNT_PID" 2 || true
     fi
-    wait "$MOUNT_PID" >/dev/null 2>&1 || true
+    if kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
+      echo "mount process $MOUNT_PID did not exit after SIGKILL; leaving runner cleanup to reap it" >&2
+    fi
   fi
   if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then
     umount "$MOUNT_DIR" >/dev/null 2>&1 || true
@@ -81,14 +94,14 @@ cleanup() {
   sudo rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
   if [[ -n "$DAEMON_PID" ]] && kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
     kill "$DAEMON_PID" >/dev/null 2>&1
-    for _ in $(seq 1 5); do
-      kill -0 "$DAEMON_PID" >/dev/null 2>&1 || break
-      sleep 1
-    done
+    wait_for_process_exit "$DAEMON_PID" 5 || true
     if kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
       kill -KILL "$DAEMON_PID" >/dev/null 2>&1 || true
+      wait_for_process_exit "$DAEMON_PID" 2 || true
     fi
-    wait "$DAEMON_PID" >/dev/null 2>&1 || true
+    if kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
+      echo "daemon process $DAEMON_PID did not exit after SIGKILL; leaving runner cleanup to reap it" >&2
+    fi
   fi
   rm -rf "$TMP_DIR"
 }
