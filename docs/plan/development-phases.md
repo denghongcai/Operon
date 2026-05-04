@@ -5152,6 +5152,12 @@ Completed:
   globally and could let a missing seed file continue into later test steps.
   Windows live-smoke evidence now shows callback flags are present but WinFsp
   still returns `STATUS_INVALID_DEVICE_REQUEST` before any adapter callback.
+- Align the Windows WinFsp adapter with conservative official sample-style
+  volume/interface defaults after live-smoke diagnostics showed registered
+  callback flags but no adapter callback dispatch: expose base `Create` instead
+  of `CreateEx`, use case-insensitive search, persistent ACLs,
+  post-cleanup-when-modified-only, and an explicit volume creation time while
+  retaining double buffering.
 
 Remaining:
 

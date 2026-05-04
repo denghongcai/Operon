@@ -172,8 +172,8 @@ impl FileSystemInterface for OperonWinFspFs {
 
     const GET_VOLUME_INFO_DEFINED: bool = true;
     const GET_SECURITY_BY_NAME_DEFINED: bool = true;
-    const CREATE_DEFINED: bool = false;
-    const CREATE_EX_DEFINED: bool = true;
+    const CREATE_DEFINED: bool = true;
+    const CREATE_EX_DEFINED: bool = false;
     const OPEN_DEFINED: bool = true;
     const CLEANUP_DEFINED: bool = true;
     const CLOSE_DEFINED: bool = true;
@@ -455,15 +455,17 @@ impl FileSystemInterface for OperonWinFspFs {
 fn volume_params() -> VolumeParams {
     let mut params = VolumeParams::default();
     params
-        .set_case_sensitive_search(true)
+        .set_case_sensitive_search(false)
         .set_case_preserved_names(true)
         .set_unicode_on_disk(true)
-        .set_persistent_acls(false)
+        .set_persistent_acls(true)
+        .set_post_cleanup_when_modified_only(true)
         .set_read_only_volume(false)
         .set_always_use_double_buffering(true)
         .set_max_component_length(255)
         .set_sector_size(4096)
         .set_sectors_per_allocation_unit(1)
+        .set_volume_creation_time(winfsp_wrs::filetime_now())
         .set_volume_serial_number(0x0A0E_0001)
         .set_file_info_timeout(1000)
         .set_dir_info_timeout(1000)
