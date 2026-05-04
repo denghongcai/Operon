@@ -12,8 +12,8 @@ require_pattern 'Status: Completed' docs/plan/v0.11.2-exec-session-hardening.md
 require_pattern 'v0.11.2 Exec Session Hardening' docs/plan/development-phases.md
 require_pattern 'No v0.11.2 work remains' docs/plan/development-phases.md
 
-require_pattern 'TerminalDimensions' crates/operon-cli/src/commands/exec.rs
-require_pattern 'local_terminal_dimensions_or_default' crates/operon-cli/src/commands/exec.rs
+require_pattern 'TerminalDimensions' crates/operon-cli/src/commands/exec_session.rs
+require_pattern 'local_terminal_dimensions_or_default' crates/operon-cli/src/commands/exec_session.rs
 require_pattern 'spawn_resize_forwarder' crates/operon-cli/src/grpc_exec.rs
 require_pattern 'ExecSessionResize' crates/operon-cli/src/grpc_exec.rs
 require_pattern 'SessionStreamGuard' crates/operond/src/exec_session.rs

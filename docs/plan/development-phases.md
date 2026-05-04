@@ -4643,6 +4643,9 @@ Completed:
   and wired it into CI and DEVELOPMENT.md.
 - Updated release documentation so maintainers run
   `scripts/verify-release-artifacts.sh <tag>` after publishing.
+- Follow-up workflow validation fixed the draft release workflow's Windows zip
+  packaging command so the tag-triggered workflow parses before release jobs
+  are scheduled.
 
 Remaining:
 
@@ -4686,6 +4689,10 @@ Completed:
 - Added
   [`scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh`](../../scripts/verify-v0.12.5-cli-grpc-maintainability-cleanup.sh)
   and wired it into CI and DEVELOPMENT.md.
+- Follow-up CI verification aligned the older v0.11 and v0.11.2 validation
+  scripts with the v0.12.2 CLI exec session module split so those gates check
+  [`commands/exec_session.rs`](../../crates/operon-cli/src/commands/exec_session.rs)
+  instead of the pre-split exec command file.
 
 Remaining:
 
