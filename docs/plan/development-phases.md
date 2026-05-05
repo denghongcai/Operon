@@ -5397,6 +5397,13 @@ Completed:
   caused by fuser advertising macOS capabilities (`CASE_INSENSITIVE`,
   `VOL_RENAME`, `XTIMES`) that libfuse high-level filesystems only request when
   matching operations are implemented.
+- Record hosted run `25375413405` from that diagnostic branch: patching fuser's
+  macOS `INIT_FLAGS` changed the negotiated FUSE-T flags from `0xe0000001` to
+  `0x40000001`, but the minimal fuser filesystem still failed with the same
+  early `Connection closed`. The remaining bit 30 is produced by fuser's
+  low-level init reply adding `FUSE_INIT_EXT`, which collides with macOS
+  `FUSE_VOL_RENAME`; this supports moving the macOS adapter toward libfuse
+  high-level mounting rather than continuing Operon callback adjustments.
 
 Remaining:
 
