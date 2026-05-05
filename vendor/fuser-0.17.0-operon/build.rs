@@ -3,6 +3,7 @@ fn main() {
     println!(
         "cargo::rustc-check-cfg=cfg(fuser_mount_impl, values(\"pure-rust\", \"libfuse2\", \"libfuse3\", \"macos-no-mount\"))"
     );
+    println!("cargo::rerun-if-env-changed=OPERON_FUSER_MACOS_FORCE_LIBFUSE3");
 
     let target_os =
         std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS should be set");
@@ -16,6 +17,8 @@ fn main() {
     } else if target_os == "macos" {
         if cfg!(feature = "macos-no-mount") {
             println!("cargo::rustc-cfg=fuser_mount_impl=\"macos-no-mount\"");
+        } else if std::env::var_os("OPERON_FUSER_MACOS_FORCE_LIBFUSE3").is_some() {
+            configure_libfuse3().unwrap();
         } else {
             let fuse = pkg_config::Config::new()
                 .atleast_version("2.6.0")
