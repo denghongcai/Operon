@@ -5286,6 +5286,11 @@ Completed:
   because `@rpath/libfuse-t.dylib` could not be resolved. The install helper
   now emits an rpath in generated pkg-config metadata and exports
   `DYLD_LIBRARY_PATH` for the smoke environment.
+- Run the next hosted NFS smoke for commit `acc1e20` in run `25355546910`; the
+  mount command reached `spawn_mount2_ok`, but the seed file was not exposed
+  and unified logs reported `nfs_connect: socket connect taking a while for
+  fuse-t:/...`. The next checkpoint adds deeper FUSE-T process/socket
+  diagnostics and runs an SMB-backend smoke to isolate NFS-specific behavior.
 
 Remaining:
 

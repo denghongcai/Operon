@@ -19,6 +19,14 @@ if pkg-config --modversion fuse >/dev/null 2>&1; then
   exit 0
 fi
 
+if pkg-config --modversion fuse-t >/dev/null 2>&1; then
+  fuse_t_libs="$(pkg-config --libs fuse-t)"
+  fuse_t_cflags="$(pkg-config --cflags fuse-t)"
+else
+  fuse_t_libs=""
+  fuse_t_cflags=""
+fi
+
 find_first() {
   local pattern="$1"
   shift
@@ -41,11 +49,15 @@ fi
 lib_dir="$(dirname "$lib_path")"
 pkgconfig_dir="$lib_dir/pkgconfig"
 pc_file="$pkgconfig_dir/fuse.pc"
-cflags=""
-if [[ -n "$header_path" ]]; then
+cflags="$fuse_t_cflags"
+if [[ -z "$cflags" && -n "$header_path" ]]; then
   cflags="-I$(dirname "$header_path")"
-else
+elif [[ -z "$cflags" ]]; then
   echo "FUSE-T headers were not found; generating link-only pkg-config metadata for fuser" >&2
+fi
+libs="$fuse_t_libs"
+if [[ -z "$libs" ]]; then
+  libs="-L\${libdir} -lfuse-t"
 fi
 
 sudo mkdir -p "$pkgconfig_dir"
@@ -57,7 +69,7 @@ libdir=${lib_dir}
 Name: fuse
 Description: FUSE-T compatibility metadata for libfuse
 Version: 2.9.9
-Libs: -L\${libdir} -Wl,-rpath,\${libdir} -lfuse-t
+Libs: ${libs} -Wl,-rpath,\${libdir}
 Cflags: ${cflags}
 PC
 

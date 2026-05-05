@@ -35,10 +35,15 @@ dump_diagnostics() {
     pkg-config --modversion fuse >&2 || true
     pkg-config --libs fuse >&2 || true
     pkg-config --cflags fuse >&2 || true
+    pkg-config --libs fuse-t >&2 || true
+    pkg-config --cflags fuse-t >&2 || true
+    cat /usr/local/lib/pkgconfig/fuse.pc >&2 || true
+    cat /usr/local/lib/pkgconfig/fuse-t.pc >&2 || true
     ls -la "/Library/Application Support/fuse-t" >&2 || true
     find /usr/local/lib /opt/homebrew/lib -maxdepth 2 \( -iname '*fuse*' -o -iname '*nfs*' \) -print >&2 || true
-    pgrep -af 'fuse-t|nfsd|mount_nfs' >&2 || true
+    ps -axo pid,ppid,stat,command | grep -Ei 'fuse-t|nfsd|mount_nfs|mount_smbfs' | grep -v grep >&2 || true
     nfsd status >&2 || true
+    sudo lsof -nP -iTCP -iUDP | grep -Ei 'fuse|nfs|smb|mount' >&2 || true
     log show --last 3m --style compact --predicate 'process CONTAINS[c] "fuse-t" OR process CONTAINS[c] "nfsd" OR eventMessage CONTAINS[c] "fuse-t"' >&2 || true
     if [[ -n "$DAEMON_PID" ]]; then
       ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
