@@ -146,6 +146,12 @@ operond_bin="$archive_dir/operond${suffix}"
 
 test -f "$operon_bin" || { echo "missing binary: $operon_bin" >&2; exit 1; }
 test -f "$operond_bin" || { echo "missing binary: $operond_bin" >&2; exit 1; }
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  test -f "$archive_dir/libfuse-t.dylib" || {
+    echo "missing bundled macOS FUSE-T runtime library: $archive_dir/libfuse-t.dylib" >&2
+    exit 1
+  }
+fi
 
 "$operon_bin" --version
 "$operond_bin" --version

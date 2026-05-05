@@ -216,6 +216,32 @@ jobs:
             cp LICENSE "$binary_dir/"
           fi
 
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            lib_path=""
+            for candidate in \
+              /usr/local/lib/libfuse-t.dylib \
+              /opt/homebrew/lib/libfuse-t.dylib \
+              "/Library/Application Support/fuse-t/lib/libfuse-t.dylib"
+            do
+              if [[ -f "$candidate" ]]; then
+                lib_path="$candidate"
+                break
+              fi
+            done
+
+            if [[ -z "$lib_path" ]]; then
+              echo "libfuse-t.dylib is required for macOS release packaging" >&2
+              exit 1
+            fi
+
+            cp "$lib_path" "$binary_dir/libfuse-t.dylib"
+            if ! otool -l "$binary_dir/operon$suffix" | grep -Fq "@executable_path"; then
+              install_name_tool -add_rpath "@executable_path" "$binary_dir/operon$suffix"
+            fi
+            codesign --force --sign - "$binary_dir/operon$suffix" "$binary_dir/libfuse-t.dylib"
+            "$binary_dir/operon$suffix" --version
+          fi
+
           if [[ "${{ matrix.archive }}" == "zip" ]]; then
             (cd "$dist_dir" && python -m zipfile --create "operon-${tag}-${arch}.zip" "operon-${tag}-${arch}")
           else
