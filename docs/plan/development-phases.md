@@ -5475,6 +5475,12 @@ Completed:
   `c045b0a` in run `25378255568`; the smoke covered seed exposure, read,
   write, truncate, mkdir, rename, delete, remote read-back, and cleanup through
   the FUSE-T NFS adapter.
+- Check the libfuse3 alternative with hosted run `25379933991`: forcing
+  fuser's macOS mount implementation to `libfuse3` made FUSE-T negotiate
+  `profile=v3 client=libfuse3`, but the minimal fuser hello probe still closed
+  after root `statfs/getattr` and never reached `lookup/open/read`. v0.14
+  should keep the already validated FUSE-T `libfuse2-compatible` path instead
+  of switching macOS live mount to fuser's libfuse3 mount implementation.
 
 Remaining:
 
