@@ -314,7 +314,7 @@ fi
 
 start_watchdog
 write_probe_source
-cc -Wall -Wextra -Werror $(pkg-config --cflags fuse) "$SRC_PATH" $(pkg-config --libs fuse) -o "$BIN_PATH"
+cc -Wall -Wextra -Werror -D_FILE_OFFSET_BITS=64 $(pkg-config --cflags fuse) "$SRC_PATH" $(pkg-config --libs fuse) -o "$BIN_PATH"
 sudo mkdir -p "$MOUNT_DIR"
 sudo chown "$(id -u):$(id -g)" "$MOUNT_DIR"
 
