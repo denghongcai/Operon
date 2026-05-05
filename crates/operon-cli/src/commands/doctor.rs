@@ -135,7 +135,7 @@ fn mount_adapter_diagnostic() -> &'static str {
 
 #[cfg(target_os = "macos")]
 fn mount_adapter_diagnostic() -> &'static str {
-    "macos-macfuse-supported-runtime-required"
+    "macos-fuse-t-supported-runtime-required"
 }
 
 #[cfg(windows)]
@@ -373,7 +373,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         assert_eq!(
             report.mount_adapter,
-            "macos-macfuse-supported-runtime-required"
+            "macos-fuse-t-supported-runtime-required"
         );
         #[cfg(windows)]
         assert_eq!(

@@ -5095,7 +5095,7 @@ Completed:
   remain valid for post-rename `stat` and `unlink` operations.
 - Align Rust crate versions, the TypeScript SDK package version, CLI version
   output, and `PROTOCOL_VERSION` to `0.14.0` / `v0.14.0`.
-- Add a manual Actions live-smoke workflow for macOS macFUSE and Windows WinFsp
+- Add a manual Actions live-smoke workflow for macOS FUSE-T and Windows WinFsp
   validation.
 - Validate the current implementation checkpoint with the `core`, `runtime`,
   and `linux-system` consolidated validation groups.
@@ -5244,20 +5244,20 @@ Completed:
   the same root-cause evidence: the hosted runner does not load the macFUSE
   kernel extension, the seed file is not exposed, and Operon reaches
   `spawn_mount2_start`.
-- Add a `macos_runner=hosted|self-hosted-macfuse` input to the manual v0.14
-  live-smoke workflow. The hosted path remains the current GitHub runner
-  diagnostic lane, while the self-hosted path targets a runner labeled
-  `self-hosted`, `macOS`, and `macfuse` where macFUSE is already installed,
-  approved, and loaded for release-gate validation.
+- Replace the earlier `macos_runner=hosted|self-hosted-macfuse` manual
+  live-smoke path with the FUSE-T
+  `macos_runner=hosted|self-hosted-fuse-t` path. The hosted path is now the
+  first release-gate candidate, while the self-hosted path targets a runner
+  labeled `self-hosted`, `macOS`, and `fuse-t` where FUSE-T is already
+  installed.
 - Check the repository Actions runner registry before dispatching the
   self-hosted macOS live-smoke lane. The registry currently reports
   `total_count: 0`, so no `self-hosted`/`macOS`/`macfuse` runner is available
   and no queued self-hosted workflow run was created.
-- Add `scripts/preflight-v0.14-macos-macfuse-host.sh` and wire it into the
-  self-hosted macOS live-smoke lane so a real release-gate host fails early
-  when macFUSE is missing, `pkg-config fuse` is unavailable, the selected
-  FSKit backend is running on macOS before 15.4, or the selected kernel backend
-  does not have the macFUSE kernel extension approved and loaded.
+- Replace the earlier self-hosted macFUSE preflight with
+  `scripts/preflight-v0.14-macos-fuse-t-host.sh` so a macOS live-smoke host
+  fails early when FUSE-T is missing, `pkg-config fuse` is unavailable, or the
+  selected backend is unsupported.
 - Add `docs/plan/v0.14-macos-live-smoke-runbook.md` with the concrete
   host-preflight, self-hosted runner labels, workflow dispatch command, success
   evidence, and failure-log handling needed to execute the remaining macOS
@@ -5265,17 +5265,24 @@ Completed:
 - Add a tag-triggered release workflow guard through
   `scripts/verify-v0.14-release-gates.sh` so `v0.14*` release drafts fail
   before artifact builds unless the exact release commit has a successful
-  self-hosted macOS macFUSE live-smoke run.
+  macOS FUSE-T live-smoke run.
 - Clarify the macOS live-smoke runbook with the concrete hosted-runner failure
   evidence: FSKit reaches the macFUSE service layer but lacks the required
   entitlement, while the kernel backend reports an unloaded macFUSE kernel
   extension and never exposes the seed file.
+- Switch the active macOS live-smoke target from macFUSE to FUSE-T after
+  hosted-runner macFUSE attempts showed runtime-level blockers. The macOS
+  adapter keeps the existing `fuser` implementation path, defaults to
+  FUSE-T's NFS backend, the workflows install
+  `macos-fuse-t/homebrew-cask/fuse-t`, and release gates now accept a
+  successful macOS FUSE-T hosted or self-hosted live mount job on the exact
+  release commit.
 
 Remaining:
 
-- Run macOS live smoke on a host with macFUSE installed, approved, and loaded,
-  either manually or through the `self-hosted`/`macOS`/`macfuse` Actions runner
-  lane.
+- Run macOS live smoke on GitHub-hosted macOS with FUSE-T's NFS backend, then
+  record the run ID if it passes or use the uploaded artifact to narrow the next
+  runtime issue if it fails.
 - Publish and verify a release only after live smoke and release artifact
   validation pass.
 

@@ -1,7 +1,5 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 
-#[cfg(target_os = "macos")]
-use std::process::Command;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -120,9 +118,14 @@ fn add_platform_mount_options(
     mount_point: &Path,
 ) -> anyhow::Result<()> {
     if let Some(backend) = macos_mount_backend() {
+        if backend.eq_ignore_ascii_case("kernel") {
+            anyhow::bail!(
+                "macOS kernel FUSE backend is not supported; install FUSE-T and use OPERON_MOUNT_MACOS_BACKEND=nfs, smb, or fskit"
+            );
+        }
         if backend.eq_ignore_ascii_case("fskit") && !mount_point.starts_with("/Volumes") {
             anyhow::bail!(
-                "macFUSE FSKit backend requires a mount point under /Volumes; choose /Volumes/<name> or set OPERON_MOUNT_MACOS_BACKEND=kernel after enabling the macFUSE kernel extension"
+                "macOS FUSE FSKit backend requires a mount point under /Volumes; choose /Volumes/<name> or set OPERON_MOUNT_MACOS_BACKEND=nfs to use the FUSE-T NFS backend"
             );
         }
         trace_mount_event("macos_backend", backend.clone());
@@ -142,47 +145,10 @@ fn add_platform_mount_options(
 #[cfg(target_os = "macos")]
 fn macos_mount_backend() -> Option<String> {
     match std::env::var("OPERON_MOUNT_MACOS_BACKEND") {
-        Ok(value) if value.eq_ignore_ascii_case("kernel") || value.is_empty() => return None,
+        Ok(value) if value.is_empty() => return None,
         Ok(value) => return Some(value),
         Err(_) => {}
     }
 
-    let version = Command::new("sw_vers")
-        .arg("-productVersion")
-        .output()
-        .ok()
-        .and_then(|output| String::from_utf8(output.stdout).ok())?;
-    if macos_supports_fskit(version.trim()) {
-        Some("fskit".to_string())
-    } else {
-        None
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn macos_supports_fskit(version: &str) -> bool {
-    let mut parts = version.split('.');
-    let major = parts
-        .next()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(0);
-    let minor = parts
-        .next()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(0);
-    major > 15 || (major == 15 && minor >= 4)
-}
-
-#[cfg(all(test, target_os = "macos"))]
-mod macos_tests {
-    use super::macos_supports_fskit;
-
-    #[test]
-    fn macos_fskit_support_starts_at_15_4() {
-        assert!(!macos_supports_fskit("14.7.1"));
-        assert!(!macos_supports_fskit("15.3.9"));
-        assert!(macos_supports_fskit("15.4"));
-        assert!(macos_supports_fskit("15.7.4"));
-        assert!(macos_supports_fskit("26.0"));
-    }
+    Some("nfs".to_string())
 }

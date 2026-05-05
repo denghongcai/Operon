@@ -60,7 +60,7 @@ fn mount_adapter_name() -> &'static str {
 
 #[cfg(target_os = "macos")]
 fn mount_adapter_name() -> &'static str {
-    "macos-macfuse"
+    "macos-fuse-t"
 }
 
 #[cfg(windows)]

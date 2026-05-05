@@ -384,7 +384,7 @@ cancellation uses process-group termination. Windows non-interactive exec
 cancellation uses Job Object process-tree termination, with a direct-child kill
 fallback only if the daemon cannot create or assign the Job Object for that
 process. Live mount adapters translate OS filesystem callbacks into the Core FS
-Protocol: Linux uses FUSE, macOS uses macFUSE, and Windows uses WinFsp. macOS
+Protocol: Linux uses FUSE, macOS uses FUSE-T, and Windows uses WinFsp. macOS
 and Windows hosts must provide those platform runtimes for `operon mount`; the
 filesystem RPCs remain the authoritative API and do not depend on mount support.
 Windows token and config files are checked with ACL-aware private-file

@@ -23,7 +23,6 @@ WATCHDOG_PID=""
 SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-600}"
 OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
-MACFUSE_BIN="/Library/Filesystems/macfuse.fs/Contents/Resources/macfuse.app/Contents/MacOS/macfuse"
 
 dump_diagnostics() {
   (
@@ -33,11 +32,13 @@ dump_diagnostics() {
     sw_vers >&2 || true
     uname -a >&2 || true
     pkg-config --modversion fuse >&2 || true
-    ls -la /Library/Filesystems/macfuse.fs >&2 || true
-    ls -la /Library/Filesystems/macfuse.fs/Contents/Extensions >&2 || true
-    kmutil showloaded --list-only 2>/dev/null | grep -i macfuse >&2 || true
-    kextstat 2>/dev/null | grep -i macfuse >&2 || true
-    log show --last 3m --style compact --predicate 'subsystem in {"com.apple.FSKit", "com.apple.LiveFS", "io.macfuse"}' >&2 || true
+    pkg-config --libs fuse >&2 || true
+    pkg-config --cflags fuse >&2 || true
+    ls -la "/Library/Application Support/fuse-t" >&2 || true
+    find /usr/local/lib /opt/homebrew/lib -maxdepth 2 \( -iname '*fuse*' -o -iname '*nfs*' \) -print >&2 || true
+    pgrep -af 'fuse-t|nfsd|mount_nfs' >&2 || true
+    nfsd status >&2 || true
+    log show --last 3m --style compact --predicate 'process CONTAINS[c] "fuse-t" OR process CONTAINS[c] "nfsd" OR eventMessage CONTAINS[c] "fuse-t"' >&2 || true
     if [[ -n "$DAEMON_PID" ]]; then
       ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
     fi
@@ -117,26 +118,18 @@ start_watchdog() {
   WATCHDOG_PID="$!"
 }
 
-ensure_macfuse_runtime() {
-  export OPERON_MOUNT_MACOS_BACKEND="${OPERON_MOUNT_MACOS_BACKEND:-fskit}"
+ensure_fuse_t_runtime() {
+  export OPERON_MOUNT_MACOS_BACKEND="${OPERON_MOUNT_MACOS_BACKEND:-nfs}"
   echo "macOS mount backend: $OPERON_MOUNT_MACOS_BACKEND" >&2
-  if [[ "$OPERON_MOUNT_MACOS_BACKEND" != "kernel" ]]; then
-    if [[ -x "$MACFUSE_BIN" ]]; then
-      sudo "$MACFUSE_BIN" install --components file-system-extensions --force >&2 || true
-    fi
-    return 0
+  if [[ "$OPERON_MOUNT_MACOS_BACKEND" != "nfs" && "$OPERON_MOUNT_MACOS_BACKEND" != "smb" && "$OPERON_MOUNT_MACOS_BACKEND" != "fskit" ]]; then
+    echo "unsupported OPERON_MOUNT_MACOS_BACKEND: $OPERON_MOUNT_MACOS_BACKEND" >&2
+    echo "expected nfs, smb, or fskit" >&2
+    exit 1
   fi
 
-  local macos_major
-  macos_major="$(sw_vers -productVersion | cut -d. -f1)"
-  local kext_path="/Library/Filesystems/macfuse.fs/Contents/Extensions/${macos_major}/macfuse.kext"
-
-  if [[ -d "$kext_path" ]]; then
-    sudo /usr/bin/kmutil load -p "$kext_path" >/dev/null 2>&1 || true
-  fi
-
-  if ! kmutil showloaded --list-only 2>/dev/null | grep -qi macfuse; then
-    echo "macFUSE kernel extension is not loaded; attempting mount for diagnostics" >&2
+  if ! pkg-config --modversion fuse >/dev/null 2>&1; then
+    echo "pkg-config cannot resolve fuse; install FUSE-T before running macOS live mount smoke" >&2
+    exit 1
   fi
 }
 
@@ -211,7 +204,7 @@ sudo chown "$(id -u):$(id -g)" "$MOUNT_DIR"
 printf "seed" >"$WORKSPACE/seed.txt"
 write_config
 start_watchdog
-ensure_macfuse_runtime
+ensure_fuse_t_runtime
 
 cargo build -q -p operond -p operon-cli --locked
 

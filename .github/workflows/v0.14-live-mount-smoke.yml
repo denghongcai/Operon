@@ -13,13 +13,14 @@ on:
           - macos
           - windows
       macos_backend:
-        description: "macFUSE backend for macOS smoke"
+        description: "FUSE-T backend for macOS smoke"
         type: choice
         required: true
-        default: fskit
+        default: nfs
         options:
+          - nfs
+          - smb
           - fskit
-          - kernel
       macos_runner:
         description: "macOS runner for live mount smoke"
         type: choice
@@ -27,14 +28,14 @@ on:
         default: hosted
         options:
           - hosted
-          - self-hosted-macfuse
+          - self-hosted-fuse-t
 
 permissions:
   contents: read
 
 jobs:
   macos-hosted-live-mount:
-    name: macOS macFUSE Live Mount (hosted)
+    name: macOS FUSE-T Live Mount (hosted)
     if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && inputs.macos_runner == 'hosted' }}
     runs-on: macos-latest
     timeout-minutes: 15
@@ -56,8 +57,8 @@ jobs:
           version: "25.3"
           repo-token: ${{ github.token }}
 
-      - name: Install macFUSE
-        run: brew install --cask macfuse
+      - name: Install FUSE-T
+        run: scripts/install-v0.14-macos-fuse-t.sh
 
       - name: Run macOS live mount smoke
         id: macos-smoke
@@ -84,9 +85,9 @@ jobs:
           if-no-files-found: warn
 
   macos-self-hosted-live-mount:
-    name: macOS macFUSE Live Mount (self-hosted)
-    if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && inputs.macos_runner == 'self-hosted-macfuse' }}
-    runs-on: [self-hosted, macOS, macfuse]
+    name: macOS FUSE-T Live Mount (self-hosted)
+    if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && inputs.macos_runner == 'self-hosted-fuse-t' }}
+    runs-on: [self-hosted, macOS, fuse-t]
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -106,11 +107,11 @@ jobs:
           version: "25.3"
           repo-token: ${{ github.token }}
 
-      - name: Check macFUSE runtime
+      - name: Check FUSE-T runtime
         env:
           OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
         run: |
-          scripts/preflight-v0.14-macos-macfuse-host.sh
+          scripts/preflight-v0.14-macos-fuse-t-host.sh
 
       - name: Run macOS live mount smoke
         id: macos-smoke

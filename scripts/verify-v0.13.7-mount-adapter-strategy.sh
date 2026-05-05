@@ -24,8 +24,8 @@ require_pattern 'Platform-neutral mount behavior' docs/plan/v0.13.8-mount-core-b
 require_pattern 'Phase 91: v0.13.7 Mount Adapter Strategy' docs/plan/development-phases.md
 require_pattern 'Status: Completed' docs/plan/development-phases.md
 require_pattern 'Phase 92: v0.13.8 Mount Core Boundary' docs/plan/development-phases.md
-require_pattern 'Linux FUSE, macOS macFUSE, and Windows WinFsp' docs/architecture/technology-and-protocol-decisions.md
-require_pattern 'Linux FUSE, macOS macFUSE, and Windows WinFsp' README.md
+require_pattern 'Linux FUSE, macOS FUSE-T, and Windows WinFsp' docs/architecture/technology-and-protocol-decisions.md
+require_pattern 'Linux FUSE, macOS FUSE-T, and Windows WinFsp' README.md
 require_pattern 'superseded by' docs/plan/v0.13.7-mount-adapter-strategy.md
 require_pattern 'Completed mount-core boundary milestone: v0.13.8' AGENTS.md
 

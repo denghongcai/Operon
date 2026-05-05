@@ -317,14 +317,14 @@ Operon should not own:
 - `docs/plan/v0.14-cross-platform-live-mount.md`
   - In-progress v0.14 scope for making live mount a complete core capability
     across Linux, macOS, and Windows. Shared mount-core behavior, Unix
-    FUSE/macFUSE gating, Windows WinFsp adapter code, CLI dispatch, doctor
+    FUSE/FUSE-T gating, Windows WinFsp adapter code, CLI dispatch, doctor
     diagnostics, docs, and validation wiring are implemented; Windows live
-    smoke passed and macOS live smoke remains.
+    smoke passed and macOS FUSE-T live smoke remains.
 
 - `docs/plan/v0.14-macos-live-smoke-runbook.md`
-  - Runbook for the remaining v0.14 macOS release gate on a host with a working
-    macFUSE runtime. Covers preflight, required self-hosted runner labels,
-    workflow dispatch, success evidence, and failure-log handling.
+  - Runbook for the remaining v0.14 macOS release gate through FUSE-T's
+    NFS-backed default path. Covers preflight, workflow dispatch, success
+    evidence, and failure-log handling.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -509,12 +509,12 @@ Operon should not own:
   `v0.13.8`.
 - In-progress mount milestone: v0.14 is making live mount a complete core
   Operon capability across Linux, macOS, and Windows. Shared mount-core
-  operation mapping, Unix FUSE/macFUSE gating, native Windows WinFsp adapter
+  operation mapping, Unix FUSE/FUSE-T gating, native Windows WinFsp adapter
   code through MIT `winfsp_wrs`, CLI dispatch, doctor diagnostics, docs, release
   workflow wiring, and validation coverage are implemented. Windows live smoke
-  passed on GitHub-hosted `windows-latest`; macOS live smoke remains blocked on
-  hosted-runner macFUSE FSKit/LiveFS entitlement and requires a macOS host with
-  a working macFUSE backend before release publication.
+  passed on GitHub-hosted `windows-latest`; macFUSE hosted-runner validation was
+  blocked at the runtime boundary, so macOS live smoke now targets FUSE-T's NFS
+  backend on hosted macOS.
 - Next planned milestone: v0.14 Cross-Platform Live Mount.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
@@ -878,7 +878,7 @@ Defer:
   [`operon-mount`](crates/operon-mount) now has shared
   `MountAdapterCore` operation mapping and error classification, Linux/macOS
   FUSE adapter gating through `fuser`, and a Windows native WinFsp adapter using
-  MIT `winfsp_wrs`. `operon mount` dispatches to Linux FUSE, macOS macFUSE, or
+  MIT `winfsp_wrs`. `operon mount` dispatches to Linux FUSE, macOS FUSE-T, or
   Windows WinFsp builds; `operon doctor` reports platform runtime requirements.
   CI validation is wired through
   [`scripts/verify-v0.14-cross-platform-live-mount.sh`](scripts/verify-v0.14-cross-platform-live-mount.sh),
@@ -889,29 +889,25 @@ Defer:
   package metadata, CLI version output, and `PROTOCOL_VERSION` are aligned to
   `0.14.0` / `v0.14.0`. A manual Actions live-smoke workflow is present at
   [`.github/workflows/v0.14-live-mount-smoke.yml`](.github/workflows/v0.14-live-mount-smoke.yml)
-  for macOS macFUSE and Windows WinFsp validation. Windows live smoke passed on
+  for macOS FUSE-T and Windows WinFsp validation. Windows live smoke passed on
   GitHub-hosted `windows-latest` in run `25339076348`. macOS live smoke on
   GitHub-hosted `macos-latest` still fails at the macFUSE FSKit/LiveFS service
-  boundary; the workflow supports `macos_backend=fskit|kernel`, with the kernel
-  backend intended for a host where the macFUSE kernel extension is approved and
-  loaded. The workflow also supports
-  `macos_runner=hosted|self-hosted-macfuse`; use the `self-hosted-macfuse`
-  lane only when a runner labeled `self-hosted`, `macOS`, and `macfuse` is
-  available with macFUSE installed, approved, and loaded, because GitHub-hosted
-  macOS runners remain diagnostic-only for this release gate. The repository
-  Actions runner registry currently reports `total_count: 0`, so do not
-  dispatch `self-hosted-macfuse` until such a runner exists. The self-hosted
-  lane runs
-  [`scripts/preflight-v0.14-macos-macfuse-host.sh`](scripts/preflight-v0.14-macos-macfuse-host.sh)
-  before the full live smoke so missing macFUSE, missing `pkg-config fuse`,
-  unsupported FSKit OS versions, and unloaded kernel backends fail early with
-  actionable output. Use
+  boundary, so FUSE-T has replaced macFUSE as the active macOS live-smoke
+  runtime. The workflow supports `macos_backend=nfs|smb|fskit`, defaults to
+  `nfs`, and installs FUSE-T through
+  [`scripts/install-v0.14-macos-fuse-t.sh`](scripts/install-v0.14-macos-fuse-t.sh).
+  The workflow also supports `macos_runner=hosted|self-hosted-fuse-t`; use the
+  self-hosted lane only when a runner labeled `self-hosted`, `macOS`, and
+  `fuse-t` is available with FUSE-T installed. The self-hosted lane runs
+  [`scripts/preflight-v0.14-macos-fuse-t-host.sh`](scripts/preflight-v0.14-macos-fuse-t-host.sh)
+  before the full live smoke so missing FUSE-T or `pkg-config fuse` fails early
+  with actionable output. Use
   [`docs/plan/v0.14-macos-live-smoke-runbook.md`](docs/plan/v0.14-macos-live-smoke-runbook.md)
-  for the host setup, dispatch command, and evidence to record once a suitable
-  runner exists. The tag-triggered release workflow runs
+  for the dispatch command and evidence to record once the FUSE-T smoke passes.
+  The tag-triggered release workflow runs
   [`scripts/verify-v0.14-release-gates.sh`](scripts/verify-v0.14-release-gates.sh)
   before artifact builds, so `v0.14*` release drafts fail unless the exact
-  release commit has a successful self-hosted macOS macFUSE live-smoke run. A
+  release commit has a successful macOS FUSE-T live-smoke run. A
   GitHub-hosted
   `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
@@ -923,5 +919,5 @@ Defer:
   the macOS smoke script now uses bounded cleanup waits. Follow-up run
   `25341745841` fails cleanly with an uploaded artifact and explicit exit code
   instead of timing out, preserving the same hosted-runner macFUSE runtime
-  evidence. Remaining v0.14 work: run macOS live smoke on a working macFUSE
-  host, then publish and verify a release.
+  evidence. Remaining v0.14 work: run macOS live smoke on hosted macOS with
+  FUSE-T's NFS backend, then publish and verify a release.

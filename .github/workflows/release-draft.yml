@@ -167,10 +167,10 @@ jobs:
           version: "25.3"
           repo-token: ${{ github.token }}
 
-      - name: Install macFUSE build dependency
+      - name: Install FUSE-T build dependency
         if: runner.os == 'macOS'
         shell: bash
-        run: brew install --cask macfuse
+        run: scripts/install-v0.14-macos-fuse-t.sh
 
       - name: Install Rust target
         run: rustup target add "${{ matrix.target }}"

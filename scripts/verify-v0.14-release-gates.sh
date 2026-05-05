@@ -6,8 +6,7 @@ usage() {
 usage: scripts/verify-v0.14-release-gates.sh <tag> <commit-sha> [owner/repo]
 
 Checks release-only gates that cannot run in normal CI. For v0.14 tags this
-requires a successful self-hosted macOS macFUSE live mount smoke on the exact
-release commit.
+requires a successful macOS FUSE-T live mount smoke on the exact release commit.
 USAGE
 }
 
@@ -20,7 +19,10 @@ TAG="$1"
 COMMIT_SHA="$2"
 REPO="${3:-denghongcai/Operon}"
 WORKFLOW_NAME="v0.14 Live Mount Smoke"
-MACOS_JOB_NAME="macOS macFUSE Live Mount (self-hosted)"
+MACOS_JOB_NAMES=(
+  "macOS FUSE-T Live Mount (hosted)"
+  "macOS FUSE-T Live Mount (self-hosted)"
+)
 
 if [[ "$TAG" != v0.14* ]]; then
   echo "no v0.14-specific release gates for $TAG"
@@ -43,16 +45,18 @@ mapfile -t run_ids < <(
 )
 
 for run_id in "${run_ids[@]}"; do
-  if gh run view "$run_id" \
-    --repo "$REPO" \
-    --json jobs \
-    --jq ".jobs[] | select(.name == \"$MACOS_JOB_NAME\" and .conclusion == \"success\") | .name" \
-    | grep -Fxq "$MACOS_JOB_NAME"; then
-    echo "v0.14 macOS live mount release gate passed in workflow run $run_id"
-    exit 0
-  fi
+  for job_name in "${MACOS_JOB_NAMES[@]}"; do
+    if gh run view "$run_id" \
+      --repo "$REPO" \
+      --json jobs \
+      --jq ".jobs[] | select(.name == \"$job_name\" and .conclusion == \"success\") | .name" \
+      | grep -Fxq "$job_name"; then
+      echo "v0.14 macOS live mount release gate passed in workflow run $run_id"
+      exit 0
+    fi
+  done
 done
 
-echo "missing v0.14 release gate: successful '$MACOS_JOB_NAME' in '$WORKFLOW_NAME' on commit $COMMIT_SHA" >&2
+echo "missing v0.14 release gate: successful macOS FUSE-T live mount job in '$WORKFLOW_NAME' on commit $COMMIT_SHA" >&2
 echo "run docs/plan/v0.14-macos-live-smoke-runbook.md before creating or updating the v0.14 release" >&2
 exit 1

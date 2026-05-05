@@ -113,7 +113,7 @@ a secret, forward a local service, or inspect an execution trace.
 
 Install the latest release binary. Linux and macOS release archives use
 `.tar.gz`; Windows release archives use `.zip`. Live mount support is available
-through Linux FUSE, macOS macFUSE, and Windows WinFsp; macOS and Windows hosts
+through Linux FUSE, macOS FUSE-T, and Windows WinFsp; macOS and Windows hosts
 must have the corresponding platform runtime installed before `operon mount`
 can start a filesystem session.
 
@@ -384,7 +384,7 @@ mesh://cloud-a/service/web
 Current capability areas:
 
 - Filesystem read, write, list, copy, mutation, and live mount access through
-  Linux FUSE, macOS macFUSE, or Windows WinFsp.
+  Linux FUSE, macOS FUSE-T, or Windows WinFsp.
 - Exec execution with logs, stdin, cancellation, timeouts, scoped secrets, and
   Unix-like PTY-backed interactive sessions when policy enables `exec.session`.
   Windows interactive exec sessions are explicitly unsupported in this release
@@ -459,7 +459,7 @@ Operon is usable today as a pre-1.0 runtime. The current release includes:
 - Unified config and guided onboarding.
 - Policy-derived capabilities.
 - Filesystem, exec, service, audit, trace, and graph flows.
-- Live mount support through Linux FUSE, macOS macFUSE, and Windows WinFsp.
+- Live mount support through Linux FUSE, macOS FUSE-T, and Windows WinFsp.
 - TCP and UDP service forwarding over existing node connections.
 - mDNS endpoint discovery for local networks.
 
@@ -468,7 +468,7 @@ Current public release artifacts cover Linux `x86_64`, Linux `arm64`, Linux
 Windows prebuilt archives include daemon/CLI, gRPC, config, filesystem RPC,
 exec, service, audit, trace, graph, SDK protocol flows, and platform live mount
 adapters. Windows non-interactive exec cancellation uses Job Object process-tree
-termination. macOS live mounts require macFUSE on the host. Windows live mounts
+termination. macOS live mounts require FUSE-T on the host. Windows live mounts
 require WinFsp on the host.
 
 For contributor setup, validation commands, release automation, detailed config
