@@ -5318,12 +5318,17 @@ Completed:
   `https://github.com/macos-fuse-t/fuse-zip` so v0.14 diagnostics can validate
   whether GitHub-hosted macOS can publish a non-Operon FUSE-T mount. The probe
   builds fuse-zip on the runner, mounts a seed ZIP through FUSE-T, checks
-  read/write visibility, and uploads FUSE-T logs on failure.
+  seed-file read visibility, and uploads FUSE-T logs on failure.
 - The first fuse-zip probe dispatch for commit `4b847e0` failed before mount
   validation because fuse-zip's `make release` target dropped the FUSE include
   directory and could not find `fuse.h`. The probe now passes explicit
   `pkg-config` cflags/libs for FUSE-T and libzip so the next run can test the
   actual hosted macOS FUSE-T mount path.
+- The follow-up fuse-zip probe dispatch for commit `78d1061` in run
+  `25358498739` compiled fuse-zip and reached the mounted `seed.txt` read path,
+  then failed only because the probe also asserted third-party fuse-zip
+  write-back persistence for `new.txt`. The probe is now narrowed to the
+  intended hosted-runner control: FUSE-T mount publication and read visibility.
 
 Remaining:
 

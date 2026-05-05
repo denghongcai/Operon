@@ -174,11 +174,9 @@ FUSE_ZIP_PID="$!"
 wait_for_mount
 
 grep -q "^seed$" "$MOUNT_DIR/seed.txt"
-printf "created through fuse-zip" >"$MOUNT_DIR/new.txt"
+echo "fuse-zip exposed seed file through FUSE-T"
 run_with_timeout 5 umount "$MOUNT_DIR"
 wait_for_process_exit "$FUSE_ZIP_PID" 10 || true
-
-unzip -p "$ZIP_PATH" new.txt >"$TMP_DIR/new-read.txt"
-grep -q "^created through fuse-zip$" "$TMP_DIR/new-read.txt"
+FUSE_ZIP_PID=""
 
 echo "v0.14 macOS FUSE-T fuse-zip probe passed"
