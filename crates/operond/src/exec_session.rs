@@ -566,13 +566,16 @@ mod tests {
             })
             .expect("resize pty");
 
-        let command = CommandBuilder::new(session_shell_program());
+        let mut command = CommandBuilder::new(session_shell_program());
+        command.arg(session_shell_arg());
+        command.arg("echo operon-pty-smoke");
 
         let mut child = slave.spawn_command(command).expect("spawn pty command");
         drop(slave);
         let mut killer = child.clone_killer();
         let mut reader = master.try_clone_reader().expect("clone pty reader");
-        let mut writer = master.take_writer().expect("take pty writer");
+        let writer = master.take_writer().expect("take pty writer");
+        drop(writer);
         let (tx, rx) = std_mpsc::channel();
         thread::spawn(move || {
             let mut buffer = [0_u8; 1024];
@@ -587,17 +590,6 @@ mod tests {
                 }
             }
         });
-        if cfg!(windows) {
-            writer
-                .write_all(b"echo operon-pty-smoke\r\nexit\r\n")
-                .expect("write pty smoke commands");
-        } else {
-            writer
-                .write_all(b"echo operon-pty-smoke\r\nexit\r\n")
-                .expect("write pty smoke commands");
-        }
-        writer.flush().expect("flush pty smoke commands");
-        drop(writer);
 
         let output_deadline = Instant::now() + Duration::from_secs(10);
         let mut output = String::new();
