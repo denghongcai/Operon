@@ -5354,6 +5354,12 @@ Completed:
   FUSE-T's NFS bridge stuck in `CLOSE_WAIT`: `fuser` 0.17 rejects
   `n_threads != 1` on non-Linux session loops, so Operon now keeps four FUSE
   threads on Linux and uses one thread on macOS.
+- Extend the Unix FUSE adapter's fuse-zip-compatible macOS callback surface
+  after hosted run `25359740331` reached `statfs` and root `getattr` with
+  `n_threads: 1` but closed the FUSE-T NFS bridge before lookup/readdir:
+  init/destroy/opendir/releasedir are now traced, `statfs` reports a non-zero
+  fragment size, and xattr probes return empty/no-xattr responses instead of
+  default `ENOSYS`.
 
 Remaining:
 

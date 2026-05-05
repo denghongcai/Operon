@@ -112,6 +112,19 @@ impl OperonFuseFs {
 }
 
 impl fuser::Filesystem for OperonFuseFs {
+    fn init(
+        &mut self,
+        _req: &fuser::Request,
+        _config: &mut fuser::KernelConfig,
+    ) -> std::io::Result<()> {
+        trace_fuse_event("init", "ok");
+        Ok(())
+    }
+
+    fn destroy(&mut self) {
+        trace_fuse_event("destroy", "ok");
+    }
+
     fn lookup(
         &self,
         _req: &fuser::Request,
@@ -502,6 +515,38 @@ impl fuser::Filesystem for OperonFuseFs {
         reply.ok();
     }
 
+    fn opendir(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        flags: fuser::OpenFlags,
+        reply: fuser::ReplyOpen,
+    ) {
+        trace_fuse_event("opendir", format!("ino={ino:?} flags={flags:?}"));
+        match self.inode(ino) {
+            Some(entry) if entry.is_dir => {
+                reply.opened(
+                    fuser::FileHandle(u64::from(ino)),
+                    fuser::FopenFlags::empty(),
+                );
+            }
+            Some(_) => reply.error(fuser::Errno::ENOTDIR),
+            None => reply.error(fuser::Errno::ENOENT),
+        }
+    }
+
+    fn releasedir(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        _fh: fuser::FileHandle,
+        _flags: fuser::OpenFlags,
+        reply: fuser::ReplyEmpty,
+    ) {
+        trace_fuse_event("releasedir", format!("ino={ino:?}"));
+        reply.ok();
+    }
+
     fn release(
         &self,
         _req: &fuser::Request,
@@ -552,7 +597,7 @@ impl fuser::Filesystem for OperonFuseFs {
     fn statfs(&self, _req: &fuser::Request, ino: fuser::INodeNo, reply: fuser::ReplyStatfs) {
         trace_fuse_event("statfs", format!("ino={ino:?}"));
         reply.statfs(
-            1_048_576, 1_048_576, 1_048_576, 1_000_000, 1_000_000, BLOCK_SIZE, 255, 0,
+            1_048_576, 1_048_576, 1_048_576, 1_000_000, 1_000_000, 1, 255, 1,
         );
     }
 
@@ -567,6 +612,67 @@ impl fuser::Filesystem for OperonFuseFs {
         match self.access_errno(ino) {
             Some(errno) => reply.error(errno),
             None => reply.ok(),
+        }
+    }
+
+    fn getxattr(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        name: &OsStr,
+        _size: u32,
+        reply: fuser::ReplyXattr,
+    ) {
+        trace_fuse_event("getxattr", format!("ino={ino:?} name={name:?}"));
+        match self.access_errno(ino) {
+            Some(errno) => reply.error(errno),
+            None => reply.error(fuser::Errno::NO_XATTR),
+        }
+    }
+
+    fn listxattr(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        size: u32,
+        reply: fuser::ReplyXattr,
+    ) {
+        trace_fuse_event("listxattr", format!("ino={ino:?} size={size}"));
+        match self.access_errno(ino) {
+            Some(errno) => reply.error(errno),
+            None if size == 0 => reply.size(0),
+            None => reply.data(&[]),
+        }
+    }
+
+    fn setxattr(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        name: &OsStr,
+        _value: &[u8],
+        _flags: i32,
+        _position: u32,
+        reply: fuser::ReplyEmpty,
+    ) {
+        trace_fuse_event("setxattr", format!("ino={ino:?} name={name:?}"));
+        match self.access_errno(ino) {
+            Some(errno) => reply.error(errno),
+            None => reply.error(fuser::Errno::ENOTSUP),
+        }
+    }
+
+    fn removexattr(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        name: &OsStr,
+        reply: fuser::ReplyEmpty,
+    ) {
+        trace_fuse_event("removexattr", format!("ino={ino:?} name={name:?}"));
+        match self.access_errno(ino) {
+            Some(errno) => reply.error(errno),
+            None => reply.error(fuser::Errno::NO_XATTR),
         }
     }
 
