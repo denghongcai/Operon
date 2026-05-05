@@ -16,6 +16,9 @@ require_file scripts/verify-v0.14-release-gates.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
 require_file scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
+require_file vendor/fuser-0.17.0-operon/OPERON_PATCH.md
+require_file vendor/fuser-0.17.0-operon/src/lib.rs
+require_file vendor/fuser-0.17.0-operon/src/ll/request.rs
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
 require_pattern 'Status: In progress' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'FUSE-T replaces macFUSE as the active macOS live-smoke runtime' docs/plan/v0.14-cross-platform-live-mount.md
@@ -31,6 +34,10 @@ require_pattern 'Linux FUSE, macOS FUSE-T, and Windows WinFsp' README.md
 require_pattern 'Linux uses FUSE, macOS uses FUSE-T, and Windows uses WinFsp' PROTOCOL.md
 require_pattern 'native Windows WinFsp adapter' AGENTS.md
 require_pattern 'MIT `winfsp_wrs` / `winfsp_wrs_sys`' docs/architecture/technology-and-protocol-decisions.md
+require_pattern 'fuser = \{ path = "vendor/fuser-0\.17\.0-operon" \}' Cargo.toml
+require_pattern 'const INIT_FLAGS: InitFlags = InitFlags::FUSE_ASYNC_READ;' vendor/fuser-0.17.0-operon/src/lib.rs
+require_pattern '#\[cfg\(target_os = "macos"\)\]' vendor/fuser-0.17.0-operon/src/ll/request.rs
+require_pattern 'let flags = config.requested;' vendor/fuser-0.17.0-operon/src/ll/request.rs
 
 require_pattern 'pub struct MountAdapterCore' crates/operon-mount/src/mount_core.rs
 require_pattern 'pub struct MountDirectoryEntry' crates/operon-mount/src/mount_core.rs

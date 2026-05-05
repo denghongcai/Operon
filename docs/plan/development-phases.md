@@ -5404,6 +5404,13 @@ Completed:
   low-level init reply adding `FUSE_INIT_EXT`, which collides with macOS
   `FUSE_VOL_RENAME`; this supports moving the macOS adapter toward libfuse
   high-level mounting rather than continuing Operon callback adjustments.
+- Add an Operon-local `fuser` 0.17.0 patch under
+  `vendor/fuser-0.17.0-operon` and wire it through workspace
+  `[patch.crates-io]`. The patch is macOS-scoped: keep default init flags at
+  `FUSE_ASYNC_READ` and do not add Linux `FUSE_INIT_EXT` in macOS init replies,
+  while preserving the upstream Linux handshake path. This is the next minimal
+  live-smoke experiment before deciding whether the final macOS adapter can
+  remain on patched `fuser` or must move to libfuse high-level mounting.
 
 Remaining:
 

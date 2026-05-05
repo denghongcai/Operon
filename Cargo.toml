@@ -46,3 +46,6 @@ tonic-prost = "0.14.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 windows-sys = "0.61.2"
+
+[patch.crates-io]
+fuser = { path = "vendor/fuser-0.17.0-operon" }

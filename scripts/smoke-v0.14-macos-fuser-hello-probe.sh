@@ -332,38 +332,11 @@ patch_fuser_init_flags() {
     return 0
   fi
 
-  cargo fetch --manifest-path "$PROBE_DIR/Cargo.toml"
-  local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
-  local source_dir
-  source_dir="$(find "$cargo_home/registry/src" -path '*/fuser-0.17.0' -type d | head -n 1)"
-  if [[ -z "$source_dir" ]]; then
-    echo "failed to locate downloaded fuser 0.17.0 source" >&2
+  local patched_dir="$ROOT_DIR/vendor/fuser-0.17.0-operon"
+  if [[ ! -d "$patched_dir" ]]; then
+    echo "failed to locate Operon-patched fuser source at $patched_dir" >&2
     exit 1
   fi
-
-  local patched_dir="$TMP_DIR/fuser-patched"
-  cp -R "$source_dir" "$patched_dir"
-  python3 - "$patched_dir/src/lib.rs" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-old = '''#[cfg(target_os = "macos")]
-const INIT_FLAGS: InitFlags = InitFlags::FUSE_ASYNC_READ
-    .union(InitFlags::FUSE_CASE_INSENSITIVE)
-    .union(InitFlags::FUSE_VOL_RENAME)
-    .union(InitFlags::FUSE_XTIMES);
-// TODO: Add FUSE_EXPORT_SUPPORT and FUSE_BIG_WRITES (requires ABI 7.10)
-'''
-new = '''#[cfg(target_os = "macos")]
-const INIT_FLAGS: InitFlags = InitFlags::FUSE_ASYNC_READ;
-// TODO: Add FUSE_EXPORT_SUPPORT and FUSE_BIG_WRITES (requires ABI 7.10)
-'''
-if old not in text:
-    raise SystemExit("expected macOS INIT_FLAGS block not found in fuser source")
-path.write_text(text.replace(old, new))
-PY
 
   cat >>"$PROBE_DIR/Cargo.toml" <<TOML
 
