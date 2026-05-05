@@ -18,7 +18,6 @@ PROBE_PID=""
 WATCHDOG_PID=""
 SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-300}"
 PATCH_INIT_FLAGS="${OPERON_FUSER_HELLO_PATCH_INIT_FLAGS:-0}"
-FORCE_LIBFUSE3="${OPERON_FUSER_HELLO_FORCE_LIBFUSE3:-0}"
 export DYLD_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
 
 wait_for_process_exit() {
@@ -42,14 +41,10 @@ dump_diagnostics() {
     echo "macOS mount backend: ${OPERON_MOUNT_MACOS_BACKEND:-<unset>}" >&2
     echo "macOS mount extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}" >&2
     echo "patched fuser init flags: $PATCH_INIT_FLAGS" >&2
-    echo "force fuser libfuse3: $FORCE_LIBFUSE3" >&2
     sw_vers >&2 || true
     pkg-config --modversion fuse >&2 || true
     pkg-config --libs fuse >&2 || true
     pkg-config --cflags fuse >&2 || true
-    pkg-config --modversion fuse3 >&2 || true
-    pkg-config --libs fuse3 >&2 || true
-    pkg-config --cflags fuse3 >&2 || true
     ps -axo pid,ppid,stat,command | grep -Ei 'fuse-t|nfsd|mount_nfs|mount_smbfs|fuser_hello' | grep -v grep >&2 || true
     nfsd status >&2 || true
     echo "=== macOS unified FUSE/NFS logs ===" >&2
@@ -374,13 +369,8 @@ wait_for_probe_mount() {
 echo "macOS fuser hello backend: ${OPERON_MOUNT_MACOS_BACKEND:-nfs}" >&2
 echo "macOS fuser hello extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}" >&2
 echo "patched fuser init flags: $PATCH_INIT_FLAGS" >&2
-echo "force fuser libfuse3: $FORCE_LIBFUSE3" >&2
 if ! pkg-config --modversion fuse >/dev/null 2>&1; then
   echo "pkg-config cannot resolve fuse; install FUSE-T before running fuser hello probe" >&2
-  exit 1
-fi
-if [[ "$FORCE_LIBFUSE3" == "1" ]] && ! pkg-config --modversion fuse3 >/dev/null 2>&1; then
-  echo "pkg-config cannot resolve fuse3; install FUSE-T libfuse3 metadata before forcing libfuse3" >&2
   exit 1
 fi
 
@@ -389,9 +379,6 @@ write_probe_project
 patch_fuser_init_flags
 sudo mkdir -p "$MOUNT_DIR"
 sudo chown "$(id -u):$(id -g)" "$MOUNT_DIR"
-if [[ "$FORCE_LIBFUSE3" == "1" ]]; then
-  export OPERON_FUSER_MACOS_FORCE_LIBFUSE3=1
-fi
 cargo build -q --manifest-path "$PROBE_DIR/Cargo.toml"
 
 "$PROBE_DIR/target/debug/fuser_hello" "$MOUNT_DIR" >"$PROBE_LOG" 2>&1 &

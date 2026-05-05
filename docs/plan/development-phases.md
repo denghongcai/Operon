@@ -5481,6 +5481,11 @@ Completed:
   after root `statfs/getattr` and never reached `lookup/open/read`. v0.14
   should keep the already validated FUSE-T `libfuse2-compatible` path instead
   of switching macOS live mount to fuser's libfuse3 mount implementation.
+- Remove the temporary libfuse3 force switch from the v0.14 workflow, macOS
+  fuser hello probe, and vendored fuser build script before merging the
+  investigation branch. The mainline implementation now selects the validated
+  FUSE-T `libfuse2-compatible` path on macOS and keeps libfuse3 only as a
+  documented failed alternative, not as a supported runtime toggle.
 
 Remaining:
 
