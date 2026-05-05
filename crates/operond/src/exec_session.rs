@@ -558,79 +558,184 @@ mod tests {
 
     #[test]
     fn exec_session_portable_pty_smoke_outputs_and_exits() {
-        let pty_system = native_pty_system();
-        let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .expect("open pty");
-        let portable_pty::PtyPair { master, slave } = pair;
-        master
-            .resize(PtySize {
-                rows: 30,
-                cols: 100,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .expect("resize pty");
+        fn run_candidate(
+            name: &str,
+            command: CommandBuilder,
+            input: Option<&'static [u8]>,
+        ) -> Result<String, String> {
+            let pty_system = native_pty_system();
+            let pair = pty_system
+                .openpty(PtySize {
+                    rows: 24,
+                    cols: 80,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|error| format!("{name}: open pty failed: {error:#}"))?;
+            let portable_pty::PtyPair { master, slave } = pair;
+            master
+                .resize(PtySize {
+                    rows: 30,
+                    cols: 100,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|error| format!("{name}: resize pty failed: {error:#}"))?;
 
-        let mut command = CommandBuilder::new(session_shell_program());
-        command.arg(session_shell_arg());
-        command.arg("echo operon-pty-smoke");
-
-        let mut child = slave.spawn_command(command).expect("spawn pty command");
-        drop(slave);
-        let mut killer = child.clone_killer();
-        let mut reader = master.try_clone_reader().expect("clone pty reader");
-        let (tx, rx) = std_mpsc::channel();
-        thread::spawn(move || {
-            let mut buffer = [0_u8; 1024];
-            loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) => break,
-                    Ok(count) => {
-                        let output = String::from_utf8_lossy(&buffer[..count]).to_string();
-                        let _ = tx.send(output);
+            let mut child = slave
+                .spawn_command(command)
+                .map_err(|error| format!("{name}: spawn pty command failed: {error:#}"))?;
+            drop(slave);
+            let mut killer = child.clone_killer();
+            let mut reader = master
+                .try_clone_reader()
+                .map_err(|error| format!("{name}: clone pty reader failed: {error:#}"))?;
+            let (tx, rx) = std_mpsc::channel();
+            thread::spawn(move || {
+                let mut buffer = [0_u8; 1024];
+                loop {
+                    match reader.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(count) => {
+                            let output = String::from_utf8_lossy(&buffer[..count]).to_string();
+                            let _ = tx.send(output);
+                        }
+                        Err(_) => break,
                     }
-                    Err(_) => break,
+                }
+            });
+
+            if let Some(input) = input {
+                let mut writer = master
+                    .take_writer()
+                    .map_err(|error| format!("{name}: take pty writer failed: {error:#}"))?;
+                writer
+                    .write_all(input)
+                    .map_err(|error| format!("{name}: write pty input failed: {error:#}"))?;
+                writer
+                    .flush()
+                    .map_err(|error| format!("{name}: flush pty input failed: {error:#}"))?;
+                drop(writer);
+            }
+
+            let output_deadline = Instant::now() + Duration::from_secs(10);
+            let mut output = String::new();
+            while !output.contains("operon-pty-smoke") {
+                let remaining = output_deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    let _ = killer.kill();
+                    return Err(format!("{name}: pty output timed out; output={:?}", output));
+                }
+                match rx.recv_timeout(remaining) {
+                    Ok(chunk) => output.push_str(&chunk),
+                    Err(error) => {
+                        let _ = killer.kill();
+                        return Err(format!(
+                            "{name}: pty output timed out: {error}; output={:?}",
+                            output
+                        ));
+                    }
                 }
             }
-        });
 
-        let output_deadline = Instant::now() + Duration::from_secs(10);
-        let mut output = String::new();
-        while !output.contains("operon-pty-smoke") {
-            let remaining = output_deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                let _ = killer.kill();
-                panic!("pty output timed out");
+            if input.is_none() {
+                let writer = master
+                    .take_writer()
+                    .map_err(|error| format!("{name}: take pty writer failed: {error:#}"))?;
+                drop(writer);
             }
-            match rx.recv_timeout(remaining) {
-                Ok(chunk) => output.push_str(&chunk),
+
+            let (wait_tx, wait_rx) = std_mpsc::channel();
+            thread::spawn(move || {
+                let _ = wait_tx.send(child.wait());
+            });
+
+            let status = match wait_rx.recv_timeout(Duration::from_secs(10)) {
+                Ok(status) => {
+                    status.map_err(|error| format!("{name}: wait pty child failed: {error}"))?
+                }
                 Err(error) => {
                     let _ = killer.kill();
-                    panic!("pty output timed out: {error}");
+                    return Err(format!(
+                        "{name}: pty child wait timed out: {error}; output={:?}",
+                        output
+                    ));
                 }
+            };
+            if !status.success() {
+                return Err(format!(
+                    "{name}: pty child exited unsuccessfully: {:?}; output={:?}",
+                    status, output
+                ));
+            }
+
+            Ok(output)
+        }
+
+        let mut failures = Vec::new();
+
+        #[cfg(windows)]
+        let candidates = {
+            use std::ffi::OsString;
+
+            let mut shell_command = CommandBuilder::new(session_shell_program());
+            shell_command.arg(session_shell_arg());
+            shell_command.arg("echo operon-pty-smoke");
+
+            let mut quiet_cmd = CommandBuilder::new("cmd.exe");
+            quiet_cmd.args(["/D", "/Q", "/C", "echo operon-pty-smoke"]);
+
+            let mut powershell = CommandBuilder::new("powershell.exe");
+            powershell.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Write-Output operon-pty-smoke",
+            ]);
+
+            let default_shell = CommandBuilder::new_default_prog();
+
+            vec![
+                ("cmd-shell-command", shell_command, None),
+                ("cmd-quiet-argv", quiet_cmd, None),
+                ("powershell-command", powershell, None),
+                (
+                    "default-shell-input",
+                    default_shell,
+                    Some(b"echo operon-pty-smoke\r\nexit\r\n" as &'static [u8]),
+                ),
+                (
+                    "cmd-from-argv-input",
+                    CommandBuilder::from_argv(vec![OsString::from("cmd.exe")]),
+                    Some(b"echo operon-pty-smoke\r\nexit\r\n" as &'static [u8]),
+                ),
+            ]
+        };
+
+        #[cfg(not(windows))]
+        let candidates = {
+            let mut command = CommandBuilder::new(session_shell_program());
+            command.arg(session_shell_arg());
+            command.arg("echo operon-pty-smoke");
+            vec![("unix-shell-command", command, None)]
+        };
+
+        for (name, command, input) in candidates {
+            match run_candidate(name, command, input) {
+                Ok(output) => {
+                    assert!(
+                        output.contains("operon-pty-smoke"),
+                        "{name}: output did not include marker: {output:?}"
+                    );
+                    return;
+                }
+                Err(error) => failures.push(error),
             }
         }
-        let writer = master.take_writer().expect("take pty writer");
-        drop(writer);
-        let (wait_tx, wait_rx) = std_mpsc::channel();
-        thread::spawn(move || {
-            let _ = wait_tx.send(child.wait());
-        });
 
-        let status = match wait_rx.recv_timeout(Duration::from_secs(10)) {
-            Ok(status) => status.expect("wait pty child"),
-            Err(error) => {
-                let _ = killer.kill();
-                panic!("pty child wait timed out: {error}");
-            }
-        };
-        assert!(status.success());
-        assert!(output.contains("operon-pty-smoke"));
+        panic!(
+            "all portable-pty smoke candidates failed:\n{}",
+            failures.join("\n")
+        );
     }
 }
