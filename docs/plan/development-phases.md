@@ -5329,6 +5329,12 @@ Completed:
   then failed only because the probe also asserted third-party fuse-zip
   write-back persistence for `new.txt`. The probe is now narrowed to the
   intended hosted-runner control: FUSE-T mount publication and read visibility.
+- The next fuse-zip probe dispatch for commit `f13e32b` in run `25358898425`
+  printed `v0.14 macOS FUSE-T fuse-zip probe passed`, proving hosted FUSE-T
+  read exposure through fuse-zip. The job was cancelled only because the
+  probe's shell watchdog left an orphan `sleep` process holding the Actions
+  output pipe open after success. The probe watchdog now uses a single `perl`
+  timer process that cleanup can terminate without orphaning a child process.
 
 Remaining:
 

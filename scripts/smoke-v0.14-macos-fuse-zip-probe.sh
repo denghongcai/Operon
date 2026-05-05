@@ -18,7 +18,7 @@ MOUNT_DIR="/Volumes/$MOUNT_NAME"
 FUSE_ZIP_LOG="$TMP_DIR/fuse-zip.log"
 FUSE_ZIP_PID=""
 WATCHDOG_PID=""
-SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-600}"
+SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-180}"
 export DYLD_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
 export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/Library/Application Support/fuse-t/pkgconfig:${PKG_CONFIG_PATH:-}"
 
@@ -106,11 +106,7 @@ trap cleanup EXIT
 trap 'dump_diagnostics; exit 124' TERM
 
 start_watchdog() {
-  (
-    sleep "$SMOKE_TIMEOUT_SECS"
-    echo "macOS FUSE-T fuse-zip probe timed out after ${SMOKE_TIMEOUT_SECS}s" >&2
-    kill -TERM "$$" >/dev/null 2>&1 || true
-  ) &
+  perl -e 'my ($timeout, $pid) = @ARGV; sleep $timeout; print STDERR "macOS FUSE-T fuse-zip probe timed out after ${timeout}s\n"; kill "TERM", $pid;' "$SMOKE_TIMEOUT_SECS" "$$" &
   WATCHDOG_PID="$!"
 }
 
@@ -171,12 +167,21 @@ fi
 
 "$SRC_DIR/fuse-zip" -f -o "$mount_options" "$ZIP_PATH" "$MOUNT_DIR" >"$FUSE_ZIP_LOG" 2>&1 &
 FUSE_ZIP_PID="$!"
+echo "fuse-zip started: pid=$FUSE_ZIP_PID mount=$MOUNT_DIR"
+echo "waiting for fuse-zip seed file"
 wait_for_mount
 
 grep -q "^seed$" "$MOUNT_DIR/seed.txt"
 echo "fuse-zip exposed seed file through FUSE-T"
+echo "unmounting fuse-zip mount"
 run_with_timeout 5 umount "$MOUNT_DIR"
-wait_for_process_exit "$FUSE_ZIP_PID" 10 || true
-FUSE_ZIP_PID=""
+echo "waiting for fuse-zip process exit"
+if wait_for_process_exit "$FUSE_ZIP_PID" 10; then
+  FUSE_ZIP_PID=""
+else
+  echo "fuse-zip process did not exit after unmount" >&2
+  dump_diagnostics
+  exit 1
+fi
 
 echo "v0.14 macOS FUSE-T fuse-zip probe passed"
