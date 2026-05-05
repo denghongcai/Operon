@@ -15,6 +15,7 @@ require_file scripts/install-v0.14-macos-fuse-t.sh
 require_file scripts/verify-v0.14-release-gates.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
 require_file scripts/smoke-v0.14-macos-fuse-zip-probe.sh
+require_file scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
 require_file vendor/fuser-0.17.0-operon/OPERON_PATCH.md
 require_file vendor/fuser-0.17.0-operon/src/lib.rs
@@ -87,6 +88,9 @@ require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_options:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'fuser_patch_init_flags:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'OPERON_FUSER_HELLO_PATCH_INIT_FLAGS: \$\{\{ inputs\.fuser_patch_init_flags && '\''1'\'' \|\| '\''0'\'' \}\}' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macos-libfuse-lowlevel-hello' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macOS FUSE-T libfuse Low-Level Hello Probe \(hosted\)' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos-fuse-zip' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macOS FUSE-T fuse-zip Probe \(hosted\)' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/smoke-v0.14-macos-fuse-zip-probe.sh' .github/workflows/v0.14-live-mount-smoke.yml
@@ -116,6 +120,7 @@ bash -n scripts/install-v0.14-macos-fuse-t.sh
 bash -n scripts/verify-v0.14-release-gates.sh
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
 bash -n scripts/smoke-v0.14-macos-fuse-zip-probe.sh
+bash -n scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh
 
 scripts/verify-v0.14-release-gates.sh v0.13.1 HEAD >/dev/null
 

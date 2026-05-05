@@ -12,6 +12,7 @@ on:
           - all
           - macos
           - macos-fuser-hello
+          - macos-libfuse-lowlevel-hello
           - macos-fuse-zip
           - windows
       macos_backend:
@@ -263,4 +264,42 @@ jobs:
         with:
           name: v0.14-macos-fuser-hello-${{ inputs.macos_backend }}-${{ github.run_id }}
           path: ${{ runner.temp }}/v0.14-macos-fuser-hello-${{ inputs.macos_backend }}.log
+          if-no-files-found: warn
+
+  macos-libfuse-lowlevel-hello-probe:
+    name: macOS FUSE-T libfuse Low-Level Hello Probe (hosted)
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos-libfuse-lowlevel-hello' }}
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install FUSE-T
+        run: scripts/install-v0.14-macos-fuse-t.sh
+
+      - name: Run libfuse low-level hello probe
+        id: libfuse-lowlevel-hello-probe
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
+        run: |
+          set -o pipefail
+          log_path="$RUNNER_TEMP/v0.14-macos-libfuse-lowlevel-hello-${OPERON_MOUNT_MACOS_BACKEND}.log"
+          echo "macOS libfuse low-level hello probe backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS libfuse low-level hello probe extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
+          echo "macOS libfuse low-level hello probe log: ${log_path}"
+          set +e
+          scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh 2>&1 | tee "$log_path"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "macOS FUSE-T libfuse low-level hello probe exit code: ${status}"
+          exit "$status"
+
+      - name: Upload macOS libfuse low-level hello probe log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v0.14-macos-libfuse-lowlevel-hello-${{ inputs.macos_backend }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/v0.14-macos-libfuse-lowlevel-hello-${{ inputs.macos_backend }}.log
           if-no-files-found: warn
