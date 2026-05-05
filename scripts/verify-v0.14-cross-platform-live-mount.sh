@@ -39,6 +39,9 @@ require_pattern 'fuser = \{ path = "vendor/fuser-0\.17\.0-operon" \}' Cargo.toml
 require_pattern 'const INIT_FLAGS: InitFlags = InitFlags::FUSE_ASYNC_READ;' vendor/fuser-0.17.0-operon/src/lib.rs
 require_pattern '#\[cfg\(target_os = "macos"\)\]' vendor/fuser-0.17.0-operon/src/ll/request.rs
 require_pattern 'let flags = config.requested;' vendor/fuser-0.17.0-operon/src/ll/request.rs
+require_pattern 'pub\(crate\) fn fuse_mount\(mountpoint: \*const c_char, args: \*const fuse_args\) -> \*mut c_void;' vendor/fuser-0.17.0-operon/src/mnt/fuse2_sys.rs
+require_pattern 'let channel = unsafe \{ fuse_mount\(mountpoint.as_ptr\(\), args\) \};' vendor/fuser-0.17.0-operon/src/mnt/fuse2.rs
+require_pattern 'let fd = unsafe \{ fuse_chan_fd\(channel\) \};' vendor/fuser-0.17.0-operon/src/mnt/fuse2.rs
 
 require_pattern 'pub struct MountAdapterCore' crates/operon-mount/src/mount_core.rs
 require_pattern 'pub struct MountDirectoryEntry' crates/operon-mount/src/mount_core.rs

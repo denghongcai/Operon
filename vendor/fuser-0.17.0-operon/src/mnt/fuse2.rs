@@ -24,6 +24,8 @@ fn ensure_last_os_error() -> io::Error {
 #[derive(Debug)]
 pub(crate) struct MountImpl {
     mountpoint: CString,
+    #[cfg(target_os = "macos")]
+    channel: *mut libc::c_void,
 }
 impl MountImpl {
     pub(crate) fn new(
@@ -33,41 +35,82 @@ impl MountImpl {
     ) -> io::Result<(Arc<DevFuse>, MountImpl)> {
         let mountpoint = CString::new(mountpoint.as_os_str().as_bytes()).unwrap();
         with_fuse_args(options, acl, |args| {
-            let fd = unsafe { fuse_mount_compat25(mountpoint.as_ptr(), args) };
-            if fd < 0 {
-                Err(ensure_last_os_error())
-            } else {
+            #[cfg(target_os = "macos")]
+            {
+                let channel = unsafe { fuse_mount(mountpoint.as_ptr(), args) };
+                if channel.is_null() {
+                    return Err(ensure_last_os_error());
+                }
+                let fd = unsafe { fuse_chan_fd(channel) };
+                if fd < 0 {
+                    unsafe { fuse_unmount(mountpoint.as_ptr(), channel) };
+                    return Err(ensure_last_os_error());
+                }
+                let fd = unsafe { libc::dup(fd) };
+                if fd < 0 {
+                    unsafe { fuse_unmount(mountpoint.as_ptr(), channel) };
+                    return Err(ensure_last_os_error());
+                }
                 let file = unsafe { File::from_raw_fd(fd) };
-                Ok((Arc::new(DevFuse(file)), MountImpl { mountpoint }))
+                return Ok((
+                    Arc::new(DevFuse(file)),
+                    MountImpl {
+                        mountpoint,
+                        channel,
+                    },
+                ));
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                let fd = unsafe { fuse_mount_compat25(mountpoint.as_ptr(), args) };
+                if fd < 0 {
+                    Err(ensure_last_os_error())
+                } else {
+                    let file = unsafe { File::from_raw_fd(fd) };
+                    Ok((Arc::new(DevFuse(file)), MountImpl { mountpoint }))
+                }
             }
         })
     }
 
     pub(crate) fn umount_impl(&mut self) -> io::Result<()> {
-        // fuse_unmount_compat22 unfortunately doesn't return a status. Additionally,
-        // it attempts to call realpath, which in turn calls into the filesystem. So
-        // if the filesystem returns an error, the unmount does not take place, with
-        // no indication of the error available to the caller. So we call unmount
-        // directly, which is what osxfuse does anyway, since we already converted
-        // to the real path when we first mounted.
-        if let Err(err) = crate::mnt::libc_umount(&self.mountpoint) {
-            // Linux always returns EPERM for non-root users.  We have to let the
-            // library go through the setuid-root "fusermount -u" to unmount.
-            if err == nix::errno::Errno::EPERM {
-                #[cfg(not(any(
-                    target_os = "macos",
-                    target_os = "freebsd",
-                    target_os = "dragonfly",
-                    target_os = "openbsd",
-                    target_os = "netbsd"
-                )))]
-                unsafe {
-                    fuse_unmount_compat22(self.mountpoint.as_ptr());
-                    return Ok(());
-                }
+        #[cfg(target_os = "macos")]
+        {
+            if !self.channel.is_null() {
+                unsafe { fuse_unmount(self.mountpoint.as_ptr(), self.channel) };
+                self.channel = std::ptr::null_mut();
             }
-            return Err(err.into());
+            return Ok(());
         }
-        Ok(())
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            // fuse_unmount_compat22 unfortunately doesn't return a status. Additionally,
+            // it attempts to call realpath, which in turn calls into the filesystem. So
+            // if the filesystem returns an error, the unmount does not take place, with
+            // no indication of the error available to the caller. So we call unmount
+            // directly, which is what osxfuse does anyway, since we already converted
+            // to the real path when we first mounted.
+            if let Err(err) = crate::mnt::libc_umount(&self.mountpoint) {
+                // Linux always returns EPERM for non-root users.  We have to let the
+                // library go through the setuid-root "fusermount -u" to unmount.
+                if err == nix::errno::Errno::EPERM {
+                    #[cfg(not(any(
+                        target_os = "macos",
+                        target_os = "freebsd",
+                        target_os = "dragonfly",
+                        target_os = "openbsd",
+                        target_os = "netbsd"
+                    )))]
+                    unsafe {
+                        fuse_unmount_compat22(self.mountpoint.as_ptr());
+                        return Ok(());
+                    }
+                }
+                return Err(err.into());
+            }
+            Ok(())
+        }
     }
 }

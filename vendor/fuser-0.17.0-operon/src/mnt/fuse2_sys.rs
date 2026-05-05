@@ -8,6 +8,8 @@
 
 use libc::c_char;
 use libc::c_int;
+#[cfg(target_os = "macos")]
+use libc::c_void;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -19,9 +21,17 @@ pub(crate) struct fuse_args {
 
 #[cfg(fuser_mount_impl = "libfuse2")]
 unsafe extern "C" {
+    #[cfg(target_os = "macos")]
+    pub(crate) fn fuse_mount(mountpoint: *const c_char, args: *const fuse_args) -> *mut c_void;
+    #[cfg(target_os = "macos")]
+    pub(crate) fn fuse_unmount(mountpoint: *const c_char, ch: *mut c_void);
+    #[cfg(target_os = "macos")]
+    pub(crate) fn fuse_chan_fd(ch: *mut c_void) -> c_int;
+
     // *_compat25 functions were introduced in FUSE 2.6 when function signatures changed.
     // Therefore, the minimum version requirement for *_compat25 functions is libfuse-2.6.0.
 
+    #[cfg(not(target_os = "macos"))]
     pub(crate) fn fuse_mount_compat25(mountpoint: *const c_char, args: *const fuse_args) -> c_int;
     #[cfg(not(any(
         target_os = "macos",

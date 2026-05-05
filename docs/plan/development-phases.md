@@ -5417,6 +5417,15 @@ Completed:
   This rules out init flag advertisement as a sufficient fix and reinforces
   that the macOS path should move to a libfuse high-level adapter unless a new
   lower-level trace identifies a precise fuser request/reply encoding defect.
+- Continue source-level comparison with two minimal probes. Hosted run
+  `25376060153` enabled fuser default callback logging and found no hidden
+  unimplemented callback before disconnect; fuser only reported a short read
+  after FUSE-T closed the connection. Hosted run `25376436969` proved a
+  C/libfuse low-level hello filesystem succeeds on the same FUSE-T NFS hosted
+  runner. The next fuser patch therefore targets the mount-channel difference:
+  macOS now uses current `fuse_mount()` / `fuse_chan_fd()` to preserve FUSE-T's
+  channel monitor/callback behavior, while Linux remains on
+  `fuse_mount_compat25()`.
 
 Remaining:
 
