@@ -6,6 +6,8 @@ use std::sync::Arc;
 use nix::errno::Errno;
 
 use crate::dev_fuse::DevFuse;
+#[cfg(target_os = "macos")]
+use crate::ll::fuse_abi::fuse_in_header;
 use crate::passthrough::BackingId;
 
 /// A raw communication channel to the FUSE kernel driver
@@ -27,8 +29,51 @@ impl Channel {
     }
 
     /// Receives data up to the capacity of the given buffer (can block).
+    #[cfg(not(target_os = "macos"))]
     fn receive(&self, buffer: &mut [u8]) -> nix::Result<usize> {
         nix::unistd::read(&self.0, buffer)
+    }
+
+    /// Receives exactly one framed request from FUSE-T's stream socket.
+    #[cfg(target_os = "macos")]
+    fn receive(&self, buffer: &mut [u8]) -> nix::Result<usize> {
+        let header_len = size_of::<fuse_in_header>();
+        if buffer.len() < header_len {
+            return Err(Errno::EINVAL);
+        }
+
+        let mut total = self.read_exact_framed(buffer, 0, header_len)?;
+        if total == 0 {
+            return Ok(0);
+        }
+
+        let packet_len = u32::from_ne_bytes(buffer[..4].try_into().expect("header length bytes"))
+            as usize;
+        if packet_len < header_len || packet_len > buffer.len() {
+            return Err(Errno::EIO);
+        }
+
+        total = self.read_exact_framed(buffer, total, packet_len)?;
+        Ok(total)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn read_exact_framed(
+        &self,
+        buffer: &mut [u8],
+        mut total: usize,
+        expected: usize,
+    ) -> nix::Result<usize> {
+        while total < expected {
+            match nix::unistd::read(&self.0, &mut buffer[total..expected]) {
+                Ok(0) if total == 0 => return Ok(0),
+                Ok(0) => return Err(Errno::EIO),
+                Ok(size) => total += size,
+                Err(Errno::ENOENT | Errno::EINTR | Errno::EAGAIN) => continue,
+                Err(err) => return Err(err),
+            }
+        }
+        Ok(total)
     }
 
     /// Receives data up to the capacity of the given buffer (can block),

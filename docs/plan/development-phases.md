@@ -5433,6 +5433,15 @@ Completed:
   hypothesis but stores the macOS `fuse_chan` handle as an opaque integer and
   casts it back only for `fuse_unmount()`, allowing the minimal fuser hello
   runtime test to proceed.
+- Record hosted run `25376827613`: patched fuser now compiles and mounts
+  through FUSE-T, but still closes after the initial `statfs/getattr` sequence.
+  Comparing fuser with `macos-fuse-t/libfuse` identified the next concrete
+  mismatch: FUSE-T uses a stream socket and libfuse reads exactly one framed
+  request by first reading `fuse_in_header` and then the remaining
+  `header.len` bytes, while fuser still assumed Linux `/dev/fuse` packet
+  semantics from a single large `read()`. The next patch makes macOS receive
+  one framed FUSE-T request per session-loop iteration and leaves Linux
+  unchanged.
 
 Remaining:
 
