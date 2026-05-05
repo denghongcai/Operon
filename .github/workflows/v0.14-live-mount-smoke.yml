@@ -29,6 +29,11 @@ on:
         options:
           - hosted
           - self-hosted-fuse-t
+      macos_options:
+        description: "Optional comma-separated FUSE-T -o options for macOS smoke"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -64,10 +69,12 @@ jobs:
         id: macos-smoke
         env:
           OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
         run: |
           set -o pipefail
           log_path="$RUNNER_TEMP/v0.14-macos-live-mount-${OPERON_MOUNT_MACOS_BACKEND}.log"
           echo "macOS live mount backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS live mount extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
           echo "macOS live mount log: ${log_path}"
           set +e
           scripts/smoke-v0.14-macos-live-mount.sh 2>&1 | tee "$log_path"
@@ -117,10 +124,12 @@ jobs:
         id: macos-smoke
         env:
           OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
         run: |
           set -o pipefail
           log_path="$RUNNER_TEMP/v0.14-macos-live-mount-${OPERON_MOUNT_MACOS_BACKEND}.log"
           echo "macOS live mount backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS live mount extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
           echo "macOS live mount log: ${log_path}"
           set +e
           scripts/smoke-v0.14-macos-live-mount.sh 2>&1 | tee "$log_path"

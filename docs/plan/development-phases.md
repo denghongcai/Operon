@@ -5307,6 +5307,13 @@ Completed:
   Operon's adapter has started. The smoke cleanup now bounds `umount` and
   mount-directory removal so failed hosted attempts do not linger during
   cleanup.
+- Review the FUSE-T wiki against the current macOS mount path and add
+  `OPERON_MOUNT_MACOS_OPTIONS` for comma-separated FUSE-T `-o` diagnostics such
+  as `nobrowse` and `noattrcache`. The workflow now accepts a `macos_options`
+  dispatch input, the smoke logs selected options and tails
+  `~/Library/Logs/fuse-t`, and unit tests cover backend-plus-extra option
+  construction plus rejection of raw `-d`/`-l` style arguments that `fuser`
+  cannot pass as standalone parameters.
 
 Remaining:
 

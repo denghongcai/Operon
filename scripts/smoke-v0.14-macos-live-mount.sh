@@ -30,6 +30,8 @@ dump_diagnostics() {
     set +e
     echo "temporary smoke directory: $TMP_DIR" >&2
     echo "mount directory: $MOUNT_DIR" >&2
+    echo "macOS mount backend: ${OPERON_MOUNT_MACOS_BACKEND:-<unset>}" >&2
+    echo "macOS mount extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}" >&2
     sw_vers >&2 || true
     uname -a >&2 || true
     pkg-config --modversion fuse >&2 || true
@@ -46,6 +48,8 @@ dump_diagnostics() {
     nfsd status >&2 || true
     sudo lsof -nP -iTCP -iUDP | grep -Ei 'fuse|nfs|smb|mount' >&2 || true
     log show --last 3m --style compact --predicate 'process CONTAINS[c] "fuse-t" OR process CONTAINS[c] "nfsd" OR eventMessage CONTAINS[c] "fuse-t"' >&2 || true
+    echo "=== FUSE-T user logs ===" >&2
+    find "$HOME/Library/Logs/fuse-t" -maxdepth 2 -type f -print -exec tail -200 {} \; >&2 || true
     if [[ -n "$DAEMON_PID" ]]; then
       ps -p "$DAEMON_PID" -o pid,stat,command >&2 || true
     fi
@@ -145,6 +149,7 @@ start_watchdog() {
 ensure_fuse_t_runtime() {
   export OPERON_MOUNT_MACOS_BACKEND="${OPERON_MOUNT_MACOS_BACKEND:-nfs}"
   echo "macOS mount backend: $OPERON_MOUNT_MACOS_BACKEND" >&2
+  echo "macOS mount extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}" >&2
   if [[ "$OPERON_MOUNT_MACOS_BACKEND" != "nfs" && "$OPERON_MOUNT_MACOS_BACKEND" != "smb" && "$OPERON_MOUNT_MACOS_BACKEND" != "fskit" ]]; then
     echo "unsupported OPERON_MOUNT_MACOS_BACKEND: $OPERON_MOUNT_MACOS_BACKEND" >&2
     echo "expected nfs, smb, or fskit" >&2

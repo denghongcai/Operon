@@ -117,20 +117,16 @@ fn add_platform_mount_options(
     options: &mut Vec<fuser::MountOption>,
     mount_point: &Path,
 ) -> anyhow::Result<()> {
-    if let Some(backend) = macos_mount_backend() {
-        if backend.eq_ignore_ascii_case("kernel") {
-            anyhow::bail!(
-                "macOS kernel FUSE backend is not supported; install FUSE-T and use OPERON_MOUNT_MACOS_BACKEND=nfs, smb, or fskit"
-            );
-        }
-        if backend.eq_ignore_ascii_case("fskit") && !mount_point.starts_with("/Volumes") {
-            anyhow::bail!(
-                "macOS FUSE FSKit backend requires a mount point under /Volumes; choose /Volumes/<name> or set OPERON_MOUNT_MACOS_BACKEND=nfs to use the FUSE-T NFS backend"
-            );
-        }
-        trace_mount_event("macos_backend", backend.clone());
-        options.push(fuser::MountOption::CUSTOM(format!("backend={backend}")));
-    }
+    let extra_options = match std::env::var("OPERON_MOUNT_MACOS_OPTIONS") {
+        Ok(value) => parse_macos_extra_mount_options(&value)?,
+        Err(_) => Vec::new(),
+    };
+    add_macos_mount_options(
+        options,
+        mount_point,
+        macos_mount_backend().as_deref(),
+        &extra_options,
+    )?;
     Ok(())
 }
 
@@ -151,4 +147,97 @@ fn macos_mount_backend() -> Option<String> {
     }
 
     Some("nfs".to_string())
+}
+
+fn add_macos_mount_options(
+    options: &mut Vec<fuser::MountOption>,
+    mount_point: &Path,
+    backend: Option<&str>,
+    extra_options: &[String],
+) -> anyhow::Result<()> {
+    if let Some(backend) = backend {
+        if backend.eq_ignore_ascii_case("kernel") {
+            anyhow::bail!(
+                "macOS kernel FUSE backend is not supported; install FUSE-T and use OPERON_MOUNT_MACOS_BACKEND=nfs, smb, or fskit"
+            );
+        }
+        if backend.eq_ignore_ascii_case("fskit") && !mount_point.starts_with("/Volumes") {
+            anyhow::bail!(
+                "macOS FUSE FSKit backend requires a mount point under /Volumes; choose /Volumes/<name> or set OPERON_MOUNT_MACOS_BACKEND=nfs to use the FUSE-T NFS backend"
+            );
+        }
+        trace_mount_event("macos_backend", backend);
+        options.push(fuser::MountOption::CUSTOM(format!("backend={backend}")));
+    }
+
+    for option in extra_options {
+        trace_mount_event("macos_option", option);
+        options.push(fuser::MountOption::CUSTOM(option.clone()));
+    }
+
+    Ok(())
+}
+
+fn parse_macos_extra_mount_options(value: &str) -> anyhow::Result<Vec<String>> {
+    let mut options = Vec::new();
+    for option in value
+        .split(',')
+        .map(str::trim)
+        .filter(|option| !option.is_empty())
+    {
+        if option.starts_with('-') {
+            anyhow::bail!(
+                "macOS FUSE-T extra mount options must be -o options such as nobrowse,noattrcache,rwsize=65536; raw arguments like -d or -l are not supported through OPERON_MOUNT_MACOS_OPTIONS"
+            );
+        }
+        if option.starts_with("backend=") {
+            anyhow::bail!(
+                "set macOS FUSE-T backend with OPERON_MOUNT_MACOS_BACKEND instead of OPERON_MOUNT_MACOS_OPTIONS"
+            );
+        }
+        if option.contains('\n') || option.contains('\r') {
+            anyhow::bail!("macOS FUSE-T extra mount options must not contain newlines");
+        }
+        options.push(option.to_string());
+    }
+    Ok(options)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn macos_mount_options_include_backend_and_extra_fuse_t_options() {
+        let mut options = Vec::new();
+
+        add_macos_mount_options(
+            &mut options,
+            Path::new("/Volumes/operon-test"),
+            Some("nfs"),
+            &["nobrowse".to_string(), "noattrcache".to_string()],
+        )
+        .expect("macos options");
+
+        assert_eq!(
+            options,
+            vec![
+                fuser::MountOption::CUSTOM("backend=nfs".to_string()),
+                fuser::MountOption::CUSTOM("nobrowse".to_string()),
+                fuser::MountOption::CUSTOM("noattrcache".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn macos_extra_options_reject_raw_fuse_t_arguments() {
+        let error = parse_macos_extra_mount_options("-d,nobrowse").expect_err("raw args rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("macOS FUSE-T extra mount options must be -o options"),
+            "{error}"
+        );
+    }
 }

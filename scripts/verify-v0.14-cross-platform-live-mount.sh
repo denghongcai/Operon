@@ -21,6 +21,7 @@ require_pattern 'FUSE-T replaces macFUSE as the active macOS live-smoke runtime'
 require_pattern 'v0.14 macOS live mount smoke passed' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'macos_runner=hosted' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'macos_backend=nfs' docs/plan/v0.14-macos-live-smoke-runbook.md
+require_pattern 'OPERON_MOUNT_MACOS_OPTIONS=nobrowse,noattrcache' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'scripts/preflight-v0.14-macos-fuse-t-host.sh' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'docs/plan/v0.14-cross-platform-live-mount.md' AGENTS.md
 require_pattern 'docs/plan/v0.14-macos-live-smoke-runbook.md' AGENTS.md
@@ -69,11 +70,13 @@ require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/v0.14-
 require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install-v0.14-macos-fuse-t.sh
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macos_options:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'self-hosted-fuse-t' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'runs-on: \[self-hosted, macOS, fuse-t\]' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'Check FUSE-T runtime' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/preflight-v0.14-macos-fuse-t-host.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'OPERON_MOUNT_MACOS_OPTIONS: \$\{\{ inputs.macos_options \}\}' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macOS live mount smoke exit code' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'actions/upload-artifact@v7' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'choco install winfsp -y' .github/workflows/v0.14-live-mount-smoke.yml
@@ -82,6 +85,8 @@ require_pattern 'scripts/smoke-v0.14-windows-live-mount.ps1' .github/workflows/v
 require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'wait_for_process_exit' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'macOS mount backend: \$OPERON_MOUNT_MACOS_BACKEND' scripts/smoke-v0.14-macos-live-mount.sh
+require_pattern 'macOS mount extra options: \$\{OPERON_MOUNT_MACOS_OPTIONS:-<none>\}' scripts/smoke-v0.14-macos-live-mount.sh
+require_pattern 'Library/Logs/fuse-t' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'v0\.14 macOS FUSE-T host preflight passed' scripts/preflight-v0.14-macos-fuse-t-host.sh
 
 bash -n scripts/preflight-v0.14-macos-fuse-t-host.sh
