@@ -17,5 +17,7 @@ Changes from upstream 0.17.0:
   iteration by reading the FUSE header first, then the remaining
   `fuse_in_header.len` bytes. Linux keeps the upstream single `read()` path
   because `/dev/fuse` preserves request packet boundaries.
+- macOS uses FUSE-T's 32 MiB Darwin user/kernel buffer size for negotiated
+  `max_write`; Linux keeps fuser's upstream 16 MiB limit.
 
 The Linux path is intentionally unchanged.

@@ -5442,6 +5442,13 @@ Completed:
   semantics from a single large `read()`. The next patch makes macOS receive
   one framed FUSE-T request per session-loop iteration and leaves Linux
   unchanged.
+- Record expanded comparison logs from hosted runs `25377362323` and
+  `25377364111`: the successful C/libfuse low-level path starts with
+  `proto=7.23 max_write=33554432` and then reaches `lookup/open/read`; patched
+  fuser negotiates `ABI 7.19 max_write=16777216` and is closed after two
+  `statfs/getattr` pairs. The next single-variable fuser patch aligns macOS
+  `MAX_WRITE_SIZE` with FUSE-T's Darwin 32 MiB user/kernel buffer while leaving
+  Linux at fuser's upstream 16 MiB.
 
 Remaining:
 

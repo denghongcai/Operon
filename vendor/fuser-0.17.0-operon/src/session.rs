@@ -51,6 +51,9 @@ use crate::request::RequestWithSender;
 /// The max size of write requests from the kernel. The absolute minimum is 4k,
 /// FUSE recommends at least 128k, max 16M. The FUSE default is 16M on macOS
 /// and 128k on other systems.
+#[cfg(target_os = "macos")]
+pub(crate) const MAX_WRITE_SIZE: usize = 32 * 1024 * 1024;
+#[cfg(not(target_os = "macos"))]
 pub(crate) const MAX_WRITE_SIZE: usize = 16 * 1024 * 1024;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone, Copy)]
