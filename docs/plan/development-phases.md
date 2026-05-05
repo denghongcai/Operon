@@ -5411,6 +5411,12 @@ Completed:
   while preserving the upstream Linux handshake path. This is the next minimal
   live-smoke experiment before deciding whether the final macOS adapter can
   remain on patched `fuser` or must move to libfuse high-level mounting.
+- Record hosted run `25375851519`: the vendored fuser handshake patch reduced
+  FUSE-T negotiated flags to `0x00000001`, but the minimal fuser filesystem
+  still failed before `lookup/readdir` with the same early `Connection closed`.
+  This rules out init flag advertisement as a sufficient fix and reinforces
+  that the macOS path should move to a libfuse high-level adapter unless a new
+  lower-level trace identifies a precise fuser request/reply encoding defect.
 
 Remaining:
 
