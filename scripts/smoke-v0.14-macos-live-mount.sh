@@ -47,7 +47,10 @@ dump_diagnostics() {
     ps -axo pid,ppid,stat,command | grep -Ei 'fuse-t|nfsd|mount_nfs|mount_smbfs' | grep -v grep >&2 || true
     nfsd status >&2 || true
     sudo lsof -nP -iTCP -iUDP | grep -Ei 'fuse|nfs|smb|mount' >&2 || true
-    log show --last 3m --style compact --predicate 'process CONTAINS[c] "fuse-t" OR process CONTAINS[c] "nfsd" OR eventMessage CONTAINS[c] "fuse-t"' >&2 || true
+    echo "=== macOS unified FUSE/NFS logs ===" >&2
+    log show --last 3m --style compact --predicate 'process CONTAINS[c] "fuse-t" OR process CONTAINS[c] "nfsd" OR process CONTAINS[c] "mount_nfs" OR process CONTAINS[c] "mount" OR eventMessage CONTAINS[c] "fuse-t" OR eventMessage CONTAINS[c] "mount_nfs" OR eventMessage CONTAINS[c] "NFS" OR eventMessage CONTAINS[c] "nfs"' >&2 || true
+    echo "=== nfsstat mounts ===" >&2
+    nfsstat -m >&2 || true
     echo "=== FUSE-T user logs ===" >&2
     find "$HOME/Library/Logs/fuse-t" -maxdepth 2 -type f -print -exec tail -200 {} \; >&2 || true
     if [[ -n "$DAEMON_PID" ]]; then

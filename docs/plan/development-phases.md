@@ -5365,6 +5365,13 @@ Completed:
   `statfs/getattr`: macOS now passes only FUSE-T-specific backend/extra options,
   while Linux keeps the existing `fsname`, `subtype`, `nodev`, `nosuid`, and
   `noexec` options.
+- Continue the fuse-zip comparison after hosted run `25360049773` showed the
+  minimized macOS option set still closes the FUSE-T NFS bridge immediately
+  after root `statfs/getattr`: Operon now reports FUSE attributes with
+  fuse-zip-compatible 512-byte stat blocks, reports macOS file ownership as the
+  mounting user instead of root, logs the exact root attr/statfs values, and
+  captures `mount_nfs`/NFS unified logs plus `nfsstat -m` in the macOS smoke
+  diagnostics.
 
 Remaining:
 
