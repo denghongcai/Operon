@@ -581,10 +581,7 @@ mod tests {
                     Ok(0) => break,
                     Ok(count) => {
                         let output = String::from_utf8_lossy(&buffer[..count]).to_string();
-                        let _ = tx.send(output.clone());
-                        if output.contains("operon-pty-smoke") {
-                            break;
-                        }
+                        let _ = tx.send(output);
                     }
                     Err(_) => break,
                 }
