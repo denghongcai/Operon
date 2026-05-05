@@ -5345,6 +5345,15 @@ Completed:
   `statfs()` returns stable non-zero capacity metadata, and
   `OPERON_MOUNT_TRACE` logs lookup/getattr/open/read/write/readdir/access/
   statfs/fsyncdir callback entry for the next hosted macOS live-smoke run.
+- Mirror the fuse-zip probe watchdog in the Operon macOS live-smoke script:
+  the smoke now uses a single `perl` timer process instead of a background
+  shell plus `sleep`, so timeout/failure diagnostics can finish and upload
+  artifacts without orphaned sleep processes holding the Actions output pipe.
+- Use a platform-aware FUSE session thread count after hosted macOS run
+  `25359328268` showed `spawn_mount2_ok`, no FUSE callback trace, and
+  FUSE-T's NFS bridge stuck in `CLOSE_WAIT`: `fuser` 0.17 rejects
+  `n_threads != 1` on non-Linux session loops, so Operon now keeps four FUSE
+  threads on Linux and uses one thread on macOS.
 
 Remaining:
 

@@ -138,11 +138,7 @@ trap cleanup EXIT
 trap 'dump_diagnostics; exit 124' TERM
 
 start_watchdog() {
-  (
-    sleep "$SMOKE_TIMEOUT_SECS"
-    echo "macOS live mount smoke timed out after ${SMOKE_TIMEOUT_SECS}s" >&2
-    kill -TERM "$$" >/dev/null 2>&1 || true
-  ) &
+  perl -e 'my ($timeout, $pid) = @ARGV; sleep $timeout; print STDERR "macOS live mount smoke timed out after ${timeout}s\n"; kill "TERM", $pid;' "$SMOKE_TIMEOUT_SECS" "$$" &
   WATCHDOG_PID="$!"
 }
 

@@ -92,13 +92,24 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         fuser::MountOption::NoExec,
     ];
     add_platform_mount_options(&mut config.mount_options, &mount_point)?;
-    config.n_threads = Some(4);
+    config.n_threads = Some(default_mount_thread_count());
+    trace_mount_event("n_threads", default_mount_thread_count().to_string());
     trace_mount_event("spawn_mount2_start", mount_point.display().to_string());
     let session = fuser::spawn_mount2(fs, &mount_point, &config)
         .with_context(|| format!("failed to mount {}", mount_point.display()))?;
     trace_mount_event("spawn_mount2_ok", mount_point.display().to_string());
 
     Ok(MountSession { session })
+}
+
+#[cfg(target_os = "linux")]
+fn default_mount_thread_count() -> usize {
+    4
+}
+
+#[cfg(not(target_os = "linux"))]
+fn default_mount_thread_count() -> usize {
+    1
 }
 
 fn ensure_mount_point(path: &Path) -> anyhow::Result<()> {
@@ -241,5 +252,14 @@ mod tests {
                 .contains("macOS FUSE-T extra mount options must be -o options"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn default_mount_thread_count_matches_fuser_platform_support() {
+        if cfg!(target_os = "linux") {
+            assert_eq!(default_mount_thread_count(), 4);
+        } else {
+            assert_eq!(default_mount_thread_count(), 1);
+        }
     }
 }

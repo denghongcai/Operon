@@ -40,6 +40,8 @@ require_pattern 'MountAdapterCore::new' crates/operon-mount/src/fuse_fs.rs
 require_pattern '#!\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/fuse_fs.rs
 require_pattern '#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/lib.rs
 require_pattern 'macos-no-mount = \["fuser/macos-no-mount"\]' crates/operon-mount/Cargo.toml
+require_pattern 'fn default_mount_thread_count\(\) -> usize' crates/operon-mount/src/session.rs
+require_pattern 'trace_mount_event\("n_threads"' crates/operon-mount/src/session.rs
 require_pattern 'winfsp_wrs = "0\.4\.1"' crates/operon-mount/Cargo.toml
 require_pattern 'winfsp_wrs_sys = "0\.4\.1"' crates/operon-mount/Cargo.toml
 require_pattern 'mod windows;' crates/operon-mount/src/lib.rs
@@ -90,6 +92,7 @@ require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scri
 require_pattern 'wait_for_process_exit' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'macOS mount backend: \$OPERON_MOUNT_MACOS_BACKEND' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'macOS mount extra options: \$\{OPERON_MOUNT_MACOS_OPTIONS:-<none>\}' scripts/smoke-v0.14-macos-live-mount.sh
+require_pattern 'perl -e .*macOS live mount smoke timed out' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'Library/Logs/fuse-t' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'v0\.14 macOS FUSE-T fuse-zip probe passed' scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 require_pattern 'https://github.com/macos-fuse-t/fuse-zip' scripts/smoke-v0.14-macos-fuse-zip-probe.sh
