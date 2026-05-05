@@ -11,6 +11,7 @@ on:
         options:
           - all
           - macos
+          - macos-fuser-hello
           - macos-fuse-zip
           - windows
       macos_backend:
@@ -217,4 +218,42 @@ jobs:
         with:
           name: v0.14-macos-fuse-zip-${{ inputs.macos_backend }}-${{ github.run_id }}
           path: ${{ runner.temp }}/v0.14-macos-fuse-zip-${{ inputs.macos_backend }}.log
+          if-no-files-found: warn
+
+  macos-fuser-hello-probe:
+    name: macOS FUSE-T fuser Hello Probe (hosted)
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos-fuser-hello' }}
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install FUSE-T
+        run: scripts/install-v0.14-macos-fuse-t.sh
+
+      - name: Run fuser hello probe
+        id: fuser-hello-probe
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
+        run: |
+          set -o pipefail
+          log_path="$RUNNER_TEMP/v0.14-macos-fuser-hello-${OPERON_MOUNT_MACOS_BACKEND}.log"
+          echo "macOS fuser hello probe backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS fuser hello probe extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
+          echo "macOS fuser hello probe log: ${log_path}"
+          set +e
+          scripts/smoke-v0.14-macos-fuser-hello-probe.sh 2>&1 | tee "$log_path"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "macOS FUSE-T fuser hello probe exit code: ${status}"
+          exit "$status"
+
+      - name: Upload macOS fuser hello probe log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v0.14-macos-fuser-hello-${{ inputs.macos_backend }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/v0.14-macos-fuser-hello-${{ inputs.macos_backend }}.log
           if-no-files-found: warn

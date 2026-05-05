@@ -5377,6 +5377,12 @@ Completed:
   runner, but the root directory still reported `blocks=1`, so directories now
   report zero allocated stat blocks and `statfs` free-inode metadata is aligned
   to fuse-zip's zero value.
+- Add a standalone hosted macOS FUSE-T `fuser` hello probe after hosted run
+  `25360430340` confirmed root attributes now match the fuser hello/fuse-zip
+  shape but the session still closes before `lookup` or `readdir`. This probe
+  separates Operon filesystem semantics from the `fuser` low-level session path;
+  if it fails the same way, the remaining macOS path should move toward a
+  libfuse-style high-level adapter instead of further callback micro-adjustment.
 
 Remaining:
 
