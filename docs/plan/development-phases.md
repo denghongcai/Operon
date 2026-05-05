@@ -5372,6 +5372,11 @@ Completed:
   mounting user instead of root, logs the exact root attr/statfs values, and
   captures `mount_nfs`/NFS unified logs plus `nfsstat -m` in the macOS smoke
   diagnostics.
+- Use hosted run `25360306048` evidence to remove the next root-attribute
+  difference from fuse-zip/fuser hello: uid/gid and `blksize=512` reached the
+  runner, but the root directory still reported `blocks=1`, so directories now
+  report zero allocated stat blocks and `statfs` free-inode metadata is aligned
+  to fuse-zip's zero value.
 
 Remaining:
 

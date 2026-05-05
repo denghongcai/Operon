@@ -116,7 +116,11 @@ impl OperonFuseFs {
         fuser::FileAttr {
             ino: entry.ino,
             size: if entry.is_dir { 0 } else { entry.size },
-            blocks: entry.size.div_ceil(STAT_BLOCK_SIZE as u64),
+            blocks: if entry.is_dir {
+                0
+            } else {
+                entry.size.div_ceil(STAT_BLOCK_SIZE as u64)
+            },
             atime: UNIX_EPOCH,
             mtime: UNIX_EPOCH,
             ctime: UNIX_EPOCH,
@@ -636,12 +640,10 @@ impl fuser::Filesystem for OperonFuseFs {
         trace_fuse_event(
             "statfs",
             format!(
-                "ino={ino:?} blocks=1048576 bfree=1048576 bavail=1048576 files=1000000 ffree=1000000 bsize=1 namelen=255 frsize=1"
+                "ino={ino:?} blocks=1048576 bfree=1048576 bavail=1048576 files=1000000 ffree=0 bsize=1 namelen=255 frsize=1"
             ),
         );
-        reply.statfs(
-            1_048_576, 1_048_576, 1_048_576, 1_000_000, 1_000_000, 1, 255, 1,
-        );
+        reply.statfs(1_048_576, 1_048_576, 1_048_576, 1_000_000, 0, 1, 255, 1);
     }
 
     fn access(
@@ -813,6 +815,7 @@ mod tests {
         assert_eq!(attr.perm, 0o755);
         assert_eq!(attr.nlink, 2);
         assert_eq!(attr.size, 0);
+        assert_eq!(attr.blocks, 0);
     }
 
     #[test]
