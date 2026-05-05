@@ -1024,6 +1024,13 @@ mod op {
             }
 
             let init = init.as_bytes();
+            #[cfg(target_os = "macos")]
+            let init = if self.arg.minor < 5 {
+                &init[..FUSE_COMPAT_INIT_OUT_SIZE]
+            } else {
+                &init[..FUSE_COMPAT_22_INIT_OUT_SIZE]
+            };
+            #[cfg(not(target_os = "macos"))]
             let init = if self.arg.minor < 5 {
                 &init[..FUSE_COMPAT_INIT_OUT_SIZE]
             } else if self.arg.minor < 23 {

@@ -19,5 +19,9 @@ Changes from upstream 0.17.0:
   because `/dev/fuse` preserves request packet boundaries.
 - macOS uses FUSE-T's 32 MiB Darwin user/kernel buffer size for negotiated
   `max_write`; Linux keeps fuser's upstream 16 MiB limit.
+- macOS init replies always use the libfuse2/Darwin 24-byte `fuse_init_out`
+  payload size. FUSE-T may send an init request with minor 23, but its bundled
+  libfuse2 success path still replies with the Darwin libfuse2 init payload,
+  not fuser's newer FUSE3-sized init payload.
 
 The Linux path is intentionally unchanged.

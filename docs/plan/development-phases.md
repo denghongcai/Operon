@@ -5449,6 +5449,14 @@ Completed:
   `statfs/getattr` pairs. The next single-variable fuser patch aligns macOS
   `MAX_WRITE_SIZE` with FUSE-T's Darwin 32 MiB user/kernel buffer while leaving
   Linux at fuser's upstream 16 MiB.
+- Record hosted run `25377547576`: the 32 MiB `max_write` alignment changed
+  FUSE-T negotiation to `max_write=33554432` but did not change the failure
+  shape. The next source-level difference is init reply payload size: FUSE-T's
+  request minor is 23, which made fuser send its newer FUSE3-sized
+  `fuse_init_out`, while FUSE-T's bundled libfuse2 success path still replies
+  with the Darwin 24-byte init payload. The next patch keeps macOS init replies
+  at `FUSE_COMPAT_22_INIT_OUT_SIZE` regardless of incoming FUSE-T minor version
+  and leaves non-macOS behavior unchanged.
 
 Remaining:
 
