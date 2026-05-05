@@ -138,6 +138,7 @@ cleanup() {
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
+trap 'status=$?; echo "macOS live mount smoke failed with status $status at line $LINENO" >&2; dump_diagnostics; exit "$status"' ERR
 trap 'dump_diagnostics; exit 124' TERM
 
 start_watchdog() {

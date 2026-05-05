@@ -379,7 +379,12 @@ impl fuser::Filesystem for OperonFuseFs {
         flags: fuser::RenameFlags,
         reply: fuser::ReplyEmpty,
     ) {
+        trace_fuse_event(
+            "rename",
+            format!("parent={parent:?} name={name:?} newparent={newparent:?} newname={newname:?} flags={flags:?}"),
+        );
         if !flags.is_empty() {
+            trace_fuse_event("rename_error", format!("unsupported flags={flags:?}"));
             reply.error(fuser::Errno::ENOSYS);
             return;
         }
@@ -409,7 +414,10 @@ impl fuser::Filesystem for OperonFuseFs {
                 }
                 Err(error) => reply.error(errno_for_error(&error)),
             },
-            Err(error) => reply.error(errno_for_error(&error)),
+            Err(error) => {
+                trace_fuse_event("rename_error", error.to_string());
+                reply.error(errno_for_error(&error));
+            }
         }
     }
     fn link(
