@@ -28,6 +28,7 @@ pub struct MountDirectoryEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MountErrorKind {
     NotFound,
+    AlreadyExists,
     PermissionDenied,
     InvalidInput,
     FailedPrecondition,
@@ -126,6 +127,7 @@ pub fn classify_mount_error(error: &anyhow::Error) -> MountErrorKind {
     if let Some(status) = error.downcast_ref::<tonic::Status>() {
         match status.code() {
             tonic::Code::NotFound => return MountErrorKind::NotFound,
+            tonic::Code::AlreadyExists => return MountErrorKind::AlreadyExists,
             tonic::Code::PermissionDenied | tonic::Code::Unauthenticated => {
                 return MountErrorKind::PermissionDenied;
             }
@@ -340,6 +342,10 @@ mod tests {
         assert_eq!(
             classify_mount_error(&tonic::Status::not_found("missing").into()),
             MountErrorKind::NotFound
+        );
+        assert_eq!(
+            classify_mount_error(&tonic::Status::already_exists("exists").into()),
+            MountErrorKind::AlreadyExists
         );
         assert_eq!(
             classify_mount_error(&tonic::Status::permission_denied("denied").into()),

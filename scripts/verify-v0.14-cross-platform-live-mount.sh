@@ -73,8 +73,8 @@ require_pattern 'macos-fuse-t' crates/operon-cli/src/commands/mount.rs
 require_pattern 'windows-winfsp' crates/operon-cli/src/commands/mount.rs
 require_pattern 'macos-fuse-t-supported-runtime-required' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'windows-winfsp-supported-runtime-required' crates/operon-cli/src/commands/doctor.rs
-require_pattern 'PROTOCOL_VERSION: &str = "v0\.14\.0"' crates/operon-protocol/src/lib.rs
-require_pattern '"version": "0\.14\.0"' packages/sdk-js/package.json
+require_pattern 'PROTOCOL_VERSION: &str = "v0\.15\.0"' crates/operon-protocol/src/lib.rs
+require_pattern '"version": "0\.15\.0"' packages/sdk-js/package.json
 require_pattern 'cargo test -p operon-mount --locked --features macos-no-mount' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-mount --locked' .github/workflows/ci.yml
 require_pattern 'actions: read' .github/workflows/release-draft.yml

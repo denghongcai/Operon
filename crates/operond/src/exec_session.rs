@@ -34,10 +34,6 @@ pub(crate) type ExecSessionStream = std::pin::Pin<
     Box<dyn futures_util::Stream<Item = Result<GrpcExecSessionEvent, Status>> + Send + 'static>,
 >;
 
-#[cfg(windows)]
-const WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON: &str =
-    "Windows interactive exec sessions are unsupported in this release line; use non-interactive exec run";
-
 enum SessionControl {
     Input(Vec<u8>),
     Resize(PtySize),
@@ -260,14 +256,6 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
     })
 }
 
-#[cfg(windows)]
-fn ensure_exec_session_platform_supported() -> Result<(), Status> {
-    Err(Status::unimplemented(
-        WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON,
-    ))
-}
-
-#[cfg(not(windows))]
 fn ensure_exec_session_platform_supported() -> Result<(), Status> {
     Ok(())
 }
@@ -550,23 +538,12 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-    #[cfg(windows)]
     #[test]
-    fn windows_exec_session_is_explicitly_unsupported() {
-        let error = ensure_exec_session_platform_supported().expect_err("windows unsupported");
-
-        assert_eq!(error.code(), tonic::Code::Unimplemented);
-        assert_eq!(error.message(), WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON);
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn unix_like_exec_session_platform_is_supported() {
-        ensure_exec_session_platform_supported().expect("unix-like supported");
+    fn exec_session_platform_is_supported() {
+        ensure_exec_session_platform_supported().expect("exec session platform supported");
     }
 
     #[test]
-    #[cfg(not(windows))]
     fn exec_session_portable_pty_smoke_outputs_and_exits() {
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -594,6 +571,7 @@ mod tests {
             .slave
             .spawn_command(command)
             .expect("spawn pty command");
+        let mut killer = child.clone_killer();
         let mut reader = pair.master.try_clone_reader().expect("clone pty reader");
         let (tx, rx) = std_mpsc::channel();
         thread::spawn(move || {
@@ -612,11 +590,26 @@ mod tests {
                 }
             }
         });
+        let (wait_tx, wait_rx) = std_mpsc::channel();
+        thread::spawn(move || {
+            let _ = wait_tx.send(child.wait());
+        });
 
-        let status = child.wait().expect("wait pty child");
+        let output = match rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(output) => output,
+            Err(error) => {
+                let _ = killer.kill();
+                panic!("pty output timed out: {error}");
+            }
+        };
+        let status = match wait_rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(status) => status.expect("wait pty child"),
+            Err(error) => {
+                let _ = killer.kill();
+                panic!("pty child wait timed out: {error}");
+            }
+        };
         assert!(status.success());
-
-        let output = rx.recv_timeout(Duration::from_secs(5)).expect("pty output");
         assert!(output.contains("operon-pty-smoke"));
     }
 }

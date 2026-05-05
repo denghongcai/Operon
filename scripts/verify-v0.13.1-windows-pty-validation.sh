@@ -12,25 +12,21 @@ require_pattern 'Status: Completed' docs/plan/v0.13.1-windows-pty-validation.md
 require_pattern 'Phase 85: v0.13.1 Windows PTY Validation' docs/plan/development-phases.md
 require_pattern 'No v0.13.1 Windows PTY validation work remains' docs/plan/development-phases.md
 
-require_pattern 'WINDOWS_EXEC_SESSION_UNSUPPORTED_REASON' crates/operond/src/exec_session.rs
-require_pattern 'Status::unimplemented' crates/operond/src/exec_session.rs
-require_pattern 'windows_exec_session_is_explicitly_unsupported' crates/operond/src/exec_session.rs
-require_pattern 'unix_like_exec_session_platform_is_supported' crates/operond/src/exec_session.rs
-require_pattern 'windows-exec-session-unsupported' crates/operon-cli/src/commands/doctor.rs
+require_pattern 'exec_session_platform_is_supported' crates/operond/src/exec_session.rs
+require_pattern 'exec_session_portable_pty_smoke_outputs_and_exits' crates/operond/src/exec_session.rs
+require_pattern 'windows-portable-pty-smoke-validated' crates/operon-cli/src/commands/doctor.rs
 reject_pattern 'portable-pty-validation-deferred' crates/operon-cli/src/commands/doctor.rs README.md PROTOCOL.md docs/architecture/runtime-api.md
+reject_pattern 'windows-exec-session-unsupported' crates/operon-cli/src/commands/doctor.rs README.md PROTOCOL.md docs/architecture/runtime-api.md
 
-require_pattern "if: runner.os == 'Windows'" .github/workflows/ci.yml
-require_pattern 'cargo test -p operond --locked windows_exec_session_is_explicitly_unsupported' .github/workflows/ci.yml
-require_pattern "if: runner.os != 'Windows'" .github/workflows/ci.yml
+require_pattern 'cargo test -p operond --locked exec_session_platform_is_supported' .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits' .github/workflows/ci.yml
 
-require_pattern 'Windows interactive exec sessions are explicitly unsupported' README.md
-require_pattern 'Windows interactive exec sessions are' PROTOCOL.md
-require_pattern 'explicitly unsupported in this release line' PROTOCOL.md
-require_pattern 'Windows interactive exec sessions are explicitly unsupported' docs/architecture/runtime-api.md
-require_pattern 'explicitly unsupported on Windows' docs/architecture/technology-and-protocol-decisions.md
+require_pattern 'Windows interactive exec sessions use `portable-pty`' README.md
+require_pattern 'Windows interactive exec sessions use `portable-pty`' PROTOCOL.md
+require_pattern 'Windows interactive exec sessions use `portable-pty`' docs/architecture/runtime-api.md
+require_pattern 'supported through `portable-pty` on Unix-like platforms and Windows' docs/architecture/technology-and-protocol-decisions.md
 
-cargo test -p operond --locked unix_like_exec_session_platform_is_supported
+cargo test -p operond --locked exec_session_platform_is_supported
 cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
 cargo test -p operon-cli --locked platform_report_contains_operator_caveats
 

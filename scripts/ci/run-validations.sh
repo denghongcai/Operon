@@ -84,6 +84,8 @@ validations=(
   "core|v0.13.7 Mount Adapter Strategy Validation|scripts/verify-v0.13.7-mount-adapter-strategy.sh"
   "core|v0.13.8 Mount Core Boundary Validation|scripts/verify-v0.13.8-mount-core-boundary.sh"
   "core|v0.14 Cross-Platform Live Mount Validation|scripts/verify-v0.14-cross-platform-live-mount.sh"
+  "core|v0.14.1 Mount Stabilization Validation|scripts/verify-v0.14.1-mount-stabilization.sh"
+  "core|v0.15 Windows Exec Session Parity Validation|scripts/verify-v0.15-windows-exec-session-parity.sh"
 )
 
 failures=()

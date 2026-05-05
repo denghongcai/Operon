@@ -13,7 +13,7 @@ use anyhow::Context;
 use operon_core::FsStat;
 use operon_network::NodeEndpoint;
 use windows_sys::Win32::{
-    Foundation::{LocalFree, STATUS_BUFFER_OVERFLOW},
+    Foundation::{LocalFree, STATUS_BUFFER_OVERFLOW, STATUS_OBJECT_NAME_COLLISION},
     Security::{
         Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION},
         GetSecurityDescriptorLength,
@@ -949,6 +949,7 @@ fn file_info_for_stat(stat: &FsStat) -> FSP_FSCTL_FILE_INFO {
 fn ntstatus_for_error(error: anyhow::Error) -> NTSTATUS {
     match classify_mount_error(&error) {
         MountErrorKind::NotFound => STATUS_OBJECT_NAME_NOT_FOUND,
+        MountErrorKind::AlreadyExists => STATUS_OBJECT_NAME_COLLISION,
         MountErrorKind::PermissionDenied => STATUS_ACCESS_DENIED,
         MountErrorKind::InvalidInput => STATUS_INVALID_PARAMETER,
         MountErrorKind::FailedPrecondition => STATUS_ACCESS_DENIED,

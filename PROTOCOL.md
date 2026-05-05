@@ -374,10 +374,9 @@ interactive. Server events report `started`, raw terminal `output`, and final
 the daemon terminates the remote session. Session authorization uses the
 distinct `exec:default` `session` action; `policy.exec.allow_sessions` must be
 true. Session lifecycle is audited, but input bytes are not copied into audit
-event resources. Unix-like platforms use the existing `portable-pty`
-abstraction for interactive sessions. Windows interactive exec sessions are
-explicitly unsupported in this release line and return `UNIMPLEMENTED`; use
-non-interactive `exec run` on Windows.
+event resources. Unix-like platforms and Windows use the existing
+`portable-pty` abstraction for interactive sessions. Windows interactive exec sessions use `portable-pty`
+with the same `OpenExecSession` protocol as Unix-like platforms.
 
 Platform guarantees are intentionally explicit. Linux and Unix-like exec
 cancellation uses process-group termination. Windows non-interactive exec

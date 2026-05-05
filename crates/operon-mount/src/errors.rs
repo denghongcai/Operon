@@ -5,6 +5,7 @@ use crate::mount_core::{classify_mount_error, MountErrorKind};
 pub(crate) fn errno_for_error(error: &anyhow::Error) -> fuser::Errno {
     match classify_mount_error(error) {
         MountErrorKind::NotFound => fuser::Errno::ENOENT,
+        MountErrorKind::AlreadyExists => fuser::Errno::EEXIST,
         MountErrorKind::PermissionDenied => fuser::Errno::EACCES,
         MountErrorKind::InvalidInput => fuser::Errno::EINVAL,
         MountErrorKind::FailedPrecondition => fuser::Errno::EPERM,
@@ -21,6 +22,12 @@ mod tests {
         assert_eq!(
             errno_debug(errno_for_error(&tonic::Status::not_found("missing").into())),
             errno_debug(fuser::Errno::ENOENT)
+        );
+        assert_eq!(
+            errno_debug(errno_for_error(
+                &tonic::Status::already_exists("exists").into()
+            )),
+            errno_debug(fuser::Errno::EEXIST)
         );
         assert_eq!(
             errno_debug(errno_for_error(

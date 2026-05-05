@@ -90,9 +90,8 @@ Runtime schema constraints:
 - `OpenExecSession` uses explicit start, input, and resize request envelopes
   and started, output, and exit response envelopes.
 - `OpenExecSession` uses the existing `portable-pty` backend on Unix-like
-  platforms. Windows interactive exec sessions are explicitly unsupported in
-  this release line and return `UNIMPLEMENTED`; Windows non-interactive exec
-  remains supported.
+  platforms and Windows. Windows interactive exec sessions use `portable-pty`
+  with the same request and event envelopes as Unix-like platforms.
 - Exec cancellation guarantees are platform-specific: Unix-like platforms use
   process-group termination, while Windows uses Job Object process-tree
   termination with a direct-child kill fallback if Job Object setup fails for a

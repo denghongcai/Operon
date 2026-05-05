@@ -104,13 +104,11 @@ jobs:
       - name: Test daemon platform shell defaults
         run: cargo test -p operond --locked shell_invocation_matches_platform
 
-      - name: Test daemon PTY smoke
-        if: runner.os != 'Windows'
-        run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
+      - name: Test daemon exec session support decision
+        run: cargo test -p operond --locked exec_session_platform_is_supported
 
-      - name: Test daemon Windows PTY unsupported decision
-        if: runner.os == 'Windows'
-        run: cargo test -p operond --locked windows_exec_session_is_explicitly_unsupported
+      - name: Test daemon PTY smoke
+        run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
 
       - name: Test daemon exec cancellation guarantee
         run: cargo test -p operond --locked exec_cancellation_guarantee_matches_platform

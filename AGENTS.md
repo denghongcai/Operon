@@ -326,6 +326,15 @@ Operon should not own:
     NFS-backed default path. Covers preflight, workflow dispatch, success
     evidence, and failure-log handling.
 
+- `docs/plan/v0.14.1-mount-stabilization.md`
+  - Completed v0.14.1 scope for mount adapter error classification hardening,
+    including remote `ALREADY_EXISTS` to Unix `EEXIST` mapping and validation.
+
+- `docs/plan/v0.15-windows-exec-session-parity.md`
+  - Completed v0.15 scope for Windows interactive exec session support through
+    `portable-pty`, bounded cross-platform PTY smoke validation, doctor/docs
+    updates, and version alignment to `0.15.0` / `v0.15.0`.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -844,13 +853,13 @@ Defer:
   [`scripts/verify-v0.13.6-test-hardening.sh`](scripts/verify-v0.13.6-test-hardening.sh)
   is wired into consolidated validation. Nothing remains in v0.13.6.
 - Latest phase status update: v0.13.1 completed Windows PTY Validation.
-  Windows interactive `OpenExecSession` now returns an explicit
-  `UNIMPLEMENTED` response for this release line, and `operon doctor` reports
-  `windows-exec-session-unsupported`; Unix-like `portable-pty` smoke coverage,
-  Windows non-interactive exec, and Windows Job Object cancellation remain in
-  place. CI has a Windows-safe unsupported-decision test and
+  This phase originally chose an explicit unsupported decision for Windows
+  interactive `OpenExecSession`; that decision is superseded by v0.15 Windows
+  Exec Session Parity. Windows non-interactive exec and Windows Job Object
+  cancellation remain in place, and
   [`scripts/verify-v0.13.1-windows-pty-validation.sh`](scripts/verify-v0.13.1-windows-pty-validation.sh)
-  is wired into consolidated validation. Nothing remains in v0.13.1.
+  now validates that the historical ambiguity was closed and that current docs
+  point at the supported v0.15 status. Nothing remains in v0.13.1.
 - Latest phase status update: v0.13 completed Release Publication and Public
   Verification. Public GitHub Release
   [`v0.13.1`](https://github.com/denghongcai/Operon/releases/tag/v0.13.1)
@@ -894,3 +903,17 @@ Defer:
   WinFsp live mount jobs. After publishing, run the manual
   `Verify Release Artifacts` and `Verify README Quickstart` workflows for the
   public tag. Nothing remains in v0.14.
+- Latest phase status update: v0.14.1 Mount Stabilization is completed.
+  [`operon-mount`](crates/operon-mount) classifies remote
+  `tonic::Code::AlreadyExists` separately and maps it to Unix FUSE `EEXIST`
+  for existing-path create or mkdir collisions. Focused mount-core and errno
+  tests plus
+  [`scripts/verify-v0.14.1-mount-stabilization.sh`](scripts/verify-v0.14.1-mount-stabilization.sh)
+  cover the behavior. Nothing remains in v0.14.1.
+- Latest phase status update: v0.15 Windows Exec Session Parity is completed.
+  Windows interactive exec sessions now use the existing `portable-pty`
+  backend instead of returning `UNIMPLEMENTED`; `operon doctor` reports
+  `windows-portable-pty-smoke-validated`; the platform smoke workflow runs
+  bounded portable-pty smoke coverage on Windows; docs and validation scripts
+  are aligned with the supported status and repository versions are aligned to
+  `0.15.0` / `v0.15.0`. Nothing remains in v0.15.

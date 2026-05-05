@@ -41,7 +41,7 @@ FORWARD_PORT="18875"
 mkdir -p "$WORKSPACE_DIR" "$WEB_DIR"
 printf 'operon service forwarding\n' >"$WEB_DIR/index.html"
 rg -n 'rpc OpenServiceTunnel\(stream ServiceTunnelRequest\) returns \(stream ServiceTunnelResponse\)' proto/operon/runtime.proto >/dev/null
-rg -n 'PROTOCOL_VERSION: &str = "v0.14.0"' crates/operon-protocol/src/lib.rs >/dev/null
+rg -n 'PROTOCOL_VERSION: &str = "v0.15.0"' crates/operon-protocol/src/lib.rs >/dev/null
 
 python3 -m http.server "$SERVICE_PORT" --bind 127.0.0.1 --directory "$WEB_DIR" \
   >"$TMP_DIR/service.log" 2>&1 &

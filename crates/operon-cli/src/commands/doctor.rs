@@ -178,7 +178,7 @@ fn pty_session_diagnostic() -> &'static str {
 
 #[cfg(windows)]
 fn pty_session_diagnostic() -> &'static str {
-    "windows-exec-session-unsupported"
+    "windows-portable-pty-smoke-validated"
 }
 
 async fn diagnose_node(
@@ -385,7 +385,7 @@ mod tests {
         assert_eq!(report.private_file_protection, "windows-acl-verified");
         assert!(!report.exec_cancellation.is_empty());
         #[cfg(windows)]
-        assert_eq!(report.pty_sessions, "windows-exec-session-unsupported");
+        assert_eq!(report.pty_sessions, "windows-portable-pty-smoke-validated");
         #[cfg(not(windows))]
         assert_eq!(report.pty_sessions, "portable-pty-smoke-validated");
         assert!(report.service_forwarding.contains("firewall"));

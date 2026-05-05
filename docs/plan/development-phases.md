@@ -5537,6 +5537,67 @@ Remaining:
   the same commit had already passed main CI `25383140244`, including the
   `linux-system` validation group, before release publication.
 
+## Phase 94: v0.14.1 Mount Stabilization
+
+Status: Completed.
+
+Goal: stabilize cross-platform live mount adapter behavior after v0.14 by
+tightening error classification and validation without changing the mount
+protocol or release workflow.
+
+Detailed plan: `docs/plan/v0.14.1-mount-stabilization.md`.
+
+Completed:
+
+- Added `MountErrorKind::AlreadyExists` for platform-neutral mount adapter
+  classification.
+- Mapped remote `tonic::Code::AlreadyExists` errors to that classification.
+- Mapped Unix FUSE existing-path failures to `EEXIST` instead of generic
+  `EIO`.
+- Added focused unit coverage for mount-core classification and Unix errno
+  conversion.
+- Added `scripts/verify-v0.14.1-mount-stabilization.sh` and wired it into the
+  consolidated validation runner.
+
+Remaining:
+
+- No v0.14.1 mount stabilization work remains.
+
+## Phase 95: v0.15 Windows Exec Session Parity
+
+Status: Completed.
+
+Goal: promote Windows interactive exec sessions from the v0.13.1 unsupported
+decision to supported `portable-pty` behavior while preserving the existing
+`OpenExecSession` protocol shape.
+
+Detailed plan: `docs/plan/v0.15-windows-exec-session-parity.md`.
+
+Completed:
+
+- Removed the Windows-only `UNIMPLEMENTED` guard from daemon exec session
+  startup.
+- Kept `portable-pty` as the only PTY abstraction and preserved platform shell
+  defaults for command-string sessions.
+- Replaced platform-specific support tests with
+  `exec_session_platform_is_supported`.
+- Made the portable-pty smoke test run on Windows and added bounded output and
+  child-wait timeouts so CI cannot hang indefinitely on a PTY backend
+  regression.
+- Updated the cross-platform Rust smoke workflow to run the support decision
+  and portable-pty smoke on Windows.
+- Updated `operon doctor`, README, `PROTOCOL.md`, runtime API docs,
+  architecture docs, and validation scripts to report Windows PTY support
+  instead of `windows-exec-session-unsupported`.
+- Aligned Rust crate versions, the TypeScript SDK package version, CLI version
+  output, and `PROTOCOL_VERSION` to `0.15.0` / `v0.15.0`.
+- Added `scripts/verify-v0.15-windows-exec-session-parity.sh` and wired it
+  into the consolidated validation runner.
+
+Remaining:
+
+- No v0.15 Windows exec session parity work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:
