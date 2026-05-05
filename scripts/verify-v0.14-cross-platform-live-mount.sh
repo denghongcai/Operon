@@ -21,7 +21,7 @@ require_file vendor/fuser-0.17.0-operon/OPERON_PATCH.md
 require_file vendor/fuser-0.17.0-operon/src/lib.rs
 require_file vendor/fuser-0.17.0-operon/src/ll/request.rs
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
-require_pattern 'Status: In progress' docs/plan/v0.14-cross-platform-live-mount.md
+require_pattern 'Status: Completed' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'FUSE-T replaces macFUSE as the active macOS live-smoke runtime' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'v0.14 macOS live mount smoke passed' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'macos_runner=hosted' docs/plan/v0.14-macos-live-smoke-runbook.md
@@ -82,8 +82,9 @@ require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/releas
 require_pattern 'v014-release-gate' .github/workflows/release-draft.yml
 require_pattern 'scripts/verify-v0.14-release-gates.sh "\$GITHUB_REF_NAME" "\$GITHUB_SHA" "\$GITHUB_REPOSITORY"' .github/workflows/release-draft.yml
 require_pattern 'macOS FUSE-T Live Mount \(hosted\)' scripts/verify-v0.14-release-gates.sh
-require_pattern 'missing v0\.14 release gate' scripts/verify-v0.14-release-gates.sh
-require_pattern 'v0\.14 macOS live mount release gate passed' scripts/verify-v0.14-release-gates.sh
+require_pattern 'Windows WinFsp Live Mount' scripts/verify-v0.14-release-gates.sh
+require_pattern 'missing release gate' scripts/verify-v0.14-release-gates.sh
+require_pattern '\$gate_name live mount release gate passed' scripts/verify-v0.14-release-gates.sh
 require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install-v0.14-macos-fuse-t.sh
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
@@ -125,7 +126,7 @@ bash -n scripts/smoke-v0.14-macos-live-mount.sh
 bash -n scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 bash -n scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh
 
-scripts/verify-v0.14-release-gates.sh v0.13.1 HEAD >/dev/null
+scripts/verify-v0.14-release-gates.sh test-tag HEAD >/dev/null
 
 rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu >/dev/null
 

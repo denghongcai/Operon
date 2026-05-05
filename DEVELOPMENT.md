@@ -305,23 +305,33 @@ git tag v0.x.y
 git push origin v0.x.y
 ```
 
+Before pushing or moving a public release tag, run the manual
+`v0.14 Live Mount Smoke` workflow on the exact release commit. Use
+`platform=all` when possible, or run separate `platform=macos` and
+`platform=windows` dispatches. The draft release workflow rejects public
+release tags unless the exact commit has successful macOS FUSE-T and Windows
+WinFsp live mount smoke jobs.
+
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
 `armv7` binary tarballs, macOS `x86_64` and `aarch64` binary tarballs, a
 Windows `x86_64` binary zip, a JavaScript SDK tarball, and `SHA256SUMS`. Draft
 releases are intentionally left unpublished for manual review.
 
-After publishing a release, verify the public assets from the release download
-surface:
+After publishing a release, verify the public release through manual GitHub
+Actions workflows:
 
-```bash
-scripts/verify-release-artifacts.sh <tag>
-```
+- `Verify Release Artifacts` downloads the public Release assets, checks
+  `SHA256SUMS`, verifies the expected Linux/macOS/Windows/SDK asset set, and
+  smoke-tests the extracted `operon` and `operond` binaries on Linux, macOS,
+  and Windows runners.
+- `Verify README Quickstart` runs
+  `scripts/verify-readme-quickstart-docker.sh` on GitHub Actions with
+  `OPERON_VERSION=<tag>` so the README install path is validated against the
+  public release download surface.
 
-The same verification can be started from GitHub Actions with the
-`Verify Release Artifacts` workflow. It downloads the public Release assets,
-checks `SHA256SUMS`, verifies the expected Linux/macOS/Windows/SDK asset set,
-and smoke-tests the current platform's extracted `operon` and `operond`
-binaries.
+Do not substitute local runs for release-completion evidence. The local scripts
+remain useful for development and debugging, but public release completion is
+based on the manual workflow runs.
 
 Version policy:
 

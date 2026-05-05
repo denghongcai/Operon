@@ -1,0 +1,25 @@
+name: Verify README Quickstart
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Public release tag to verify, for example v0.14.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-readme-quickstart:
+    name: Verify README Quickstart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify README Quickstart
+        env:
+          OPERON_VERSION: ${{ inputs.tag }}
+        run: scripts/verify-readme-quickstart-docker.sh

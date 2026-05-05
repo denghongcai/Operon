@@ -23,13 +23,18 @@ require_pattern 'doctor --help' scripts/verify-release-artifacts.sh
 require_pattern 'exec --help' scripts/verify-release-artifacts.sh
 
 require_file .github/workflows/verify-release-artifacts.yml
+require_file .github/workflows/verify-readme-quickstart.yml
 require_pattern 'workflow_dispatch' .github/workflows/verify-release-artifacts.yml
 require_pattern 'ubuntu-latest' .github/workflows/verify-release-artifacts.yml
 require_pattern 'macos-latest' .github/workflows/verify-release-artifacts.yml
 require_pattern 'windows-latest' .github/workflows/verify-release-artifacts.yml
 require_pattern 'scripts/verify-release-artifacts.sh' .github/workflows/verify-release-artifacts.yml
+require_pattern 'workflow_dispatch' .github/workflows/verify-readme-quickstart.yml
+require_pattern 'OPERON_VERSION: \$\{\{ inputs.tag \}\}' .github/workflows/verify-readme-quickstart.yml
+require_pattern 'scripts/verify-readme-quickstart-docker.sh' .github/workflows/verify-readme-quickstart.yml
 
-require_pattern 'scripts/verify-release-artifacts.sh <tag>' DEVELOPMENT.md
+require_pattern 'Verify README Quickstart' DEVELOPMENT.md
+require_pattern 'Do not substitute local runs for release-completion evidence' DEVELOPMENT.md
 require_pattern 'Verify Release Artifacts' DEVELOPMENT.md
 require_pattern 'README Quickstart' docs/plan/v0.12.4-release-artifact-verification.md
 require_pattern 'v0.12.4 Release Artifact Verification Validation' scripts/ci/run-validations.sh

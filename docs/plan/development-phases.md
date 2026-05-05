@@ -5523,6 +5523,12 @@ Completed:
   against the public release; it passed onboarding, daemon health,
   capabilities, agent skills discovery/install, fs, exec, service
   check/forward, audit, graph, and config explain checks.
+- Tighten future release validation policy: every public release must run
+  manual multi-platform live mount smoke on the exact release commit before
+  tagging or publishing, with macOS FUSE-T and Windows WinFsp live mount jobs
+  required by the release gate. Post-publication release artifact and README
+  Quickstart verification must run through manual GitHub Actions workflows
+  rather than being accepted from local script runs.
 
 Remaining:
 

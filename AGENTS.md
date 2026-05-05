@@ -315,14 +315,14 @@ Operon should not own:
     implementation.
 
 - `docs/plan/v0.14-cross-platform-live-mount.md`
-  - In-progress v0.14 scope for making live mount a complete core capability
+  - Completed v0.14 scope for making live mount a complete core capability
     across Linux, macOS, and Windows. Shared mount-core behavior, Unix
     FUSE/FUSE-T gating, Windows WinFsp adapter code, CLI dispatch, doctor
-    diagnostics, docs, and validation wiring are implemented; Windows live
-    smoke passed and macOS FUSE-T live smoke remains.
+    diagnostics, docs, validation wiring, release artifacts, and public
+    Quickstart verification are complete.
 
 - `docs/plan/v0.14-macos-live-smoke-runbook.md`
-  - Runbook for the remaining v0.14 macOS release gate through FUSE-T's
+  - Runbook for macOS FUSE-T live mount release gates through FUSE-T's
     NFS-backed default path. Covers preflight, workflow dispatch, success
     evidence, and failure-log handling.
 
@@ -507,15 +507,12 @@ Operon should not own:
   crate-root Linux gate, kept Linux FUSE adapter/session modules Linux-gated,
   added validation, and aligned the public release line to `0.13.8` /
   `v0.13.8`.
-- In-progress mount milestone: v0.14 is making live mount a complete core
-  Operon capability across Linux, macOS, and Windows. Shared mount-core
-  operation mapping, Unix FUSE/FUSE-T gating, native Windows WinFsp adapter
-  code through MIT `winfsp_wrs`, CLI dispatch, doctor diagnostics, docs, release
-  workflow wiring, and validation coverage are implemented. Windows live smoke
-  passed on GitHub-hosted `windows-latest`; macFUSE hosted-runner validation was
-  blocked at the runtime boundary, so macOS live smoke now targets FUSE-T's NFS
-  backend on hosted macOS.
-- Next planned milestone: v0.14 Cross-Platform Live Mount.
+- Completed mount milestone: v0.14 made live mount a complete core Operon
+  capability across Linux, macOS, and Windows. Shared mount-core operation
+  mapping, Unix FUSE/FUSE-T gating, native Windows WinFsp adapter code through
+  MIT `winfsp_wrs` / `winfsp_wrs_sys`, CLI dispatch, doctor diagnostics, docs,
+  release workflow wiring, validation coverage, public release artifacts, and
+  README Quickstart verification are complete.
 - Browser management UI and CLI TUI console are no longer planned product
   surfaces.
 - Network layer: outsourced to Cloudflare Mesh, Tailscale, WireGuard, SSH, LAN, Kubernetes, or manual endpoints.
@@ -603,10 +600,17 @@ Defer:
 - Before creating or publishing a public release tag, confirm the release
   commit is already merged to `main`; release tags must be created from the
   commit currently intended for `main`, not from an unmerged feature branch.
+- Before creating, moving, or publishing a public release tag, run the manual
+  `v0.14 Live Mount Smoke` GitHub Actions workflow on the exact release commit.
+  Public release gates require successful macOS FUSE-T and Windows WinFsp live
+  mount jobs; Linux live mount remains covered by the `linux-system` validation
+  group.
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
   when README Quickstart, release packaging, install prerequisites, or agent
-  skills guidance changes, and must run that script against the public release
-  before publishing or declaring the release complete.
+  skills guidance changes. After publishing, verify release artifacts and README
+  Quickstart through the manual `Verify Release Artifacts` and
+  `Verify README Quickstart` GitHub Actions workflows. Do not substitute local
+  script runs for release-completion evidence.
 - After every task, update `docs/plan/development-phases.md` before finishing.
 - Phase updates must state which phase changed, what was completed, and what remains.
 - If implementation changes the phase scope, update the phase text itself instead of only adding a note.
@@ -874,53 +878,19 @@ Defer:
   focused tests, and
   [`scripts/verify-v0.13.3-config-onboard-maintainability.sh`](scripts/verify-v0.13.3-config-onboard-maintainability.sh)
   is wired into consolidated validation. Nothing remains in v0.13.3.
-- Latest phase status update: v0.14 Cross-Platform Live Mount is in progress.
-  [`operon-mount`](crates/operon-mount) now has shared
-  `MountAdapterCore` operation mapping and error classification, Linux/macOS
-  FUSE adapter gating through `fuser`, and a Windows native WinFsp adapter using
-  MIT `winfsp_wrs`. `operon mount` dispatches to Linux FUSE, macOS FUSE-T, or
-  Windows WinFsp builds; `operon doctor` reports platform runtime requirements.
-  CI validation is wired through
-  [`scripts/verify-v0.14-cross-platform-live-mount.sh`](scripts/verify-v0.14-cross-platform-live-mount.sh),
-  and the current implementation checkpoint has passed the `core`, `runtime`,
-  and `linux-system` consolidated validation groups. Linux FUSE rename now
-  preserves inode mappings so post-rename `stat` and `unlink` operations keep
-  working through cached kernel dentries. Rust crate versions, TypeScript SDK
-  package metadata, CLI version output, and `PROTOCOL_VERSION` are aligned to
-  `0.14.0` / `v0.14.0`. A manual Actions live-smoke workflow is present at
-  [`.github/workflows/v0.14-live-mount-smoke.yml`](.github/workflows/v0.14-live-mount-smoke.yml)
-  for macOS FUSE-T and Windows WinFsp validation. Windows live smoke passed on
-  GitHub-hosted `windows-latest` in run `25339076348`. macOS live smoke on
-  GitHub-hosted `macos-latest` still fails at the macFUSE FSKit/LiveFS service
-  boundary, so FUSE-T has replaced macFUSE as the active macOS live-smoke
-  runtime. The workflow supports `macos_backend=nfs|smb|fskit`, defaults to
-  `nfs`, and installs FUSE-T through
-  [`scripts/install-v0.14-macos-fuse-t.sh`](scripts/install-v0.14-macos-fuse-t.sh).
-  The workflow also supports `macos_runner=hosted|self-hosted-fuse-t`; use the
-  self-hosted lane only when a runner labeled `self-hosted`, `macOS`, and
-  `fuse-t` is available with FUSE-T installed. The self-hosted lane runs
-  [`scripts/preflight-v0.14-macos-fuse-t-host.sh`](scripts/preflight-v0.14-macos-fuse-t-host.sh)
-  before the full live smoke so missing FUSE-T or `pkg-config fuse` fails early
-  with actionable output. Use
-  [`docs/plan/v0.14-macos-live-smoke-runbook.md`](docs/plan/v0.14-macos-live-smoke-runbook.md)
-  for the dispatch command and evidence to record once the FUSE-T smoke passes.
-  The tag-triggered release workflow runs
-  [`scripts/verify-v0.14-release-gates.sh`](scripts/verify-v0.14-release-gates.sh)
-  before artifact builds, so `v0.14*` release drafts fail unless the exact
-  release commit has a successful macOS FUSE-T live-smoke run. A GitHub-hosted
-  `macos_backend=kernel` check in run `25340391127`
-  failed during the smoke step without publishing that step body in the GitHub
-  job log, so the workflow now tees macOS smoke output to an uploaded artifact
-  and prints the smoke exit code for the next diagnostic run. The first
-  artifact-backed kernel run `25340798030` confirmed the hosted runner keeps the
-  macFUSE kernel extension unloaded and reaches `spawn_mount2_start` before the
-  seed file remains hidden; it also exposed an unbounded smoke cleanup wait, so
-  the macOS smoke script now uses bounded cleanup waits. Follow-up run
-  `25341745841` fails cleanly with an uploaded artifact and explicit exit code
-  instead of timing out, preserving the same hosted-runner macFUSE runtime
-  evidence. Later FUSE-T hosted NFS/SMB runs reached `spawn_mount2_ok`, but the
-  network volume never appeared; the final NFS diagnostic run `25356391309`
-  showed `mount_nfs` stuck connecting to `fuse-t:/...` while FUSE-T's local
-  `go-nfsv4` server listened on `127.0.0.1`. Remaining v0.14 work: run macOS
-  live smoke on a macOS host where FUSE-T network volumes can complete, then
-  publish and verify a release.
+- Latest phase status update: v0.14 Cross-Platform Live Mount is completed.
+  [`operon-mount`](crates/operon-mount) has shared `MountAdapterCore`
+  operation mapping and error classification, Linux/macOS FUSE adapter gating
+  through `fuser`, and a Windows native WinFsp adapter using MIT
+  `winfsp_wrs` / `winfsp_wrs_sys`. `operon mount` dispatches to Linux FUSE,
+  macOS FUSE-T, or Windows WinFsp builds; `operon doctor` reports platform
+  runtime requirements. Final release commit `dffa1c5` passed main CI
+  `25383140244`, CodeQL `25383139508`, hosted macOS FUSE-T live smoke
+  `25383149119`, and Windows WinFsp live smoke `25383149153`. Public GitHub
+  Release `v0.14.0` is published with Linux, macOS, Windows, TypeScript SDK,
+  and checksum assets. For future public releases, run the manual
+  `v0.14 Live Mount Smoke` workflow on the exact release commit before tagging
+  or publishing; release gates require successful macOS FUSE-T and Windows
+  WinFsp live mount jobs. After publishing, run the manual
+  `Verify Release Artifacts` and `Verify README Quickstart` workflows for the
+  public tag. Nothing remains in v0.14.

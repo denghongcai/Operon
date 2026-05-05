@@ -5,8 +5,9 @@ usage() {
   cat >&2 <<'USAGE'
 usage: scripts/verify-v0.14-release-gates.sh <tag> <commit-sha> [owner/repo]
 
-Checks release-only gates that cannot run in normal CI. For v0.14 tags this
-requires a successful macOS FUSE-T live mount smoke on the exact release commit.
+Checks release-only gates that cannot run in normal CI. For public release tags this
+requires successful macOS FUSE-T and Windows WinFsp live mount smoke jobs on
+the exact release commit.
 USAGE
 }
 
@@ -23,9 +24,12 @@ MACOS_JOB_NAMES=(
   "macOS FUSE-T Live Mount (hosted)"
   "macOS FUSE-T Live Mount (self-hosted)"
 )
+WINDOWS_JOB_NAMES=(
+  "Windows WinFsp Live Mount"
+)
 
-if [[ "$TAG" != v0.14* ]]; then
-  echo "no v0.14-specific release gates for $TAG"
+if [[ "$TAG" != v* ]]; then
+  echo "no public release gates for non-release tag $TAG"
   exit 0
 fi
 
@@ -44,19 +48,34 @@ mapfile -t run_ids < <(
     --jq '.[].databaseId'
 )
 
-for run_id in "${run_ids[@]}"; do
-  for job_name in "${MACOS_JOB_NAMES[@]}"; do
-    if gh run view "$run_id" \
-      --repo "$REPO" \
-      --json jobs \
-      --jq ".jobs[] | select(.name == \"$job_name\" and .conclusion == \"success\") | .name" \
-      | grep -Fxq "$job_name"; then
-      echo "v0.14 macOS live mount release gate passed in workflow run $run_id"
-      exit 0
-    fi
-  done
-done
+find_successful_job() {
+  local gate_name="$1"
+  shift
+  local job_name run_id
 
-echo "missing v0.14 release gate: successful macOS FUSE-T live mount job in '$WORKFLOW_NAME' on commit $COMMIT_SHA" >&2
-echo "run docs/plan/v0.14-macos-live-smoke-runbook.md before creating or updating the v0.14 release" >&2
-exit 1
+  for run_id in "${run_ids[@]}"; do
+    for job_name in "$@"; do
+      if gh run view "$run_id" \
+        --repo "$REPO" \
+        --json jobs \
+        --jq ".jobs[] | select(.name == \"$job_name\" and .conclusion == \"success\") | .name" \
+        | grep -Fxq "$job_name"; then
+        echo "$gate_name live mount release gate passed in workflow run $run_id ($job_name)"
+        return 0
+      fi
+    done
+  done
+
+  echo "missing release gate: successful $gate_name live mount job in '$WORKFLOW_NAME' on commit $COMMIT_SHA" >&2
+  return 1
+}
+
+missing=0
+find_successful_job "macOS FUSE-T" "${MACOS_JOB_NAMES[@]}" || missing=1
+find_successful_job "Windows WinFsp" "${WINDOWS_JOB_NAMES[@]}" || missing=1
+
+if [[ "$missing" -ne 0 ]]; then
+  echo "run '$WORKFLOW_NAME' with platform=all, or run separate platform=macos and platform=windows dispatches, before creating or updating a public release" >&2
+  echo "record the successful workflow run IDs in docs/plan/development-phases.md and docs/plan/v0.14-cross-platform-live-mount.md" >&2
+  exit 1
+fi
