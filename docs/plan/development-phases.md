@@ -5335,11 +5335,17 @@ Completed:
   probe's shell watchdog left an orphan `sleep` process holding the Actions
   output pipe open after success. The probe watchdog now uses a single `perl`
   timer process that cleanup can terminate without orphaning a child process.
+- The corrected fuse-zip probe passed on GitHub-hosted `macos-latest` for
+  commit `5f0a0bc` in run `25359068416` in 43 seconds. This proves the hosted
+  runner can publish and read at least one FUSE-T NFS mount through an
+  independent libfuse implementation, so the remaining Operon macOS live-smoke
+  failure is no longer a blanket hosted-runner FUSE-T limitation.
 
 Remaining:
 
-- Run macOS live smoke on a macOS host where FUSE-T network volumes can
-  complete, then record the run ID if it passes.
+- Fix and validate macOS live smoke through Operon's FUSE-T NFS adapter on
+  GitHub-hosted macOS or on a suitable self-hosted FUSE-T runner, then record
+  the passing run ID.
 - Publish and verify a release only after live smoke and release artifact
   validation pass.
 
