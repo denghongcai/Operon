@@ -5599,6 +5599,20 @@ Completed:
   output, and `PROTOCOL_VERSION` to `0.15.0` / `v0.15.0`.
 - Added `scripts/verify-v0.15-windows-exec-session-parity.sh` and wired it
   into the consolidated validation runner.
+- Published `v0.15.0` from `main` commit
+  `f9cc8d187960f69835ea349d7ca0e4b7264d5976` after main CI and CodeQL
+  passed.
+- Re-ran the required live mount release gates on that exact commit:
+  macOS FUSE-T live mount smoke run `25391757529` and Windows WinFsp live
+  mount smoke run `25391757596`.
+- Fixed macOS release packaging after public artifact verification caught that
+  `operon --version` could not start without `libfuse-t.dylib`; macOS release
+  archives now bundle `libfuse-t.dylib`, add `@executable_path` rpath to the
+  packaged `operon` binary, and the artifact verifier checks for the bundled
+  library.
+- Rebuilt release assets through draft release workflow `25392667228`,
+  published the release, and verified the public artifacts and README
+  Quickstart through workflow runs `25392962032` and `25392962190`.
 
 Remaining:
 

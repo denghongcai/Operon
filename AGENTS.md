@@ -920,4 +920,11 @@ Defer:
   terminal response, and smoke coverage drives a real interactive shell
   through the PTY writer; docs and validation scripts are aligned with the
   supported status and repository versions are aligned to `0.15.0` /
-  `v0.15.0`. Nothing remains in v0.15.
+  `v0.15.0`. `v0.15.0` was published from `main` commit
+  `f9cc8d187960f69835ea349d7ca0e4b7264d5976` after main CI `25391744639`,
+  CodeQL `25391744590`, macOS FUSE-T live mount gate `25391757529`, and
+  Windows WinFsp live mount gate `25391757596` passed. Release draft workflow
+  `25392667228` rebuilt the public assets after macOS packaging was hardened
+  to bundle `libfuse-t.dylib` with an `@executable_path` rpath, and public
+  verification passed in release artifact workflow `25392962032` and README
+  Quickstart workflow `25392962190`. Nothing remains in v0.15.
