@@ -84,13 +84,7 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
 
     let fs = OperonFuseFs::new(remote_fs, root);
     let mut config = fuser::Config::default();
-    config.mount_options = vec![
-        fuser::MountOption::FSName("operon".to_string()),
-        fuser::MountOption::Subtype("operon".to_string()),
-        fuser::MountOption::NoDev,
-        fuser::MountOption::NoSuid,
-        fuser::MountOption::NoExec,
-    ];
+    config.mount_options = base_mount_options();
     add_platform_mount_options(&mut config.mount_options, &mount_point)?;
     config.n_threads = Some(default_mount_thread_count());
     trace_mount_event("n_threads", default_mount_thread_count().to_string());
@@ -100,6 +94,22 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     trace_mount_event("spawn_mount2_ok", mount_point.display().to_string());
 
     Ok(MountSession { session })
+}
+
+#[cfg(target_os = "macos")]
+fn base_mount_options() -> Vec<fuser::MountOption> {
+    Vec::new()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn base_mount_options() -> Vec<fuser::MountOption> {
+    vec![
+        fuser::MountOption::FSName("operon".to_string()),
+        fuser::MountOption::Subtype("operon".to_string()),
+        fuser::MountOption::NoDev,
+        fuser::MountOption::NoSuid,
+        fuser::MountOption::NoExec,
+    ]
 }
 
 #[cfg(target_os = "linux")]
@@ -260,6 +270,24 @@ mod tests {
             assert_eq!(default_mount_thread_count(), 4);
         } else {
             assert_eq!(default_mount_thread_count(), 1);
+        }
+    }
+
+    #[test]
+    fn base_mount_options_match_platform_mount_backend() {
+        if cfg!(target_os = "macos") {
+            assert!(base_mount_options().is_empty());
+        } else {
+            assert_eq!(
+                base_mount_options(),
+                vec![
+                    fuser::MountOption::FSName("operon".to_string()),
+                    fuser::MountOption::Subtype("operon".to_string()),
+                    fuser::MountOption::NoDev,
+                    fuser::MountOption::NoSuid,
+                    fuser::MountOption::NoExec,
+                ]
+            );
         }
     }
 }

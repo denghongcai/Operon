@@ -5360,6 +5360,11 @@ Completed:
   init/destroy/opendir/releasedir are now traced, `statfs` reports a non-zero
   fragment size, and xattr probes return empty/no-xattr responses instead of
   default `ENOSYS`.
+- Align macOS mount options with the successful fuse-zip control after hosted
+  run `25359898168` still closed the FUSE-T NFS bridge after root
+  `statfs/getattr`: macOS now passes only FUSE-T-specific backend/extra options,
+  while Linux keeps the existing `fsname`, `subtype`, `nodev`, `nosuid`, and
+  `noexec` options.
 
 Remaining:
 

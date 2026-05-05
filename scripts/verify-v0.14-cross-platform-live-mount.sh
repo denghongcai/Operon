@@ -43,6 +43,7 @@ require_pattern 'Errno::NO_XATTR' crates/operon-mount/src/fuse_fs.rs
 require_pattern '#!\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/fuse_fs.rs
 require_pattern '#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/lib.rs
 require_pattern 'macos-no-mount = \["fuser/macos-no-mount"\]' crates/operon-mount/Cargo.toml
+require_pattern 'fn base_mount_options\(\) -> Vec<fuser::MountOption>' crates/operon-mount/src/session.rs
 require_pattern 'fn default_mount_thread_count\(\) -> usize' crates/operon-mount/src/session.rs
 require_pattern 'trace_mount_event\("n_threads"' crates/operon-mount/src/session.rs
 require_pattern 'winfsp_wrs = "0\.4\.1"' crates/operon-mount/Cargo.toml
