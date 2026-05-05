@@ -5457,12 +5457,27 @@ Completed:
   with the Darwin 24-byte init payload. The next patch keeps macOS init replies
   at `FUSE_COMPAT_22_INIT_OUT_SIZE` regardless of incoming FUSE-T minor version
   and leaves non-macOS behavior unchanged.
+- Record hosted run `25377712709`: the Darwin 24-byte init reply patch fixed
+  the minimal fuser hello probe and let FUSE-T proceed into lookup/open/read.
+  The first full Operon smoke after that, run `25377799125`, then failed later
+  at `mv` with `Input/output error`, proving the session handshake was fixed
+  and the next issue was a rename-path incompatibility.
+- Record hosted run `25378047581`: failure diagnostics showed fuser decoded a
+  normal macOS FUSE-T rename as `name="" newname="renamed.txt"`. The root
+  cause was fuser enabling the MacFUSE 4 `fuse_rename_in` request layout on a
+  FUSE-T 1.2.1 `libfuse2-compatible` session. FUSE-T sends the legacy 8-byte
+  payload, so the 16-byte MacFUSE layout skipped the old filename.
+- Detect FUSE-T's pkg-config `-lfuse-t` mapping in the vendored fuser build
+  script and keep the legacy libfuse2 `FUSE_RENAME` request ABI for FUSE-T
+  while preserving MacFUSE 4 compatibility for non-FUSE-T macOS libfuse2
+  builds.
+- Validate macOS live mount on GitHub-hosted `macos-latest` for commit
+  `c045b0a` in run `25378255568`; the smoke covered seed exposure, read,
+  write, truncate, mkdir, rename, delete, remote read-back, and cleanup through
+  the FUSE-T NFS adapter.
 
 Remaining:
 
-- Fix and validate macOS live smoke through Operon's FUSE-T NFS adapter on
-  GitHub-hosted macOS or on a suitable self-hosted FUSE-T runner, then record
-  the passing run ID.
 - Publish and verify a release only after live smoke and release artifact
   validation pass.
 
