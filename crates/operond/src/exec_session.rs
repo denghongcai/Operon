@@ -574,6 +574,7 @@ mod tests {
         drop(slave);
         let mut killer = child.clone_killer();
         let mut reader = master.try_clone_reader().expect("clone pty reader");
+        let writer = master.take_writer().expect("take pty writer");
         let (tx, rx) = std_mpsc::channel();
         thread::spawn(move || {
             let mut buffer = [0_u8; 1024];
@@ -591,18 +592,29 @@ mod tests {
                 }
             }
         });
+
+        let output_deadline = Instant::now() + Duration::from_secs(10);
+        let mut output = String::new();
+        while !output.contains("operon-pty-smoke") {
+            let remaining = output_deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                let _ = killer.kill();
+                panic!("pty output timed out");
+            }
+            match rx.recv_timeout(remaining) {
+                Ok(chunk) => output.push_str(&chunk),
+                Err(error) => {
+                    let _ = killer.kill();
+                    panic!("pty output timed out: {error}");
+                }
+            }
+        }
+        drop(writer);
         let (wait_tx, wait_rx) = std_mpsc::channel();
         thread::spawn(move || {
             let _ = wait_tx.send(child.wait());
         });
 
-        let output = match rx.recv_timeout(Duration::from_secs(10)) {
-            Ok(output) => output,
-            Err(error) => {
-                let _ = killer.kill();
-                panic!("pty output timed out: {error}");
-            }
-        };
         let status = match wait_rx.recv_timeout(Duration::from_secs(10)) {
             Ok(status) => status.expect("wait pty child"),
             Err(error) => {
