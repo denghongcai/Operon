@@ -5390,6 +5390,13 @@ Completed:
   low-level session path against FUSE-T's NFS bridge; the next implementation
   checkpoint is a fuse-zip-style libfuse high-level macOS adapter while Linux
   stays on `fuser`.
+- Continue the fuser/FUSE-T root-cause check on branch
+  `investigate-macos-fuser-fuset` with a workflow-controlled fuser hello
+  experiment that patches fuser 0.17's macOS `INIT_FLAGS` down to
+  `ASYNC_READ` only. This isolates whether the early FUSE-T disconnect is
+  caused by fuser advertising macOS capabilities (`CASE_INSENSITIVE`,
+  `VOL_RENAME`, `XTIMES`) that libfuse high-level filesystems only request when
+  matching operations are implemented.
 
 Remaining:
 

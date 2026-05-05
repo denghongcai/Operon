@@ -36,6 +36,11 @@ on:
         type: string
         required: false
         default: ""
+      fuser_patch_init_flags:
+        description: "Patch fuser macOS INIT_FLAGS to ASYNC_READ only for the hello probe"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -237,11 +242,13 @@ jobs:
         env:
           OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
           OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
+          OPERON_FUSER_HELLO_PATCH_INIT_FLAGS: ${{ inputs.fuser_patch_init_flags && '1' || '0' }}
         run: |
           set -o pipefail
           log_path="$RUNNER_TEMP/v0.14-macos-fuser-hello-${OPERON_MOUNT_MACOS_BACKEND}.log"
           echo "macOS fuser hello probe backend: ${OPERON_MOUNT_MACOS_BACKEND}"
           echo "macOS fuser hello probe extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
+          echo "macOS fuser hello patched init flags: ${OPERON_FUSER_HELLO_PATCH_INIT_FLAGS}"
           echo "macOS fuser hello probe log: ${log_path}"
           set +e
           scripts/smoke-v0.14-macos-fuser-hello-probe.sh 2>&1 | tee "$log_path"

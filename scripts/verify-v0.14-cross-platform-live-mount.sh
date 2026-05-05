@@ -78,6 +78,8 @@ require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_options:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'fuser_patch_init_flags:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'OPERON_FUSER_HELLO_PATCH_INIT_FLAGS: \$\{\{ inputs\.fuser_patch_init_flags && '\''1'\'' \|\| '\''0'\'' \}\}' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos-fuse-zip' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macOS FUSE-T fuse-zip Probe \(hosted\)' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'scripts/smoke-v0.14-macos-fuse-zip-probe.sh' .github/workflows/v0.14-live-mount-smoke.yml

@@ -17,6 +17,7 @@ PROBE_LOG="$TMP_DIR/fuser-hello.log"
 PROBE_PID=""
 WATCHDOG_PID=""
 SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-300}"
+PATCH_INIT_FLAGS="${OPERON_FUSER_HELLO_PATCH_INIT_FLAGS:-0}"
 export DYLD_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
 
 wait_for_process_exit() {
@@ -39,6 +40,7 @@ dump_diagnostics() {
     echo "mount directory: $MOUNT_DIR" >&2
     echo "macOS mount backend: ${OPERON_MOUNT_MACOS_BACKEND:-<unset>}" >&2
     echo "macOS mount extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}" >&2
+    echo "patched fuser init flags: $PATCH_INIT_FLAGS" >&2
     sw_vers >&2 || true
     pkg-config --modversion fuse >&2 || true
     pkg-config --libs fuse >&2 || true
@@ -325,6 +327,51 @@ fn main() -> anyhow::Result<()> {
 RS
 }
 
+patch_fuser_init_flags() {
+  if [[ "$PATCH_INIT_FLAGS" != "1" ]]; then
+    return 0
+  fi
+
+  cargo fetch --manifest-path "$PROBE_DIR/Cargo.toml"
+  local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+  local source_dir
+  source_dir="$(find "$cargo_home/registry/src" -path '*/fuser-0.17.0' -type d | head -n 1)"
+  if [[ -z "$source_dir" ]]; then
+    echo "failed to locate downloaded fuser 0.17.0 source" >&2
+    exit 1
+  fi
+
+  local patched_dir="$TMP_DIR/fuser-patched"
+  cp -R "$source_dir" "$patched_dir"
+  python3 - "$patched_dir/src/lib.rs" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = '''#[cfg(target_os = "macos")]
+const INIT_FLAGS: InitFlags = InitFlags::FUSE_ASYNC_READ
+    .union(InitFlags::FUSE_CASE_INSENSITIVE)
+    .union(InitFlags::FUSE_VOL_RENAME)
+    .union(InitFlags::FUSE_XTIMES);
+// TODO: Add FUSE_EXPORT_SUPPORT and FUSE_BIG_WRITES (requires ABI 7.10)
+'''
+new = '''#[cfg(target_os = "macos")]
+const INIT_FLAGS: InitFlags = InitFlags::FUSE_ASYNC_READ;
+// TODO: Add FUSE_EXPORT_SUPPORT and FUSE_BIG_WRITES (requires ABI 7.10)
+'''
+if old not in text:
+    raise SystemExit("expected macOS INIT_FLAGS block not found in fuser source")
+path.write_text(text.replace(old, new))
+PY
+
+  cat >>"$PROBE_DIR/Cargo.toml" <<TOML
+
+[patch.crates-io]
+fuser = { path = "$patched_dir" }
+TOML
+}
+
 wait_for_probe_mount() {
   for _ in $(seq 1 30); do
     if [[ -n "$PROBE_PID" ]] && ! kill -0 "$PROBE_PID" >/dev/null 2>&1; then
@@ -344,6 +391,7 @@ wait_for_probe_mount() {
 
 echo "macOS fuser hello backend: ${OPERON_MOUNT_MACOS_BACKEND:-nfs}" >&2
 echo "macOS fuser hello extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}" >&2
+echo "patched fuser init flags: $PATCH_INIT_FLAGS" >&2
 if ! pkg-config --modversion fuse >/dev/null 2>&1; then
   echo "pkg-config cannot resolve fuse; install FUSE-T before running fuser hello probe" >&2
   exit 1
@@ -351,6 +399,7 @@ fi
 
 start_watchdog
 write_probe_project
+patch_fuser_init_flags
 sudo mkdir -p "$MOUNT_DIR"
 sudo chown "$(id -u):$(id -g)" "$MOUNT_DIR"
 cargo build -q --manifest-path "$PROBE_DIR/Cargo.toml"
