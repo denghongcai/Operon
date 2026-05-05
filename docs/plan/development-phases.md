@@ -5491,6 +5491,13 @@ Completed:
   `v0.6 Linux Mount Validation` jobs failed because `docker/Dockerfile` copied
   `Cargo.toml`, `crates`, and `proto` but not `vendor/`, so container builds
   could not read `/workspace/vendor/fuser-0.17.0-operon/Cargo.toml`.
+- Validate the fixed main commit `db1e9ed`: CI run `25381696059` passed Rust,
+  TypeScript, macOS/Windows platform smoke, and all validation groups; CodeQL
+  run `25381695848` passed. Manual live-smoke runs `25382104626` and
+  `25382104650` passed hosted macOS FUSE-T NFS and Windows WinFsp live mount
+  validation respectively, and `scripts/verify-v0.14-release-gates.sh v0.14.0
+  db1e9edf168c3bdd77e2a5f1b2b74511ae097c5c denghongcai/Operon` accepted the
+  macOS release gate.
 
 Remaining:
 
