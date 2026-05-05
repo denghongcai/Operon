@@ -5277,6 +5277,10 @@ Completed:
   `macos-fuse-t/homebrew-cask/fuse-t`, and release gates now accept a
   successful macOS FUSE-T hosted or self-hosted live mount job on the exact
   release commit.
+- Run the first hosted FUSE-T smoke for commit `1c086ae` in run `25355056996`;
+  FUSE-T 1.2.1 installed and provided `/usr/local/lib/libfuse-t.dylib`, but no
+  `fuse.h` was present, so the install helper now creates link-only
+  `pkg-config fuse` compatibility metadata when headers are absent.
 
 Remaining:
 

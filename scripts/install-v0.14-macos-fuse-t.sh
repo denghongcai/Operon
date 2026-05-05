@@ -32,30 +32,33 @@ find_first() {
 lib_path="$(find_first libfuse-t.dylib /usr/local/lib /opt/homebrew/lib)"
 header_path="$(find_first fuse.h /usr/local/include /opt/homebrew/include)"
 
-if [[ -z "$lib_path" || -z "$header_path" ]]; then
+if [[ -z "$lib_path" ]]; then
   echo "FUSE-T installed, but pkg-config fuse metadata is unavailable and compatibility metadata could not be generated" >&2
-  echo "libfuse-t: ${lib_path:-missing}" >&2
-  echo "fuse.h: ${header_path:-missing}" >&2
+  echo "libfuse-t: missing" >&2
   exit 1
 fi
 
 lib_dir="$(dirname "$lib_path")"
-include_dir="$(dirname "$header_path")"
 pkgconfig_dir="$lib_dir/pkgconfig"
 pc_file="$pkgconfig_dir/fuse.pc"
+cflags=""
+if [[ -n "$header_path" ]]; then
+  cflags="-I$(dirname "$header_path")"
+else
+  echo "FUSE-T headers were not found; generating link-only pkg-config metadata for fuser" >&2
+fi
 
 sudo mkdir -p "$pkgconfig_dir"
 sudo tee "$pc_file" >/dev/null <<PC
 prefix=${lib_dir%/lib}
 exec_prefix=\${prefix}
 libdir=${lib_dir}
-includedir=${include_dir}
 
 Name: fuse
 Description: FUSE-T compatibility metadata for libfuse
 Version: 2.9.9
 Libs: -L\${libdir} -lfuse-t
-Cflags: -I\${includedir}
+Cflags: ${cflags}
 PC
 
 export PKG_CONFIG_PATH="$pkgconfig_dir:${PKG_CONFIG_PATH:-}"
