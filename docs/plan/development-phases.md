@@ -5585,9 +5585,11 @@ Completed:
   child-wait timeouts so CI cannot hang indefinitely on a PTY backend
   regression.
 - Released `portable-pty` slave handles after spawning session processes and
-  made PTY writer ownership lazy so Windows ConPTY output is readable before a
-  client sends input; smoke coverage closes the writer after reading output to
-  verify the session EOF path.
+  made PTY writer ownership shared between the control loop and output reader
+  so Windows ConPTY cursor-position queries (`ESC[6n`) can receive a minimal
+  terminal response while normal client input still flows through the session
+  writer; smoke coverage closes the writer after reading output to verify the
+  session EOF path.
 - Updated the cross-platform Rust smoke workflow to run the support decision
   and portable-pty smoke on Windows.
 - Updated `operon doctor`, README, `PROTOCOL.md`, runtime API docs,

@@ -915,7 +915,9 @@ Defer:
   backend instead of returning `UNIMPLEMENTED`; `operon doctor` reports
   `windows-portable-pty-smoke-validated`; the platform smoke workflow runs
   bounded portable-pty smoke coverage on Windows; daemon session runtime now
-  releases the portable-pty slave handle after spawn and smoke coverage drives
-  a real interactive shell through the PTY writer; docs and validation scripts
-  are aligned with the supported status and repository versions are aligned to
-  `0.15.0` / `v0.15.0`. Nothing remains in v0.15.
+  releases the portable-pty slave handle after spawn, shares PTY writer
+  ownership so Windows ConPTY cursor-position queries receive a minimal
+  terminal response, and smoke coverage drives a real interactive shell
+  through the PTY writer; docs and validation scripts are aligned with the
+  supported status and repository versions are aligned to `0.15.0` /
+  `v0.15.0`. Nothing remains in v0.15.
