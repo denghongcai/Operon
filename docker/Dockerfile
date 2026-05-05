@@ -9,6 +9,7 @@ RUN apt-get update \
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY proto ./proto
+COPY vendor ./vendor
 
 RUN cargo build --release -p operond -p operon-cli
 

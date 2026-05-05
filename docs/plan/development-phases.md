@@ -5486,6 +5486,11 @@ Completed:
   investigation branch. The mainline implementation now selects the validated
   FUSE-T `libfuse2-compatible` path on macOS and keeps libfuse3 only as a
   documented failed alternative, not as a supported runtime toggle.
+- Fix the Docker build context after merging the vendored fuser patch: CI run
+  `25380583451` showed the linux-system `v0.5 Docker Validation` and
+  `v0.6 Linux Mount Validation` jobs failed because `docker/Dockerfile` copied
+  `Cargo.toml`, `crates`, and `proto` but not `vendor/`, so container builds
+  could not read `/workspace/vendor/fuser-0.17.0-operon/Cargo.toml`.
 
 Remaining:
 
