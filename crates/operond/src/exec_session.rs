@@ -277,6 +277,8 @@ struct SessionTask {
     event_tx: mpsc::UnboundedSender<GrpcExecSessionEvent>,
 }
 
+type SharedPtyWriter = Arc<Mutex<Option<Box<dyn Write + Send>>>>;
+
 fn run_session_task(task: SessionTask) {
     let result = run_session_task_inner(&task);
     let (status, exit_code) = result.unwrap_or_else(|error| {
@@ -319,7 +321,7 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
     drop(slave);
     let mut killer = child.clone_killer();
     let mut reader = master.try_clone_reader()?;
-    let mut writer = None;
+    let writer: SharedPtyWriter = Arc::new(Mutex::new(Some(master.take_writer()?)));
     let output_sink = OutputSink {
         execs: task.execs.clone(),
         logs: task.logs.clone(),
@@ -328,7 +330,9 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
         exec_id: task.exec_id.clone(),
         event_tx: task.event_tx.clone(),
     };
-    let _reader_thread = thread::spawn(move || read_session_output(&mut reader, output_sink));
+    let output_writer = writer.clone();
+    let _reader_thread =
+        thread::spawn(move || read_session_output(&mut reader, output_sink, output_writer));
     let (wait_tx, wait_rx) = std_mpsc::channel();
     thread::spawn(move || {
         let status = child.wait();
@@ -353,15 +357,13 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
         }
         match task.control_rx.recv_timeout(Duration::from_millis(20)) {
             Ok(SessionControl::Input(data)) => {
-                if writer.is_none() {
-                    match master.take_writer() {
-                        Ok(master_writer) => writer = Some(master_writer),
-                        Err(_) => {
-                            forced_status.get_or_insert(ExecStatus::Failed);
-                            continue;
-                        }
+                let mut writer = match writer.lock() {
+                    Ok(writer) => writer,
+                    Err(_) => {
+                        forced_status.get_or_insert(ExecStatus::Failed);
+                        continue;
                     }
-                }
+                };
                 if let Some(writer) = writer.as_mut() {
                     if writer.write_all(&data).is_err() {
                         forced_status.get_or_insert(ExecStatus::Failed);
@@ -373,8 +375,8 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
                 let _ = master.resize(size);
             }
             Ok(SessionControl::CloseInput) => {
-                if writer.take().is_none() {
-                    let _ = master.take_writer();
+                if let Ok(mut writer) = writer.lock() {
+                    writer.take();
                 }
             }
             Ok(SessionControl::Terminate) | Err(std_mpsc::RecvTimeoutError::Disconnected) => {
@@ -431,13 +433,18 @@ struct OutputSink {
     event_tx: mpsc::UnboundedSender<GrpcExecSessionEvent>,
 }
 
-fn read_session_output(reader: &mut Box<dyn Read + Send>, sink: OutputSink) {
+fn read_session_output(
+    reader: &mut Box<dyn Read + Send>,
+    sink: OutputSink,
+    writer: SharedPtyWriter,
+) {
     let mut buffer = [0_u8; 8192];
     loop {
         match reader.read(&mut buffer) {
             Ok(0) => break,
             Ok(count) => {
                 let data = buffer[..count].to_vec();
+                respond_to_terminal_queries(&data, &writer);
                 append_exec_log(
                     &sink.execs,
                     &sink.logs,
@@ -476,6 +483,29 @@ fn read_session_output(reader: &mut Box<dyn Read + Send>, sink: OutputSink) {
         }
     }
 }
+
+#[cfg(windows)]
+fn respond_to_terminal_queries(data: &[u8], writer: &SharedPtyWriter) {
+    const CURSOR_POSITION_REQUEST: &[u8] = b"\x1b[6n";
+    const CURSOR_POSITION_RESPONSE: &[u8] = b"\x1b[1;1R";
+
+    if !data
+        .windows(CURSOR_POSITION_REQUEST.len())
+        .any(|window| window == CURSOR_POSITION_REQUEST)
+    {
+        return;
+    }
+
+    if let Ok(mut writer) = writer.lock() {
+        if let Some(writer) = writer.as_mut() {
+            let _ = writer.write_all(CURSOR_POSITION_RESPONSE);
+            let _ = writer.flush();
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn respond_to_terminal_queries(_data: &[u8], _writer: &SharedPtyWriter) {}
 
 fn exec_status_from_pty(
     status: std::io::Result<portable_pty::ExitStatus>,
@@ -590,14 +620,21 @@ mod tests {
             let mut reader = master
                 .try_clone_reader()
                 .map_err(|error| format!("{name}: clone pty reader failed: {error:#}"))?;
+            let writer: SharedPtyWriter =
+                Arc::new(Mutex::new(Some(master.take_writer().map_err(|error| {
+                    format!("{name}: take pty writer failed: {error:#}")
+                })?)));
             let (tx, rx) = std_mpsc::channel();
+            let output_writer = writer.clone();
             thread::spawn(move || {
                 let mut buffer = [0_u8; 1024];
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
                         Ok(count) => {
-                            let output = String::from_utf8_lossy(&buffer[..count]).to_string();
+                            let data = &buffer[..count];
+                            respond_to_terminal_queries(data, &output_writer);
+                            let output = String::from_utf8_lossy(data).to_string();
                             let _ = tx.send(output);
                         }
                         Err(_) => break,
@@ -606,16 +643,17 @@ mod tests {
             });
 
             if let Some(input) = input {
-                let mut writer = master
-                    .take_writer()
-                    .map_err(|error| format!("{name}: take pty writer failed: {error:#}"))?;
-                writer
-                    .write_all(input)
-                    .map_err(|error| format!("{name}: write pty input failed: {error:#}"))?;
-                writer
-                    .flush()
-                    .map_err(|error| format!("{name}: flush pty input failed: {error:#}"))?;
-                drop(writer);
+                let mut writer = writer
+                    .lock()
+                    .map_err(|_| format!("{name}: pty writer lock was poisoned"))?;
+                if let Some(writer) = writer.as_mut() {
+                    writer
+                        .write_all(input)
+                        .map_err(|error| format!("{name}: write pty input failed: {error:#}"))?;
+                    writer
+                        .flush()
+                        .map_err(|error| format!("{name}: flush pty input failed: {error:#}"))?;
+                }
             }
 
             let output_deadline = Instant::now() + Duration::from_secs(10);
@@ -638,11 +676,11 @@ mod tests {
                 }
             }
 
-            if input.is_none() {
-                let writer = master
-                    .take_writer()
-                    .map_err(|error| format!("{name}: take pty writer failed: {error:#}"))?;
-                drop(writer);
+            {
+                let mut writer = writer
+                    .lock()
+                    .map_err(|_| format!("{name}: pty writer lock was poisoned"))?;
+                writer.take();
             }
 
             let (wait_tx, wait_rx) = std_mpsc::channel();
