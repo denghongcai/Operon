@@ -5383,6 +5383,13 @@ Completed:
   separates Operon filesystem semantics from the `fuser` low-level session path;
   if it fails the same way, the remaining macOS path should move toward a
   libfuse-style high-level adapter instead of further callback micro-adjustment.
+- Record the hosted `fuser` hello probe result from run `25360630179`: a
+  minimal `fuser` filesystem failed with the same `init` -> root
+  `statfs/getattr` -> `destroy` sequence and no `lookup/readdir`, while FUSE-T
+  logged `Connection closed`. This confirms the macOS blocker is the `fuser`
+  low-level session path against FUSE-T's NFS bridge; the next implementation
+  checkpoint is a fuse-zip-style libfuse high-level macOS adapter while Linux
+  stays on `fuser`.
 
 Remaining:
 
