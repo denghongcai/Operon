@@ -5298,12 +5298,20 @@ Completed:
   FUSE-T pkg-config metadata from both `/usr/local` and
   `/Library/Application Support/fuse-t/pkgconfig` before generating the
   compatibility `fuse.pc`.
+- Run the final hosted NFS diagnostic smoke for commit `189be7e` in run
+  `25356391309`; FUSE-T metadata was valid, `spawn_mount2_ok` was reached, and
+  diagnostics showed `/sbin/mount_nfs` stuck connecting to
+  `fuse-t:/operon-v014-macos-live-mount-*` while the FUSE-T `go-nfsv4` server
+  listened on `127.0.0.1:<port>` with a `CLOSE_WAIT` connection. This narrows
+  the remaining hosted blocker to FUSE-T/macOS network-volume connection after
+  Operon's adapter has started. The smoke cleanup now bounds `umount` and
+  mount-directory removal so failed hosted attempts do not linger during
+  cleanup.
 
 Remaining:
 
-- Run macOS live smoke on GitHub-hosted macOS with FUSE-T's NFS backend, then
-  record the run ID if it passes or use the uploaded artifact to narrow the next
-  runtime issue if it fails.
+- Run macOS live smoke on a macOS host where FUSE-T network volumes can
+  complete, then record the run ID if it passes.
 - Publish and verify a release only after live smoke and release artifact
   validation pass.
 

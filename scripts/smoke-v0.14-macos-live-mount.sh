@@ -75,6 +75,23 @@ wait_for_process_exit() {
   return 1
 }
 
+run_with_timeout() {
+  local attempts="$1"
+  shift
+  "$@" &
+  local pid="$!"
+  if wait_for_process_exit "$pid" "$attempts"; then
+    return 0
+  fi
+  kill -TERM "$pid" >/dev/null 2>&1 || true
+  wait_for_process_exit "$pid" 2 || true
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    kill -KILL "$pid" >/dev/null 2>&1 || true
+    wait_for_process_exit "$pid" 2 || true
+  fi
+  return 124
+}
+
 cleanup() {
   set +e
   if [[ -n "$WATCHDOG_PID" ]] && kill -0 "$WATCHDOG_PID" >/dev/null 2>&1; then
@@ -97,9 +114,9 @@ cleanup() {
     fi
   fi
   if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then
-    umount "$MOUNT_DIR" >/dev/null 2>&1 || true
+    run_with_timeout 5 umount "$MOUNT_DIR" >/dev/null 2>&1 || true
   fi
-  sudo rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
+  run_with_timeout 5 sudo rmdir "$MOUNT_DIR" >/dev/null 2>&1 || true
   if [[ -n "$DAEMON_PID" ]] && kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
     kill "$DAEMON_PID" >/dev/null 2>&1
     wait_for_process_exit "$DAEMON_PID" 5 || true

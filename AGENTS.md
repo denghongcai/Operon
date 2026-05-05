@@ -907,8 +907,7 @@ Defer:
   The tag-triggered release workflow runs
   [`scripts/verify-v0.14-release-gates.sh`](scripts/verify-v0.14-release-gates.sh)
   before artifact builds, so `v0.14*` release drafts fail unless the exact
-  release commit has a successful macOS FUSE-T live-smoke run. A
-  GitHub-hosted
+  release commit has a successful macOS FUSE-T live-smoke run. A GitHub-hosted
   `macos_backend=kernel` check in run `25340391127`
   failed during the smoke step without publishing that step body in the GitHub
   job log, so the workflow now tees macOS smoke output to an uploaded artifact
@@ -919,5 +918,9 @@ Defer:
   the macOS smoke script now uses bounded cleanup waits. Follow-up run
   `25341745841` fails cleanly with an uploaded artifact and explicit exit code
   instead of timing out, preserving the same hosted-runner macFUSE runtime
-  evidence. Remaining v0.14 work: run macOS live smoke on hosted macOS with
-  FUSE-T's NFS backend, then publish and verify a release.
+  evidence. Later FUSE-T hosted NFS/SMB runs reached `spawn_mount2_ok`, but the
+  network volume never appeared; the final NFS diagnostic run `25356391309`
+  showed `mount_nfs` stuck connecting to `fuse-t:/...` while FUSE-T's local
+  `go-nfsv4` server listened on `127.0.0.1`. Remaining v0.14 work: run macOS
+  live smoke on a macOS host where FUSE-T network volumes can complete, then
+  publish and verify a release.
