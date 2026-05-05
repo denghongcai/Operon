@@ -154,7 +154,9 @@ start_watchdog
 ensure_runtime
 
 git clone --depth 1 https://github.com/macos-fuse-t/fuse-zip "$SRC_DIR"
-make -C "$SRC_DIR" release
+FUSE_ZIP_CXXFLAGS="-O2 -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -pedantic -std=c++11 $(pkg-config --cflags fuse) $(pkg-config --cflags libzip)"
+FUSE_ZIP_LIBS="-Llib -lfusezip $(pkg-config --libs fuse) $(pkg-config --libs libzip)"
+make -C "$SRC_DIR" CXXFLAGS="$FUSE_ZIP_CXXFLAGS" LIBS="$FUSE_ZIP_LIBS" all doc
 
 mkdir -p "$ZIP_ROOT"
 printf "seed" >"$ZIP_ROOT/seed.txt"
