@@ -319,7 +319,7 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
     drop(slave);
     let mut killer = child.clone_killer();
     let mut reader = master.try_clone_reader()?;
-    let mut writer = Some(master.take_writer()?);
+    let mut writer = None;
     let output_sink = OutputSink {
         execs: task.execs.clone(),
         logs: task.logs.clone(),
@@ -353,6 +353,15 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
         }
         match task.control_rx.recv_timeout(Duration::from_millis(20)) {
             Ok(SessionControl::Input(data)) => {
+                if writer.is_none() {
+                    match master.take_writer() {
+                        Ok(master_writer) => writer = Some(master_writer),
+                        Err(_) => {
+                            forced_status.get_or_insert(ExecStatus::Failed);
+                            continue;
+                        }
+                    }
+                }
                 if let Some(writer) = writer.as_mut() {
                     if writer.write_all(&data).is_err() {
                         forced_status.get_or_insert(ExecStatus::Failed);
@@ -364,7 +373,9 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
                 let _ = master.resize(size);
             }
             Ok(SessionControl::CloseInput) => {
-                writer.take();
+                if writer.take().is_none() {
+                    let _ = master.take_writer();
+                }
             }
             Ok(SessionControl::Terminate) | Err(std_mpsc::RecvTimeoutError::Disconnected) => {
                 if forced_status.is_none() {
@@ -574,8 +585,6 @@ mod tests {
         drop(slave);
         let mut killer = child.clone_killer();
         let mut reader = master.try_clone_reader().expect("clone pty reader");
-        let writer = master.take_writer().expect("take pty writer");
-        drop(writer);
         let (tx, rx) = std_mpsc::channel();
         thread::spawn(move || {
             let mut buffer = [0_u8; 1024];
@@ -607,6 +616,8 @@ mod tests {
                 }
             }
         }
+        let writer = master.take_writer().expect("take pty writer");
+        drop(writer);
         let (wait_tx, wait_rx) = std_mpsc::channel();
         thread::spawn(move || {
             let _ = wait_tx.send(child.wait());
