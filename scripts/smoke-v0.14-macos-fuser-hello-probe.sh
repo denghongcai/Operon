@@ -101,6 +101,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
+env_logger = "0.11"
 fuser = "0.17.0"
 libc = "0.2"
 TOML
@@ -303,6 +304,9 @@ impl Filesystem for HelloFs {
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("fuser=warn"))
+        .format_timestamp_millis()
+        .init();
     let mount_point = PathBuf::from(env::args().nth(1).expect("mount point argument"));
     let backend = env::var("OPERON_MOUNT_MACOS_BACKEND").unwrap_or_else(|_| "nfs".to_string());
     let mut config = fuser::Config::default();
