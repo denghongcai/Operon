@@ -5314,6 +5314,11 @@ Completed:
   `~/Library/Logs/fuse-t`, and unit tests cover backend-plus-extra option
   construction plus rejection of raw `-d`/`-l` style arguments that `fuser`
   cannot pass as standalone parameters.
+- Add a hosted macOS FUSE-T reference probe using
+  `https://github.com/macos-fuse-t/fuse-zip` so v0.14 diagnostics can validate
+  whether GitHub-hosted macOS can publish a non-Operon FUSE-T mount. The probe
+  builds fuse-zip on the runner, mounts a seed ZIP through FUSE-T, checks
+  read/write visibility, and uploads FUSE-T logs on failure.
 
 Remaining:
 

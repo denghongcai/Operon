@@ -11,6 +11,7 @@ on:
         options:
           - all
           - macos
+          - macos-fuse-zip
           - windows
       macos_backend:
         description: "FUSE-T backend for macOS smoke"
@@ -176,3 +177,44 @@ jobs:
       - name: Run Windows live mount smoke
         shell: powershell
         run: scripts/smoke-v0.14-windows-live-mount.ps1
+
+  macos-fuse-zip-probe:
+    name: macOS FUSE-T fuse-zip Probe (hosted)
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos-fuse-zip' }}
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install FUSE-T
+        run: scripts/install-v0.14-macos-fuse-t.sh
+
+      - name: Install fuse-zip dependencies
+        run: brew install libzip
+
+      - name: Run fuse-zip probe
+        id: fuse-zip-probe
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
+        run: |
+          set -o pipefail
+          log_path="$RUNNER_TEMP/v0.14-macos-fuse-zip-${OPERON_MOUNT_MACOS_BACKEND}.log"
+          echo "macOS fuse-zip probe backend: ${OPERON_MOUNT_MACOS_BACKEND}"
+          echo "macOS fuse-zip probe extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
+          echo "macOS fuse-zip probe log: ${log_path}"
+          set +e
+          scripts/smoke-v0.14-macos-fuse-zip-probe.sh 2>&1 | tee "$log_path"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "macOS FUSE-T fuse-zip probe exit code: ${status}"
+          exit "$status"
+
+      - name: Upload macOS fuse-zip probe log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v0.14-macos-fuse-zip-${{ inputs.macos_backend }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/v0.14-macos-fuse-zip-${{ inputs.macos_backend }}.log
+          if-no-files-found: warn

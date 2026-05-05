@@ -132,7 +132,7 @@ fn add_platform_mount_options(
 
 #[cfg(not(target_os = "macos"))]
 fn add_platform_mount_options(
-    _options: &mut Vec<fuser::MountOption>,
+    _options: &mut [fuser::MountOption],
     _mount_point: &Path,
 ) -> anyhow::Result<()> {
     Ok(())
@@ -149,6 +149,7 @@ fn macos_mount_backend() -> Option<String> {
     Some("nfs".to_string())
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn add_macos_mount_options(
     options: &mut Vec<fuser::MountOption>,
     mount_point: &Path,
@@ -178,6 +179,7 @@ fn add_macos_mount_options(
     Ok(())
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn parse_macos_extra_mount_options(value: &str) -> anyhow::Result<Vec<String>> {
     let mut options = Vec::new();
     for option in value

@@ -14,6 +14,7 @@ require_file scripts/preflight-v0.14-macos-fuse-t-host.sh
 require_file scripts/install-v0.14-macos-fuse-t.sh
 require_file scripts/verify-v0.14-release-gates.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
+require_file scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
 require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/development-phases.md
 require_pattern 'Status: In progress' docs/plan/v0.14-cross-platform-live-mount.md
@@ -71,6 +72,9 @@ require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'macos_options:' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macos-fuse-zip' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'macOS FUSE-T fuse-zip Probe \(hosted\)' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'scripts/smoke-v0.14-macos-fuse-zip-probe.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'self-hosted-fuse-t' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'runs-on: \[self-hosted, macOS, fuse-t\]' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'Check FUSE-T runtime' .github/workflows/v0.14-live-mount-smoke.yml
@@ -87,12 +91,15 @@ require_pattern 'wait_for_process_exit' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'macOS mount backend: \$OPERON_MOUNT_MACOS_BACKEND' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'macOS mount extra options: \$\{OPERON_MOUNT_MACOS_OPTIONS:-<none>\}' scripts/smoke-v0.14-macos-live-mount.sh
 require_pattern 'Library/Logs/fuse-t' scripts/smoke-v0.14-macos-live-mount.sh
+require_pattern 'v0\.14 macOS FUSE-T fuse-zip probe passed' scripts/smoke-v0.14-macos-fuse-zip-probe.sh
+require_pattern 'https://github.com/macos-fuse-t/fuse-zip' scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 require_pattern 'v0\.14 macOS FUSE-T host preflight passed' scripts/preflight-v0.14-macos-fuse-t-host.sh
 
 bash -n scripts/preflight-v0.14-macos-fuse-t-host.sh
 bash -n scripts/install-v0.14-macos-fuse-t.sh
 bash -n scripts/verify-v0.14-release-gates.sh
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
+bash -n scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 
 scripts/verify-v0.14-release-gates.sh v0.13.1 HEAD >/dev/null
 
