@@ -5426,6 +5426,13 @@ Completed:
   macOS now uses current `fuse_mount()` / `fuse_chan_fd()` to preserve FUSE-T's
   channel monitor/callback behavior, while Linux remains on
   `fuse_mount_compat25()`.
+- Record hosted run `25376658909`: the first current-`fuse_mount()` patch
+  failed at compile time because fuser moves mount state into its background
+  session thread and raw `*mut c_void` channel storage made `MountImpl` fail
+  Rust's `Send` bound. The follow-up patch keeps the same libfuse channel
+  hypothesis but stores the macOS `fuse_chan` handle as an opaque integer and
+  casts it back only for `fuse_unmount()`, allowing the minimal fuser hello
+  runtime test to proceed.
 
 Remaining:
 

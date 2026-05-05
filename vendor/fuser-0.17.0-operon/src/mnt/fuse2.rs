@@ -25,7 +25,7 @@ fn ensure_last_os_error() -> io::Error {
 pub(crate) struct MountImpl {
     mountpoint: CString,
     #[cfg(target_os = "macos")]
-    channel: *mut libc::c_void,
+    channel: usize,
 }
 impl MountImpl {
     pub(crate) fn new(
@@ -56,7 +56,7 @@ impl MountImpl {
                     Arc::new(DevFuse(file)),
                     MountImpl {
                         mountpoint,
-                        channel,
+                        channel: channel as usize,
                     },
                 ));
             }
@@ -77,9 +77,10 @@ impl MountImpl {
     pub(crate) fn umount_impl(&mut self) -> io::Result<()> {
         #[cfg(target_os = "macos")]
         {
-            if !self.channel.is_null() {
-                unsafe { fuse_unmount(self.mountpoint.as_ptr(), self.channel) };
-                self.channel = std::ptr::null_mut();
+            let channel = self.channel as *mut libc::c_void;
+            if !channel.is_null() {
+                unsafe { fuse_unmount(self.mountpoint.as_ptr(), channel) };
+                self.channel = 0;
             }
             return Ok(());
         }

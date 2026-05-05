@@ -10,5 +10,8 @@ Changes from upstream 0.17.0:
 - macOS libfuse2 mounting uses the current `fuse_mount()` / `fuse_chan_fd()`
   path instead of the legacy `fuse_mount_compat25()` raw-fd path, preserving
   FUSE-T's channel monitor/callback behavior.
+- The macOS `fuse_chan` handle is stored as an opaque integer inside fuser's
+  mount state so the background session thread still satisfies Rust's `Send`
+  bound.
 
 The Linux path is intentionally unchanged.
