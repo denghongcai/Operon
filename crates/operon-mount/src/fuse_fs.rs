@@ -19,6 +19,12 @@ use crate::{
 const TTL: Duration = Duration::from_secs(1);
 const BLOCK_SIZE: u32 = 4096;
 
+fn trace_fuse_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
+    if std::env::var_os("OPERON_MOUNT_TRACE").is_some() {
+        eprintln!("operon-mount fuse {}: {}", event.as_ref(), detail.as_ref());
+    }
+}
+
 pub(crate) struct OperonFuseFs {
     core: MountAdapterCore,
     inodes: RwLock<InodeTable>,
@@ -99,6 +105,10 @@ impl OperonFuseFs {
             blksize: BLOCK_SIZE,
         }
     }
+
+    fn access_errno(&self, ino: fuser::INodeNo) -> Option<fuser::Errno> {
+        self.inode(ino).map_or(Some(fuser::Errno::ENOENT), |_| None)
+    }
 }
 
 impl fuser::Filesystem for OperonFuseFs {
@@ -109,6 +119,7 @@ impl fuser::Filesystem for OperonFuseFs {
         name: &OsStr,
         reply: fuser::ReplyEntry,
     ) {
+        trace_fuse_event("lookup", format!("parent={parent:?} name={name:?}"));
         match self.lookup_child(parent, name) {
             Ok(entry) => reply.entry(&TTL, &self.file_attr(&entry), fuser::Generation(0)),
             Err(error) => reply.error(errno_for_error(&error)),
@@ -122,6 +133,7 @@ impl fuser::Filesystem for OperonFuseFs {
         _fh: Option<fuser::FileHandle>,
         reply: fuser::ReplyAttr,
     ) {
+        trace_fuse_event("getattr", format!("ino={ino:?}"));
         let Some(entry) = self.inode(ino) else {
             reply.error(fuser::Errno::ENOENT);
             return;
@@ -148,6 +160,7 @@ impl fuser::Filesystem for OperonFuseFs {
         _flags: fuser::OpenFlags,
         reply: fuser::ReplyOpen,
     ) {
+        trace_fuse_event("open", format!("ino={ino:?}"));
         let Some(entry) = self.inode(ino) else {
             reply.error(fuser::Errno::ENOENT);
             return;
@@ -366,6 +379,7 @@ impl fuser::Filesystem for OperonFuseFs {
         _lock_owner: Option<fuser::LockOwner>,
         reply: fuser::ReplyData,
     ) {
+        trace_fuse_event("read", format!("ino={ino:?} offset={offset} size={size}"));
         let Some(entry) = self.inode(ino) else {
             reply.error(fuser::Errno::ENOENT);
             return;
@@ -392,6 +406,10 @@ impl fuser::Filesystem for OperonFuseFs {
         _lock_owner: Option<fuser::LockOwner>,
         reply: fuser::ReplyWrite,
     ) {
+        trace_fuse_event(
+            "write",
+            format!("ino={ino:?} offset={offset} size={}", data.len()),
+        );
         let Some(entry) = self.inode(ino) else {
             reply.error(fuser::Errno::ENOENT);
             return;
@@ -427,6 +445,7 @@ impl fuser::Filesystem for OperonFuseFs {
         offset: u64,
         mut reply: fuser::ReplyDirectory,
     ) {
+        trace_fuse_event("readdir", format!("ino={ino:?} offset={offset}"));
         let Some(parent) = self.inode(ino) else {
             reply.error(fuser::Errno::ENOENT);
             return;
@@ -516,6 +535,39 @@ impl fuser::Filesystem for OperonFuseFs {
         reply: fuser::ReplyEmpty,
     ) {
         reply.ok();
+    }
+
+    fn fsyncdir(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        _fh: fuser::FileHandle,
+        _datasync: bool,
+        reply: fuser::ReplyEmpty,
+    ) {
+        trace_fuse_event("fsyncdir", format!("ino={ino:?}"));
+        reply.ok();
+    }
+
+    fn statfs(&self, _req: &fuser::Request, ino: fuser::INodeNo, reply: fuser::ReplyStatfs) {
+        trace_fuse_event("statfs", format!("ino={ino:?}"));
+        reply.statfs(
+            1_048_576, 1_048_576, 1_048_576, 1_000_000, 1_000_000, BLOCK_SIZE, 255, 0,
+        );
+    }
+
+    fn access(
+        &self,
+        _req: &fuser::Request,
+        ino: fuser::INodeNo,
+        mask: fuser::AccessFlags,
+        reply: fuser::ReplyEmpty,
+    ) {
+        trace_fuse_event("access", format!("ino={ino:?} mask={mask}"));
+        match self.access_errno(ino) {
+            Some(errno) => reply.error(errno),
+            None => reply.ok(),
+        }
     }
 
     fn create(
@@ -612,6 +664,19 @@ mod tests {
         assert_eq!(attr.perm, 0o755);
         assert_eq!(attr.nlink, 2);
         assert_eq!(attr.size, 0);
+    }
+
+    #[test]
+    fn access_accepts_known_inodes_and_rejects_missing_inodes() {
+        let remote = Arc::new(MockRemoteFs::new([]));
+        let fs = OperonFuseFs::new(remote, dir_stat("/"));
+
+        assert!(fs.access_errno(fuser::INodeNo::ROOT).is_none());
+        assert_eq!(
+            fs.access_errno(fuser::INodeNo(99_999))
+                .map(|errno| format!("{errno:?}")),
+            Some(format!("{:?}", fuser::Errno::ENOENT))
+        );
     }
 
     struct MockRemoteFs {

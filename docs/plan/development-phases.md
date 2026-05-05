@@ -5340,6 +5340,11 @@ Completed:
   runner can publish and read at least one FUSE-T NFS mount through an
   independent libfuse implementation, so the remaining Operon macOS live-smoke
   failure is no longer a blanket hosted-runner FUSE-T limitation.
+- Mirror fuse-zip's low-risk FUSE compatibility callbacks in Operon's Unix FUSE
+  adapter: known-inode `access()` now succeeds, `fsyncdir()` succeeds,
+  `statfs()` returns stable non-zero capacity metadata, and
+  `OPERON_MOUNT_TRACE` logs lookup/getattr/open/read/write/readdir/access/
+  statfs/fsyncdir callback entry for the next hosted macOS live-smoke run.
 
 Remaining:
 
