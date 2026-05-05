@@ -5266,6 +5266,10 @@ Completed:
   `scripts/verify-v0.14-release-gates.sh` so `v0.14*` release drafts fail
   before artifact builds unless the exact release commit has a successful
   self-hosted macOS macFUSE live-smoke run.
+- Clarify the macOS live-smoke runbook with the concrete hosted-runner failure
+  evidence: FSKit reaches the macFUSE service layer but lacks the required
+  entitlement, while the kernel backend reports an unloaded macFUSE kernel
+  extension and never exposes the seed file.
 
 Remaining:
 

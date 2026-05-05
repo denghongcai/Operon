@@ -18,6 +18,8 @@ require_pattern 'Phase 93: v0.14 Cross-Platform Live Mount' docs/plan/developmen
 require_pattern 'Status: In progress' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'macOS live smoke on a host with macFUSE installed, approved, and loaded' docs/plan/v0.14-cross-platform-live-mount.md
 require_pattern 'v0.14 macOS live mount smoke passed' docs/plan/v0.14-macos-live-smoke-runbook.md
+require_pattern 'Hello FSClient!' docs/plan/v0.14-macos-live-smoke-runbook.md
+require_pattern 'macFUSE kernel extension is not' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'macos_runner=self-hosted-macfuse' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'scripts/preflight-v0.14-macos-macfuse-host.sh' docs/plan/v0.14-macos-live-smoke-runbook.md
 require_pattern 'docs/plan/v0.14-cross-platform-live-mount.md' AGENTS.md
