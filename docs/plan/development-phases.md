@@ -5061,7 +5061,7 @@ Remaining:
 
 ## Phase 93: v0.14 Cross-Platform Live Mount
 
-Status: In progress.
+Status: Completed.
 
 Goal: make live mount a complete core Operon capability across Linux, macOS,
 and Windows instead of treating non-Linux mount support as deferred convenience
@@ -5503,11 +5503,33 @@ Completed:
   `WinFsp installation directory not found`. The release workflow now installs
   WinFsp before Windows native release builds, matching the platform smoke and
   live-smoke workflow prerequisites.
+- Validate final release commit `dffa1c5`: main CI run `25383140244` passed
+  Rust, TypeScript, macOS/Windows platform smoke, and all consolidated
+  validation groups; CodeQL run `25383139508` passed on the same commit.
+- Validate final live-mount release gates on `dffa1c5`: manual live-smoke run
+  `25383149119` passed hosted macOS FUSE-T NFS live mount validation, manual
+  run `25383149153` passed Windows WinFsp live mount validation, and
+  `scripts/verify-v0.14-release-gates.sh v0.14.0
+  dffa1c5d4437d06afd20411db128fac97ccd8978 denghongcai/Operon` accepted the
+  macOS release gate.
+- Publish public GitHub Release `v0.14.0` from the verified `main` commit
+  `dffa1c5` after Draft Release run `25383613370` generated Linux
+  x86_64/arm64/armv7, macOS x86_64/aarch64, Windows x86_64, TypeScript SDK,
+  and `SHA256SUMS` assets.
+- Run `scripts/verify-release-artifacts.sh v0.14.0 denghongcai/Operon`; it
+  verified every published checksum and confirmed the Linux x86_64 `operon` and
+  `operond` binaries report `0.14.0`.
+- Run `OPERON_VERSION=v0.14.0 scripts/verify-readme-quickstart-docker.sh`
+  against the public release; it passed onboarding, daemon health,
+  capabilities, agent skills discovery/install, fs, exec, service
+  check/forward, audit, graph, and config explain checks.
 
 Remaining:
 
-- Publish and verify a release only after live smoke and release artifact
-  validation pass.
+- Nothing remains in v0.14. A duplicate tag-triggered CI run `25383613436`
+  remained queued in its `linux-system` validation job at publication time, but
+  the same commit had already passed main CI `25383140244`, including the
+  `linux-system` validation group, before release publication.
 
 ## Planning Principle
 
