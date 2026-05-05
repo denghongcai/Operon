@@ -5498,6 +5498,11 @@ Completed:
   validation respectively, and `scripts/verify-v0.14-release-gates.sh v0.14.0
   db1e9edf168c3bdd77e2a5f1b2b74511ae097c5c denghongcai/Operon` accepted the
   macOS release gate.
+- Fix the v0.14 draft release Windows build dependency after tag-triggered run
+  `25382858520` failed in `winfsp_wrs_sys` build script with
+  `WinFsp installation directory not found`. The release workflow now installs
+  WinFsp before Windows native release builds, matching the platform smoke and
+  live-smoke workflow prerequisites.
 
 Remaining:
 

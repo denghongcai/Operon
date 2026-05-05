@@ -172,6 +172,11 @@ jobs:
         shell: bash
         run: scripts/install-v0.14-macos-fuse-t.sh
 
+      - name: Install WinFsp build dependency
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install winfsp -y
+
       - name: Install Rust target
         run: rustup target add "${{ matrix.target }}"
 
