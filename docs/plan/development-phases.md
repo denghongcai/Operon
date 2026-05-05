@@ -5291,6 +5291,13 @@ Completed:
   and unified logs reported `nfs_connect: socket connect taking a while for
   fuse-t:/...`. The next checkpoint adds deeper FUSE-T process/socket
   diagnostics and runs an SMB-backend smoke to isolate NFS-specific behavior.
+- Run the hosted SMB smoke for commit `acc1e20` in run `25355950126`; it also
+  reached `spawn_mount2_ok` without exposing the seed file, so the current
+  evidence points at hosted macOS network-volume publication after FUSE-T
+  starts, not at Operon's FUSE callback startup. The install helper now probes
+  FUSE-T pkg-config metadata from both `/usr/local` and
+  `/Library/Application Support/fuse-t/pkgconfig` before generating the
+  compatibility `fuse.pc`.
 
 Remaining:
 

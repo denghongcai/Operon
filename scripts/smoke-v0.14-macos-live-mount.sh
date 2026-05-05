@@ -39,6 +39,7 @@ dump_diagnostics() {
     pkg-config --cflags fuse-t >&2 || true
     cat /usr/local/lib/pkgconfig/fuse.pc >&2 || true
     cat /usr/local/lib/pkgconfig/fuse-t.pc >&2 || true
+    cat "/Library/Application Support/fuse-t/pkgconfig/fuse-t.pc" >&2 || true
     ls -la "/Library/Application Support/fuse-t" >&2 || true
     find /usr/local/lib /opt/homebrew/lib -maxdepth 2 \( -iname '*fuse*' -o -iname '*nfs*' \) -print >&2 || true
     ps -axo pid,ppid,stat,command | grep -Ei 'fuse-t|nfsd|mount_nfs|mount_smbfs' | grep -v grep >&2 || true

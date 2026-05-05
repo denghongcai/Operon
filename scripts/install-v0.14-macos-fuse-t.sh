@@ -13,9 +13,14 @@ fi
 
 brew install macos-fuse-t/homebrew-cask/fuse-t
 
+export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/Library/Application Support/fuse-t/pkgconfig:${PKG_CONFIG_PATH:-}"
+
 if pkg-config --modversion fuse >/dev/null 2>&1; then
   pkg-config --modversion fuse
   pkg-config --libs fuse
+  if [[ -n "${GITHUB_ENV:-}" ]]; then
+    echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >>"$GITHUB_ENV"
+  fi
   exit 0
 fi
 
@@ -37,8 +42,8 @@ find_first() {
   done
 }
 
-lib_path="$(find_first libfuse-t.dylib /usr/local/lib /opt/homebrew/lib)"
-header_path="$(find_first fuse.h /usr/local/include /opt/homebrew/include)"
+lib_path="$(find_first libfuse-t.dylib /usr/local/lib /opt/homebrew/lib "/Library/Application Support/fuse-t/lib")"
+header_path="$(find_first fuse.h /usr/local/include /opt/homebrew/include "/Library/Application Support/fuse-t/include")"
 
 if [[ -z "$lib_path" ]]; then
   echo "FUSE-T installed, but pkg-config fuse metadata is unavailable and compatibility metadata could not be generated" >&2
