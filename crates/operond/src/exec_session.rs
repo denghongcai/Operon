@@ -596,7 +596,7 @@ mod tests {
                 .expect("write pty smoke commands");
         } else {
             writer
-                .write_all(b"echo operon-pty-smoke\nexit\n")
+                .write_all(b"echo operon-pty-smoke\r\nexit\r\n")
                 .expect("write pty smoke commands");
         }
         writer.flush().expect("flush pty smoke commands");
