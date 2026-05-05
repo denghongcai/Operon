@@ -23,5 +23,10 @@ Changes from upstream 0.17.0:
   payload size. FUSE-T may send an init request with minor 23, but its bundled
   libfuse2 success path still replies with the Darwin libfuse2 init payload,
   not fuser's newer FUSE3-sized init payload.
+- macOS build probing does not enable fuser's `macfuse-4-compat` request ABI
+  when pkg-config resolves `fuse` to FUSE-T's `-lfuse-t`. FUSE-T 1.2.1
+  negotiates a `libfuse2-compatible` session and sends the legacy 8-byte
+  `FUSE_RENAME` request payload; the MacFUSE 4 layout would skip the old name
+  and decode normal renames as an empty source filename.
 
 The Linux path is intentionally unchanged.

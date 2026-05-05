@@ -17,13 +17,15 @@ fn main() {
         if cfg!(feature = "macos-no-mount") {
             println!("cargo::rustc-cfg=fuser_mount_impl=\"macos-no-mount\"");
         } else {
-            pkg_config::Config::new()
+            let fuse = pkg_config::Config::new()
                 .atleast_version("2.6.0")
                 .probe("fuse") // for macFUSE 4.x
                 .map_err(|e| eprintln!("{e}"))
                 .unwrap();
             println!("cargo::rustc-cfg=fuser_mount_impl=\"libfuse2\"");
-            println!("cargo::rustc-cfg=feature=\"macfuse-4-compat\"");
+            if !fuse.libs.iter().any(|lib| lib == "fuse-t") {
+                println!("cargo::rustc-cfg=feature=\"macfuse-4-compat\"");
+            }
         }
     } else if cfg!(feature = "libfuse3") {
         configure_libfuse3().unwrap();
