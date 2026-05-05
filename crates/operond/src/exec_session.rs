@@ -592,6 +592,10 @@ mod tests {
                 }
             }
         });
+        if cfg!(target_os = "macos") {
+            thread::sleep(Duration::from_millis(20));
+        }
+        drop(writer);
 
         let output_deadline = Instant::now() + Duration::from_secs(10);
         let mut output = String::new();
@@ -609,7 +613,6 @@ mod tests {
                 }
             }
         }
-        drop(writer);
         let (wait_tx, wait_rx) = std_mpsc::channel();
         thread::spawn(move || {
             let _ = wait_tx.send(child.wait());
