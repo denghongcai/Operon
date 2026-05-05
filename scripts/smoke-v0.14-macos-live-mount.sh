@@ -23,6 +23,7 @@ WATCHDOG_PID=""
 SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-600}"
 OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
+export DYLD_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
 
 dump_diagnostics() {
   (

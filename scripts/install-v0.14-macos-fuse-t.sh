@@ -57,13 +57,14 @@ libdir=${lib_dir}
 Name: fuse
 Description: FUSE-T compatibility metadata for libfuse
 Version: 2.9.9
-Libs: -L\${libdir} -lfuse-t
+Libs: -L\${libdir} -Wl,-rpath,\${libdir} -lfuse-t
 Cflags: ${cflags}
 PC
 
 export PKG_CONFIG_PATH="$pkgconfig_dir:${PKG_CONFIG_PATH:-}"
 if [[ -n "${GITHUB_ENV:-}" ]]; then
   echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >>"$GITHUB_ENV"
+  echo "DYLD_LIBRARY_PATH=$lib_dir:${DYLD_LIBRARY_PATH:-}" >>"$GITHUB_ENV"
 fi
 pkg-config --modversion fuse
 pkg-config --libs fuse

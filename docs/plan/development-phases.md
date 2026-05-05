@@ -5281,6 +5281,11 @@ Completed:
   FUSE-T 1.2.1 installed and provided `/usr/local/lib/libfuse-t.dylib`, but no
   `fuse.h` was present, so the install helper now creates link-only
   `pkg-config fuse` compatibility metadata when headers are absent.
+- Run the follow-up hosted FUSE-T smoke for commit `a3409c6` in run
+  `25355152823`; the smoke reached the built `operon` binary, but dyld aborted
+  because `@rpath/libfuse-t.dylib` could not be resolved. The install helper
+  now emits an rpath in generated pkg-config metadata and exports
+  `DYLD_LIBRARY_PATH` for the smoke environment.
 
 Remaining:
 
