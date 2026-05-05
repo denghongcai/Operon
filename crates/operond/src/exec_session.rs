@@ -308,16 +308,18 @@ fn run_session_task(task: SessionTask) {
 fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Option<i32>)> {
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(task.size)?;
+    let portable_pty::PtyPair { master, slave } = pair;
     let mut command = session_command(task);
     command.cwd(&task.cwd);
     command.env_clear();
     for (key, value) in &task.env {
         command.env(key, value);
     }
-    let mut child = pair.slave.spawn_command(command)?;
+    let mut child = slave.spawn_command(command)?;
+    drop(slave);
     let mut killer = child.clone_killer();
-    let mut reader = pair.master.try_clone_reader()?;
-    let mut writer = Some(pair.master.take_writer()?);
+    let mut reader = master.try_clone_reader()?;
+    let mut writer = Some(master.take_writer()?);
     let output_sink = OutputSink {
         execs: task.execs.clone(),
         logs: task.logs.clone(),
@@ -359,7 +361,7 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
                 }
             }
             Ok(SessionControl::Resize(size)) => {
-                let _ = pair.master.resize(size);
+                let _ = master.resize(size);
             }
             Ok(SessionControl::CloseInput) => {
                 writer.take();
@@ -554,7 +556,8 @@ mod tests {
                 pixel_height: 0,
             })
             .expect("open pty");
-        pair.master
+        let portable_pty::PtyPair { master, slave } = pair;
+        master
             .resize(PtySize {
                 rows: 30,
                 cols: 100,
@@ -567,12 +570,10 @@ mod tests {
         command.arg(session_shell_arg());
         command.arg("echo operon-pty-smoke");
 
-        let mut child = pair
-            .slave
-            .spawn_command(command)
-            .expect("spawn pty command");
+        let mut child = slave.spawn_command(command).expect("spawn pty command");
+        drop(slave);
         let mut killer = child.clone_killer();
-        let mut reader = pair.master.try_clone_reader().expect("clone pty reader");
+        let mut reader = master.try_clone_reader().expect("clone pty reader");
         let (tx, rx) = std_mpsc::channel();
         thread::spawn(move || {
             let mut buffer = [0_u8; 1024];
