@@ -327,5 +327,7 @@ fi
 PROBE_PID="$!"
 wait_for_probe_mount
 grep -q "^hello from libfuse lowlevel$" "$MOUNT_DIR/hello.txt"
+echo "=== libfuse low-level hello log ===" >&2
+cat "$PROBE_LOG" >&2
 
 echo "v0.14 macOS FUSE-T libfuse low-level hello probe passed"

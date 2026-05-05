@@ -304,7 +304,7 @@ impl Filesystem for HelloFs {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("fuser=warn"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("fuser=debug"))
         .format_timestamp_millis()
         .init();
     let mount_point = PathBuf::from(env::args().nth(1).expect("mount point argument"));
