@@ -5585,9 +5585,9 @@ Completed:
   child-wait timeouts so CI cannot hang indefinitely on a PTY backend
   regression.
 - Released `portable-pty` slave handles after spawning session processes and
-  made the no-stdin smoke test take and drop the master writer, matching the
-  upstream handle-lifecycle pattern and avoiding Windows ConPTY child-wait
-  deadlocks.
+  made smoke coverage drive a real interactive shell through the PTY writer,
+  matching the `OpenExecSession` behavior that Windows ConPTY needs to
+  validate.
 - Updated the cross-platform Rust smoke workflow to run the support decision
   and portable-pty smoke on Windows.
 - Updated `operon doctor`, README, `PROTOCOL.md`, runtime API docs,
