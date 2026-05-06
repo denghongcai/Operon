@@ -22,8 +22,8 @@ require_pattern 'cargo test -p operond --locked shell_invocation_matches_platfor
 require_pattern 'cargo test -p operon-cli --locked exec_session_terminal_dimensions' .github/workflows/ci.yml
 
 require_pattern 'Linux FUSE, macOS FUSE-T, and Windows WinFsp' README.md
-require_pattern 'macOS and Windows hosts' README.md
-require_pattern 'must have the corresponding platform runtime installed' README.md
+require_pattern 'hosts must have the' README.md
+require_pattern 'corresponding platform runtime installed' README.md
 require_pattern 'supported through `portable-pty` on Unix-like platforms and Windows' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'Windows interactive exec sessions use `portable-pty`' PROTOCOL.md
 require_pattern 'Mount adapter | Linux FUSE supported | Deferred macFUSE | Deferred WinFsp' docs/plan/v0.11.3-platform-capability-matrix.md

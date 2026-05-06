@@ -126,12 +126,8 @@ case "$asset" in
       echo "unzip is required to verify Windows archives" >&2
       exit 1
     }
-    unzip -q "$WORKDIR/assets/$asset" -d "$WORKDIR/extracted"
-    suffix=".exe"
     ;;
   *.tar.gz)
-    tar -xzf "$WORKDIR/assets/$asset" -C "$WORKDIR/extracted"
-    suffix=""
     ;;
   *)
     echo "unsupported archive format: $asset" >&2
@@ -139,25 +135,7 @@ case "$asset" in
     ;;
 esac
 
-archive_dir="$WORKDIR/extracted/${asset%.tar.gz}"
-archive_dir="${archive_dir%.zip}"
-operon_bin="$archive_dir/operon${suffix}"
-operond_bin="$archive_dir/operond${suffix}"
-
-test -f "$operon_bin" || { echo "missing binary: $operon_bin" >&2; exit 1; }
-test -f "$operond_bin" || { echo "missing binary: $operond_bin" >&2; exit 1; }
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  test -f "$archive_dir/libfuse-t.dylib" || {
-    echo "missing bundled macOS FUSE-T runtime library: $archive_dir/libfuse-t.dylib" >&2
-    exit 1
-  }
-fi
-
-"$operon_bin" --version
-"$operond_bin" --version
-"$operon_bin" --help >/dev/null
-"$operon_bin" doctor --help >/dev/null
-"$operon_bin" exec --help >/dev/null
+scripts/smoke-release-archive.sh "$WORKDIR/assets/$asset"
 
 tar -tzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" \
   | grep -E '(^|/)dist/' >/dev/null

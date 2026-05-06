@@ -12,6 +12,7 @@ require_file docs/plan/v0.14-macos-live-smoke-runbook.md
 require_file .github/workflows/v0.14-live-mount-smoke.yml
 require_file scripts/preflight-v0.14-macos-fuse-t-host.sh
 require_file scripts/install-v0.14-macos-fuse-t.sh
+require_file scripts/verify-release-gates.sh
 require_file scripts/verify-v0.14-release-gates.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
 require_file scripts/smoke-v0.14-macos-fuse-zip-probe.sh
@@ -79,12 +80,16 @@ require_pattern 'cargo test -p operon-mount --locked --features macos-no-mount' 
 require_pattern 'cargo test -p operon-mount --locked' .github/workflows/ci.yml
 require_pattern 'actions: read' .github/workflows/release-draft.yml
 require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/release-draft.yml
-require_pattern 'v014-release-gate' .github/workflows/release-draft.yml
-require_pattern 'scripts/verify-v0.14-release-gates.sh "\$GITHUB_REF_NAME" "\$GITHUB_SHA" "\$GITHUB_REPOSITORY"' .github/workflows/release-draft.yml
-require_pattern 'macOS FUSE-T Live Mount \(hosted\)' scripts/verify-v0.14-release-gates.sh
-require_pattern 'Windows WinFsp Live Mount' scripts/verify-v0.14-release-gates.sh
-require_pattern 'missing release gate' scripts/verify-v0.14-release-gates.sh
-require_pattern '\$gate_name live mount release gate passed' scripts/verify-v0.14-release-gates.sh
+require_pattern 'release-gate' .github/workflows/release-draft.yml
+require_pattern 'scripts/verify-release-gates.sh "\$GITHUB_REF_NAME" "\$GITHUB_SHA" "\$GITHUB_REPOSITORY"' .github/workflows/release-draft.yml
+require_pattern 'Cross-Platform Live Mount Smoke' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'Cross-Platform Live Mount Smoke' scripts/verify-release-gates.sh
+require_pattern 'v0.14 Live Mount Smoke' scripts/verify-release-gates.sh
+require_pattern 'macOS FUSE-T Live Mount \(hosted\)' scripts/verify-release-gates.sh
+require_pattern 'Windows WinFsp Live Mount' scripts/verify-release-gates.sh
+require_pattern 'missing release gate' scripts/verify-release-gates.sh
+require_pattern '\$gate_name live mount release gate passed' scripts/verify-release-gates.sh
+require_pattern 'scripts/verify-release-gates.sh "\$@"' scripts/verify-v0.14-release-gates.sh
 require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/v0.14-live-mount-smoke.yml
 require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install-v0.14-macos-fuse-t.sh
 require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
@@ -121,11 +126,13 @@ require_pattern 'v0\.14 macOS FUSE-T host preflight passed' scripts/preflight-v0
 
 bash -n scripts/preflight-v0.14-macos-fuse-t-host.sh
 bash -n scripts/install-v0.14-macos-fuse-t.sh
+bash -n scripts/verify-release-gates.sh
 bash -n scripts/verify-v0.14-release-gates.sh
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
 bash -n scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 bash -n scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh
 
+scripts/verify-release-gates.sh test-tag HEAD >/dev/null
 scripts/verify-v0.14-release-gates.sh test-tag HEAD >/dev/null
 
 rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu >/dev/null

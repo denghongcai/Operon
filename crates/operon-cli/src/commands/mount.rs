@@ -27,7 +27,8 @@ pub(crate) fn mount_fs(
             endpoint,
             remote_path: target.path.clone(),
             mount_point: destination.clone(),
-        })?;
+        })
+        .map_err(|error| anyhow::anyhow!("{error}\n{}", mount_runtime_hint()))?;
         let manifest = serde_json::json!({
             "mode": "write-through-live-fuse",
             "node_id": target.node_id,
@@ -66,4 +67,24 @@ fn mount_adapter_name() -> &'static str {
 #[cfg(windows)]
 fn mount_adapter_name() -> &'static str {
     "windows-winfsp"
+}
+
+#[cfg(target_os = "linux")]
+fn mount_runtime_hint() -> &'static str {
+    "hint: Linux live mounts require /dev/fuse plus fusermount3 or fusermount access; run `operon doctor` for platform diagnostics"
+}
+
+#[cfg(target_os = "macos")]
+fn mount_runtime_hint() -> &'static str {
+    "hint: macOS live mounts require FUSE-T (`brew install macos-fuse-t/homebrew-cask/fuse-t`); use OPERON_MOUNT_MACOS_BACKEND=nfs by default, or fskit with a /Volumes mount point"
+}
+
+#[cfg(windows)]
+fn mount_runtime_hint() -> &'static str {
+    "hint: Windows live mounts require the WinFsp runtime and service; install WinFsp before running `operon mount` and use `operon doctor` for platform diagnostics"
+}
+
+#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), not(windows)))]
+fn mount_runtime_hint() -> &'static str {
+    "hint: live mount adapters are supported only on Linux, macOS, and Windows"
 }

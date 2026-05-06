@@ -5618,6 +5618,65 @@ Remaining:
 
 - No v0.15 Windows exec session parity work remains.
 
+## Phase 96: v0.15.1 Release Gate Hardening
+
+Status: Completed.
+
+Goal: move release archive packaging failures into the draft release workflow
+so public verification confirms already-hardened artifacts instead of being the
+first packaging regression detector.
+
+Detailed plan: `docs/plan/v0.15.1-release-gate-hardening.md`.
+
+Completed:
+
+- Added `scripts/smoke-release-archive.sh` to extract release archives, verify
+  packaged files, enforce macOS `libfuse-t.dylib` and `@executable_path` rpath
+  contracts, and smoke-run native packaged binaries with macOS `DYLD_*`
+  variables cleared.
+- Wired release archive smoke into `release-draft.yml` before archive upload.
+  Linux x86_64, macOS, and Windows packages run packaged binaries; Linux arm64
+  and armv7 cross-build packages run structural checks.
+- Updated public artifact verification to reuse the same archive smoke script.
+- Added generic `scripts/verify-release-gates.sh`, kept
+  `scripts/verify-v0.14-release-gates.sh` as a compatibility wrapper, and
+  renamed the manual live mount workflow display name to
+  `Cross-Platform Live Mount Smoke` while accepting old v0.14 workflow evidence
+  for historical tags.
+- Added `scripts/verify-v0.15.1-release-gate-hardening.sh` and wired it into
+  the consolidated validation runner.
+
+Remaining:
+
+- No v0.15.1 release gate hardening work remains.
+
+## Phase 97: v0.16 Mount Runtime UX Hardening
+
+Status: Completed.
+
+Goal: make live mount runtime setup failures easy to diagnose across Linux,
+macOS, and Windows.
+
+Detailed plan: `docs/plan/v0.16-mount-runtime-ux-hardening.md`.
+
+Completed:
+
+- Extended `operon doctor` platform output with `mount_runtime` and
+  `mount_hint`.
+- Linux doctor reports missing `/dev/fuse` or missing
+  `fusermount3`/`fusermount`; macOS doctor checks FUSE-T library/pkg-config
+  availability; Windows doctor checks common WinFsp runtime installation
+  locations.
+- `operon mount` appends platform-specific setup hints when adapter startup
+  fails.
+- Updated README and PROTOCOL troubleshooting/runtime language.
+- Added `scripts/verify-v0.16-mount-runtime-ux-hardening.sh` and wired it into
+  the consolidated validation runner.
+
+Remaining:
+
+- No v0.16 mount runtime UX hardening work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

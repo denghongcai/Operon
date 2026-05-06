@@ -1,4 +1,4 @@
-name: v0.14 Live Mount Smoke
+name: Cross-Platform Live Mount Smoke
 
 on:
   workflow_dispatch:

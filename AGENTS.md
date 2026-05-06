@@ -335,6 +335,16 @@ Operon should not own:
     `portable-pty`, bounded cross-platform PTY smoke validation, doctor/docs
     updates, and version alignment to `0.15.0` / `v0.15.0`.
 
+- `docs/plan/v0.15.1-release-gate-hardening.md`
+  - Completed v0.15.1 scope for release archive self-tests before upload,
+    generic release gates, macOS FUSE-T dylib/rpath packaging checks, and
+    public artifact verifier reuse.
+
+- `docs/plan/v0.16-mount-runtime-ux-hardening.md`
+  - Completed v0.16 scope for `operon doctor` mount runtime status/hints and
+    platform-specific `operon mount` setup hints for Linux FUSE, macOS FUSE-T,
+    and Windows WinFsp.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -610,10 +620,13 @@ Defer:
   commit is already merged to `main`; release tags must be created from the
   commit currently intended for `main`, not from an unmerged feature branch.
 - Before creating, moving, or publishing a public release tag, run the manual
-  `v0.14 Live Mount Smoke` GitHub Actions workflow on the exact release commit.
-  Public release gates require successful macOS FUSE-T and Windows WinFsp live
-  mount jobs; Linux live mount remains covered by the `linux-system` validation
-  group.
+  `Cross-Platform Live Mount Smoke` GitHub Actions workflow on the exact
+  release commit. Public release gates require successful macOS FUSE-T and
+  Windows WinFsp live mount jobs; Linux live mount remains covered by the
+  `linux-system` validation group. The generic release gate script is
+  [`scripts/verify-release-gates.sh`](scripts/verify-release-gates.sh);
+  [`scripts/verify-v0.14-release-gates.sh`](scripts/verify-v0.14-release-gates.sh)
+  is only a compatibility wrapper.
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
   when README Quickstart, release packaging, install prerequisites, or agent
   skills guidance changes. After publishing, verify release artifacts and README
@@ -898,7 +911,7 @@ Defer:
   `25383149119`, and Windows WinFsp live smoke `25383149153`. Public GitHub
   Release `v0.14.0` is published with Linux, macOS, Windows, TypeScript SDK,
   and checksum assets. For future public releases, run the manual
-  `v0.14 Live Mount Smoke` workflow on the exact release commit before tagging
+  `Cross-Platform Live Mount Smoke` workflow on the exact release commit before tagging
   or publishing; release gates require successful macOS FUSE-T and Windows
   WinFsp live mount jobs. After publishing, run the manual
   `Verify Release Artifacts` and `Verify README Quickstart` workflows for the
@@ -928,3 +941,18 @@ Defer:
   to bundle `libfuse-t.dylib` with an `@executable_path` rpath, and public
   verification passed in release artifact workflow `25392962032` and README
   Quickstart workflow `25392962190`. Nothing remains in v0.15.
+- Latest phase status update: v0.15.1 Release Gate Hardening is completed.
+  Release archives are now extracted and smoke-tested inside the draft release
+  workflow before upload; macOS archive smoke clears `DYLD_*`, requires bundled
+  `libfuse-t.dylib`, and verifies the packaged `operon` binary has an
+  `@executable_path` rpath. Public release artifact verification reuses the
+  same archive smoke script. The release-only live mount gate is now the
+  cross-version `Cross-Platform Live Mount Smoke` workflow, with old v0.14
+  workflow evidence accepted only for compatibility. Nothing remains in
+  v0.15.1.
+- Latest phase status update: v0.16 Mount Runtime UX Hardening is completed.
+  `operon doctor` now reports `mount_runtime` and `mount_hint` in human and
+  JSON output, with Linux FUSE, macOS FUSE-T, and Windows WinFsp runtime
+  detection. `operon mount` appends platform-specific setup hints when adapter
+  startup fails, and README/PROTOCOL troubleshooting language is aligned.
+  Nothing remains in v0.16.

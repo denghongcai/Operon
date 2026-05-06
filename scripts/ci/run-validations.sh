@@ -86,6 +86,8 @@ validations=(
   "core|v0.14 Cross-Platform Live Mount Validation|scripts/verify-v0.14-cross-platform-live-mount.sh"
   "core|v0.14.1 Mount Stabilization Validation|scripts/verify-v0.14.1-mount-stabilization.sh"
   "core|v0.15 Windows Exec Session Parity Validation|scripts/verify-v0.15-windows-exec-session-parity.sh"
+  "core|v0.15.1 Release Gate Hardening Validation|scripts/verify-v0.15.1-release-gate-hardening.sh"
+  "core|v0.16 Mount Runtime UX Hardening Validation|scripts/verify-v0.16-mount-runtime-ux-hardening.sh"
 )
 
 failures=()

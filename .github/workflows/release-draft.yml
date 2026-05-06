@@ -10,21 +10,21 @@ permissions:
   contents: write
 
 jobs:
-  v014-release-gate:
-    name: v0.14 Release Gates
+  release-gate:
+    name: Release Gates
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Verify v0.14 release gates
+      - name: Verify release gates
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/verify-v0.14-release-gates.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_REPOSITORY"
+        run: scripts/verify-release-gates.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_REPOSITORY"
 
   build-rust-linux:
     name: Build Rust Linux (${{ matrix.arch }})
-    needs: v014-release-gate
+    needs: release-gate
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
@@ -119,6 +119,18 @@ jobs:
 
           tar -C "$dist_dir" -czf "$dist_dir/operon-${tag}-${arch}.tar.gz" "operon-${tag}-${arch}"
 
+      - name: Smoke release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          archive="dist/operon-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar.gz"
+          if [[ "${{ matrix.arch }}" == "linux-x86_64" ]]; then
+            scripts/smoke-release-archive.sh "$archive"
+          else
+            scripts/smoke-release-archive.sh --no-run "$archive"
+          fi
+
       - name: Upload Rust archive
         uses: actions/upload-artifact@v7
         with:
@@ -128,7 +140,7 @@ jobs:
 
   build-rust-native:
     name: Build Rust Native (${{ matrix.arch }})
-    needs: v014-release-gate
+    needs: release-gate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -248,6 +260,18 @@ jobs:
             tar -C "$dist_dir" -czf "$dist_dir/operon-${tag}-${arch}.tar.gz" "operon-${tag}-${arch}"
           fi
 
+      - name: Smoke release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            archive="dist/operon-${GITHUB_REF_NAME}-${{ matrix.arch }}.zip"
+          else
+            archive="dist/operon-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar.gz"
+          fi
+          scripts/smoke-release-archive.sh "$archive"
+
       - name: Upload Rust archive
         uses: actions/upload-artifact@v7
         with:
@@ -259,7 +283,7 @@ jobs:
 
   build-sdk:
     name: Build TypeScript SDK
-    needs: v014-release-gate
+    needs: release-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
