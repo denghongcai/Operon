@@ -1019,9 +1019,12 @@ Defer:
   `scripts/verify-v0.17.1-maintainability-cleanup.sh` validates the moved
   boundaries. Nothing remains in v0.17.1.
 - Latest phase status update: v0.16.5 Release Publication and Public
-  Verification is in progress. Versions and release dry-run wiring are aligned
-  to `0.16.5` / `v0.16.5`; CI, live mount release gates, tag publication,
-  draft release build, public artifact verification, and README Quickstart
-  verification remain.
-- Next planned phase order: v0.16.5 Release Publication and Public
-  Verification remains the active release-publication phase.
+  Verification is completed. `v0.16.5` was published from `main` commit
+  `c9b0737049db95d7cf241f61d73c0b26d687db28` after main CI `25442815597`,
+  CodeQL `25442814311`, macOS FUSE-T live mount gate `25443368771`, and
+  Windows WinFsp live mount gate `25443370961` passed. Draft release workflow
+  `25443548403` built and archive-smoked the artifacts, public artifact
+  verification passed in workflow `25443988140`, and README Quickstart
+  verification passed in workflow `25443990441`. Nothing remains in v0.16.5.
+- Next planned phase order: choose the next post-release phase after v0.16.5,
+  v0.17, and v0.17.1 completion.

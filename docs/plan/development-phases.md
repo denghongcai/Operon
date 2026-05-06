@@ -5777,7 +5777,7 @@ Remaining:
 
 ## Phase 102: v0.16.5 Release Publication and Public Verification
 
-Status: In progress.
+Status: Completed.
 
 Goal: publish the v0.16 release line from `main` after the completed v0.16.0
 through v0.16.4 mount/runtime hardening work, then verify public artifacts and
@@ -5806,10 +5806,20 @@ Progress:
 - Verified local release-line consistency with the protocol version test,
   CLI/daemon `--version`, release artifact dry-run, and README Quickstart
   dry-run.
+- Published tag `v0.16.5` from `main` commit
+  `c9b0737049db95d7cf241f61d73c0b26d687db28`.
+- Verified the release commit with main CI workflow run `25442815597` and
+  CodeQL workflow run `25442814311`.
+- Verified live mount release gates through macOS FUSE-T workflow run
+  `25443368771` and Windows WinFsp workflow run `25443370961`.
+- Built and archive-smoked public release artifacts through draft release
+  workflow run `25443548403`, then published the GitHub Release.
+- Verified the public release artifacts through workflow run `25443988140` and
+  README Quickstart through workflow run `25443990441`.
 
 Remaining:
 
-- Full v0.16.5 release publication and public verification remain.
+- No v0.16.5 release publication or public verification work remains.
 
 ## Phase 103: v0.17 Release and CI Observability Cleanup
 
