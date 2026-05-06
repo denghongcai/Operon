@@ -88,6 +88,10 @@ validations=(
   "core|v0.15 Windows Exec Session Parity Validation|scripts/verify-v0.15-windows-exec-session-parity.sh"
   "core|v0.15.1 Release Gate Hardening Validation|scripts/verify-v0.15.1-release-gate-hardening.sh"
   "core|v0.16 Mount Runtime UX Hardening Validation|scripts/verify-v0.16-mount-runtime-ux-hardening.sh"
+  "core|v0.16.1 Generic Mount and Release Naming Validation|scripts/verify-v0.16.1-generic-mount-release-naming.sh"
+  "sdk|v0.16.2 SDK Maintainability Cleanup Validation|scripts/verify-v0.16.2-sdk-maintainability-cleanup.sh"
+  "core|v0.16.3 Daemon and Mount Maintainability Cleanup Validation|scripts/verify-v0.16.3-daemon-mount-maintainability-cleanup.sh"
+  "runtime|v0.16.4 Mount Runtime Preflight UX Validation|scripts/verify-v0.16.4-mount-runtime-preflight-ux.sh"
 )
 
 failures=()

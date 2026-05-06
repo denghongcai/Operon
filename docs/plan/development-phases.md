@@ -5677,6 +5677,104 @@ Remaining:
 
 - No v0.16 mount runtime UX hardening work remains.
 
+## Phase 98: v0.16.1 Generic Mount and Release Naming Cleanup
+
+Status: Completed.
+
+Goal: make live mount and release-gate maintenance entrypoints version-neutral
+while preserving v0.14 compatibility wrappers for historical docs and
+automation.
+
+Detailed plan: `docs/plan/v0.16.1-generic-mount-release-naming.md`.
+
+Completed:
+
+- Added `.github/workflows/live-mount-smoke.yml` as the active
+  `Cross-Platform Live Mount Smoke` workflow.
+- Added generic macOS FUSE-T install/preflight helpers and macOS/Windows live
+  mount smoke scripts.
+- Kept the older `scripts/*v0.14*` names as compatibility wrappers that
+  delegate to the generic scripts.
+- Updated release draft packaging to call `scripts/install-macos-fuse-t.sh`.
+- Added `scripts/verify-v0.16.1-generic-mount-release-naming.sh` and wired it
+  into the consolidated validation runner.
+
+Remaining:
+
+- No v0.16.1 generic mount/release naming cleanup work remains.
+
+## Phase 99: v0.16.2 SDK Maintainability Cleanup
+
+Status: Completed.
+
+Goal: reduce the TypeScript SDK monolith risk while keeping the public SDK API
+and generated gRPC surface unchanged.
+
+Detailed plan: `docs/plan/v0.16.2-sdk-maintainability-cleanup.md`.
+
+Completed:
+
+- Added `packages/sdk-js/src/transport.ts` for endpoint conversion, metadata,
+  required-field, and BodyInit/stream byte helpers.
+- Added `packages/sdk-js/src/grpc-requests.ts` for fs write, exec stdin,
+  exec session, TCP service tunnel, and UDP datagram tunnel request streams.
+- Kept `packages/sdk-js/src/index.ts` as the public API entrypoint.
+- Added `scripts/verify-v0.16.2-sdk-maintainability-cleanup.sh` and wired it
+  into the consolidated validation runner.
+
+Remaining:
+
+- No v0.16.2 SDK maintainability cleanup work remains.
+
+## Phase 100: v0.16.3 Daemon and Mount Maintainability Cleanup
+
+Status: Completed.
+
+Goal: reduce high-churn daemon and mount/CLI runtime boundaries without
+changing protocol behavior.
+
+Detailed plan: `docs/plan/v0.16.3-daemon-mount-maintainability-cleanup.md`.
+
+Completed:
+
+- Added `crates/operond/src/exec_command.rs` for daemon exec command
+  construction, platform shell defaults, and process-group setup.
+- Updated `crates/operond/src/exec_runtime.rs` to focus on exec lifecycle,
+  stream capture, logs, completion, and cancellation.
+- Added `crates/operon-cli/src/commands/mount_runtime.rs` for shared mount
+  adapter/runtime diagnostics used by both `operon doctor` and `operon mount`.
+- Added `scripts/verify-v0.16.3-daemon-mount-maintainability-cleanup.sh` and
+  wired it into the consolidated validation runner.
+
+Remaining:
+
+- No v0.16.3 daemon/mount maintainability cleanup work remains.
+
+## Phase 101: v0.16.4 Mount Runtime Preflight UX
+
+Status: Completed.
+
+Goal: let users and CI check mount runtime readiness before starting a live
+mount, and fail `operon mount` early when the host runtime is clearly
+unavailable.
+
+Detailed plan: `docs/plan/v0.16.4-mount-runtime-preflight-ux.md`.
+
+Completed:
+
+- Added `operon doctor --mount-runtime`, which reports only local mount runtime
+  status and does not require a config file.
+- Added `mount_runtime_ready` to doctor platform output.
+- Made `operon mount` fail before daemon connection when the local platform
+  runtime is known to be missing.
+- Updated README and PROTOCOL mount troubleshooting guidance.
+- Added `scripts/verify-v0.16.4-mount-runtime-preflight-ux.sh` and wired it
+  into the consolidated validation runner.
+
+Remaining:
+
+- No v0.16.4 mount runtime preflight UX work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

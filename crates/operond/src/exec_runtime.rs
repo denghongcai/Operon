@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    process::Stdio,
     sync::{atomic::Ordering, Arc, Mutex},
 };
 
@@ -14,7 +13,7 @@ use operon_protocol::runtime::v1::{
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    process::{Child, Command as TokioCommand},
+    process::Child,
     sync::{broadcast, mpsc, oneshot},
     task::JoinHandle,
     time,
@@ -26,6 +25,7 @@ use crate::{
         append_store_record, current_request_context, now_ms, push_audit_event,
         record_audit_capability, record_policy_decision,
     },
+    exec_command::build_exec_command,
     grpc_status::status_from_error,
     locks::lock,
     state::{
@@ -269,56 +269,6 @@ fn exec_status_from_wait(
         }
     }
 }
-
-fn build_exec_command(task: &ExecTask) -> TokioCommand {
-    let mut command = if task.argv.is_empty() {
-        let mut command = TokioCommand::new(exec_shell_program());
-        command.arg(exec_shell_arg()).arg(&task.command);
-        command
-    } else {
-        let mut command = TokioCommand::new(&task.argv[0]);
-        command.args(&task.argv[1..]);
-        command
-    };
-    command
-        .current_dir(&task.cwd)
-        .env_clear()
-        .envs(&task.env)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    configure_exec_process_group(&mut command);
-    command
-}
-
-#[cfg(windows)]
-fn exec_shell_program() -> &'static str {
-    "cmd.exe"
-}
-
-#[cfg(not(windows))]
-fn exec_shell_program() -> &'static str {
-    "/bin/sh"
-}
-
-#[cfg(windows)]
-fn exec_shell_arg() -> &'static str {
-    "/C"
-}
-
-#[cfg(not(windows))]
-fn exec_shell_arg() -> &'static str {
-    "-c"
-}
-
-#[cfg(unix)]
-fn configure_exec_process_group(command: &mut TokioCommand) {
-    command.process_group(0);
-}
-
-#[cfg(not(unix))]
-fn configure_exec_process_group(_command: &mut TokioCommand) {}
 
 pub(crate) async fn terminate_child(child: &mut Child, child_group: &ExecChildGroup) {
     #[cfg(unix)]
@@ -968,21 +918,6 @@ mod tests {
             "descendant process survived Job Object termination and wrote {}",
             marker.display()
         );
-    }
-
-    #[test]
-    fn exec_shell_invocation_matches_platform() {
-        #[cfg(windows)]
-        {
-            assert_eq!(exec_shell_program(), "cmd.exe");
-            assert_eq!(exec_shell_arg(), "/C");
-        }
-
-        #[cfg(not(windows))]
-        {
-            assert_eq!(exec_shell_program(), "/bin/sh");
-            assert_eq!(exec_shell_arg(), "-c");
-        }
     }
 
     #[test]

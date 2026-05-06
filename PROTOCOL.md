@@ -386,9 +386,10 @@ process. Live mount adapters translate OS filesystem callbacks into the Core FS
 Protocol: Linux uses FUSE, macOS uses FUSE-T, and Windows uses WinFsp. macOS
 and Windows hosts must provide those platform runtimes for `operon mount`; Linux
 hosts must provide `/dev/fuse` and a `fusermount` helper. The filesystem RPCs
-remain the authoritative API and do not depend on mount support. `operon doctor`
-reports mount runtime status and install hints before users start a live mount
-session.
+remain the authoritative API and do not depend on mount support.
+`operon doctor --mount-runtime` reports mount runtime readiness and install
+hints without loading endpoint config, and `operon mount` runs the same
+preflight before contacting the daemon.
 Windows token and config files are checked with ACL-aware private-file
 validation when Operon creates or overwrites sensitive files; the accepted ACL
 scope is the current user, Administrators, and SYSTEM.

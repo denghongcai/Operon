@@ -105,7 +105,7 @@ enum Command {
         #[command(subcommand)]
         command: TraceCommand,
     },
-    #[command(about = "Mount a remote filesystem capability on Linux")]
+    #[command(about = "Mount a remote filesystem capability through the platform adapter")]
     Mount {
         /// Remote target in node:/path form.
         target: String,
@@ -123,6 +123,9 @@ enum Command {
         /// Optional node ids to diagnose. Defaults to every configured client node.
         #[arg(long)]
         node: Vec<String>,
+        /// Only report local mount adapter runtime preflight status.
+        #[arg(long)]
+        mount_runtime: bool,
     },
     #[command(about = "Generate shell completion scripts")]
     Completion {
@@ -706,7 +709,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Config { command } => match command {
             ConfigCommand::Explain => commands::config::explain(config_path, output),
         },
-        Command::Doctor { node } => commands::doctor::run(config_path, node, output).await,
+        Command::Doctor {
+            node,
+            mount_runtime,
+        } => commands::doctor::run(config_path, node, mount_runtime, output).await,
         Command::Completion { shell } => completion(shell),
     }
 }
@@ -764,6 +770,18 @@ mod tests {
         command
             .find_subcommand_mut("doctor")
             .expect("doctor subcommand should exist");
+    }
+
+    #[test]
+    fn clap_model_exposes_doctor_mount_runtime_flag() {
+        let mut command = Args::command();
+
+        command
+            .find_subcommand_mut("doctor")
+            .expect("doctor subcommand should exist")
+            .get_arguments()
+            .find(|arg| arg.get_id() == "mount_runtime")
+            .expect("doctor --mount-runtime flag should exist");
     }
 
     #[test]

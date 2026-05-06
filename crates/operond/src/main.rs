@@ -27,6 +27,7 @@ mod audit;
 mod auth;
 mod capability_diagnostics;
 mod defaults;
+mod exec_command;
 mod exec_runtime;
 mod exec_service;
 mod exec_session;

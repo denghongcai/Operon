@@ -4,6 +4,7 @@ use operon_config::OperonConfig;
 use operon_core::{CapabilityDiagnosticRequest, CapabilityKind, PolicyDecision, ServiceCheck};
 
 use crate::{
+    commands::mount_runtime,
     grpc,
     output::{print_json, OutputMode},
     private_files,
@@ -25,6 +26,7 @@ struct DoctorPlatformReport {
     arch: String,
     mount_adapter: String,
     mount_runtime: String,
+    mount_runtime_ready: bool,
     mount_hint: String,
     private_file_protection: String,
     exec_cancellation: String,
@@ -53,8 +55,19 @@ struct DoctorNodeReport {
 pub(crate) async fn run(
     config_path: PathBuf,
     nodes: Vec<String>,
+    mount_runtime_only: bool,
     output: OutputMode,
 ) -> anyhow::Result<()> {
+    if mount_runtime_only {
+        let report = platform_report();
+        if output.json {
+            print_json(&report)?;
+        } else if !output.quiet {
+            print_platform_report(&report);
+        }
+        return Ok(());
+    }
+
     let content = std::fs::read_to_string(&config_path)?;
     let loaded = OperonConfig::from_str_with_warnings(&content)?;
     let config_dir = OperonConfig::config_dir(&config_path);
@@ -118,12 +131,13 @@ pub(crate) async fn run(
 }
 
 fn platform_report() -> DoctorPlatformReport {
-    let mount_runtime = mount_runtime_diagnostic();
+    let mount_runtime = mount_runtime::report();
     DoctorPlatformReport {
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
-        mount_adapter: mount_adapter_diagnostic().to_string(),
+        mount_adapter: mount_runtime.adapter.to_string(),
         mount_runtime: mount_runtime.status.to_string(),
+        mount_runtime_ready: mount_runtime.ready,
         mount_hint: mount_runtime.hint.to_string(),
         private_file_protection: private_file_protection_diagnostic().to_string(),
         exec_cancellation: exec_cancellation_diagnostic().to_string(),
@@ -131,137 +145,6 @@ fn platform_report() -> DoctorPlatformReport {
         service_forwarding: "service forwarding depends on local and remote firewall policy"
             .to_string(),
     }
-}
-
-#[cfg(target_os = "linux")]
-fn mount_adapter_diagnostic() -> &'static str {
-    "linux-fuse-supported"
-}
-
-#[cfg(target_os = "macos")]
-fn mount_adapter_diagnostic() -> &'static str {
-    "macos-fuse-t-supported-runtime-required"
-}
-
-#[cfg(windows)]
-fn mount_adapter_diagnostic() -> &'static str {
-    "windows-winfsp-supported-runtime-required"
-}
-
-#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), not(windows)))]
-fn mount_adapter_diagnostic() -> &'static str {
-    "mount-adapter-unsupported-platform"
-}
-
-struct MountRuntimeDiagnostic {
-    status: &'static str,
-    hint: &'static str,
-}
-
-#[cfg(target_os = "linux")]
-fn mount_runtime_diagnostic() -> MountRuntimeDiagnostic {
-    if !std::path::Path::new("/dev/fuse").exists() {
-        return MountRuntimeDiagnostic {
-            status: "linux-fuse-runtime-missing",
-            hint: "install/configure FUSE and ensure /dev/fuse is available to the user running operon mount",
-        };
-    }
-    if !command_exists("fusermount3") && !command_exists("fusermount") {
-        return MountRuntimeDiagnostic {
-            status: "linux-fuse-helper-missing",
-            hint: "install fuse3 or fuse so fusermount3/fusermount is available on PATH",
-        };
-    }
-    MountRuntimeDiagnostic {
-        status: "linux-fuse-runtime-found",
-        hint: "Linux live mounts require host FUSE permissions and fusermount access",
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn mount_runtime_diagnostic() -> MountRuntimeDiagnostic {
-    if macos_fuse_t_library_exists() || pkg_config_resolves("fuse") {
-        MountRuntimeDiagnostic {
-            status: "macos-fuse-t-runtime-found",
-            hint: "macOS live mounts require FUSE-T; use OPERON_MOUNT_MACOS_BACKEND=nfs by default or fskit for /Volumes mount points",
-        }
-    } else {
-        MountRuntimeDiagnostic {
-            status: "macos-fuse-t-runtime-missing",
-            hint: "install FUSE-T with `brew install macos-fuse-t/homebrew-cask/fuse-t` before running operon mount",
-        }
-    }
-}
-
-#[cfg(windows)]
-fn mount_runtime_diagnostic() -> MountRuntimeDiagnostic {
-    if windows_winfsp_library_exists() {
-        MountRuntimeDiagnostic {
-            status: "windows-winfsp-runtime-found",
-            hint: "Windows live mounts require the WinFsp runtime and service to be installed",
-        }
-    } else {
-        MountRuntimeDiagnostic {
-            status: "windows-winfsp-runtime-missing",
-            hint: "install WinFsp before running operon mount; CI uses `choco install winfsp -y`",
-        }
-    }
-}
-
-#[cfg(all(not(target_os = "linux"), not(target_os = "macos"), not(windows)))]
-fn mount_runtime_diagnostic() -> MountRuntimeDiagnostic {
-    MountRuntimeDiagnostic {
-        status: "mount-runtime-unsupported-platform",
-        hint: "live mount adapters are supported only on Linux, macOS, and Windows",
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn command_exists(name: &str) -> bool {
-    std::env::var_os("PATH")
-        .is_some_and(|paths| std::env::split_paths(&paths).any(|path| path.join(name).is_file()))
-}
-
-#[cfg(target_os = "macos")]
-fn macos_fuse_t_library_exists() -> bool {
-    [
-        "/usr/local/lib/libfuse-t.dylib",
-        "/opt/homebrew/lib/libfuse-t.dylib",
-        "/Library/Application Support/fuse-t/lib/libfuse-t.dylib",
-    ]
-    .into_iter()
-    .any(|path| std::path::Path::new(path).is_file())
-}
-
-#[cfg(target_os = "macos")]
-fn pkg_config_resolves(package: &str) -> bool {
-    std::process::Command::new("pkg-config")
-        .arg("--modversion")
-        .arg(package)
-        .output()
-        .is_ok_and(|output| output.status.success())
-}
-
-#[cfg(windows)]
-fn windows_winfsp_library_exists() -> bool {
-    let mut candidates = Vec::new();
-    if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
-        candidates.push(
-            PathBuf::from(program_files_x86)
-                .join("WinFsp")
-                .join("bin")
-                .join("winfsp-x64.dll"),
-        );
-    }
-    if let Some(program_files) = std::env::var_os("ProgramFiles") {
-        candidates.push(
-            PathBuf::from(program_files)
-                .join("WinFsp")
-                .join("bin")
-                .join("winfsp-x64.dll"),
-        );
-    }
-    candidates.into_iter().any(|path| path.is_file())
 }
 
 fn private_file_protection_diagnostic() -> &'static str {
@@ -401,18 +284,7 @@ fn diagnostic_request_for_capability(
 }
 
 fn print_report(report: &DoctorReport) {
-    println!(
-        "platform os={} arch={} mount={} mount_runtime={} mount_hint={} private_files={} exec_cancel={} pty={} service_forwarding={}",
-        report.platform.os,
-        report.platform.arch,
-        report.platform.mount_adapter,
-        report.platform.mount_runtime,
-        report.platform.mount_hint,
-        report.platform.private_file_protection,
-        report.platform.exec_cancellation,
-        report.platform.pty_sessions,
-        report.platform.service_forwarding
-    );
+    print_platform_report(&report.platform);
     for warning in &report.config_warnings {
         println!("config warning: unknown field {warning}");
     }
@@ -460,6 +332,22 @@ fn print_report(report: &DoctorReport) {
     }
 }
 
+fn print_platform_report(platform: &DoctorPlatformReport) {
+    println!(
+        "platform os={} arch={} mount={} mount_runtime={} mount_runtime_ready={} mount_hint={} private_files={} exec_cancel={} pty={} service_forwarding={}",
+        platform.os,
+        platform.arch,
+        platform.mount_adapter,
+        platform.mount_runtime,
+        platform.mount_runtime_ready,
+        platform.mount_hint,
+        platform.private_file_protection,
+        platform.exec_cancellation,
+        platform.pty_sessions,
+        platform.service_forwarding
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,6 +375,7 @@ mod tests {
 
         assert!(!report.mount_adapter.is_empty());
         assert!(!report.mount_runtime.is_empty());
+        assert_eq!(report.mount_runtime_ready, mount_runtime::report().ready);
         assert!(!report.mount_hint.is_empty());
         #[cfg(target_os = "linux")]
         assert_eq!(report.mount_adapter, "linux-fuse-supported");

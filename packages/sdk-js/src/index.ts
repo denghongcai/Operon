@@ -1,4 +1,4 @@
-import { createChannel, createClient, Metadata, type Channel, type CallOptions } from "nice-grpc";
+import { createChannel, createClient, type CallOptions, type Channel } from "nice-grpc";
 import {
   CapabilityKind as GrpcCapabilityKind,
   ExecStatus as GrpcExecStatus,
@@ -17,7 +17,6 @@ import {
   type ExecLogStreamEvent as GrpcExecLogStreamEvent,
   type ExecRecord as GrpcExecRecord,
   type ExecSessionEvent as GrpcExecSessionEvent,
-  type ExecSessionRequest as GrpcExecSessionRequest,
   type ExecStdin as GrpcExecStdin,
   type ExecStdinClose as GrpcExecStdinClose,
   type OperonRuntimeClient,
@@ -26,8 +25,26 @@ import {
   type ServiceList as GrpcServiceList,
   type ServiceTunnelResponse as GrpcServiceTunnelResponse,
 } from "./generated/operon/runtime";
-
-const DEFAULT_LIST_PAGE_SIZE = 1000;
+import {
+  emptyAsyncIterable,
+  grpcExecSessionRequests,
+  grpcFileChunks,
+  grpcFileChunksFromBody,
+  grpcServiceDatagramTunnelRequests,
+  grpcServiceTunnelRequests,
+  grpcStdinChunks,
+} from "./grpc-requests";
+import {
+  bodyToBytes,
+  concatChunks,
+  DEFAULT_LIST_PAGE_SIZE,
+  grpcOptions,
+  grpcTarget,
+  required,
+  streamToBytes,
+  toArrayBuffer,
+  type RequestContext,
+} from "./transport";
 
 export type NodeEndpoint = {
   nodeId: string;
@@ -73,11 +90,6 @@ export type OperonStepTrace = {
   endedAtMs: number;
   error?: string;
   output?: unknown;
-};
-
-type RequestContext = {
-  runId?: string;
-  stepId?: string;
 };
 
 export type ExecRecord = {
@@ -614,22 +626,7 @@ export class OperonClient {
   }
 
   private grpcOptions(endpoint: NodeEndpoint, context?: RequestContext): CallOptions {
-    if (!endpoint.token && !context?.runId && !context?.stepId) {
-      return {};
-    }
-    let metadata = Metadata();
-    if (endpoint.token) {
-      metadata = metadata.set("authorization", `Bearer ${endpoint.token}`);
-    }
-    if (context?.runId) {
-      metadata = metadata.set("x-operon-run-id", context.runId);
-    }
-    if (context?.stepId) {
-      metadata = metadata.set("x-operon-step-id", context.stepId);
-    }
-    return {
-      metadata,
-    };
+    return grpcOptions(endpoint, context);
   }
 
   private async runGrpcAction(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<unknown> {
@@ -760,220 +757,6 @@ export class OperonClient {
     } while (pageToken);
     return { path, entries, next_page_token: "" };
   }
-}
-
-function required(value: string | undefined, field: string): string {
-  if (!value) {
-    throw new Error(`step requires ${field}`);
-  }
-  return value;
-}
-
-function grpcTarget(endpoint: string): string {
-  if (endpoint.startsWith("grpc://")) {
-    return `http://${endpoint.slice("grpc://".length)}`;
-  }
-  if (endpoint.startsWith("grpcs://")) {
-    return `https://${endpoint.slice("grpcs://".length)}`;
-  }
-  throw new Error(`endpoint ${endpoint} is not a gRPC endpoint`);
-}
-
-async function bodyToBytes(body: BodyInit): Promise<Uint8Array> {
-  if (typeof body === "string") {
-    return new TextEncoder().encode(body);
-  }
-  if (body instanceof ArrayBuffer) {
-    return new Uint8Array(body);
-  }
-  if (ArrayBuffer.isView(body)) {
-    return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
-  }
-  if (body instanceof Blob) {
-    return new Uint8Array(await body.arrayBuffer());
-  }
-  if (body instanceof URLSearchParams) {
-    return new TextEncoder().encode(body.toString());
-  }
-  if (body instanceof ReadableStream) {
-    const reader = body.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const next = await reader.read();
-      if (next.done) {
-        break;
-      }
-      chunks.push(next.value);
-    }
-    return concatChunks(chunks);
-  }
-  throw new Error("unsupported BodyInit for gRPC streaming request");
-}
-
-async function* bodyToByteChunks(body: BodyInit): AsyncIterable<Uint8Array> {
-  if (body instanceof ReadableStream) {
-    const reader = body.getReader();
-    while (true) {
-      const next = await reader.read();
-      if (next.done) {
-        return;
-      }
-      yield next.value;
-    }
-  } else {
-    yield await bodyToBytes(body);
-  }
-}
-
-function concatChunks(chunks: Uint8Array[]): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return merged;
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-}
-
-async function streamToBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  while (true) {
-    const next = await reader.read();
-    if (next.done) {
-      break;
-    }
-    chunks.push(next.value);
-  }
-  return concatChunks(chunks);
-}
-
-async function* grpcFileChunks(
-  path: string,
-  bytes: Uint8Array,
-  precondition?: FsPrecondition,
-): AsyncIterable<{
-  target?: ReturnType<typeof grpcFileTarget>;
-  chunk?: { data: Uint8Array };
-}> {
-  yield { target: grpcFileTarget(path, precondition) };
-  if (bytes.byteLength === 0) {
-    yield { chunk: { data: new Uint8Array() } };
-    return;
-  }
-  for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
-    yield {
-      chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
-    };
-  }
-}
-
-async function* grpcFileChunksFromBody(
-  path: string,
-  body: BodyInit,
-  precondition?: FsPrecondition,
-): AsyncIterable<{
-  target?: ReturnType<typeof grpcFileTarget>;
-  chunk?: { data: Uint8Array };
-}> {
-  yield { target: grpcFileTarget(path, precondition) };
-  let emitted = false;
-  for await (const bytes of bodyToByteChunks(body)) {
-    if (bytes.byteLength === 0) {
-      continue;
-    }
-    emitted = true;
-    for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
-      yield {
-        chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
-      };
-    }
-  }
-  if (!emitted) {
-    yield { chunk: { data: new Uint8Array() } };
-  }
-}
-
-function grpcFileTarget(path: string, precondition?: FsPrecondition) {
-  const requireAbsent = precondition?.require_absent ?? false;
-  const expectedVersion = precondition?.expected_version;
-  return {
-    path,
-    precondition:
-      expectedVersion || requireAbsent
-        ? { expectedVersion, requireAbsent }
-        : undefined,
-    expectedVersion,
-    requireAbsent,
-  };
-}
-
-async function* grpcStdinChunks(execId: string, bytes: Uint8Array): AsyncIterable<{ target?: { execId: string }; chunk?: { data: Uint8Array } }> {
-  yield { target: { execId } };
-  if (bytes.byteLength === 0) {
-    yield { chunk: { data: new Uint8Array() } };
-    return;
-  }
-  for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
-    yield {
-      chunk: { data: bytes.subarray(offset, Math.min(offset + 64 * 1024, bytes.byteLength)) },
-    };
-  }
-}
-
-async function* grpcExecSessionRequests(
-  start: ExecSessionStart,
-  input: AsyncIterable<Uint8Array>,
-): AsyncIterable<GrpcExecSessionRequest> {
-  yield {
-    start: {
-      command: start.command ?? "",
-      argv: start.argv ?? [],
-      cwd: start.cwd ?? "",
-      timeoutSecs: start.timeoutSecs === undefined ? undefined : String(start.timeoutSecs),
-      secrets: start.secrets ?? [],
-      rows: start.rows ?? 24,
-      cols: start.cols ?? 80,
-    },
-  };
-  for await (const chunk of input) {
-    yield { input: { data: chunk } };
-  }
-}
-
-async function* emptyAsyncIterable(): AsyncIterable<Uint8Array> {}
-
-async function* grpcServiceTunnelRequests(
-  serviceId: string,
-  input: AsyncIterable<Uint8Array>,
-): AsyncIterable<{ target?: { serviceId: string }; data?: { data: Uint8Array }; close?: { reason: string } }> {
-  yield { target: { serviceId } };
-  for await (const chunk of input) {
-    yield { data: { data: chunk } };
-  }
-  yield { close: { reason: "client input ended" } };
-}
-
-async function* grpcServiceDatagramTunnelRequests(
-  serviceId: string,
-  input: AsyncIterable<ServiceDatagram>,
-): AsyncIterable<{
-  target?: { serviceId: string };
-  datagram?: { peerId: string; data: Uint8Array };
-  close?: { peerId: string; reason: string };
-}> {
-  yield { target: { serviceId } };
-  for await (const datagram of input) {
-    yield { datagram: { peerId: datagram.peer_id, data: datagram.data } };
-  }
-  yield { close: { peerId: "", reason: "client input ended" } };
 }
 
 function serviceTunnelReadableStream(

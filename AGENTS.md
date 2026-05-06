@@ -345,6 +345,22 @@ Operon should not own:
     platform-specific `operon mount` setup hints for Linux FUSE, macOS FUSE-T,
     and Windows WinFsp.
 
+- `docs/plan/v0.16.1-generic-mount-release-naming.md`
+  - Completed v0.16.1 scope for generic live-mount workflow/script names while
+    keeping v0.14 compatibility wrappers.
+
+- `docs/plan/v0.16.2-sdk-maintainability-cleanup.md`
+  - Completed v0.16.2 scope for behavior-preserving TypeScript SDK helper and
+    gRPC request-stream module extraction.
+
+- `docs/plan/v0.16.3-daemon-mount-maintainability-cleanup.md`
+  - Completed v0.16.3 scope for daemon exec command construction boundaries
+    and shared CLI mount runtime diagnostics.
+
+- `docs/plan/v0.16.4-mount-runtime-preflight-ux.md`
+  - Completed v0.16.4 scope for `operon doctor --mount-runtime`, JSON
+    readiness, and pre-mount runtime failure checks.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -956,3 +972,21 @@ Defer:
   detection. `operon mount` appends platform-specific setup hints when adapter
   startup fails, and README/PROTOCOL troubleshooting language is aligned.
   Nothing remains in v0.16.
+- Latest phase status update: v0.16.1 Generic Mount and Release Naming Cleanup
+  is completed. The active live-mount workflow is
+  `.github/workflows/live-mount-smoke.yml`, generic macOS/Windows smoke helper
+  names are available, and old `scripts/*v0.14*` names are compatibility
+  wrappers. Nothing remains in v0.16.1.
+- Latest phase status update: v0.16.2 SDK Maintainability Cleanup is
+  completed. `packages/sdk-js/src/transport.ts` and
+  `packages/sdk-js/src/grpc-requests.ts` now own SDK transport and request
+  stream helpers while `index.ts` remains the public API entrypoint. Nothing
+  remains in v0.16.2.
+- Latest phase status update: v0.16.3 Daemon and Mount Maintainability Cleanup
+  is completed. `crates/operond/src/exec_command.rs` owns daemon exec command
+  construction and `crates/operon-cli/src/commands/mount_runtime.rs` owns
+  shared mount runtime diagnostics. Nothing remains in v0.16.3.
+- Latest phase status update: v0.16.4 Mount Runtime Preflight UX is completed.
+  `operon doctor --mount-runtime` reports local mount runtime readiness without
+  loading config, doctor JSON includes `mount_runtime_ready`, and `operon mount`
+  fails early when the local runtime is missing. Nothing remains in v0.16.4.

@@ -8,6 +8,7 @@ pub(crate) mod exec_session;
 pub(crate) mod fs;
 pub(crate) mod init;
 pub(crate) mod mount;
+pub(crate) mod mount_runtime;
 pub(crate) mod node;
 pub(crate) mod service;
 pub(crate) mod trace;

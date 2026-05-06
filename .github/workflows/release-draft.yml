@@ -182,7 +182,7 @@ jobs:
       - name: Install FUSE-T build dependency
         if: runner.os == 'macOS'
         shell: bash
-        run: scripts/install-v0.14-macos-fuse-t.sh
+        run: scripts/install-macos-fuse-t.sh
 
       - name: Install WinFsp build dependency
         if: runner.os == 'Windows'

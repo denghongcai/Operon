@@ -28,11 +28,11 @@ require_pattern 'supported through `portable-pty` on Unix-like platforms and Win
 require_pattern 'Windows interactive exec sessions use `portable-pty`' PROTOCOL.md
 require_pattern 'Mount adapter | Linux FUSE supported | Deferred macFUSE | Deferred WinFsp' docs/plan/v0.11.3-platform-capability-matrix.md
 
-require_pattern 'fn exec_shell_program' crates/operond/src/exec_runtime.rs
+require_pattern 'fn exec_shell_program' crates/operond/src/exec_command.rs
 require_pattern 'fn session_shell_program' crates/operond/src/exec_session.rs
-require_pattern '"cmd.exe"' crates/operond/src/exec_runtime.rs
+require_pattern '"cmd.exe"' crates/operond/src/exec_command.rs
 require_pattern '"cmd.exe"' crates/operond/src/exec_session.rs
-require_pattern '"/bin/sh"' crates/operond/src/exec_runtime.rs
+require_pattern '"/bin/sh"' crates/operond/src/exec_command.rs
 require_pattern '"/bin/sh"' crates/operond/src/exec_session.rs
 
 cargo test -p operond --locked shell_invocation_matches_platform

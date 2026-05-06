@@ -9,15 +9,21 @@ source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.14-cross-platform-live-mount.md
 require_file docs/plan/v0.14-macos-live-smoke-runbook.md
-require_file .github/workflows/v0.14-live-mount-smoke.yml
+require_file .github/workflows/live-mount-smoke.yml
 require_file scripts/preflight-v0.14-macos-fuse-t-host.sh
+require_file scripts/preflight-macos-fuse-t-host.sh
 require_file scripts/install-v0.14-macos-fuse-t.sh
+require_file scripts/install-macos-fuse-t.sh
 require_file scripts/verify-release-gates.sh
 require_file scripts/verify-v0.14-release-gates.sh
 require_file scripts/smoke-v0.14-macos-live-mount.sh
+require_file scripts/smoke-macos-live-mount.sh
 require_file scripts/smoke-v0.14-macos-fuse-zip-probe.sh
+require_file scripts/smoke-macos-fuse-zip-probe.sh
 require_file scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh
+require_file scripts/smoke-macos-libfuse-lowlevel-hello-probe.sh
 require_file scripts/smoke-v0.14-windows-live-mount.ps1
+require_file scripts/smoke-windows-live-mount.ps1
 require_file vendor/fuser-0.17.0-operon/OPERON_PATCH.md
 require_file vendor/fuser-0.17.0-operon/src/lib.rs
 require_file vendor/fuser-0.17.0-operon/src/ll/request.rs
@@ -70,8 +76,8 @@ require_pattern 'windows_name_to_remote_path' crates/operon-mount/src/windows.rs
 require_pattern 'write_to_eof' crates/operon-mount/src/windows.rs
 require_pattern 'cfg\(any\(target_os = "linux", target_os = "macos"\)\)' crates/operon-cli/Cargo.toml
 require_pattern 'operon-mount = \{ path = "../operon-mount" \}' crates/operon-cli/Cargo.toml
-require_pattern 'macos-fuse-t' crates/operon-cli/src/commands/mount.rs
-require_pattern 'windows-winfsp' crates/operon-cli/src/commands/mount.rs
+require_pattern 'macos-fuse-t' crates/operon-cli/src/commands/mount_runtime.rs
+require_pattern 'windows-winfsp' crates/operon-cli/src/commands/mount_runtime.rs
 require_pattern 'macos-fuse-t-supported-runtime-required' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'windows-winfsp-supported-runtime-required' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'PROTOCOL_VERSION: &str = "v0\.15\.0"' crates/operon-protocol/src/lib.rs
@@ -79,10 +85,10 @@ require_pattern '"version": "0\.15\.0"' packages/sdk-js/package.json
 require_pattern 'cargo test -p operon-mount --locked --features macos-no-mount' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-mount --locked' .github/workflows/ci.yml
 require_pattern 'actions: read' .github/workflows/release-draft.yml
-require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/release-draft.yml
+require_pattern 'scripts/install-macos-fuse-t.sh' .github/workflows/release-draft.yml
 require_pattern 'release-gate' .github/workflows/release-draft.yml
 require_pattern 'scripts/verify-release-gates.sh "\$GITHUB_REF_NAME" "\$GITHUB_SHA" "\$GITHUB_REPOSITORY"' .github/workflows/release-draft.yml
-require_pattern 'Cross-Platform Live Mount Smoke' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'Cross-Platform Live Mount Smoke' .github/workflows/live-mount-smoke.yml
 require_pattern 'Cross-Platform Live Mount Smoke' scripts/verify-release-gates.sh
 require_pattern 'v0.14 Live Mount Smoke' scripts/verify-release-gates.sh
 require_pattern 'macOS FUSE-T Live Mount \(hosted\)' scripts/verify-release-gates.sh
@@ -90,44 +96,50 @@ require_pattern 'Windows WinFsp Live Mount' scripts/verify-release-gates.sh
 require_pattern 'missing release gate' scripts/verify-release-gates.sh
 require_pattern '\$gate_name live mount release gate passed' scripts/verify-release-gates.sh
 require_pattern 'scripts/verify-release-gates.sh "\$@"' scripts/verify-v0.14-release-gates.sh
-require_pattern 'scripts/install-v0.14-macos-fuse-t.sh' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install-v0.14-macos-fuse-t.sh
-require_pattern 'macos_backend:' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macos_runner:' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macos_options:' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'fuser_patch_init_flags:' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'OPERON_FUSER_HELLO_PATCH_INIT_FLAGS: \$\{\{ inputs\.fuser_patch_init_flags && '\''1'\'' \|\| '\''0'\'' \}\}' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macos-libfuse-lowlevel-hello' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macOS FUSE-T libfuse Low-Level Hello Probe \(hosted\)' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macos-fuse-zip' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macOS FUSE-T fuse-zip Probe \(hosted\)' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'scripts/smoke-v0.14-macos-fuse-zip-probe.sh' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'self-hosted-fuse-t' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'runs-on: \[self-hosted, macOS, fuse-t\]' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'Check FUSE-T runtime' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'scripts/preflight-v0.14-macos-fuse-t-host.sh' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'OPERON_MOUNT_MACOS_OPTIONS: \$\{\{ inputs.macos_options \}\}' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'macOS live mount smoke exit code' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'actions/upload-artifact@v7' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'choco install winfsp -y' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'scripts/smoke-v0.14-macos-live-mount.sh' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'scripts/smoke-v0.14-windows-live-mount.ps1' .github/workflows/v0.14-live-mount-smoke.yml
-require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scripts/smoke-v0.14-macos-live-mount.sh
-require_pattern 'wait_for_process_exit' scripts/smoke-v0.14-macos-live-mount.sh
-require_pattern 'macOS mount backend: \$OPERON_MOUNT_MACOS_BACKEND' scripts/smoke-v0.14-macos-live-mount.sh
-require_pattern 'macOS mount extra options: \$\{OPERON_MOUNT_MACOS_OPTIONS:-<none>\}' scripts/smoke-v0.14-macos-live-mount.sh
-require_pattern 'perl -e .*macOS live mount smoke timed out' scripts/smoke-v0.14-macos-live-mount.sh
-require_pattern 'Library/Logs/fuse-t' scripts/smoke-v0.14-macos-live-mount.sh
-require_pattern 'v0\.14 macOS FUSE-T fuse-zip probe passed' scripts/smoke-v0.14-macos-fuse-zip-probe.sh
-require_pattern 'https://github.com/macos-fuse-t/fuse-zip' scripts/smoke-v0.14-macos-fuse-zip-probe.sh
-require_pattern 'v0\.14 macOS FUSE-T host preflight passed' scripts/preflight-v0.14-macos-fuse-t-host.sh
+require_pattern 'scripts/install-macos-fuse-t.sh' .github/workflows/live-mount-smoke.yml
+require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' scripts/install-macos-fuse-t.sh
+require_pattern 'exec scripts/install-macos-fuse-t.sh "\$@"' scripts/install-v0.14-macos-fuse-t.sh
+require_pattern 'macos_backend:' .github/workflows/live-mount-smoke.yml
+require_pattern 'macos_runner:' .github/workflows/live-mount-smoke.yml
+require_pattern 'macos_options:' .github/workflows/live-mount-smoke.yml
+require_pattern 'fuser_patch_init_flags:' .github/workflows/live-mount-smoke.yml
+require_pattern 'OPERON_FUSER_HELLO_PATCH_INIT_FLAGS: \$\{\{ inputs\.fuser_patch_init_flags && '\''1'\'' \|\| '\''0'\'' \}\}' .github/workflows/live-mount-smoke.yml
+require_pattern 'macos-libfuse-lowlevel-hello' .github/workflows/live-mount-smoke.yml
+require_pattern 'macOS FUSE-T libfuse Low-Level Hello Probe \(hosted\)' .github/workflows/live-mount-smoke.yml
+require_pattern 'scripts/smoke-macos-libfuse-lowlevel-hello-probe.sh' .github/workflows/live-mount-smoke.yml
+require_pattern 'macos-fuse-zip' .github/workflows/live-mount-smoke.yml
+require_pattern 'macOS FUSE-T fuse-zip Probe \(hosted\)' .github/workflows/live-mount-smoke.yml
+require_pattern 'scripts/smoke-macos-fuse-zip-probe.sh' .github/workflows/live-mount-smoke.yml
+require_pattern 'self-hosted-fuse-t' .github/workflows/live-mount-smoke.yml
+require_pattern 'runs-on: \[self-hosted, macOS, fuse-t\]' .github/workflows/live-mount-smoke.yml
+require_pattern 'Check FUSE-T runtime' .github/workflows/live-mount-smoke.yml
+require_pattern 'scripts/preflight-macos-fuse-t-host.sh' .github/workflows/live-mount-smoke.yml
+require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .github/workflows/live-mount-smoke.yml
+require_pattern 'OPERON_MOUNT_MACOS_OPTIONS: \$\{\{ inputs.macos_options \}\}' .github/workflows/live-mount-smoke.yml
+require_pattern 'macOS live mount smoke exit code' .github/workflows/live-mount-smoke.yml
+require_pattern 'actions/upload-artifact@v7' .github/workflows/live-mount-smoke.yml
+require_pattern 'choco install winfsp -y' .github/workflows/live-mount-smoke.yml
+require_pattern 'scripts/smoke-macos-live-mount.sh' .github/workflows/live-mount-smoke.yml
+require_pattern 'scripts/smoke-windows-live-mount.ps1' .github/workflows/live-mount-smoke.yml
+require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scripts/smoke-macos-live-mount.sh
+require_pattern 'wait_for_process_exit' scripts/smoke-macos-live-mount.sh
+require_pattern 'macOS mount backend: \$OPERON_MOUNT_MACOS_BACKEND' scripts/smoke-macos-live-mount.sh
+require_pattern 'macOS mount extra options: \$\{OPERON_MOUNT_MACOS_OPTIONS:-<none>\}' scripts/smoke-macos-live-mount.sh
+require_pattern 'perl -e .*macOS live mount smoke timed out' scripts/smoke-macos-live-mount.sh
+require_pattern 'Library/Logs/fuse-t' scripts/smoke-macos-live-mount.sh
+require_pattern 'macOS FUSE-T fuse-zip probe passed' scripts/smoke-macos-fuse-zip-probe.sh
+require_pattern 'https://github.com/macos-fuse-t/fuse-zip' scripts/smoke-macos-fuse-zip-probe.sh
+require_pattern 'macOS FUSE-T host preflight passed' scripts/preflight-macos-fuse-t-host.sh
 
+bash -n scripts/preflight-macos-fuse-t-host.sh
+bash -n scripts/install-macos-fuse-t.sh
 bash -n scripts/preflight-v0.14-macos-fuse-t-host.sh
 bash -n scripts/install-v0.14-macos-fuse-t.sh
 bash -n scripts/verify-release-gates.sh
 bash -n scripts/verify-v0.14-release-gates.sh
+bash -n scripts/smoke-macos-live-mount.sh
+bash -n scripts/smoke-macos-fuse-zip-probe.sh
+bash -n scripts/smoke-macos-libfuse-lowlevel-hello-probe.sh
 bash -n scripts/smoke-v0.14-macos-live-mount.sh
 bash -n scripts/smoke-v0.14-macos-fuse-zip-probe.sh
 bash -n scripts/smoke-v0.14-macos-libfuse-lowlevel-hello-probe.sh

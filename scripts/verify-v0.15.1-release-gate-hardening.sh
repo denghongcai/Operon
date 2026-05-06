@@ -21,7 +21,7 @@ require_pattern '@executable_path' scripts/smoke-release-archive.sh
 require_pattern 'DYLD_LIBRARY_PATH' scripts/smoke-release-archive.sh
 require_pattern 'DYLD_FALLBACK_LIBRARY_PATH' scripts/smoke-release-archive.sh
 require_pattern 'DYLD_FRAMEWORK_PATH' scripts/smoke-release-archive.sh
-require_pattern 'Cross-Platform Live Mount Smoke' .github/workflows/v0.14-live-mount-smoke.yml
+require_pattern 'Cross-Platform Live Mount Smoke' .github/workflows/live-mount-smoke.yml
 require_pattern 'Cross-Platform Live Mount Smoke' scripts/verify-release-gates.sh
 require_pattern 'v0.14 Live Mount Smoke' scripts/verify-release-gates.sh
 require_pattern 'scripts/verify-release-gates.sh "\$GITHUB_REF_NAME" "\$GITHUB_SHA" "\$GITHUB_REPOSITORY"' .github/workflows/release-draft.yml
