@@ -39,6 +39,9 @@ else
   pnpm --dir packages/sdk-js test
 fi
 cargo check -p operond --locked
+if command -v rustup >/dev/null 2>&1; then
+  rustup target add x86_64-pc-windows-gnu >/dev/null
+fi
 cargo check -p operond --target x86_64-pc-windows-gnu --tests --locked
 cargo check -p operon-mount --target x86_64-pc-windows-gnu --tests --locked
 
