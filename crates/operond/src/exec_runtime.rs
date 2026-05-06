@@ -881,7 +881,9 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn windows_job_object_cancellation_terminates_descendant_process() {
-        use std::{fs, time::Duration};
+        use std::{fs, process::Stdio, time::Duration};
+
+        use tokio::process::Command as TokioCommand;
 
         let marker = std::env::temp_dir().join(format!(
             "operon-job-object-marker-{}.txt",

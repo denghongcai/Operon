@@ -19,7 +19,11 @@ require_pattern 'export async function bodyToBytes' packages/sdk-js/src/transpor
 require_pattern 'export async function\* grpcFileChunksFromBody' packages/sdk-js/src/grpc-requests.ts
 require_pattern 'export async function\* grpcExecSessionRequests' packages/sdk-js/src/grpc-requests.ts
 
-pnpm --dir packages/sdk-js typecheck
-pnpm --dir packages/sdk-js test
+if [[ "${OPERON_SKIP_SDK_TESTS:-0}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --dir packages/sdk-js typecheck
+  pnpm --dir packages/sdk-js test
+fi
 
 echo "v0.16.2 SDK maintainability cleanup validation passed"
