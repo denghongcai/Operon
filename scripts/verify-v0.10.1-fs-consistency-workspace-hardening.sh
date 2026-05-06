@@ -25,7 +25,7 @@ require_pattern 'SYS_openat2' crates/operon-fs/src/lib.rs
 require_pattern 'RESOLVE_BENEATH' crates/operon-fs/src/lib.rs
 require_pattern 'check_precondition' crates/operond/src/fs_service.rs
 require_pattern 'Status::failed_precondition' crates/operond/src/fs_service.rs
-require_pattern 'expected_version' crates/operon-cli/src/main.rs
+require_pattern 'expected_version' crates/operon-cli/src/cli_args.rs
 require_pattern 'expected_version' packages/sdk-js/src/index.ts
 require_pattern 'Filesystem Concurrency and Preconditions' PROTOCOL.md
 require_pattern 'FsPrecondition' docs/architecture/runtime-api.md

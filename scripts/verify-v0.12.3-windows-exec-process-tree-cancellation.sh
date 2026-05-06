@@ -14,12 +14,12 @@ require_pattern 'No v0.12.3 work remains' docs/plan/development-phases.md
 
 require_pattern 'windows-sys = "0\.61\.2"' Cargo.toml
 require_pattern 'Win32_System_JobObjects' crates/operond/Cargo.toml
-require_pattern 'struct ExecChildGroup' crates/operond/src/exec_runtime.rs
-require_pattern 'struct WindowsJobObject' crates/operond/src/exec_runtime.rs
-require_pattern 'AssignProcessToJobObject' crates/operond/src/exec_runtime.rs
-require_pattern 'TerminateJobObject' crates/operond/src/exec_runtime.rs
-require_pattern 'job-object-process-tree' crates/operond/src/exec_runtime.rs
-require_pattern 'windows_job_object_cancellation_terminates_descendant_process' crates/operond/src/exec_runtime.rs
+require_pattern 'struct ExecChildGroup' crates/operond/src/exec_process.rs
+require_pattern 'struct WindowsJobObject' crates/operond/src/exec_process.rs
+require_pattern 'AssignProcessToJobObject' crates/operond/src/exec_process.rs
+require_pattern 'TerminateJobObject' crates/operond/src/exec_process.rs
+require_pattern 'job-object-process-tree' crates/operond/src/exec_process.rs
+require_pattern 'windows_job_object_cancellation_terminates_descendant_process' crates/operond/src/exec_process.rs
 require_pattern 'job-object-process-tree-termination' crates/operon-cli/src/commands/doctor.rs
 
 require_pattern 'windows_job_object_cancellation_terminates_descendant_process' .github/workflows/ci.yml

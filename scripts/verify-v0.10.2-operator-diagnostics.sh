@@ -12,7 +12,7 @@ require_pattern 'Status: Completed' docs/plan/v0.10.2-operator-diagnostics.md
 require_pattern 'v0.10.2 Operator Diagnostics' docs/plan/development-phases.md
 require_pattern 'No v0.10.2 work remains' docs/plan/development-phases.md
 
-require_pattern 'Command::Doctor' crates/operon-cli/src/main.rs
+require_pattern 'Command::Doctor' crates/operon-cli/src/cli_dispatch.rs
 require_pattern 'pub\(crate\) mod doctor' crates/operon-cli/src/commands/mod.rs
 require_pattern 'struct DoctorReport' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'from_str_with_warnings' crates/operon-cli/src/commands/doctor.rs

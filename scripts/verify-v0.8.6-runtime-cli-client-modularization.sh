@@ -23,8 +23,8 @@ for module in audit capability config init exec mount node service trace; do
   require_file "crates/operon-cli/src/commands/${module}.rs"
   require_pattern "pub\\(crate\\) mod ${module};" crates/operon-cli/src/commands/mod.rs
 done
-require_pattern '^    Graph \{' crates/operon-cli/src/main.rs
-require_pattern '^    Workflow \{' crates/operon-cli/src/main.rs
+require_pattern '^    Graph \{' crates/operon-cli/src/cli_args.rs
+require_pattern '^    Workflow \{' crates/operon-cli/src/cli_args.rs
 require_pattern 'struct FsReadOutputSummary' crates/operon-cli/src/commands/fs.rs
 reject_pattern '^async fn exec_' crates/operon-cli/src/main.rs
 reject_pattern '^async fn service_' crates/operon-cli/src/main.rs

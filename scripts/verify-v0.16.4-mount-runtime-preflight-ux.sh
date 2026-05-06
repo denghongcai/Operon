@@ -10,7 +10,7 @@ source "$ROOT/scripts/lib/validation.sh"
 require_file docs/plan/v0.16.4-mount-runtime-preflight-ux.md
 require_pattern 'Phase 101: v0.16.4 Mount Runtime Preflight UX' docs/plan/development-phases.md
 require_pattern 'Status: Completed' docs/plan/v0.16.4-mount-runtime-preflight-ux.md
-require_pattern 'mount_runtime: bool' crates/operon-cli/src/main.rs
+require_pattern 'mount_runtime: bool' crates/operon-cli/src/cli_args.rs
 require_pattern 'doctor --mount-runtime' README.md
 require_pattern 'operon doctor --mount-runtime' PROTOCOL.md
 require_pattern 'mount_runtime_ready: bool' crates/operon-cli/src/commands/doctor.rs
