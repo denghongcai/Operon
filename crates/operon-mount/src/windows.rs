@@ -12,13 +12,6 @@ use std::{
 use anyhow::Context;
 use operon_core::FsStat;
 use operon_network::NodeEndpoint;
-use windows_sys::Win32::{
-    Foundation::{LocalFree, STATUS_BUFFER_OVERFLOW},
-    Security::{
-        Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION},
-        GetSecurityDescriptorLength,
-    },
-};
 use winfsp_wrs::{
     u16cstr, u16str, CreateOptions, U16CStr, U16CString, NTSTATUS, STATUS_FILE_IS_A_DIRECTORY,
     STATUS_INVALID_PARAMETER, STATUS_NOT_A_DIRECTORY, STATUS_SUCCESS,
@@ -38,6 +31,7 @@ use crate::{
     remote_client::GrpcRemoteFs,
     windows_file_info::{attributes_for_stat, file_info_for_stat},
     windows_path::windows_name_to_remote_path,
+    windows_security::WindowsSecurityDescriptor,
     windows_status::ntstatus_for_error,
 };
 
@@ -171,61 +165,6 @@ impl OperonWinFspFs {
 struct WindowsFileContext {
     path: String,
     is_dir: bool,
-}
-
-struct WindowsSecurityDescriptor {
-    bytes: Vec<u8>,
-}
-
-impl WindowsSecurityDescriptor {
-    fn from_sddl(sddl: &U16CStr) -> anyhow::Result<Self> {
-        let mut descriptor = std::ptr::null_mut();
-        let mut reported_len = 0;
-        let ok = unsafe {
-            ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                sddl.as_ptr(),
-                SDDL_REVISION,
-                &mut descriptor,
-                &mut reported_len,
-            )
-        };
-        if ok == 0 {
-            anyhow::bail!("failed to create Windows security descriptor");
-        }
-
-        let len = unsafe { GetSecurityDescriptorLength(descriptor) as usize };
-        let mut bytes = vec![0; len];
-        unsafe {
-            std::ptr::copy_nonoverlapping(descriptor.cast::<u8>(), bytes.as_mut_ptr(), len);
-            LocalFree(descriptor.cast());
-        }
-        Ok(Self { bytes })
-    }
-
-    unsafe fn copy_to(
-        &self,
-        security_descriptor: PSECURITY_DESCRIPTOR,
-        security_descriptor_size: *mut SIZE_T,
-    ) -> NTSTATUS {
-        if security_descriptor_size.is_null() {
-            return STATUS_SUCCESS;
-        }
-
-        if self.bytes.len() as SIZE_T > security_descriptor_size.read() {
-            security_descriptor_size.write(self.bytes.len() as SIZE_T);
-            return STATUS_BUFFER_OVERFLOW;
-        }
-
-        security_descriptor_size.write(self.bytes.len() as SIZE_T);
-        if !security_descriptor.is_null() {
-            std::ptr::copy_nonoverlapping(
-                self.bytes.as_ptr(),
-                security_descriptor.cast::<u8>(),
-                self.bytes.len(),
-            );
-        }
-        STATUS_SUCCESS
-    }
 }
 
 struct WinFspMountHandles {

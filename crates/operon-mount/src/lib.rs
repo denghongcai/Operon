@@ -1,6 +1,8 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod errors;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+mod fuse_attr;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod fuse_fs;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod inode_table;
@@ -16,6 +18,8 @@ mod windows;
 mod windows_file_info;
 #[cfg(windows)]
 mod windows_path;
+#[cfg(windows)]
+mod windows_security;
 #[cfg(windows)]
 mod windows_status;
 

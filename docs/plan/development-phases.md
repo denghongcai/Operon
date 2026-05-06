@@ -5901,6 +5901,74 @@ Remaining:
 
 - No v0.17.1 maintainability cleanup work remains.
 
+## Phase 105: v0.17.2 Mount Probe Reliability Cleanup
+
+Status: Completed.
+
+Goal: keep the cross-platform live mount workflow green for release-relevant
+mount gates while preserving the fuser hello probe as an opt-in macOS FUSE-T
+diagnostic.
+
+Detailed plan: `docs/plan/v0.17.2-mount-probe-reliability.md`.
+
+Planned:
+
+- Treat `macos-fuser-hello` as a strict standalone diagnostic probe.
+- Treat the fuser hello probe as diagnostic-only when `platform=all` is used,
+  so third-party fuser clean-unmount or short-read behavior does not fail the
+  release-oriented aggregate workflow.
+- Keep macOS FUSE-T live mount, Windows WinFsp live mount, fuse-zip, and
+  libfuse low-level probes strict in `platform=all`.
+- Add validation coverage for the workflow and script contract.
+
+Progress:
+
+- Added a diagnostic-only mode to the fuser hello probe workflow step when the
+  aggregate `platform=all` live mount smoke is used. The step records the real
+  fuser exit code and emits a GitHub warning, but does not fail the aggregate
+  release-oriented workflow for fuser-only diagnostic failures.
+- Kept `platform=macos-fuser-hello` strict by returning the raw fuser probe
+  exit code outside aggregate mode.
+- Added `scripts/verify-v0.17.2-mount-probe-reliability.sh` and wired it into
+  the consolidated `core` validation group.
+
+Remaining:
+
+- No v0.17.2 mount probe reliability cleanup work remains.
+
+## Phase 106: v0.17.3 Mount Adapter Maintainability Cleanup
+
+Status: Completed.
+
+Goal: reduce mount adapter file responsibility without changing Linux/macOS
+FUSE, Windows WinFsp, CLI, protocol, or SDK behavior.
+
+Detailed plan: `docs/plan/v0.17.3-mount-adapter-maintainability.md`.
+
+Planned:
+
+- Move Linux/macOS FUSE attribute ownership, block accounting, and trace
+  formatting helpers behind a focused mount adapter module.
+- Move Windows security descriptor construction/copying out of the WinFsp
+  callback file.
+- Keep FUSE callback behavior, WinFsp callback behavior, public mount APIs, and
+  live mount smoke semantics unchanged.
+- Add focused validation for the new module boundaries and existing mount
+  behavior.
+
+Progress:
+
+- Moved Linux/macOS FUSE attribute mapping, platform owner selection, block
+  accounting, and trace formatting into `crates/operon-mount/src/fuse_attr.rs`.
+- Moved Windows security descriptor construction and copy behavior into
+  `crates/operon-mount/src/windows_security.rs`.
+- Added `scripts/verify-v0.17.3-mount-adapter-maintainability.sh` and wired it
+  into the consolidated `core` validation group.
+
+Remaining:
+
+- No v0.17.3 mount adapter maintainability cleanup work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

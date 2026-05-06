@@ -4,54 +4,25 @@ use std::{
     ffi::OsStr,
     path::Path,
     sync::{Arc, RwLock, RwLockWriteGuard},
-    time::{Duration, UNIX_EPOCH},
+    time::Duration,
 };
 
 use operon_core::FsStat;
 
 use crate::{
     errors::errno_for_error,
+    fuse_attr::{attr_trace_detail, file_attr},
     inode_table::{InodeEntry, InodeTable},
     mount_core::{MountAdapterCore, RemoteFs},
     path::{join_remote_child, validate_child_name},
 };
 
 const TTL: Duration = Duration::from_secs(1);
-const STAT_BLOCK_SIZE: u32 = 512;
 
 fn trace_fuse_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
     if std::env::var_os("OPERON_MOUNT_TRACE").is_some() {
         eprintln!("operon-mount fuse {}: {}", event.as_ref(), detail.as_ref());
     }
-}
-
-fn attr_owner() -> (u32, u32) {
-    #[cfg(target_os = "macos")]
-    {
-        // FUSE-T's NFS bridge behaves more like a user-mounted filesystem than
-        // the Linux kernel FUSE path, so report files as owned by the mounter.
-        return unsafe { (libc::getuid(), libc::getgid()) };
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        (0, 0)
-    }
-}
-
-fn attr_trace_detail(attr: &fuser::FileAttr) -> String {
-    format!(
-        "ino={:?} kind={:?} size={} blocks={} blksize={} perm={:o} nlink={} uid={} gid={}",
-        attr.ino,
-        attr.kind,
-        attr.size,
-        attr.blocks,
-        attr.blksize,
-        attr.perm,
-        attr.nlink,
-        attr.uid,
-        attr.gid
-    )
 }
 
 pub(crate) struct OperonFuseFs {
@@ -111,35 +82,6 @@ impl OperonFuseFs {
         self.write_inodes()?.upsert(parent, name.to_string(), stat)
     }
 
-    fn file_attr(&self, entry: &InodeEntry) -> fuser::FileAttr {
-        let (uid, gid) = attr_owner();
-        fuser::FileAttr {
-            ino: entry.ino,
-            size: if entry.is_dir { 0 } else { entry.size },
-            blocks: if entry.is_dir {
-                0
-            } else {
-                entry.size.div_ceil(STAT_BLOCK_SIZE as u64)
-            },
-            atime: UNIX_EPOCH,
-            mtime: UNIX_EPOCH,
-            ctime: UNIX_EPOCH,
-            crtime: UNIX_EPOCH,
-            kind: if entry.is_dir {
-                fuser::FileType::Directory
-            } else {
-                fuser::FileType::RegularFile
-            },
-            perm: if entry.is_dir { 0o755 } else { 0o644 },
-            nlink: if entry.is_dir { 2 } else { 1 },
-            uid,
-            gid,
-            rdev: 0,
-            flags: 0,
-            blksize: STAT_BLOCK_SIZE,
-        }
-    }
-
     fn access_errno(&self, ino: fuser::INodeNo) -> Option<fuser::Errno> {
         self.inode(ino).map_or(Some(fuser::Errno::ENOENT), |_| None)
     }
@@ -169,7 +111,7 @@ impl fuser::Filesystem for OperonFuseFs {
         trace_fuse_event("lookup", format!("parent={parent:?} name={name:?}"));
         match self.lookup_child(parent, name) {
             Ok(entry) => {
-                let attr = self.file_attr(&entry);
+                let attr = file_attr(&entry);
                 trace_fuse_event("lookup_attr", attr_trace_detail(&attr));
                 reply.entry(&TTL, &attr, fuser::Generation(0));
             }
@@ -197,7 +139,7 @@ impl fuser::Filesystem for OperonFuseFs {
                     .and_then(|mut table| table.upsert(entry.parent, entry.name, stat));
                 match refreshed {
                     Ok(entry) => {
-                        let attr = self.file_attr(&entry);
+                        let attr = file_attr(&entry);
                         trace_fuse_event("getattr_attr", attr_trace_detail(&attr));
                         reply.attr(&TTL, &attr);
                     }
@@ -258,13 +200,13 @@ impl fuser::Filesystem for OperonFuseFs {
                 self.write_inodes()
                     .and_then(|mut table| table.upsert(entry.parent, entry.name.clone(), stat))
             }) {
-                Ok(entry) => reply.attr(&TTL, &self.file_attr(&entry)),
+                Ok(entry) => reply.attr(&TTL, &file_attr(&entry)),
                 Err(error) => reply.error(errno_for_error(&error)),
             }
             return;
         }
 
-        reply.attr(&TTL, &self.file_attr(&entry));
+        reply.attr(&TTL, &file_attr(&entry));
     }
 
     fn mknod(
@@ -301,7 +243,7 @@ impl fuser::Filesystem for OperonFuseFs {
             .mkdir(&path)
             .and_then(|stat| self.upsert_child(parent, name, stat))
         {
-            Ok(entry) => reply.entry(&TTL, &self.file_attr(&entry), fuser::Generation(0)),
+            Ok(entry) => reply.entry(&TTL, &file_attr(&entry), fuser::Generation(0)),
             Err(error) => reply.error(errno_for_error(&error)),
         }
     }
@@ -753,7 +695,7 @@ impl fuser::Filesystem for OperonFuseFs {
         {
             Ok(entry) => reply.created(
                 &TTL,
-                &self.file_attr(&entry),
+                &file_attr(&entry),
                 fuser::Generation(0),
                 fuser::FileHandle(u64::from(entry.ino)),
                 fuser::FopenFlags::empty(),
@@ -788,7 +730,7 @@ mod tests {
         let entry = fs
             .lookup_child(fuser::INodeNo::ROOT, OsStr::new("file.txt"))
             .expect("lookup child");
-        let attr = fs.file_attr(&entry);
+        let attr = file_attr(&entry);
 
         assert_eq!(entry.path, "/file.txt");
         assert_eq!(entry.size, 12);
@@ -809,48 +751,6 @@ mod tests {
 
         assert!(error.to_string().contains("invalid child path name"));
         assert!(remote.stat_calls().is_empty());
-    }
-
-    #[test]
-    fn file_attr_maps_directories_with_directory_permissions() {
-        let remote = Arc::new(MockRemoteFs::new([]));
-        let fs = OperonFuseFs::new(remote, dir_stat("/"));
-        let entry = fs.inode(fuser::INodeNo::ROOT).expect("root inode");
-
-        let attr = fs.file_attr(&entry);
-
-        assert_eq!(attr.kind, fuser::FileType::Directory);
-        assert_eq!(attr.perm, 0o755);
-        assert_eq!(attr.nlink, 2);
-        assert_eq!(attr.size, 0);
-        assert_eq!(attr.blocks, 0);
-    }
-
-    #[test]
-    fn file_attr_uses_fuse_compatible_512_byte_stat_blocks() {
-        let remote = Arc::new(MockRemoteFs::new([file_stat("/file.txt", 513)]));
-        let fs = OperonFuseFs::new(remote, dir_stat("/"));
-        let entry = fs
-            .lookup_child(fuser::INodeNo::ROOT, OsStr::new("file.txt"))
-            .expect("lookup child");
-
-        let attr = fs.file_attr(&entry);
-
-        assert_eq!(attr.blksize, 512);
-        assert_eq!(attr.blocks, 2);
-    }
-
-    #[test]
-    fn file_attr_reports_platform_owner() {
-        let remote = Arc::new(MockRemoteFs::new([]));
-        let fs = OperonFuseFs::new(remote, dir_stat("/"));
-        let entry = fs.inode(fuser::INodeNo::ROOT).expect("root inode");
-
-        let attr = fs.file_attr(&entry);
-        let (expected_uid, expected_gid) = attr_owner();
-
-        assert_eq!(attr.uid, expected_uid);
-        assert_eq!(attr.gid, expected_gid);
     }
 
     #[test]

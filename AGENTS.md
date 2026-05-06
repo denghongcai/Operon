@@ -362,9 +362,9 @@ Operon should not own:
     readiness, and pre-mount runtime failure checks.
 
 - `docs/plan/v0.16.5-release-publication.md`
-  - In-progress v0.16.5 scope for publishing the v0.16 release line from
-    `main`, running CI/CodeQL, live mount release gates, public artifact
-    verification, and README Quickstart verification.
+  - Completed v0.16.5 scope for publishing the v0.16 release line from `main`,
+    running CI/CodeQL, live mount release gates, public artifact verification,
+    and README Quickstart verification.
 
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
@@ -374,6 +374,15 @@ Operon should not own:
 - `docs/plan/v0.17.1-maintainability-cleanup.md`
   - Completed v0.17.1 scope for behavior-preserving SDK, Windows mount adapter,
     daemon runtime/router, and FUSE helper maintainability cleanup.
+
+- `docs/plan/v0.17.2-mount-probe-reliability.md`
+  - Completed v0.17.2 scope for making the fuser hello probe diagnostic-only
+    in aggregate `platform=all` live mount workflow runs while preserving strict
+    standalone `platform=macos-fuser-hello` behavior.
+
+- `docs/plan/v0.17.3-mount-adapter-maintainability.md`
+  - Completed v0.17.3 scope for moving Linux/macOS FUSE attribute helpers and
+    Windows security descriptor behavior behind focused mount adapter modules.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -1027,4 +1036,16 @@ Defer:
   verification passed in workflow `25443988140`, and README Quickstart
   verification passed in workflow `25443990441`. Nothing remains in v0.16.5.
 - Next planned phase order: choose the next post-release phase after v0.16.5,
-  v0.17, and v0.17.1 completion.
+  v0.17, v0.17.1, v0.17.2, and v0.17.3 completion.
+- Latest phase status update: v0.17.2 Mount Probe Reliability Cleanup is
+  completed. The fuser hello probe now records and warns on failures without
+  failing aggregate `platform=all` live mount workflow runs, while standalone
+  `platform=macos-fuser-hello` remains strict. Validation is wired through
+  `scripts/verify-v0.17.2-mount-probe-reliability.sh`. Nothing remains in
+  v0.17.2.
+- Latest phase status update: v0.17.3 Mount Adapter Maintainability Cleanup is
+  completed. FUSE attribute mapping lives in
+  `crates/operon-mount/src/fuse_attr.rs`, Windows security descriptor behavior
+  lives in `crates/operon-mount/src/windows_security.rs`, and
+  `scripts/verify-v0.17.3-mount-adapter-maintainability.sh` validates the moved
+  boundaries. Nothing remains in v0.17.3.

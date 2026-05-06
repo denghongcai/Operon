@@ -94,6 +94,8 @@ validations=(
   "runtime|v0.16.4 Mount Runtime Preflight UX Validation|scripts/verify-v0.16.4-mount-runtime-preflight-ux.sh"
   "core|v0.17 Release and CI Observability Cleanup Validation|scripts/verify-v0.17-release-ci-observability.sh"
   "sdk|v0.17.1 Maintainability Cleanup Validation|scripts/verify-v0.17.1-maintainability-cleanup.sh"
+  "core|v0.17.2 Mount Probe Reliability Cleanup Validation|scripts/verify-v0.17.2-mount-probe-reliability.sh"
+  "core|v0.17.3 Mount Adapter Maintainability Cleanup Validation|scripts/verify-v0.17.3-mount-adapter-maintainability.sh"
 )
 
 failures=()

@@ -244,18 +244,24 @@ jobs:
           OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
           OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
           OPERON_FUSER_HELLO_PATCH_INIT_FLAGS: ${{ inputs.fuser_patch_init_flags && '1' || '0' }}
+          OPERON_FUSER_HELLO_DIAGNOSTIC_ONLY: ${{ inputs.platform == 'all' && '1' || '0' }}
         run: |
           set -o pipefail
           log_path="$RUNNER_TEMP/macos-fuser-hello-${OPERON_MOUNT_MACOS_BACKEND}.log"
           echo "macOS fuser hello probe backend: ${OPERON_MOUNT_MACOS_BACKEND}"
           echo "macOS fuser hello probe extra options: ${OPERON_MOUNT_MACOS_OPTIONS:-<none>}"
           echo "macOS fuser hello patched init flags: ${OPERON_FUSER_HELLO_PATCH_INIT_FLAGS}"
+          echo "macOS fuser hello diagnostic only: ${OPERON_FUSER_HELLO_DIAGNOSTIC_ONLY}"
           echo "macOS fuser hello probe log: ${log_path}"
           set +e
           scripts/smoke-macos-fuser-hello-probe.sh 2>&1 | tee "$log_path"
           status=${PIPESTATUS[0]}
           set -e
           echo "macOS FUSE-T fuser hello probe exit code: ${status}"
+          if [[ "${OPERON_FUSER_HELLO_DIAGNOSTIC_ONLY}" == "1" && "${status}" != "0" ]]; then
+            echo "::warning title=macOS fuser hello diagnostic failed::The fuser hello probe is diagnostic-only for platform=all; rerun with platform=macos-fuser-hello to make this failure strict."
+            exit 0
+          fi
           exit "$status"
 
       - name: Upload macOS fuser hello probe log
