@@ -13,14 +13,16 @@ require_pattern 'Phase 82: v0.12.4 Release Artifact Verification' docs/plan/deve
 require_pattern 'No v0.12.4 work remains' docs/plan/development-phases.md
 
 require_file scripts/verify-release-artifacts.sh
+require_file scripts/smoke-release-archive.sh
 require_pattern 'gh release download' scripts/verify-release-artifacts.sh
 require_pattern 'sha256sum -c SHA256SUMS' scripts/verify-release-artifacts.sh
 require_pattern 'operon-\$\{tag\}-linux-x86_64\.tar\.gz' scripts/verify-release-artifacts.sh
 require_pattern 'operon-\$\{tag\}-macos-aarch64\.tar\.gz' scripts/verify-release-artifacts.sh
 require_pattern 'operon-\$\{tag\}-windows-x86_64\.zip' scripts/verify-release-artifacts.sh
 require_pattern 'operon-sdk-js-\$\{tag\}\.tar\.gz' scripts/verify-release-artifacts.sh
-require_pattern 'doctor --help' scripts/verify-release-artifacts.sh
-require_pattern 'exec --help' scripts/verify-release-artifacts.sh
+require_pattern 'scripts/smoke-release-archive.sh "\$WORKDIR/assets/\$asset"' scripts/verify-release-artifacts.sh
+require_pattern 'doctor --help' scripts/smoke-release-archive.sh
+require_pattern 'exec --help' scripts/smoke-release-archive.sh
 
 require_file .github/workflows/verify-release-artifacts.yml
 require_file .github/workflows/verify-readme-quickstart.yml
@@ -40,6 +42,7 @@ require_pattern 'README Quickstart' docs/plan/v0.12.4-release-artifact-verificat
 require_pattern 'v0.12.4 Release Artifact Verification Validation' scripts/ci/run-validations.sh
 
 bash -n scripts/verify-release-artifacts.sh
+bash -n scripts/smoke-release-archive.sh
 scripts/verify-release-artifacts.sh --dry-run v0.13.1 >/dev/null
 
 echo "v0.12.4 release artifact verification validation passed"
