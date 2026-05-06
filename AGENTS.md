@@ -1009,8 +1009,9 @@ Defer:
   `scripts/verify-v0.17-release-ci-observability.sh`, and
   `scripts/verify-readme-quickstart-docker.sh --dry-run` now cover CI-mode SDK
   validation, Windows target daemon test compilation, release artifact dry-run
-  wiring, README Quickstart dry-run wiring, and deterministic workflow failure
-  triage. Nothing remains in v0.17.
+  wiring, README Quickstart dry-run wiring, deterministic workflow failure
+  triage, and legacy validation drift after later file-boundary refactors.
+  Nothing remains in v0.17.
 - Latest phase status update: v0.17.1 Maintainability Cleanup is completed.
   SDK gRPC mapper helpers live in `packages/sdk-js/src/grpc-mappers.ts`,
   Windows mount adapter helpers live in focused `windows_*` modules, daemon CLI

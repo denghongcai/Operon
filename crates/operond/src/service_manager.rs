@@ -17,7 +17,7 @@ use std::{
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]
 use std::process::Command;
 
-#[cfg(any(test, target_os = "linux"))]
+#[cfg(target_os = "linux")]
 const SYSTEMD_UNIT_NAME: &str = "operond.service";
 #[cfg(any(test, target_os = "macos"))]
 const LAUNCHD_LABEL: &str = "dev.operon.operond";

@@ -13,7 +13,7 @@ require_pattern 'Phase 89: v0.13.5 Daemon Service Management' docs/plan/developm
 require_pattern 'No v0.13.5 daemon service management work remains' docs/plan/development-phases.md
 
 require_file crates/operond/src/service_manager.rs
-require_pattern 'enum ServiceCommand' crates/operond/src/main.rs
+require_pattern 'enum ServiceCommand' crates/operond/src/daemon_cli.rs
 require_pattern 'ServiceCommand::Install' crates/operond/src/main.rs
 require_pattern 'service_manager::install' crates/operond/src/main.rs
 require_pattern 'render_systemd_user_unit' crates/operond/src/service_manager.rs

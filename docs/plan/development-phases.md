@@ -5844,6 +5844,9 @@ Completed:
   `scripts/ci/run-validations.sh` under the existing `core` group.
 - Covered CI-mode SDK validation, Windows target daemon test compilation,
   release artifact dry-run wiring, and README Quickstart dry-run wiring.
+- Updated older v0.13.5, v0.14, and v0.14.1 validation scripts to follow the
+  current daemon CLI, Windows mount status, and `v0.16.5` release-line
+  boundaries.
 
 Remaining:
 
