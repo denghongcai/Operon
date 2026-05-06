@@ -14,7 +14,7 @@ require_pattern 'message ExecSessionResize' proto/operon/runtime.proto
 require_pattern 'message ExecSessionEvent' proto/operon/runtime.proto
 require_pattern 'allow_sessions' crates/operon-core/src/policy.rs
 require_pattern 'exec.session' docs/plan/v0.11-exec-session-pty-interactive.md
-require_pattern 'Session' crates/operon-cli/src/main.rs
+require_pattern 'Session' crates/operon-cli/src/cli_args.rs
 require_pattern 'RawModeGuard' crates/operon-cli/src/commands/exec_session.rs
 require_pattern 'ExecSessionInputSource::LocalStdin' crates/operon-cli/src/commands/exec_session.rs
 require_pattern 'open_exec_session' crates/operond/src

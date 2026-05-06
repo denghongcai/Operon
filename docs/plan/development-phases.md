@@ -5969,6 +5969,73 @@ Remaining:
 
 - No v0.17.3 mount adapter maintainability cleanup work remains.
 
+## Phase 107: v0.17.4 Daemon Runtime Maintainability Cleanup
+
+Status: Completed.
+
+Goal: reduce daemon exec runtime file responsibility without changing exec
+protocol, policy, audit, log, cancellation, or streaming behavior.
+
+Detailed plan: `docs/plan/v0.17.4-daemon-runtime-maintainability.md`.
+
+Planned:
+
+- Move exec child process group, Windows Job Object, cancellation, stdio pump,
+  and capture-task helpers out of `crates/operond/src/exec_runtime.rs`.
+- Keep `exec_runtime.rs` focused on exec authorization, state transitions,
+  log/event APIs, completion, and persistence behavior.
+- Preserve Unix process-group cancellation, Windows Job Object cancellation,
+  timeout behavior, stdin pumping, stdout/stderr capture, and existing tests.
+- Add focused validation for the new daemon runtime boundary.
+
+Progress:
+
+- Moved exec child process group handling, Windows Job Object lifecycle,
+  platform cancellation helpers, stdout/stderr capture, stdin pumping, and
+  capture-task waiting into `crates/operond/src/exec_process.rs`.
+- Kept `exec_runtime.rs` focused on exec authorization, task orchestration,
+  log/event APIs, completion, persistence, and retention behavior.
+- Added `scripts/verify-v0.17.4-daemon-runtime-maintainability.sh` and wired it
+  into the consolidated `core` validation group.
+
+Remaining:
+
+- No v0.17.4 daemon runtime maintainability cleanup work remains.
+
+## Phase 108: v0.17.5 CLI Entrypoint Maintainability Cleanup
+
+Status: Completed.
+
+Goal: reduce `operon-cli` entrypoint responsibility without changing public CLI
+commands, flags, output, config loading, or command behavior.
+
+Detailed plan: `docs/plan/v0.17.5-cli-entrypoint-maintainability.md`.
+
+Planned:
+
+- Move clap argument and subcommand definitions out of
+  `crates/operon-cli/src/main.rs`.
+- Move top-level command dispatch and shell completion handling out of
+  `main.rs`.
+- Keep public help, command names, aliases, flags, JSON/quiet behavior, and
+  existing command modules unchanged.
+- Add focused validation for the new CLI entrypoint boundaries.
+
+Progress:
+
+- Moved the public clap model into `crates/operon-cli/src/cli_args.rs`.
+- Moved top-level command dispatch and shell completion generation into
+  `crates/operon-cli/src/cli_dispatch.rs`.
+- Reduced `crates/operon-cli/src/main.rs` to a thin parse-and-dispatch
+  entrypoint while preserving the existing command modules and root output
+  helper re-exports used by onboard code.
+- Added `scripts/verify-v0.17.5-cli-entrypoint-maintainability.sh` and wired it
+  into the consolidated `core` validation group.
+
+Remaining:
+
+- No v0.17.5 CLI entrypoint maintainability cleanup work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

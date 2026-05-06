@@ -96,6 +96,8 @@ validations=(
   "sdk|v0.17.1 Maintainability Cleanup Validation|scripts/verify-v0.17.1-maintainability-cleanup.sh"
   "core|v0.17.2 Mount Probe Reliability Cleanup Validation|scripts/verify-v0.17.2-mount-probe-reliability.sh"
   "core|v0.17.3 Mount Adapter Maintainability Cleanup Validation|scripts/verify-v0.17.3-mount-adapter-maintainability.sh"
+  "core|v0.17.4 Daemon Runtime Maintainability Cleanup Validation|scripts/verify-v0.17.4-daemon-runtime-maintainability.sh"
+  "core|v0.17.5 CLI Entrypoint Maintainability Cleanup Validation|scripts/verify-v0.17.5-cli-entrypoint-maintainability.sh"
 )
 
 failures=()

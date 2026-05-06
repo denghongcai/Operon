@@ -26,7 +26,7 @@ require_pattern 'run_request_from_cli' crates/operon-cli/src/commands/exec_args.
 require_pattern 'command_from_cli_args' crates/operon-cli/src/commands/exec_args.rs
 require_pattern 'pub\(crate\) async fn session' crates/operon-cli/src/commands/exec_session.rs
 require_pattern 'RawModeGuard' crates/operon-cli/src/commands/exec_session.rs
-require_pattern 'commands::exec_session::session' crates/operon-cli/src/main.rs
+require_pattern 'commands::exec_session::session' crates/operon-cli/src/cli_dispatch.rs
 reject_pattern 'RawModeGuard' crates/operon-cli/src/commands/exec.rs
 reject_pattern 'fn shell_escape_arg' crates/operon-cli/src/commands/exec.rs
 

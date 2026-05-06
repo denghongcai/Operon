@@ -15,9 +15,9 @@ require_pattern 'No v0.12.1 work remains' docs/plan/development-phases.md
 require_pattern 'private_file_security_model' crates/operon-cli/src/private_files.rs
 require_pattern 'windows-acl-verified' crates/operon-cli/src/private_files.rs
 require_pattern 'windows-acl-verified' crates/operon-cli/src/commands/doctor.rs
-require_pattern 'exec_cancellation_guarantee' crates/operond/src/exec_runtime.rs
-require_pattern 'job-object-process-tree' crates/operond/src/exec_runtime.rs
-require_pattern 'process-group' crates/operond/src/exec_runtime.rs
+require_pattern 'exec_cancellation_guarantee' crates/operond/src/exec_process.rs
+require_pattern 'job-object-process-tree' crates/operond/src/exec_process.rs
+require_pattern 'process-group' crates/operond/src/exec_process.rs
 require_pattern 'exec_session_portable_pty_smoke_outputs_and_exits' crates/operond/src/exec_session.rs
 require_pattern 'portable-pty-smoke-validated' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'windows-portable-pty-smoke-validated' crates/operon-cli/src/commands/doctor.rs

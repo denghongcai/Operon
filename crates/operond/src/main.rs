@@ -31,6 +31,7 @@ mod capability_diagnostics;
 mod daemon_cli;
 mod defaults;
 mod exec_command;
+mod exec_process;
 mod exec_runtime;
 mod exec_service;
 mod exec_session;

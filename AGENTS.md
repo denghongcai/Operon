@@ -384,6 +384,16 @@ Operon should not own:
   - Completed v0.17.3 scope for moving Linux/macOS FUSE attribute helpers and
     Windows security descriptor behavior behind focused mount adapter modules.
 
+- `docs/plan/v0.17.4-daemon-runtime-maintainability.md`
+  - Completed v0.17.4 scope for moving daemon exec child process lifecycle,
+    platform cancellation, stdio pumping, and stream capture helpers behind
+    `crates/operond/src/exec_process.rs`.
+
+- `docs/plan/v0.17.5-cli-entrypoint-maintainability.md`
+  - Completed v0.17.5 scope for moving the CLI clap model into
+    `crates/operon-cli/src/cli_args.rs` and top-level dispatch/completion into
+    `crates/operon-cli/src/cli_dispatch.rs`.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -1049,3 +1059,15 @@ Defer:
   lives in `crates/operon-mount/src/windows_security.rs`, and
   `scripts/verify-v0.17.3-mount-adapter-maintainability.sh` validates the moved
   boundaries. Nothing remains in v0.17.3.
+- Latest phase status update: v0.17.4 Daemon Runtime Maintainability Cleanup is
+  completed. Exec child process lifecycle, platform cancellation, stdin
+  pumping, stdout/stderr capture, and capture-task waiting now live in
+  `crates/operond/src/exec_process.rs`, and
+  `scripts/verify-v0.17.4-daemon-runtime-maintainability.sh` validates the
+  boundary. Nothing remains in v0.17.4.
+- Latest phase status update: v0.17.5 CLI Entrypoint Maintainability Cleanup is
+  completed. The clap model lives in `crates/operon-cli/src/cli_args.rs`,
+  top-level dispatch and completion live in
+  `crates/operon-cli/src/cli_dispatch.rs`, and
+  `scripts/verify-v0.17.5-cli-entrypoint-maintainability.sh` validates the
+  boundary. Nothing remains in v0.17.5.
