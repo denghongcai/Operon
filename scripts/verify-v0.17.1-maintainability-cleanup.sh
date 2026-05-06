@@ -32,8 +32,12 @@ require_pattern 'mod daemon_cli;' crates/operond/src/main.rs
 require_pattern 'pub\(crate\) struct Args' crates/operond/src/daemon_cli.rs
 require_pattern 'pub\(crate\) enum ServiceCommand' crates/operond/src/daemon_cli.rs
 
-pnpm --dir packages/sdk-js typecheck
-pnpm --dir packages/sdk-js test
+if [[ "${OPERON_SKIP_SDK_TESTS:-0}" == "1" ]]; then
+  echo "skipping @operon/sdk tests; TypeScript CI already covers them"
+else
+  pnpm --dir packages/sdk-js typecheck
+  pnpm --dir packages/sdk-js test
+fi
 cargo check -p operond --locked
 cargo check -p operond --target x86_64-pc-windows-gnu --tests --locked
 cargo check -p operon-mount --target x86_64-pc-windows-gnu --tests --locked
