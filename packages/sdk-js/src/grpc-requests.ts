@@ -1,5 +1,5 @@
 import type { ExecSessionRequest as GrpcExecSessionRequest } from "./generated/operon/runtime";
-import type { ExecSessionStart, FsPrecondition, ServiceDatagram } from "./index";
+import type { ExecSessionStart, FsPrecondition, ServiceDatagram } from "./types";
 
 import { bodyToByteChunks } from "./transport";
 

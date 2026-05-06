@@ -24,7 +24,7 @@ require_pattern 'argv_exec_request_keeps_arguments_unescaped' crates/operon-cli/
 
 require_pattern 'load_exec_logs' crates/operon-store/src/lib.rs
 require_pattern 'exec_log_buffers_from_persisted_logs' crates/operond/src/exec_runtime.rs
-require_pattern 'exec_log_buffers_from_persisted_logs' crates/operond/src/main.rs
+require_pattern 'exec_log_buffers_from_persisted_logs' crates/operond/src/daemon_state.rs
 require_pattern 'persisted_exec_logs_seed_bounded_log_buffers' crates/operond/src/exec_runtime.rs
 
 require_pattern 'service_check_audit_reason' crates/operond/src/service_forward.rs

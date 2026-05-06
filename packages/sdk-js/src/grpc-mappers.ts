@@ -38,7 +38,7 @@ import type {
   ServiceDatagramTunnelEvent,
   ServiceDefinition,
   ServiceList,
-} from "./index";
+} from "./types";
 
 export function serviceTunnelReadableStream(
   iterator: AsyncIterator<GrpcServiceTunnelResponse>,

@@ -239,4 +239,57 @@ mod tests {
         assert_eq!(renamed.name, "renamed.txt");
         assert_eq!(renamed.path, "/dir/renamed.txt");
     }
+
+    #[test]
+    fn remove_then_rename_replaces_destination_inode() {
+        let root = FsStat {
+            path: "/".to_string(),
+            is_file: false,
+            is_dir: true,
+            size: 0,
+            version: "root".to_string(),
+        };
+        let mut table = InodeTable::new(root);
+        let source = table
+            .upsert(
+                fuser::INodeNo::ROOT,
+                "source.txt".to_string(),
+                FsStat {
+                    path: "/source.txt".to_string(),
+                    is_file: true,
+                    is_dir: false,
+                    size: 3,
+                    version: "source".to_string(),
+                },
+            )
+            .expect("source");
+        let destination = table
+            .upsert(
+                fuser::INodeNo::ROOT,
+                "destination.txt".to_string(),
+                FsStat {
+                    path: "/destination.txt".to_string(),
+                    is_file: true,
+                    is_dir: false,
+                    size: 9,
+                    version: "destination".to_string(),
+                },
+            )
+            .expect("destination");
+
+        table.remove_subtree("/destination.txt");
+        table
+            .rename_subtree(
+                "/source.txt",
+                "/destination.txt",
+                fuser::INodeNo::ROOT,
+                "destination.txt".to_string(),
+            )
+            .expect("rename over destination");
+
+        assert!(table.get(destination.ino).is_none());
+        let renamed = table.get(source.ino).expect("source inode renamed");
+        assert_eq!(renamed.path, "/destination.txt");
+        assert_eq!(renamed.name, "destination.txt");
+    }
 }

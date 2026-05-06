@@ -5,6 +5,8 @@ mod fuse_attr;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod fuse_fs;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+mod fuse_semantics;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod inode_table;
 pub mod mount_core;
 #[cfg(any(target_os = "linux", target_os = "macos"))]

@@ -1,6 +1,6 @@
 import { Metadata, type CallOptions } from "nice-grpc";
 
-import type { NodeEndpoint } from "./index";
+import type { NodeEndpoint } from "./types";
 
 export const DEFAULT_LIST_PAGE_SIZE = 1000;
 

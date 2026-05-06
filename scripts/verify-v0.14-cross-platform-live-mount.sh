@@ -57,7 +57,7 @@ require_pattern 'pub fn classify_mount_error' crates/operon-mount/src/mount_core
 require_pattern 'MountAdapterCore::new' crates/operon-mount/src/fuse_fs.rs
 require_pattern 'fn getxattr' crates/operon-mount/src/fuse_fs.rs
 require_pattern 'fn listxattr' crates/operon-mount/src/fuse_fs.rs
-require_pattern 'Errno::NO_XATTR' crates/operon-mount/src/fuse_fs.rs
+require_pattern 'Errno::NO_XATTR' crates/operon-mount/src/fuse_semantics.rs
 require_pattern '#!\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/fuse_fs.rs
 require_pattern '#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/operon-mount/src/lib.rs
 require_pattern 'macos-no-mount = \["fuser/macos-no-mount"\]' crates/operon-mount/Cargo.toml

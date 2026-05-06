@@ -9,7 +9,7 @@ source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.9.2-policy-derived-capabilities.md
 require_pattern 'capabilities_from_policy' crates/operond/src/defaults.rs
-require_pattern 'capabilities_from_policy\(&node.id, &policy\)' crates/operond/src/main.rs
+require_pattern 'capabilities_from_policy\(&node.id, &policy\)' crates/operond/src/daemon_state.rs
 require_pattern 'policy_capabilities_do_not_advertise_unconfigured_policy_surfaces' crates/operond/src/defaults.rs
 require_pattern 'policy_capabilities_reflect_configured_mounts_execs_and_services' crates/operond/src/defaults.rs
 require_pattern 'v0.9.2 Policy-Derived Capability Discovery' docs/plan/development-phases.md

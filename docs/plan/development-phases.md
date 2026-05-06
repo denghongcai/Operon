@@ -6036,6 +6036,131 @@ Remaining:
 
 - No v0.17.5 CLI entrypoint maintainability cleanup work remains.
 
+## Phase 109: v0.18 Daemon Runtime / State Boundary Cleanup
+
+Status: Completed.
+
+Goal: reduce daemon startup and runtime-state responsibility in
+`crates/operond/src/main.rs` without changing daemon CLI, config loading,
+runtime protocol, policy, audit, exec, filesystem, service, or persistence
+behavior.
+
+Detailed plan: `docs/plan/v0.18-daemon-runtime-state-boundary.md`.
+
+Planned:
+
+- Move config-path loading, daemon section validation, secret loading,
+  store-backed state restoration, node-info construction, capability derivation,
+  and `AppState` construction behind a focused daemon state module.
+- Keep `main.rs` responsible for CLI parsing, service-management dispatch,
+  foreground startup orchestration, LAN advertisement, server construction, and
+  shutdown wiring.
+- Preserve store-backed audit/exec/log visibility, in-memory retention, mDNS
+  advertisement behavior, auth-token resolution, and default policy behavior.
+- Add focused validation that checks the new module boundary and existing
+  daemon behavior.
+
+Progress:
+
+- Added `crates/operond/src/daemon_state.rs` to own config loading, daemon
+  section validation, secret loading, store-backed audit/exec/log restoration,
+  node-info construction, policy-derived capability construction, and
+  `AppState` construction.
+- Updated daemon foreground startup so `main.rs` delegates runtime-state
+  construction to `daemon_state::load_daemon_runtime` while keeping CLI dispatch,
+  service-management dispatch, LAN advertisement, server construction, and
+  shutdown orchestration in `main.rs`.
+- Added `scripts/verify-v0.18-daemon-runtime-state-boundary.sh` and wired it into
+  the consolidated `core` validation group.
+- Aligned earlier validation gates that asserted daemon startup ownership in
+  `main.rs` so they now check `daemon_state.rs`, the actual owner after this
+  boundary split.
+
+Remaining:
+
+- No v0.18 daemon runtime/state boundary cleanup work remains.
+
+## Phase 110: v0.18.1 Mount Adapter Semantics Hardening
+
+Status: Completed.
+
+Goal: harden mount adapter semantics around path, inode, and
+unsupported-operation handling without changing Linux/macOS FUSE behavior,
+Windows WinFsp behavior, protocol shape, CLI commands, SDK APIs, or release
+smoke workflow semantics.
+
+Detailed plan: `docs/plan/v0.18.1-mount-adapter-semantics-hardening.md`.
+
+Planned:
+
+- Isolate small FUSE semantic helpers for unsupported rename flags, xattr errno
+  behavior, and inode update paths where tests can cover the boundary.
+- Add focused tests for overwrite rename inode invalidation, xattr behavior,
+  invalid child names, and write/truncate metadata refresh behavior.
+- Keep remote filesystem behavior delegated through `MountAdapterCore`; do not
+  add local caching semantics that would hide remote state.
+- Keep cross-platform live mount gates and release-oriented smoke behavior
+  unchanged.
+
+Progress:
+
+- Added `crates/operon-mount/src/fuse_semantics.rs` for unsupported rename flag
+  and xattr errno decisions, and routed FUSE rename/xattr callbacks through
+  those focused helpers.
+- Added a shared FUSE inode metadata refresh helper so getattr, truncate, and
+  write refresh cached inode state through one boundary.
+- Added focused tests for overwrite rename destination invalidation, rename flag
+  rejection, xattr empty/unsupported/missing-inode behavior, invalid child
+  segment handling, and cached metadata refresh after write/truncate-style stat
+  updates.
+- Added `scripts/verify-v0.18.1-mount-adapter-semantics-hardening.sh` and wired
+  it into the consolidated `core` validation group.
+- Aligned the cross-platform live mount validation gate so xattr errno behavior
+  is checked in `fuse_semantics.rs`, the actual owner after this helper split.
+
+Remaining:
+
+- No v0.18.1 mount adapter semantics hardening work remains.
+
+## Phase 111: v0.18.2 SDK API Boundary Cleanup
+
+Status: Completed.
+
+Goal: reduce TypeScript SDK entrypoint responsibility while keeping
+`packages/sdk-js/src/index.ts` as the stable public export surface and
+preserving all existing public SDK methods and types.
+
+Detailed plan: `docs/plan/v0.18.2-sdk-api-boundary-cleanup.md`.
+
+Planned:
+
+- Move public SDK type definitions into a focused internal source file and
+  re-export them from `index.ts`.
+- Remove internal imports from helper modules that depend on `index.ts`, so
+  generated request/mapping/transport helpers depend on the smaller type module
+  instead of the public entrypoint.
+- Keep `OperonClient`, generated protocol exports, package entrypoint, package
+  version, public method names, and test expectations unchanged.
+- Add focused validation for the type-module boundary and existing SDK tests.
+
+Progress:
+
+- Added `packages/sdk-js/src/types.ts` for public SDK type definitions and kept
+  `packages/sdk-js/src/index.ts` as the stable public re-export surface.
+- Updated SDK helper modules so transport, generated request helpers, and gRPC
+  mappers import public type definitions from `types.ts` instead of depending on
+  the public entrypoint.
+- Preserved `OperonClient`, generated protocol exports, package entrypoint,
+  package version, public method names, and existing SDK tests.
+- Added `scripts/verify-v0.18.2-sdk-api-boundary-cleanup.sh` and wired it into
+  the consolidated `sdk` validation group.
+- Aligned earlier SDK validation gates so public type assertions now target
+  `types.ts` while `index.ts` remains the public re-export surface.
+
+Remaining:
+
+- No v0.18.2 SDK API boundary cleanup work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

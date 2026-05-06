@@ -20,7 +20,8 @@ rg -n '^#\[cfg\(any\(target_os = "linux", target_os = "macos"\)\)\]' crates/oper
 rg -n '^pub mod mount_core;' crates/operon-mount/src/lib.rs
 rg -n '^pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 
-rg -n 'export type ExecLogStreamEvent' packages/sdk-js/src/index.ts
+rg -n 'export type ExecLogStreamEvent' packages/sdk-js/src/types.ts
+rg -n 'ExecLogStreamEvent' packages/sdk-js/src/index.ts
 rg -n 'streamExecLogEvents' packages/sdk-js/src/index.ts
 rg -n 'PROTOCOL_VERSION: &str = "v0.16.5"' crates/operon-protocol/src/lib.rs
 

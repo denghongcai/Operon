@@ -98,6 +98,9 @@ validations=(
   "core|v0.17.3 Mount Adapter Maintainability Cleanup Validation|scripts/verify-v0.17.3-mount-adapter-maintainability.sh"
   "core|v0.17.4 Daemon Runtime Maintainability Cleanup Validation|scripts/verify-v0.17.4-daemon-runtime-maintainability.sh"
   "core|v0.17.5 CLI Entrypoint Maintainability Cleanup Validation|scripts/verify-v0.17.5-cli-entrypoint-maintainability.sh"
+  "core|v0.18 Daemon Runtime/State Boundary Validation|scripts/verify-v0.18-daemon-runtime-state-boundary.sh"
+  "core|v0.18.1 Mount Adapter Semantics Hardening Validation|scripts/verify-v0.18.1-mount-adapter-semantics-hardening.sh"
+  "sdk|v0.18.2 SDK API Boundary Cleanup Validation|scripts/verify-v0.18.2-sdk-api-boundary-cleanup.sh"
 )
 
 failures=()

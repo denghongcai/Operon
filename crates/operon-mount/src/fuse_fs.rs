@@ -12,6 +12,7 @@ use operon_core::FsStat;
 use crate::{
     errors::errno_for_error,
     fuse_attr::{attr_trace_detail, file_attr},
+    fuse_semantics::{rename_flags_errno, xattr_decision, XattrDecision, XattrRequest},
     inode_table::{InodeEntry, InodeTable},
     mount_core::{MountAdapterCore, RemoteFs},
     path::{join_remote_child, validate_child_name},
@@ -82,6 +83,11 @@ impl OperonFuseFs {
         self.write_inodes()?.upsert(parent, name.to_string(), stat)
     }
 
+    fn refresh_inode_stat(&self, entry: InodeEntry, stat: FsStat) -> anyhow::Result<InodeEntry> {
+        self.write_inodes()
+            .and_then(|mut table| table.upsert(entry.parent, entry.name, stat))
+    }
+
     fn access_errno(&self, ino: fuser::INodeNo) -> Option<fuser::Errno> {
         self.inode(ino).map_or(Some(fuser::Errno::ENOENT), |_| None)
     }
@@ -133,19 +139,14 @@ impl fuser::Filesystem for OperonFuseFs {
         };
 
         match self.core.stat(&entry.path) {
-            Ok(stat) => {
-                let refreshed = self
-                    .write_inodes()
-                    .and_then(|mut table| table.upsert(entry.parent, entry.name, stat));
-                match refreshed {
-                    Ok(entry) => {
-                        let attr = file_attr(&entry);
-                        trace_fuse_event("getattr_attr", attr_trace_detail(&attr));
-                        reply.attr(&TTL, &attr);
-                    }
-                    Err(error) => reply.error(errno_for_error(&error)),
+            Ok(stat) => match self.refresh_inode_stat(entry, stat) {
+                Ok(entry) => {
+                    let attr = file_attr(&entry);
+                    trace_fuse_event("getattr_attr", attr_trace_detail(&attr));
+                    reply.attr(&TTL, &attr);
                 }
-            }
+                Err(error) => reply.error(errno_for_error(&error)),
+            },
             Err(error) => reply.error(errno_for_error(&error)),
         }
     }
@@ -196,10 +197,11 @@ impl fuser::Filesystem for OperonFuseFs {
         };
 
         if let Some(size) = size {
-            match self.core.truncate(&entry.path, size).and_then(|stat| {
-                self.write_inodes()
-                    .and_then(|mut table| table.upsert(entry.parent, entry.name.clone(), stat))
-            }) {
+            match self
+                .core
+                .truncate(&entry.path, size)
+                .and_then(|stat| self.refresh_inode_stat(entry, stat))
+            {
                 Ok(entry) => reply.attr(&TTL, &file_attr(&entry)),
                 Err(error) => reply.error(errno_for_error(&error)),
             }
@@ -325,9 +327,9 @@ impl fuser::Filesystem for OperonFuseFs {
             "rename",
             format!("parent={parent:?} name={name:?} newparent={newparent:?} newname={newname:?} flags={flags:?}"),
         );
-        if !flags.is_empty() {
+        if let Some(errno) = rename_flags_errno(flags) {
             trace_fuse_event("rename_error", format!("unsupported flags={flags:?}"));
-            reply.error(fuser::Errno::ENOSYS);
+            reply.error(errno);
             return;
         }
         let from_path = match self.child_path(parent, name) {
@@ -426,14 +428,9 @@ impl fuser::Filesystem for OperonFuseFs {
         match self.core.write_file(&entry.path, offset, data) {
             Ok(bytes_written) => {
                 if let Ok(stat) = self.core.stat(&entry.path) {
-                    match self.write_inodes() {
-                        Ok(mut table) => {
-                            let _ = table.upsert(entry.parent, entry.name, stat);
-                        }
-                        Err(error) => {
-                            reply.error(errno_for_error(&error));
-                            return;
-                        }
+                    if let Err(error) = self.refresh_inode_stat(entry, stat) {
+                        reply.error(errno_for_error(&error));
+                        return;
                     }
                 }
                 reply.written(bytes_written.min(u32::MAX as u64) as u32);
@@ -619,9 +616,11 @@ impl fuser::Filesystem for OperonFuseFs {
         reply: fuser::ReplyXattr,
     ) {
         trace_fuse_event("getxattr", format!("ino={ino:?} name={name:?}"));
-        match self.access_errno(ino) {
-            Some(errno) => reply.error(errno),
-            None => reply.error(fuser::Errno::NO_XATTR),
+        match xattr_decision(self.access_errno(ino), XattrRequest::Get) {
+            XattrDecision::Error(errno) => reply.error(errno),
+            XattrDecision::EmptyListSize | XattrDecision::EmptyListData => {
+                reply.error(fuser::Errno::ENOTSUP)
+            }
         }
     }
 
@@ -633,10 +632,10 @@ impl fuser::Filesystem for OperonFuseFs {
         reply: fuser::ReplyXattr,
     ) {
         trace_fuse_event("listxattr", format!("ino={ino:?} size={size}"));
-        match self.access_errno(ino) {
-            Some(errno) => reply.error(errno),
-            None if size == 0 => reply.size(0),
-            None => reply.data(&[]),
+        match xattr_decision(self.access_errno(ino), XattrRequest::List { size }) {
+            XattrDecision::Error(errno) => reply.error(errno),
+            XattrDecision::EmptyListSize => reply.size(0),
+            XattrDecision::EmptyListData => reply.data(&[]),
         }
     }
 
@@ -651,9 +650,11 @@ impl fuser::Filesystem for OperonFuseFs {
         reply: fuser::ReplyEmpty,
     ) {
         trace_fuse_event("setxattr", format!("ino={ino:?} name={name:?}"));
-        match self.access_errno(ino) {
-            Some(errno) => reply.error(errno),
-            None => reply.error(fuser::Errno::ENOTSUP),
+        match xattr_decision(self.access_errno(ino), XattrRequest::Set) {
+            XattrDecision::Error(errno) => reply.error(errno),
+            XattrDecision::EmptyListSize | XattrDecision::EmptyListData => {
+                reply.error(fuser::Errno::ENOTSUP)
+            }
         }
     }
 
@@ -665,9 +666,11 @@ impl fuser::Filesystem for OperonFuseFs {
         reply: fuser::ReplyEmpty,
     ) {
         trace_fuse_event("removexattr", format!("ino={ino:?} name={name:?}"));
-        match self.access_errno(ino) {
-            Some(errno) => reply.error(errno),
-            None => reply.error(fuser::Errno::NO_XATTR),
+        match xattr_decision(self.access_errno(ino), XattrRequest::Remove) {
+            XattrDecision::Error(errno) => reply.error(errno),
+            XattrDecision::EmptyListSize | XattrDecision::EmptyListData => {
+                reply.error(fuser::Errno::ENOTSUP)
+            }
         }
     }
 
@@ -764,6 +767,23 @@ mod tests {
                 .map(|errno| format!("{errno:?}")),
             Some(format!("{:?}", fuser::Errno::ENOENT))
         );
+    }
+
+    #[test]
+    fn refresh_inode_stat_updates_cached_write_and_truncate_metadata() {
+        let remote = Arc::new(MockRemoteFs::new([file_stat("/file.txt", 12)]));
+        let fs = OperonFuseFs::new(remote, dir_stat("/"));
+        let entry = fs
+            .lookup_child(fuser::INodeNo::ROOT, OsStr::new("file.txt"))
+            .expect("lookup child");
+
+        let refreshed = fs
+            .refresh_inode_stat(entry.clone(), file_stat("/file.txt", 64))
+            .expect("refresh cached inode");
+
+        assert_eq!(refreshed.ino, entry.ino);
+        assert_eq!(refreshed.size, 64);
+        assert_eq!(fs.inode(entry.ino).expect("cached inode").size, 64);
     }
 
     struct MockRemoteFs {

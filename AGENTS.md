@@ -394,6 +394,21 @@ Operon should not own:
     `crates/operon-cli/src/cli_args.rs` and top-level dispatch/completion into
     `crates/operon-cli/src/cli_dispatch.rs`.
 
+- `docs/plan/v0.18-daemon-runtime-state-boundary.md`
+  - Completed v0.18 scope for moving daemon startup config loading, persisted
+    state restoration, node-info construction, capability derivation, and
+    `AppState` construction behind a focused daemon state module.
+
+- `docs/plan/v0.18.1-mount-adapter-semantics-hardening.md`
+  - Completed v0.18.1 scope for focused mount adapter semantics hardening around
+    FUSE rename flags, xattr errno behavior, inode updates, and write/truncate
+    metadata refresh tests.
+
+- `docs/plan/v0.18.2-sdk-api-boundary-cleanup.md`
+  - Completed v0.18.2 scope for moving TypeScript SDK public type definitions
+    behind a focused type module while keeping `packages/sdk-js/src/index.ts`
+    as the stable public export surface.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -1045,8 +1060,6 @@ Defer:
   `25443548403` built and archive-smoked the artifacts, public artifact
   verification passed in workflow `25443988140`, and README Quickstart
   verification passed in workflow `25443990441`. Nothing remains in v0.16.5.
-- Next planned phase order: choose the next post-release phase after v0.16.5,
-  v0.17, v0.17.1, v0.17.2, and v0.17.3 completion.
 - Latest phase status update: v0.17.2 Mount Probe Reliability Cleanup is
   completed. The fuser hello probe now records and warns on failures without
   failing aggregate `platform=all` live mount workflow runs, while standalone
@@ -1071,3 +1084,29 @@ Defer:
   `crates/operon-cli/src/cli_dispatch.rs`, and
   `scripts/verify-v0.17.5-cli-entrypoint-maintainability.sh` validates the
   boundary. Nothing remains in v0.17.5.
+- Latest phase status update: v0.18 Daemon Runtime / State Boundary Cleanup is
+  completed. Daemon runtime-state construction now lives in
+  `crates/operond/src/daemon_state.rs`, including config loading, daemon section
+  validation, secret loading, store-backed audit/exec/log restoration,
+  node-info construction, policy-derived capability construction, and
+  `AppState` construction. `main.rs` now delegates startup state construction
+  to `daemon_state::load_daemon_runtime`, and
+  `scripts/verify-v0.18-daemon-runtime-state-boundary.sh` validates the
+  boundary. Earlier validation gates now check `daemon_state.rs` for moved
+  startup ownership. Nothing remains in v0.18.
+- Latest phase status update: v0.18.1 Mount Adapter Semantics Hardening is
+  completed. FUSE rename flag and xattr errno decisions live in
+  `crates/operon-mount/src/fuse_semantics.rs`, FUSE inode metadata refresh is
+  shared across getattr/write/truncate paths, focused tests cover overwrite
+  rename destination invalidation, invalid child segments, xattr behavior, and
+  cached metadata refresh, and
+  `scripts/verify-v0.18.1-mount-adapter-semantics-hardening.sh` validates the
+  boundary. Earlier live-mount validation now checks `fuse_semantics.rs` for
+  moved xattr errno ownership. Nothing remains in v0.18.1.
+- Latest phase status update: v0.18.2 SDK API Boundary Cleanup is completed.
+  Public TypeScript SDK type definitions live in `packages/sdk-js/src/types.ts`,
+  `packages/sdk-js/src/index.ts` remains the stable public export surface, SDK
+  helper modules import types from the smaller type module instead of the public
+  entrypoint, and `scripts/verify-v0.18.2-sdk-api-boundary-cleanup.sh`
+  validates the boundary. Earlier SDK validation gates now check `types.ts` for
+  moved public type definitions. Nothing remains in v0.18.2.

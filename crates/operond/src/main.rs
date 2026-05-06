@@ -1,23 +1,21 @@
+use std::future::Future;
 #[cfg(test)]
-use std::collections::VecDeque;
-#[cfg(test)]
-use std::path::PathBuf;
 use std::{
-    collections::BTreeMap,
-    env, fs,
-    future::Future,
+    collections::{BTreeMap, VecDeque},
+    fs,
     path::Path,
+    path::PathBuf,
     sync::{atomic::AtomicU64, Arc, Mutex},
 };
 
 use clap::Parser;
-use operon_config::{resolve_path, OperonConfig};
+use operon_config::OperonConfig;
+use operon_core::RequestContext;
 #[cfg(test)]
 use operon_core::{
     ExecLog, ExecPolicy, ExecRecord, ExecRunRequest, ExecStatus, FsMountPolicy, FsPermissions,
-    FsPolicy, PolicyConfig, RuntimeErrorKind, ServiceDefinition, ServicePolicy,
+    FsPolicy, NodeInfo, PolicyConfig, RuntimeErrorKind, ServiceDefinition, ServicePolicy,
 };
-use operon_core::{NodeInfo, RequestContext};
 #[cfg(test)]
 use operon_fs::authorize_fs;
 #[cfg(test)]
@@ -29,6 +27,7 @@ mod audit;
 mod auth;
 mod capability_diagnostics;
 mod daemon_cli;
+mod daemon_state;
 mod defaults;
 mod exec_command;
 mod exec_process;
@@ -48,17 +47,19 @@ mod service_tcp_forward;
 mod state;
 mod store_config;
 
+use audit::record_audit;
 #[cfg(test)]
 use audit::record_audit_capability;
-use audit::{bounded_audit_events, record_audit};
 use daemon_cli::{Args, Command, ServiceCommand, StartArgs};
+#[cfg(test)]
+use daemon_state::test_state;
+#[cfg(test)]
 use defaults::{capabilities_from_policy, default_policy};
-use exec_runtime::{exec_log_buffers_from_persisted_logs, next_exec_sequence};
 use lan_advertise::advertise_lan;
 use runtime::GrpcRuntime;
 #[cfg(test)]
 use service_forward::authorize_service;
-use state::AppState;
+pub(crate) use state::AppState;
 #[cfg(test)]
 use state::MAX_IN_MEMORY_AUDIT_EVENTS;
 #[cfg(test)]
@@ -66,7 +67,6 @@ use state::{
     ExecCompletion, ExecLogBuffer, MAX_IN_MEMORY_COMPLETED_EXEC_LOG_BUFFERS,
     MAX_IN_MEMORY_EXEC_LOGS,
 };
-use store_config::resolve_store_path;
 
 pub(crate) const MAX_FS_WRITE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 pub(crate) const MAX_FS_FILE_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
@@ -113,67 +113,23 @@ where
     F: Future<Output = ()>,
 {
     let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
-    let config = OperonConfig::load(&config_path)?;
-    let config_dir = OperonConfig::config_dir(&config_path);
-    let daemon = config
-        .daemon
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("config is missing daemon section"))?;
-    let policy = config.policy.unwrap_or_else(default_policy);
-    let auth_token = daemon.auth.resolve(&config_dir)?;
-    let store = resolve_store_path(&config_dir, daemon.store.as_deref())?;
-    let store_writer = operon_store::StoreWriter::new(store.clone());
-    let secrets_path = config
-        .secrets
-        .as_ref()
-        .and_then(|secrets| secrets.file.as_ref())
-        .map(|path| resolve_path(&config_dir, path));
-    let secrets = load_secrets(secrets_path.as_deref())?;
-    let stored_execs = operon_store::load_execs(store.as_deref())?;
-    let stored_audit_events = operon_store::load_audit_events(store.as_deref())?;
-    let stored_exec_logs = operon_store::load_exec_logs(store.as_deref())?;
-    let next_exec_id = next_exec_sequence(&stored_execs);
-    let node = NodeInfo {
-        id: daemon.node_id.clone(),
-        hostname: hostname(),
-        os: env::consts::OS.to_string(),
-        arch: env::consts::ARCH.to_string(),
-    };
-    let capability_list = capabilities_from_policy(&node.id, &policy);
-    let execs = Arc::new(Mutex::new(stored_execs));
-    let state = AppState {
-        capabilities: capability_list.clone(),
-        node,
-        workspace: daemon.workspace,
-        policy,
-        auth_token,
-        store_writer,
-        secrets: Arc::new(secrets),
-        audit: Arc::new(Mutex::new(bounded_audit_events(stored_audit_events))),
-        execs,
-        exec_logs: Arc::new(Mutex::new(exec_log_buffers_from_persisted_logs(
-            stored_exec_logs,
-        ))),
-        exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-        next_exec_id: Arc::new(AtomicU64::new(next_exec_id)),
-    };
-    let mdns = if daemon.advertise_lan {
+    let loaded = daemon_state::load_daemon_runtime(&config_path)?;
+    let mdns = if loaded.advertise_lan {
         Some(advertise_lan(
-            &daemon.node_id,
-            daemon.grpc_listen,
-            &capability_list,
+            &loaded.node_id,
+            loaded.grpc_listen,
+            &loaded.capabilities,
         )?)
     } else {
         None
     };
 
-    tracing::info!("operond gRPC listening on {}", daemon.grpc_listen);
+    tracing::info!("operond gRPC listening on {}", loaded.grpc_listen);
     Server::builder()
-        .add_service(OperonRuntimeServer::new(GrpcRuntime { state }))
-        .serve_with_shutdown(daemon.grpc_listen, shutdown)
+        .add_service(OperonRuntimeServer::new(GrpcRuntime {
+            state: loaded.state,
+        }))
+        .serve_with_shutdown(loaded.grpc_listen, shutdown)
         .await?;
 
     drop(mdns);
@@ -183,20 +139,6 @@ where
 
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
-}
-
-fn hostname() -> String {
-    env::var("HOSTNAME")
-        .or_else(|_| env::var("COMPUTERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string())
-}
-
-fn load_secrets(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, String>> {
-    let Some(path) = path else {
-        return Ok(BTreeMap::new());
-    };
-    let content = fs::read_to_string(path)?;
-    Ok(serde_yaml::from_str(&content)?)
 }
 
 #[cfg(test)]
@@ -240,31 +182,6 @@ mod tests {
                     permissions: operon_core::ServicePermissions::default(),
                 }],
             },
-        }
-    }
-
-    fn test_state(policy: PolicyConfig, workspace: PathBuf) -> AppState {
-        AppState {
-            node: NodeInfo {
-                id: "node-a".to_string(),
-                hostname: "host".to_string(),
-                os: "linux".to_string(),
-                arch: "x86_64".to_string(),
-            },
-            capabilities: capabilities_from_policy("node-a", &test_policy()),
-            workspace,
-            policy,
-            auth_token: None,
-            store_writer: operon_store::StoreWriter::new(None),
-            secrets: Arc::new(BTreeMap::new()),
-            audit: Arc::new(Mutex::new(VecDeque::new())),
-            execs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_exec_id: Arc::new(AtomicU64::new(1)),
         }
     }
 

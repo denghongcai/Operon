@@ -9,8 +9,8 @@ source "$ROOT/scripts/lib/validation.sh"
 
 require_file docs/plan/v0.9.3-store-backed-audit-visibility.md
 require_pattern 'load_audit_events' crates/operon-store/src/lib.rs
-require_pattern 'load_audit_events\(store.as_deref\(\)\)' crates/operond/src/main.rs
-require_pattern 'bounded_audit_events\(stored_audit_events\)' crates/operond/src/main.rs
+require_pattern 'load_audit_events\(store.as_deref\(\)\)' crates/operond/src/daemon_state.rs
+require_pattern 'bounded_audit_events\(stored_audit_events\)' crates/operond/src/daemon_state.rs
 require_pattern 'bounded_audit_events_keeps_recent_persisted_events' crates/operond/src/audit.rs
 require_pattern 'load_audit_events_reads_persisted_audit_records_in_order' crates/operon-store/src/lib.rs
 require_pattern 'v0.9.3 Store-Backed Audit Visibility' docs/plan/development-phases.md
