@@ -12,7 +12,7 @@ rg -n 'fs_service::read_range' crates/operond/src/runtime.rs
 rg -n 'read_file_range\(operon_grpc_client::request' crates/operon-mount/src/remote_client.rs
 rg -n 'readFileRangeBytes' packages/sdk-js/src/index.ts
 rg -n 'ReadFileRange' PROTOCOL.md docs/architecture/runtime-api.md docs/architecture/technology-and-protocol-decisions.md
-rg -n 'PROTOCOL_VERSION: &str = "v0.15.0"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.16.5"' crates/operon-protocol/src/lib.rs
 
 python - <<'PY'
 from pathlib import Path

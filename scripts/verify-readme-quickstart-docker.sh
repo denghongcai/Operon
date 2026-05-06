@@ -1,7 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat >&2 <<'USAGE'
+usage:
+  scripts/verify-readme-quickstart-docker.sh
+  scripts/verify-readme-quickstart-docker.sh --dry-run
+
+Runs the README Quickstart flow in Docker against OPERON_VERSION when set, or
+the latest public GitHub Release when unset. Dry-run mode prints the resolved
+container image and release tag input without starting Docker.
+USAGE
+  exit 0
+fi
+
 IMAGE="${OPERON_README_IMAGE:-ubuntu:20.04}"
+
+if [[ "${1:-}" == "--dry-run" ]]; then
+  echo "image=$IMAGE"
+  echo "operon_version=${OPERON_VERSION:-latest-public-release}"
+  exit 0
+fi
 
 docker run --rm -i \
   --name operon-readme-quickstart-validation \

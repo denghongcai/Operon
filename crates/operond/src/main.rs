@@ -1,14 +1,16 @@
 #[cfg(test)]
 use std::collections::VecDeque;
+#[cfg(test)]
+use std::path::PathBuf;
 use std::{
     collections::BTreeMap,
     env, fs,
     future::Future,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{atomic::AtomicU64, Arc, Mutex},
 };
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use operon_config::{resolve_path, OperonConfig};
 #[cfg(test)]
 use operon_core::{
@@ -26,6 +28,7 @@ use tonic::transport::Server;
 mod audit;
 mod auth;
 mod capability_diagnostics;
+mod daemon_cli;
 mod defaults;
 mod exec_command;
 mod exec_runtime;
@@ -47,6 +50,7 @@ mod store_config;
 #[cfg(test)]
 use audit::record_audit_capability;
 use audit::{bounded_audit_events, record_audit};
+use daemon_cli::{Args, Command, ServiceCommand, StartArgs};
 use defaults::{capabilities_from_policy, default_policy};
 use exec_runtime::{exec_log_buffers_from_persisted_logs, next_exec_sequence};
 use lan_advertise::advertise_lan;
@@ -70,62 +74,6 @@ const SERVICE_DATAGRAM_PEER_IDLE_SECS: u64 = 60;
 
 tokio::task_local! {
     static AUDIT_CONTEXT: RequestContext;
-}
-
-#[derive(Debug, Parser)]
-#[command(name = "operond", version, about = "Operon capability daemon")]
-struct Args {
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Debug, Subcommand)]
-enum Command {
-    Start(StartArgs),
-    #[command(about = "Install and control operond through the platform service manager")]
-    Service {
-        #[command(subcommand)]
-        command: ServiceCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum ServiceCommand {
-    #[command(about = "Install a platform-native operond service entry")]
-    Install(ServiceInstallArgs),
-    #[command(about = "Start the installed operond service")]
-    Start,
-    #[command(about = "Stop the installed operond service")]
-    Stop,
-    #[command(about = "Show the installed operond service status")]
-    Status,
-    #[command(about = "Uninstall the platform-native operond service entry")]
-    Uninstall,
-    #[cfg(any(test, windows))]
-    #[command(
-        hide = true,
-        about = "Run operond under the Windows Service Control Manager"
-    )]
-    Run(ServiceRunArgs),
-}
-
-#[derive(Debug, Parser)]
-struct StartArgs {
-    #[arg(long)]
-    config: Option<PathBuf>,
-}
-
-#[derive(Debug, Parser)]
-struct ServiceInstallArgs {
-    #[arg(long)]
-    config: PathBuf,
-}
-
-#[cfg(any(test, windows))]
-#[derive(Debug, Parser)]
-struct ServiceRunArgs {
-    #[arg(long)]
-    config: PathBuf,
 }
 
 #[tokio::main]

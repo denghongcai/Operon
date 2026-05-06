@@ -13,16 +13,15 @@ use anyhow::Context;
 use operon_core::FsStat;
 use operon_network::NodeEndpoint;
 use windows_sys::Win32::{
-    Foundation::{LocalFree, STATUS_BUFFER_OVERFLOW, STATUS_OBJECT_NAME_COLLISION},
+    Foundation::{LocalFree, STATUS_BUFFER_OVERFLOW},
     Security::{
         Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION},
         GetSecurityDescriptorLength,
     },
 };
 use winfsp_wrs::{
-    u16cstr, u16str, CreateOptions, FileAttributes, U16CStr, U16CString, NTSTATUS,
-    STATUS_ACCESS_DENIED, STATUS_FILE_IS_A_DIRECTORY, STATUS_INVALID_PARAMETER,
-    STATUS_NOT_A_DIRECTORY, STATUS_NOT_IMPLEMENTED, STATUS_OBJECT_NAME_NOT_FOUND, STATUS_SUCCESS,
+    u16cstr, u16str, CreateOptions, U16CStr, U16CString, NTSTATUS, STATUS_FILE_IS_A_DIRECTORY,
+    STATUS_INVALID_PARAMETER, STATUS_NOT_A_DIRECTORY, STATUS_SUCCESS,
 };
 use winfsp_wrs_sys::{
     FspCleanupDelete, FspFileSystemAddDirInfo, FspFileSystemCreate, FspFileSystemDelete,
@@ -35,11 +34,11 @@ use winfsp_wrs_sys::{
 };
 
 use crate::{
-    mount_core::{
-        classify_mount_error, join_remote_child, normalize_remote_path, MountAdapterCore,
-        MountErrorKind, RemoteFs,
-    },
+    mount_core::{join_remote_child, normalize_remote_path, MountAdapterCore, RemoteFs},
     remote_client::GrpcRemoteFs,
+    windows_file_info::{attributes_for_stat, file_info_for_stat},
+    windows_path::windows_name_to_remote_path,
+    windows_status::ntstatus_for_error,
 };
 
 #[derive(Debug, Clone)]
@@ -903,82 +902,4 @@ fn dir_info_storage(name: &str, stat: &FsStat) -> Vec<u8> {
         );
     }
     storage
-}
-
-fn windows_name_to_remote_path(root: &str, name: &U16CStr) -> anyhow::Result<String> {
-    let root = normalize_remote_path(root)?;
-    let name = name.to_string_lossy();
-    let name = name.trim_matches('\\');
-    if name.is_empty() {
-        return Ok(root);
-    }
-
-    let mut path = root;
-    for component in name.split('\\') {
-        if component.contains(':') {
-            anyhow::bail!("Windows alternate data streams are not supported");
-        }
-        path = join_remote_child(&path, component)?;
-    }
-    Ok(path)
-}
-
-fn attributes_for_stat(stat: &FsStat) -> FileAttributes {
-    if stat.is_dir {
-        FileAttributes::DIRECTORY
-    } else {
-        FileAttributes::NORMAL
-    }
-}
-
-fn file_info_for_stat(stat: &FsStat) -> FSP_FSCTL_FILE_INFO {
-    let mut info = FSP_FSCTL_FILE_INFO::default();
-    let size = if stat.is_dir { 0 } else { stat.size };
-    let now = winfsp_wrs::filetime_now();
-    info.FileAttributes = attributes_for_stat(stat).0;
-    info.AllocationSize = size.div_ceil(4096) * 4096;
-    info.FileSize = size;
-    info.CreationTime = now;
-    info.LastAccessTime = now;
-    info.LastWriteTime = now;
-    info.ChangeTime = now;
-    info.HardLinks = 1;
-    info
-}
-
-fn ntstatus_for_error(error: anyhow::Error) -> NTSTATUS {
-    match classify_mount_error(&error) {
-        MountErrorKind::NotFound => STATUS_OBJECT_NAME_NOT_FOUND,
-        MountErrorKind::AlreadyExists => STATUS_OBJECT_NAME_COLLISION,
-        MountErrorKind::PermissionDenied => STATUS_ACCESS_DENIED,
-        MountErrorKind::InvalidInput => STATUS_INVALID_PARAMETER,
-        MountErrorKind::FailedPrecondition => STATUS_ACCESS_DENIED,
-        MountErrorKind::Unknown => STATUS_NOT_IMPLEMENTED,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn windows_names_map_under_remote_root() {
-        assert_eq!(
-            windows_name_to_remote_path("/workspace//root", u16cstr!("\\dir\\file.txt"))
-                .expect("remote path"),
-            "/workspace/root/dir/file.txt"
-        );
-        assert_eq!(
-            windows_name_to_remote_path("/workspace", u16cstr!("\\")).expect("root"),
-            "/workspace"
-        );
-    }
-
-    #[test]
-    fn windows_name_rejects_alternate_data_streams() {
-        let error = windows_name_to_remote_path("/workspace", u16cstr!("\\file.txt:stream"))
-            .expect_err("ads should be rejected");
-
-        assert!(error.to_string().contains("alternate data streams"));
-    }
 }

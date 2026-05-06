@@ -5775,6 +5775,119 @@ Remaining:
 
 - No v0.16.4 mount runtime preflight UX work remains.
 
+## Phase 102: v0.16.5 Release Publication and Public Verification
+
+Status: In progress.
+
+Goal: publish the v0.16 release line from `main` after the completed v0.16.0
+through v0.16.4 mount/runtime hardening work, then verify public artifacts and
+README Quickstart against the published release.
+
+Detailed plan: `docs/plan/v0.16.5-release-publication.md`.
+
+Planned:
+
+- Confirm the release commit is merged to `main` before tagging.
+- Align Rust crate versions, TypeScript SDK package version,
+  `PROTOCOL_VERSION`, CLI version output, README install examples, and release
+  docs to the v0.16 release line.
+- Run main CI and CodeQL on the release commit.
+- Run macOS FUSE-T and Windows WinFsp live mount release gates through the
+  cross-platform live mount workflow.
+- Build draft release artifacts, publish the release, verify public artifacts,
+  and validate README Quickstart through GitHub Actions.
+- Record tag, commit, workflow run IDs, and remaining limits in this phase.
+
+Progress:
+
+- Aligned crate versions, SDK package version, `PROTOCOL_VERSION`, CLI version
+  expectations, release dry-run inputs, and README Quickstart workflow example
+  text to `0.16.5` / `v0.16.5`.
+- Verified local release-line consistency with the protocol version test,
+  CLI/daemon `--version`, release artifact dry-run, and README Quickstart
+  dry-run.
+
+Remaining:
+
+- Full v0.16.5 release publication and public verification remain.
+
+## Phase 103: v0.17 Release and CI Observability Cleanup
+
+Status: Completed.
+
+Goal: move CI/release environment differences into explicit validation so
+platform or tooling drift is caught before a push or release gate blocks late.
+
+Detailed plan: `docs/plan/v0.17-release-ci-observability.md`.
+
+Planned:
+
+- Validate CI SDK mode with `OPERON_SKIP_SDK_TESTS=1` so SDK validation does
+  not require pnpm where TypeScript CI already owns SDK tests.
+- Add cross-target Windows test compilation coverage for Windows-only daemon
+  test imports and helper boundaries.
+- Document release workflow observability for archive smoke, live mount gates,
+  public artifact verification, and README Quickstart verification.
+- Keep validation wired through `scripts/ci/run-validations.sh` and avoid new
+  version-specific workflow jobs unless an OS, permission model, service
+  container, or trigger requires one.
+- Document deterministic failure triage expectations: pull logs immediately,
+  cancel obsolete runs, and rerun after a targeted fix.
+
+Completed:
+
+- Added `docs/quality/release-ci-observability.md` with the release workflow
+  map, log locations, and deterministic failure triage guidance.
+- Added `scripts/verify-readme-quickstart-docker.sh --dry-run` for release
+  validation wiring checks that do not start Docker.
+- Added `scripts/verify-v0.17-release-ci-observability.sh` and wired it into
+  `scripts/ci/run-validations.sh` under the existing `core` group.
+- Covered CI-mode SDK validation, Windows target daemon test compilation,
+  release artifact dry-run wiring, and README Quickstart dry-run wiring.
+
+Remaining:
+
+- No v0.17 release and CI observability cleanup work remains.
+
+## Phase 104: v0.17.1 Maintainability Cleanup
+
+Status: Completed.
+
+Goal: reduce the next set of high-churn files without changing protocol
+behavior, public CLI shape, SDK public API, or mount semantics.
+
+Detailed plan: `docs/plan/v0.17.1-maintainability-cleanup.md`.
+
+Planned:
+
+- Split the TypeScript SDK public entrypoint by internal domain while keeping
+  `packages/sdk-js/src/index.ts` as the exported API surface.
+- Split Windows mount adapter callback responsibilities in
+  `crates/operon-mount/src/windows.rs` behind smaller helper modules.
+- Continue daemon runtime/router cleanup in `crates/operond/src/main.rs` and
+  related runtime modules where responsibilities remain mixed.
+- Keep Linux/macOS FUSE adapter behavior stable while isolating high-risk
+  `fuse_fs.rs` helpers only when tests can cover the boundary.
+- Add focused validation scripts for the moved boundaries and wire them into
+  the narrowest existing validation group.
+
+Completed:
+
+- Moved SDK gRPC mappers and stream adapters into
+  `packages/sdk-js/src/grpc-mappers.ts` while keeping
+  `packages/sdk-js/src/index.ts` as the public SDK entrypoint.
+- Split Windows mount adapter path conversion, file-info mapping, and NTSTATUS
+  mapping into `windows_path.rs`, `windows_file_info.rs`, and
+  `windows_status.rs`.
+- Moved daemon CLI argument and service command definitions into
+  `crates/operond/src/daemon_cli.rs`.
+- Added `scripts/verify-v0.17.1-maintainability-cleanup.sh` and wired it into
+  the existing `sdk` validation group.
+
+Remaining:
+
+- No v0.17.1 maintainability cleanup work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

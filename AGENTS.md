@@ -361,6 +361,20 @@ Operon should not own:
   - Completed v0.16.4 scope for `operon doctor --mount-runtime`, JSON
     readiness, and pre-mount runtime failure checks.
 
+- `docs/plan/v0.16.5-release-publication.md`
+  - In-progress v0.16.5 scope for publishing the v0.16 release line from
+    `main`, running CI/CodeQL, live mount release gates, public artifact
+    verification, and README Quickstart verification.
+
+- `docs/plan/v0.17-release-ci-observability.md`
+  - Completed v0.17 scope for CI/release observability cleanup, including
+    validation-mode SDK checks, Windows-only test compilation coverage, and
+    deterministic failure triage guidance.
+
+- `docs/plan/v0.17.1-maintainability-cleanup.md`
+  - Completed v0.17.1 scope for behavior-preserving SDK, Windows mount adapter,
+    daemon runtime/router, and FUSE helper maintainability cleanup.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -990,3 +1004,23 @@ Defer:
   `operon doctor --mount-runtime` reports local mount runtime readiness without
   loading config, doctor JSON includes `mount_runtime_ready`, and `operon mount`
   fails early when the local runtime is missing. Nothing remains in v0.16.4.
+- Latest phase status update: v0.17 Release and CI Observability Cleanup is
+  completed. `docs/quality/release-ci-observability.md`,
+  `scripts/verify-v0.17-release-ci-observability.sh`, and
+  `scripts/verify-readme-quickstart-docker.sh --dry-run` now cover CI-mode SDK
+  validation, Windows target daemon test compilation, release artifact dry-run
+  wiring, README Quickstart dry-run wiring, and deterministic workflow failure
+  triage. Nothing remains in v0.17.
+- Latest phase status update: v0.17.1 Maintainability Cleanup is completed.
+  SDK gRPC mapper helpers live in `packages/sdk-js/src/grpc-mappers.ts`,
+  Windows mount adapter helpers live in focused `windows_*` modules, daemon CLI
+  shape lives in `crates/operond/src/daemon_cli.rs`, and
+  `scripts/verify-v0.17.1-maintainability-cleanup.sh` validates the moved
+  boundaries. Nothing remains in v0.17.1.
+- Latest phase status update: v0.16.5 Release Publication and Public
+  Verification is in progress. Versions and release dry-run wiring are aligned
+  to `0.16.5` / `v0.16.5`; CI, live mount release gates, tag publication,
+  draft release build, public artifact verification, and README Quickstart
+  verification remain.
+- Next planned phase order: v0.16.5 Release Publication and Public
+  Verification remains the active release-publication phase.

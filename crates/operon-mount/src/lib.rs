@@ -12,6 +12,12 @@ pub mod remote_client;
 mod session;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod windows_file_info;
+#[cfg(windows)]
+mod windows_path;
+#[cfg(windows)]
+mod windows_status;
 
 pub use mount_core::{MountAdapterCore, MountDirectoryEntry, MountErrorKind, RemoteFs};
 #[cfg(any(target_os = "linux", target_os = "macos"))]

@@ -22,8 +22,8 @@ require_pattern 'cargo test -p operond --locked exec_session_platform_is_support
 require_pattern 'cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits' .github/workflows/ci.yml
 require_pattern 'windows-portable-pty-smoke-validated' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'Windows interactive exec sessions use `portable-pty`' README.md PROTOCOL.md docs/architecture/runtime-api.md
-require_pattern 'PROTOCOL_VERSION: &str = "v0.15.0"' crates/operon-protocol/src/lib.rs
-require_pattern '"version": "0.15.0"' packages/sdk-js/package.json
+require_pattern 'PROTOCOL_VERSION: &str = "v0.16.5"' crates/operon-protocol/src/lib.rs
+require_pattern '"version": "0.16.5"' packages/sdk-js/package.json
 
 cargo test -p operond --locked exec_session_platform_is_supported
 cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
