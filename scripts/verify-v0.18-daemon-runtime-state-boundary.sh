@@ -16,7 +16,8 @@ require_file crates/operond/src/daemon_state.rs
 require_pattern 'mod daemon_state;' crates/operond/src/main.rs
 require_pattern 'struct LoadedDaemonRuntime' crates/operond/src/daemon_state.rs
 require_pattern 'fn load_daemon_runtime' crates/operond/src/daemon_state.rs
-require_pattern 'OperonConfig::load' crates/operond/src/daemon_state.rs
+require_pattern 'fn load_config' crates/operond/src/daemon_state.rs
+require_pattern 'OperonConfig::from_str_with_warnings' crates/operond/src/daemon_state.rs
 require_pattern 'fn load_secrets' crates/operond/src/daemon_state.rs
 require_pattern 'bounded_audit_events' crates/operond/src/daemon_state.rs
 require_pattern 'exec_log_buffers_from_persisted_logs' crates/operond/src/daemon_state.rs

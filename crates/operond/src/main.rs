@@ -130,7 +130,8 @@ where
             state: loaded.state,
         }))
         .serve_with_shutdown(loaded.grpc_listen, shutdown)
-        .await?;
+        .await
+        .map_err(|error| daemon_state::server_start_error(loaded.grpc_listen, error))?;
 
     drop(mdns);
 

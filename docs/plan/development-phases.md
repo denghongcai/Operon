@@ -6161,6 +6161,134 @@ Remaining:
 
 - No v0.18.2 SDK API boundary cleanup work remains.
 
+## Phase 112: v0.18.3 SDK Public API Contract Hardening
+
+Status: Completed.
+
+Goal: make the TypeScript SDK public API surface explicit and regression-tested
+after the `types.ts` boundary split, without changing current package exports,
+runtime behavior, generated protocol output, or public method names.
+
+Detailed plan: `docs/plan/v0.18.3-sdk-public-api-contract-hardening.md`.
+
+Planned:
+
+- Add a stable public API contract check for the SDK entrypoint so accidental
+  export additions, removals, or declaration-shape drift are caught before
+  release.
+- Keep `packages/sdk-js/src/index.ts` as the only public source entrypoint and
+  keep helper modules importing internal type definitions from focused modules.
+- Cover representative type-level usage for `OperonClient`, filesystem,
+  exec/session, service, audit/trace, doctor, and generated protocol exports.
+- Wire focused validation through the existing consolidated `sdk` validation
+  group without adding a version-specific GitHub Actions job.
+
+Progress:
+
+- Added `packages/sdk-js/api-contract/public-api-contract.ts` as a focused
+  type-level public API contract covering `OperonClient`, filesystem,
+  exec/session, service, audit, capability diagnostics, and generated runtime
+  exports.
+- Added `packages/sdk-js/api-contract/public-api-exports.txt` as the stable
+  public export snapshot for `packages/sdk-js/src/index.ts`.
+- Added `packages/sdk-js/tsconfig.public-api.json` and included the public API
+  contract in the SDK `typecheck` script.
+- Added `scripts/verify-v0.18.3-sdk-public-api-contract-hardening.sh` and wired
+  it into the consolidated `sdk` validation group.
+
+Remaining:
+
+- No v0.18.3 SDK public API contract hardening work remains.
+
+## Phase 113: v0.18.4 Daemon Startup / Config Error Semantics
+
+Status: Completed.
+
+Goal: harden daemon startup and config-load error semantics now that runtime
+state construction lives behind `daemon_state.rs`, without changing the
+supported `config.yaml` shape, foreground daemon behavior, service-management
+commands, or runtime protocol.
+
+Detailed plan: `docs/plan/v0.18.4-daemon-startup-config-error-semantics.md`.
+
+Planned:
+
+- Introduce structured daemon startup error categories for config loading,
+  daemon-section validation, secret/token loading, store initialization, state
+  restoration, and server binding.
+- Preserve human-readable foreground startup errors while making diagnostics
+  stable enough for tests, service-management status, and `operon doctor`
+  interpretation.
+- Align config unknown-field warnings, private-file permission failures, store
+  failures, and protocol/version mismatch reporting across daemon startup,
+  doctor output, and audit-oriented troubleshooting docs.
+- Add focused validation for startup/config error semantics through the
+  existing consolidated `core` validation group.
+
+Progress:
+
+- Added `DaemonStartupErrorKind` and `DaemonStartupError` in
+  `crates/operond/src/daemon_state.rs` with stable category codes for config
+  loading, config parsing, daemon-section validation, auth-token resolution,
+  store config, persisted-state restore, secrets loading, and server bind
+  failures.
+- Changed daemon runtime loading to preserve unknown-field warnings while
+  classifying daemon startup/config failure stages behind the daemon state
+  boundary.
+- Wrapped gRPC server startup failures with the structured `server-bind`
+  startup category in `crates/operond/src/main.rs`.
+- Added focused daemon-state tests for missing config, invalid config, missing
+  daemon section, missing auth token file, invalid store config, invalid store
+  restore, invalid secrets, and server bind classification.
+- Added `scripts/verify-v0.18.4-daemon-startup-config-error-semantics.sh` and
+  wired it into the consolidated `core` validation group.
+- Aligned the earlier v0.18 daemon runtime/state boundary validation so it now
+  checks the structured `load_config` boundary instead of requiring direct
+  `OperonConfig::load` usage.
+
+Remaining:
+
+- No v0.18.4 daemon startup/config error semantics work remains.
+
+## Phase 114: v0.16.6 Release Publication and Public Verification
+
+Status: In Progress.
+
+Goal: publish the current v0.16 release line from `main` after the v0.18.3 SDK
+public API contract hardening and v0.18.4 daemon startup/config error semantics
+work, then verify public artifacts and README Quickstart against the published
+release.
+
+Detailed plan: `docs/plan/v0.16.6-release-publication.md`.
+
+Planned:
+
+- Confirm the release commit is merged to `main` before tagging.
+- Align Rust crate versions, TypeScript SDK package version,
+  `PROTOCOL_VERSION`, CLI version output, release dry-run inputs, and README
+  Quickstart workflow examples to `0.16.6` / `v0.16.6`.
+- Run main CI and CodeQL on the release commit.
+- Run macOS FUSE-T and Windows WinFsp live mount release gates through the
+  cross-platform live mount workflow.
+- Build draft release artifacts, publish the release, verify public artifacts,
+  and validate README Quickstart through GitHub Actions.
+- Record tag, commit, workflow run IDs, and remaining limits in this phase.
+
+Progress:
+
+- Added the release publication phase.
+- Aligned local release-line versions and validation expectations to
+  `0.16.6` / `v0.16.6`.
+
+Remaining:
+
+- Commit and push the release-line changes to `main`.
+- Verify main CI and CodeQL on the release commit.
+- Run macOS FUSE-T and Windows WinFsp live mount release gates on the release
+  commit.
+- Create and publish tag `v0.16.6` from the release commit.
+- Verify release artifacts and README Quickstart through GitHub Actions.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

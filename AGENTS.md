@@ -366,6 +366,11 @@ Operon should not own:
     running CI/CodeQL, live mount release gates, public artifact verification,
     and README Quickstart verification.
 
+- `docs/plan/v0.16.6-release-publication.md`
+  - In-progress v0.16.6 scope for publishing the current v0.16 release line
+    from `main`, verifying release artifacts and checksums, and README
+    Quickstart verification after v0.18.3/v0.18.4.
+
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
     validation-mode SDK checks, Windows-only test compilation coverage, and
@@ -408,6 +413,14 @@ Operon should not own:
   - Completed v0.18.2 scope for moving TypeScript SDK public type definitions
     behind a focused type module while keeping `packages/sdk-js/src/index.ts`
     as the stable public export surface.
+
+- `docs/plan/v0.18.3-sdk-public-api-contract-hardening.md`
+  - Completed v0.18.3 scope for adding a stable TypeScript SDK public API
+    contract check after the `types.ts` boundary split.
+
+- `docs/plan/v0.18.4-daemon-startup-config-error-semantics.md`
+  - Completed v0.18.4 scope for structured daemon startup and config-load error
+    semantics across daemon startup, service diagnostics, and doctor output.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -1110,3 +1123,28 @@ Defer:
   entrypoint, and `scripts/verify-v0.18.2-sdk-api-boundary-cleanup.sh`
   validates the boundary. Earlier SDK validation gates now check `types.ts` for
   moved public type definitions. Nothing remains in v0.18.2.
+- Latest phase status update: v0.18.3 SDK Public API Contract Hardening is
+  completed. The SDK now has `packages/sdk-js/api-contract/public-api-contract.ts`
+  for type-level public API coverage,
+  `packages/sdk-js/api-contract/public-api-exports.txt` for the stable export
+  snapshot, `packages/sdk-js/tsconfig.public-api.json` wired into SDK
+  typecheck, and
+  `scripts/verify-v0.18.3-sdk-public-api-contract-hardening.sh` wired through
+  the consolidated `sdk` validation group. Nothing remains in v0.18.3.
+- Latest phase status update: v0.18.4 Daemon Startup / Config Error Semantics
+  is completed. Daemon startup errors now use structured category codes in
+  `crates/operond/src/daemon_state.rs` for config load/parse, daemon-section,
+  auth-token, store-config, state-restore, secrets, and server-bind failures;
+  `crates/operond/src/main.rs` wraps gRPC server startup errors with the
+  `server-bind` category; and
+  `scripts/verify-v0.18.4-daemon-startup-config-error-semantics.sh` validates
+  the behavior through the consolidated `core` validation group. The older
+  v0.18 daemon runtime/state boundary validation now checks the structured
+  `load_config` boundary instead of direct `OperonConfig::load` usage. Nothing
+  remains in v0.18.4.
+- Latest phase status update: v0.16.6 Release Publication and Public
+  Verification is in progress. Local release-line versions and validation
+  expectations are aligned to `0.16.6` / `v0.16.6`; publishing still requires
+  the release commit on `main`, main CI, CodeQL, macOS FUSE-T and Windows
+  WinFsp live mount release gates, draft release artifact build, public
+  artifact verification, and README Quickstart verification.
