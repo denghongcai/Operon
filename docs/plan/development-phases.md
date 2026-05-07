@@ -6252,7 +6252,7 @@ Remaining:
 
 ## Phase 114: v0.16.6 Release Publication and Public Verification
 
-Status: In Progress.
+Status: Completed.
 
 Goal: publish the current v0.16 release line from `main` after the v0.18.3 SDK
 public API contract hardening and v0.18.4 daemon startup/config error semantics
@@ -6279,15 +6279,23 @@ Progress:
 - Added the release publication phase.
 - Aligned local release-line versions and validation expectations to
   `0.16.6` / `v0.16.6`.
+- Committed and pushed release commit
+  `d38869a56cc2a4b247788d702e1e7cb6b9c74d74` to `main`.
+- Main CI passed in workflow run `25507449800`; CodeQL passed in workflow run
+  `25507448153`.
+- Cross-platform live mount release gates passed in workflow run `25507467831`
+  for macOS FUSE-T hosted live mount and Windows WinFsp live mount.
+- Release tag `v0.16.6` was created from the release commit and pushed.
+- Draft Release workflow run `25507784221` built and uploaded Linux, macOS,
+  Windows, TypeScript SDK, and `SHA256SUMS` release artifacts.
+- Published GitHub Release `v0.16.6` at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.6`.
+- Public release artifact verification passed in workflow run `25508118147`.
+- README Quickstart verification passed in workflow run `25508118139`.
 
 Remaining:
 
-- Commit and push the release-line changes to `main`.
-- Verify main CI and CodeQL on the release commit.
-- Run macOS FUSE-T and Windows WinFsp live mount release gates on the release
-  commit.
-- Create and publish tag `v0.16.6` from the release commit.
-- Verify release artifacts and README Quickstart through GitHub Actions.
+- No v0.16.6 release publication or public verification work remains.
 
 ## Planning Principle
 

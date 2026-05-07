@@ -367,9 +367,9 @@ Operon should not own:
     and README Quickstart verification.
 
 - `docs/plan/v0.16.6-release-publication.md`
-  - In-progress v0.16.6 scope for publishing the current v0.16 release line
-    from `main`, verifying release artifacts and checksums, and README
-    Quickstart verification after v0.18.3/v0.18.4.
+  - Completed v0.16.6 scope for publishing the current v0.16 release line from
+    `main`, verifying release artifacts and checksums, and README Quickstart
+    verification after v0.18.3/v0.18.4.
 
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
@@ -1143,8 +1143,12 @@ Defer:
   `load_config` boundary instead of direct `OperonConfig::load` usage. Nothing
   remains in v0.18.4.
 - Latest phase status update: v0.16.6 Release Publication and Public
-  Verification is in progress. Local release-line versions and validation
-  expectations are aligned to `0.16.6` / `v0.16.6`; publishing still requires
-  the release commit on `main`, main CI, CodeQL, macOS FUSE-T and Windows
-  WinFsp live mount release gates, draft release artifact build, public
-  artifact verification, and README Quickstart verification.
+  Verification is completed. Release commit
+  `d38869a56cc2a4b247788d702e1e7cb6b9c74d74` was pushed to `main`; main CI
+  `25507449800`, CodeQL `25507448153`, and cross-platform live mount release
+  gate `25507467831` passed; tag `v0.16.6` was published at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.6`; Draft Release
+  workflow `25507784221` built the Linux, macOS, Windows, TypeScript SDK, and
+  `SHA256SUMS` artifacts; public artifact verification `25508118147` and
+  README Quickstart verification `25508118139` passed. Nothing remains in
+  v0.16.6.
