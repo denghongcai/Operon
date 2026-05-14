@@ -29,6 +29,10 @@ is the operator-facing map for finding the right log quickly.
 - `Verify Release Artifacts` is manual and downloads public assets on Linux,
   macOS, and Windows. It validates the complete asset set, SHA256SUMS, archive
   layout, binary smoke, and SDK tarball contents.
+- `Verify Release Install Usability` is manual and downloads the public archive
+  for each runner platform, installs `operon` and `operond` into an isolated
+  prefix, proves `PATH` resolves that prefix, runs first-use command smoke, and
+  runs Linux install smoke inside `ubuntu:20.04` and `debian:12` containers.
 - `Verify README Quickstart` is manual and runs the public README install flow
   in Docker against the provided tag.
 
@@ -40,5 +44,6 @@ is the operator-facing map for finding the right log quickly.
   release-gate and live-mount runs that are tied to an older commit.
 - Rerun only the workflow that proves the fix: default CI for code/script
   changes, live mount smoke for mount-runtime changes, release draft for tag
-  packaging, public artifact verification for published assets, and README
-  Quickstart for install-flow changes.
+  packaging, public artifact verification for published assets, release install
+  usability for post-download failures, and README Quickstart for install-flow
+  changes.

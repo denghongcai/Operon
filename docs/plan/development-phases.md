@@ -6297,6 +6297,69 @@ Remaining:
 
 - No v0.16.6 release publication or public verification work remains.
 
+## Phase 115: v0.18.5 Release / Install Usability Hardening
+
+Status: Completed.
+
+Goal: harden the path from a published GitHub Release asset to a working local
+Operon installation, so release completion is validated from the user's
+downloaded artifact rather than only from the source tree or draft release
+workflow.
+
+Detailed plan: `docs/plan/v0.18.5-release-install-usability-hardening.md`.
+
+Planned:
+
+- Add a release-install smoke path that downloads a published release tag,
+  verifies checksums, extracts the current platform archive, installs `operon`
+  and `operond` into an isolated test prefix, and proves the installed binaries
+  are used from `PATH`.
+- Exercise `operon --version`, `operond --version`, top-level help,
+  `operon init config`, `operon doctor`, a foreground local daemon, node ping,
+  capability listing, and one minimal filesystem read/write loop where
+  platform permissions allow it.
+- Add Linux container install smoke for the documented minimum glibc baseline
+  and at least one current stable distribution image, while keeping unsupported
+  musl/Alpine behavior documented unless a later phase defines musl/static
+  artifacts.
+- Add macOS and Windows post-download checks that mimic README installation
+  paths and verify mount-runtime prerequisite failures are visible through
+  doctor/setup output without replacing existing live mount release gates.
+- Update README Quickstart, release troubleshooting docs, AGENTS guidance, and
+  release-maintainer checklist text so the documented post-release verification
+  path matches the automated install smoke.
+- Add focused validation and manual workflow wiring for published-tag
+  install-usability checks, with local dry-run coverage wired through the
+  existing consolidated validation groups.
+
+Progress:
+
+- Added the release/install usability hardening phase.
+- Added `scripts/verify-release-install-usability.sh` to download the current
+  platform's public release archive and `SHA256SUMS`, verify the archive
+  checksum, install `operon` and `operond` into an isolated prefix, prove
+  `PATH` resolves the installed binaries from that prefix, run version/help and
+  `operon doctor --mount-runtime`, create starter config, start a local
+  foreground daemon, and exercise node, capability, filesystem, doctor, and
+  audit commands from the installed product.
+- Added `scripts/verify-release-linux-install-containers.sh` to run the
+  release-install smoke inside `ubuntu:20.04` for the documented glibc 2.31
+  baseline and `debian:12` for a current stable distribution path.
+- Added the manual `Verify Release Install Usability` workflow for Ubuntu,
+  macOS, Windows, and Linux container install usability checks against a
+  published tag.
+- Added `docs/quality/release-install-usability.md` with the post-download
+  verification path, dry-run commands, glibc/musl boundary, and failure triage.
+- Updated README install guidance so macOS users keep bundled
+  `libfuse-t.dylib` next to the installed binaries, and documented local
+  dry-run commands for install-usability workflow wiring.
+- Added `scripts/verify-v0.18.5-release-install-usability-hardening.sh` and
+  wired it through the consolidated `core` validation group.
+
+Remaining:
+
+- No v0.18.5 release/install usability hardening work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

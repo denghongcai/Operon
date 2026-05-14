@@ -132,6 +132,11 @@ The v0.12.4 release artifact verification validation checks the public release
 asset verifier, the manual GitHub Actions workflow, expected artifact names,
 checksum validation, and release smoke command coverage.
 
+The v0.18.5 release/install usability validation checks the post-download
+install smoke scripts, the manual `Verify Release Install Usability` workflow,
+Linux glibc-baseline container coverage, README dry-run guidance, and release
+install troubleshooting docs.
+
 The v0.12.5 CLI gRPC maintainability validation checks that the CLI gRPC
 compatibility surface delegates filesystem, exec, service, and audit helpers to
 focused modules while preserving behavior-covered tests.

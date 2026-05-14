@@ -103,6 +103,7 @@ validations=(
   "sdk|v0.18.2 SDK API Boundary Cleanup Validation|scripts/verify-v0.18.2-sdk-api-boundary-cleanup.sh"
   "sdk|v0.18.3 SDK Public API Contract Hardening Validation|scripts/verify-v0.18.3-sdk-public-api-contract-hardening.sh"
   "core|v0.18.4 Daemon Startup/Config Error Semantics Validation|scripts/verify-v0.18.4-daemon-startup-config-error-semantics.sh"
+  "core|v0.18.5 Release / Install Usability Hardening Validation|scripts/verify-v0.18.5-release-install-usability-hardening.sh"
 )
 
 failures=()

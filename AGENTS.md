@@ -422,6 +422,11 @@ Operon should not own:
   - Completed v0.18.4 scope for structured daemon startup and config-load error
     semantics across daemon startup, service diagnostics, and doctor output.
 
+- `docs/plan/v0.18.5-release-install-usability-hardening.md`
+  - Planned v0.18.5 scope for post-download release install smoke, Linux
+    glibc-baseline runtime checks, README install-path alignment, and
+    published-tag install usability verification.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -707,9 +712,10 @@ Defer:
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
   when README Quickstart, release packaging, install prerequisites, or agent
   skills guidance changes. After publishing, verify release artifacts and README
-  Quickstart through the manual `Verify Release Artifacts` and
-  `Verify README Quickstart` GitHub Actions workflows. Do not substitute local
-  script runs for release-completion evidence.
+  Quickstart through the manual `Verify Release Artifacts`,
+  `Verify Release Install Usability`, and `Verify README Quickstart` GitHub
+  Actions workflows. Do not substitute local script runs for release-completion
+  evidence.
 - After every task, update `docs/plan/development-phases.md` before finishing.
 - Phase updates must state which phase changed, what was completed, and what remains.
 - If implementation changes the phase scope, update the phase text itself instead of only adding a note.
@@ -1152,3 +1158,13 @@ Defer:
   `SHA256SUMS` artifacts; public artifact verification `25508118147` and
   README Quickstart verification `25508118139` passed. Nothing remains in
   v0.16.6.
+- Latest phase status update: v0.18.5 Release / Install Usability Hardening is
+  completed. `scripts/verify-release-install-usability.sh` downloads a public
+  release archive, verifies its checksum, installs `operon` and `operond` into
+  an isolated prefix, proves `PATH` resolves that prefix, runs version/help and
+  `operon doctor --mount-runtime`, and exercises a minimal installed local
+  daemon workflow. `scripts/verify-release-linux-install-containers.sh` covers
+  `ubuntu:20.04` and `debian:12`, `.github/workflows/verify-release-install-usability.yml`
+  adds the manual published-tag workflow, and
+  `docs/quality/release-install-usability.md` records dry-run and triage
+  guidance. Nothing remains in v0.18.5.

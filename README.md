@@ -136,6 +136,9 @@ curl -fL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/ope
 tar -xzf /tmp/operon.tar.gz -C /tmp
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
+if [[ -f "/tmp/operon-${VERSION}-${ARCH}/libfuse-t.dylib" ]]; then
+  sudo install -m 0644 "/tmp/operon-${VERSION}-${ARCH}/libfuse-t.dylib" /usr/local/bin/libfuse-t.dylib
+fi
 ```
 
 On Windows PowerShell:
@@ -150,6 +153,15 @@ Expand-Archive -Path $Archive -DestinationPath $env:TEMP -Force
 New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
 Copy-Item "$env:TEMP\operon-$Version-$Arch\operon.exe" $InstallRoot -Force
 Copy-Item "$env:TEMP\operon-$Version-$Arch\operond.exe" $InstallRoot -Force
+```
+
+Release maintainers verify the post-download install path with the manual
+`Verify Release Install Usability` workflow after publishing a tag. For local
+workflow/doc wiring checks without downloading assets, run:
+
+```bash
+scripts/verify-release-install-usability.sh --dry-run v0.16.6 denghongcai/Operon
+scripts/verify-release-linux-install-containers.sh --dry-run v0.16.6 denghongcai/Operon
 ```
 
 Create a local workspace and guided config:
