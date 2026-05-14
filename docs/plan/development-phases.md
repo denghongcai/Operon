@@ -6355,6 +6355,17 @@ Progress:
   dry-run commands for install-usability workflow wiring.
 - Added `scripts/verify-v0.18.5-release-install-usability-hardening.sh` and
   wired it through the consolidated `core` validation group.
+- Local validation passed with
+  `scripts/verify-v0.18.5-release-install-usability-hardening.sh`,
+  `scripts/verify-release-install-usability.sh v0.16.6 denghongcai/Operon`,
+  `OPERON_CONTAINER_RUNTIME=podman scripts/verify-release-linux-install-containers.sh v0.16.6 denghongcai/Operon`,
+  `scripts/verify-docs-help-skills-sync.sh`,
+  `scripts/verify-v0.17-release-ci-observability.sh`, and `git diff --check`.
+- Pushed hardening commit
+  `7433bb488aff32348932e3396a9191a957962b24` to `main`; main CI run
+  `25855660408`, CodeQL run `25855659754`, and manual `Verify Release Install
+  Usability` run `25855677323` passed. The manual workflow verified public tag
+  `v0.16.6` across Ubuntu, macOS, Windows, and Linux container install checks.
 
 Remaining:
 

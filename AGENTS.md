@@ -1167,4 +1167,9 @@ Defer:
   `ubuntu:20.04` and `debian:12`, `.github/workflows/verify-release-install-usability.yml`
   adds the manual published-tag workflow, and
   `docs/quality/release-install-usability.md` records dry-run and triage
-  guidance. Nothing remains in v0.18.5.
+  guidance. Hardening commit
+  `7433bb488aff32348932e3396a9191a957962b24` was pushed to `main`; main CI
+  `25855660408`, CodeQL `25855659754`, and manual `Verify Release Install
+  Usability` run `25855677323` passed against public tag `v0.16.6` across
+  Ubuntu, macOS, Windows, and Linux container install checks. Nothing remains
+  in v0.18.5.
