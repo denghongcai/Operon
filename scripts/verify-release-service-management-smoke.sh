@@ -182,6 +182,17 @@ assert_contains_any() {
   exit 1
 }
 
+macos_private_var_alias() {
+  local path="$1"
+  if [[ "$path" == /private/var/* ]]; then
+    printf '%s\n' "${path#/private}"
+  elif [[ "$path" == /var/* ]]; then
+    printf '/private%s\n' "$path"
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
 run_service_commands() {
   operond service install --config "$config"
   operond service start
@@ -216,9 +227,9 @@ case "$(uname -s)" in
     operond service install --config "$config"
     test -f "$plist_path" || { echo "missing generated launchd plist: $plist_path" >&2; exit 1; }
     macos_operond="$RELEASE_INSTALL_PREFIX_BIN/operond"
-    macos_operond_var_alias="${macos_operond#/private}"
+    macos_operond_var_alias="$(macos_private_var_alias "$macos_operond")"
     macos_config="$config"
-    macos_config_var_alias="${macos_config#/private}"
+    macos_config_var_alias="$(macos_private_var_alias "$macos_config")"
     assert_contains_any \
       "$plist_path" \
       "<string>$macos_operond</string>" \
