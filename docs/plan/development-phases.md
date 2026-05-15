@@ -6428,6 +6428,10 @@ Progress:
   on CI runners. The Windows path places the fake `sc.exe` beside the installed
   `operond.exe` so process lookup does not fall through to the real Service
   Control Manager.
+- Hardened hosted-runner portability after workflow validation: macOS accepts
+  `/var` and `/private/var` path aliases in generated launchd plists, and
+  Windows validates against the fake `sc.exe` from the installed binary
+  directory instead of the host Service Control Manager.
 - Extended the manual `Verify Release Install Usability` workflow with the
   downloaded service-management smoke step.
 - Updated release-install usability docs, README dry-run guidance, DEVELOPMENT
@@ -6443,6 +6447,9 @@ Progress:
   `OPERON_CONTAINER_RUNTIME=podman scripts/verify-release-linux-install-containers.sh v0.16.6 denghongcai/Operon`,
   and `scripts/verify-v0.18.5-release-install-usability-hardening.sh`; and
   consolidated validation passed with `scripts/ci/run-validations.sh core`.
+- Remote `Verify Release Install Usability` workflow run `25927984419` passed
+  against public tag `v0.16.6` across Ubuntu, macOS, Windows, and Linux
+  container install checks.
 
 Remaining:
 
