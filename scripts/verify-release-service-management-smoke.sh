@@ -107,7 +107,7 @@ SH
 }
 
 write_fake_windows_sc() {
-  local fake_sc="$fake_bin/sc.exe"
+  local fake_sc="$RELEASE_INSTALL_PREFIX_BIN/sc.exe"
   local fake_sc_windows="$fake_sc"
   local log_windows="$supervisor_log"
   if command -v cygpath >/dev/null 2>&1; then
@@ -217,11 +217,16 @@ case "$(uname -s)" in
     test -f "$plist_path" || { echo "missing generated launchd plist: $plist_path" >&2; exit 1; }
     macos_operond="$RELEASE_INSTALL_PREFIX_BIN/operond"
     macos_operond_var_alias="${macos_operond#/private}"
+    macos_config="$config"
+    macos_config_var_alias="${macos_config#/private}"
     assert_contains_any \
       "$plist_path" \
       "<string>$macos_operond</string>" \
       "<string>$macos_operond_var_alias</string>"
-    assert_contains "<string>$config</string>" "$plist_path"
+    assert_contains_any \
+      "$plist_path" \
+      "<string>$macos_config</string>" \
+      "<string>$macos_config_var_alias</string>"
     operond service start
     operond service status
     operond service stop

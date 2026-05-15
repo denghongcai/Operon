@@ -6398,9 +6398,10 @@ Planned:
 - Validate macOS service commands from the installed binary with a fake
   `launchctl`, then assert the generated launchd plist under isolated `HOME`
   invokes installed `operond start --config <path>`.
-- Validate Windows service commands from the installed binary with an isolated
-  fake `sc.exe` supervisor directory, then assert service creation arguments
-  point at installed `operond.exe service run --config <path>`.
+- Validate Windows service commands from the installed binary by placing a
+  fake `sc.exe` beside the isolated installed `operond.exe`, then assert
+  service creation arguments point at installed
+  `operond.exe service run --config <path>`.
 - Extend the manual `Verify Release Install Usability` workflow with the
   downloaded service-management smoke while preserving the existing foreground
   daemon and Linux glibc container checks.
@@ -6424,8 +6425,9 @@ Progress:
 - Added safe fake supervisor coverage for Linux `systemctl`, macOS
   `launchctl`, and Windows `sc.exe` so generated service definitions or
   registration arguments can be validated without leaving persistent services
-  on CI runners. The Windows path runs from the fake supervisor directory so
-  process lookup does not fall through to the real Service Control Manager.
+  on CI runners. The Windows path places the fake `sc.exe` beside the installed
+  `operond.exe` so process lookup does not fall through to the real Service
+  Control Manager.
 - Extended the manual `Verify Release Install Usability` workflow with the
   downloaded service-management smoke step.
 - Updated release-install usability docs, README dry-run guidance, DEVELOPMENT

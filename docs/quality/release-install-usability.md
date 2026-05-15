@@ -34,7 +34,8 @@ from that installed binary. It uses fake platform supervisor commands in CI so
 the generated systemd unit, launchd plist, or Windows Service registration
 arguments can be inspected without leaving persistent services installed on a
 runner. On Windows, the smoke runs service commands from the fake supervisor
-directory so `sc.exe` lookup is isolated from the host Service Control Manager.
+binary placed beside the installed `operond.exe` so `sc.exe` lookup is isolated
+from the host Service Control Manager.
 
 The Linux container wrapper is the release compatibility check for documented
 glibc-based archives. It uses Docker on GitHub runners and can use Docker or
