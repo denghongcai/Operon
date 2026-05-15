@@ -137,6 +137,17 @@ install smoke scripts, the manual `Verify Release Install Usability` workflow,
 Linux glibc-baseline container coverage, README dry-run guidance, and release
 install troubleshooting docs.
 
+The v0.18.6 downloaded release service-management validation checks that
+`scripts/verify-release-service-management-smoke.sh` downloads a public release
+archive, installs the released binaries into an isolated prefix, and validates
+`operond service install/start/status/stop/uninstall` with safe fake platform
+supervisors.
+
+The v0.18.7 musl / Alpine distribution validation checks
+`scripts/assess-musl-alpine-distribution.sh`, the Alpine/musl decision record,
+and user-facing docs that state Alpine and musl-based distributions are
+unsupported by the prebuilt Linux archives.
+
 The v0.12.5 CLI gRPC maintainability validation checks that the CLI gRPC
 compatibility surface delegates filesystem, exec, service, and audit helpers to
 focused modules while preserving behavior-covered tests.

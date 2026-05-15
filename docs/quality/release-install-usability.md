@@ -17,6 +17,7 @@ The workflow uses:
 
 ```bash
 scripts/verify-release-install-usability.sh <tag> <owner/repo>
+scripts/verify-release-service-management-smoke.sh <tag> <owner/repo>
 scripts/verify-release-linux-install-containers.sh <tag> <owner/repo>
 ```
 
@@ -27,12 +28,19 @@ help checks, runs `operon doctor --mount-runtime`, starts a local foreground
 daemon from the installed binary, and completes a minimal node/capability/fs
 workflow.
 
+The service-management smoke downloads the same public release archive into an
+isolated prefix and runs `operond service install/start/status/stop/uninstall`
+from that installed binary. It uses fake platform supervisor commands in CI so
+the generated systemd unit, launchd plist, or Windows Service registration
+arguments can be inspected without leaving persistent services installed on a
+runner.
+
 The Linux container wrapper is the release compatibility check for documented
 glibc-based archives. It uses Docker on GitHub runners and can use Docker or
 Podman locally. `ubuntu:20.04` represents the current glibc 2.31 minimum
 baseline, while `debian:12` catches a current stable distribution path. Alpine
-and other musl-based systems are intentionally outside this phase because the
-public Linux archives are glibc-based.
+and musl-based distributions are unsupported by the prebuilt Linux archives.
+The decision is recorded in `docs/decisions/musl-alpine-distribution.md`.
 
 ## Local Dry Run
 
@@ -40,7 +48,9 @@ Use dry-run mode while editing workflow or documentation wiring:
 
 ```bash
 scripts/verify-release-install-usability.sh --dry-run v0.16.6 denghongcai/Operon
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.6 denghongcai/Operon
 scripts/verify-release-linux-install-containers.sh --dry-run v0.16.6 denghongcai/Operon
+scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.6 denghongcai/Operon
 ```
 
 Dry-run mode does not download assets or start Docker. It validates argument
@@ -59,3 +69,9 @@ and the script entrypoints used by CI validation.
 - If the local daemon smoke fails, inspect the uploaded workflow log around
   `operond.log`; this check exercises the installed product, not the source
   checkout.
+- If service-management smoke fails, inspect the fake supervisor log in the
+  workflow output first. It shows whether the installed `operond` binary
+  generated the expected systemd, launchd, or Windows Service command.
+- If Alpine or another musl-based host reports a loader-style failure, use a
+  glibc-based Linux distribution or build from source. Alpine and musl-based
+  distributions are unsupported by the prebuilt Linux archives.

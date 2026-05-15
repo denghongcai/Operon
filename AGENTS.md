@@ -427,6 +427,16 @@ Operon should not own:
     glibc-baseline runtime checks, README install-path alignment, and
     published-tag install usability verification.
 
+- `docs/plan/v0.18.6-downloaded-release-service-management-smoke.md`
+  - Completed v0.18.6 scope for validating downloaded release binaries through
+    `operond service install/start/status/stop/uninstall` using isolated
+    install prefixes and safe fake platform supervisors.
+
+- `docs/plan/v0.18.7-musl-alpine-distribution-decision.md`
+  - Completed v0.18.7 scope for recording Alpine/musl evidence and deciding
+    whether Operon keeps glibc-only Linux archives or plans musl/static
+    artifacts.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -440,6 +450,12 @@ Operon should not own:
 - `docs/decisions/computer-mesh-operon-summary.md`
   - Product and concept decision summary.
   - Covers the shift from "computer mesh" to Operon, core abstractions, AI-native positioning, network boundary, MVP scope, and open questions.
+
+- `docs/decisions/musl-alpine-distribution.md`
+  - Current Linux distribution decision.
+  - Keeps public Linux archives glibc-only for now and documents Alpine/musl as
+    unsupported by prebuilt archives unless a later phase adds musl/static
+    artifacts.
 
 - `docs/architecture/technology-and-protocol-decisions.md`
   - Technical architecture decisions.
@@ -1173,3 +1189,16 @@ Defer:
   Usability` run `25855677323` passed against public tag `v0.16.6` across
   Ubuntu, macOS, Windows, and Linux container install checks. Nothing remains
   in v0.18.5.
+- Latest phase status update: v0.18.6 Downloaded Release Service-Management
+  Smoke is completed. `scripts/lib/release-install.sh` now shares downloaded
+  release archive install setup, `scripts/verify-release-service-management-smoke.sh`
+  validates installed `operond service install/start/status/stop/uninstall`
+  through safe fake platform supervisors, and the manual `Verify Release
+  Install Usability` workflow runs the service-management smoke. Nothing
+  remains in v0.18.6.
+- Latest phase status update: v0.18.7 musl / Alpine Distribution Decision is
+  completed. `scripts/assess-musl-alpine-distribution.sh` records Alpine/musl
+  evidence, `docs/decisions/musl-alpine-distribution.md` accepts the current
+  glibc-only public Linux archive policy, and README/release-install docs state
+  that Alpine and musl-based distributions are unsupported by the prebuilt
+  Linux archives. Nothing remains in v0.18.7.

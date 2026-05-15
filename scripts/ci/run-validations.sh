@@ -104,6 +104,8 @@ validations=(
   "sdk|v0.18.3 SDK Public API Contract Hardening Validation|scripts/verify-v0.18.3-sdk-public-api-contract-hardening.sh"
   "core|v0.18.4 Daemon Startup/Config Error Semantics Validation|scripts/verify-v0.18.4-daemon-startup-config-error-semantics.sh"
   "core|v0.18.5 Release / Install Usability Hardening Validation|scripts/verify-v0.18.5-release-install-usability-hardening.sh"
+  "core|v0.18.6 Downloaded Release Service-Management Smoke Validation|scripts/verify-v0.18.6-downloaded-release-service-management-smoke.sh"
+  "core|v0.18.7 musl / Alpine Distribution Decision Validation|scripts/verify-v0.18.7-musl-alpine-distribution-decision.sh"
 )
 
 failures=()

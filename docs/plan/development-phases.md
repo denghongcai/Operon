@@ -6371,6 +6371,133 @@ Remaining:
 
 - No v0.18.5 release/install usability hardening work remains.
 
+## Phase 116: v0.18.6 Downloaded Release Service-Management Smoke
+
+Status: Completed.
+
+Goal: extend post-download release validation so a published GitHub Release
+archive proves that `operond service install/start/status/stop/uninstall` works
+from the installed release binary path, not only from a source-tree build.
+
+Detailed plan:
+`docs/plan/v0.18.6-downloaded-release-service-management-smoke.md`.
+
+Planned:
+
+- Add a focused downloaded service-management smoke script that downloads a
+  public release tag, verifies checksums, installs `operon` and `operond` into
+  an isolated prefix, proves `PATH` resolves that prefix, and generates an
+  isolated config for service install.
+- Reuse or extract shared release-install helper logic from
+  `scripts/verify-release-install-usability.sh` so release asset download,
+  checksum, archive extraction, install-prefix, and `PATH` setup do not drift
+  across two large scripts.
+- Validate Linux service commands from the installed binary with a fake
+  `systemctl`, then assert the generated user systemd unit under isolated
+  `XDG_CONFIG_HOME` invokes installed `operond start --config <path>`.
+- Validate macOS service commands from the installed binary with a fake
+  `launchctl`, then assert the generated launchd plist under isolated `HOME`
+  invokes installed `operond start --config <path>`.
+- Validate Windows service commands from the installed binary with a fake
+  `sc.exe`, then assert service creation arguments point at installed
+  `operond.exe service run --config <path>`.
+- Extend the manual `Verify Release Install Usability` workflow with the
+  downloaded service-management smoke while preserving the existing foreground
+  daemon and Linux glibc container checks.
+- Update `docs/quality/release-install-usability.md`, README/DEVELOPMENT where
+  affected, AGENTS guidance, and focused validation coverage.
+
+Progress:
+
+- Added the downloaded release service-management smoke phase.
+- Added `scripts/lib/release-install.sh` so release-asset download, checksum
+  verification, archive extraction, isolated-prefix installation, and `PATH`
+  proof are shared by downloaded-release smoke scripts.
+- Updated `scripts/verify-release-install-usability.sh` to use the shared
+  release-install helper while preserving the existing foreground local daemon
+  smoke.
+- Added `scripts/verify-release-service-management-smoke.sh` to download a
+  public release archive, install `operon` and `operond` into an isolated
+  prefix, generate an isolated config, and run
+  `operond service install/start/status/stop/uninstall` from the installed
+  binary.
+- Added safe fake supervisor coverage for Linux `systemctl`, macOS
+  `launchctl`, and Windows `sc.exe` so generated service definitions or
+  registration arguments can be validated without leaving persistent services
+  on CI runners.
+- Extended the manual `Verify Release Install Usability` workflow with the
+  downloaded service-management smoke step.
+- Updated release-install usability docs, README dry-run guidance, DEVELOPMENT
+  validation notes, AGENTS guidance, and focused validation coverage.
+- Added `scripts/verify-v0.18.6-downloaded-release-service-management-smoke.sh`
+  and wired it through the consolidated `core` validation group.
+- Focused validation passed with
+  `scripts/verify-v0.18.6-downloaded-release-service-management-smoke.sh`;
+  downloaded service-management smoke passed locally with
+  `scripts/verify-release-service-management-smoke.sh v0.16.6 denghongcai/Operon`;
+  release-install regressions passed with
+  `scripts/verify-release-install-usability.sh v0.16.6 denghongcai/Operon`,
+  `OPERON_CONTAINER_RUNTIME=podman scripts/verify-release-linux-install-containers.sh v0.16.6 denghongcai/Operon`,
+  and `scripts/verify-v0.18.5-release-install-usability-hardening.sh`; and
+  consolidated validation passed with `scripts/ci/run-validations.sh core`.
+
+Remaining:
+
+- No v0.18.6 downloaded release service-management smoke work remains.
+
+## Phase 117: v0.18.7 musl / Alpine Distribution Decision
+
+Status: Completed.
+
+Goal: make the Linux musl / Alpine distribution boundary explicit with current
+release evidence, then decide whether Operon should keep publishing only
+glibc-based Linux archives or plan a separate musl/static artifact line.
+
+Detailed plan: `docs/plan/v0.18.7-musl-alpine-distribution-decision.md`.
+
+Planned:
+
+- Add a focused assessment path that runs the current public Linux release
+  archive in an Alpine container and records the expected unsupported behavior
+  for a glibc-linked binary.
+- Compare Alpine evidence against the existing supported Linux release-install
+  checks on `ubuntu:20.04` and `debian:12`.
+- Inspect current Rust target feasibility for `x86_64-unknown-linux-musl` at
+  the CLI/daemon boundary without committing to ship a new artifact in this
+  decision phase.
+- Add `docs/decisions/musl-alpine-distribution.md` comparing glibc-only
+  archives, musl/static Linux archives, Alpine package/container distribution,
+  and deferring Alpine support until demand or release blockers justify it.
+- Update release-install docs, README/troubleshooting guidance where affected,
+  AGENTS guidance, and the phase tracker with the chosen policy.
+- If the decision is to add musl/static artifacts, create a concrete follow-up
+  implementation phase for artifact, CI, docs, and release verification work.
+
+Progress:
+
+- Added the musl / Alpine distribution decision phase.
+- Added `scripts/assess-musl-alpine-distribution.sh` with dry-run and
+  container-backed assessment modes for recording the expected unsupported
+  behavior of the public glibc Linux archive on `alpine:3.20`.
+- Added `docs/decisions/musl-alpine-distribution.md` with the accepted current
+  policy: keep glibc-only public Linux archives for now and document Alpine
+  and musl-based distributions as unsupported by the prebuilt archives.
+- Updated release-install usability docs and README Linux install guidance so
+  Alpine users get a direct support answer.
+- Updated DEVELOPMENT and AGENTS guidance so future release work points to the
+  musl/Alpine decision record.
+- Added `scripts/verify-v0.18.7-musl-alpine-distribution-decision.sh` and
+  wired it through the consolidated `core` validation group.
+- Focused validation passed with
+  `scripts/verify-v0.18.7-musl-alpine-distribution-decision.sh`; Alpine/musl
+  assessment passed locally with
+  `OPERON_CONTAINER_RUNTIME=podman scripts/assess-musl-alpine-distribution.sh v0.16.6 denghongcai/Operon`;
+  and consolidated validation passed with `scripts/ci/run-validations.sh core`.
+
+Remaining:
+
+- No v0.18.7 musl / Alpine distribution decision work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

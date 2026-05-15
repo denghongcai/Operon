@@ -118,7 +118,7 @@ corresponding platform runtime installed before `operon mount` can start a
 filesystem session.
 
 The prebuilt Linux archives are glibc-based and currently target glibc 2.31 or
-newer, such as Ubuntu 20.04+.
+newer, such as Ubuntu 20.04+. Alpine and musl-based distributions are unsupported by the prebuilt Linux archives; build from source or use a glibc-based environment there.
 
 ```bash
 VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
@@ -161,6 +161,7 @@ workflow/doc wiring checks without downloading assets, run:
 
 ```bash
 scripts/verify-release-install-usability.sh --dry-run v0.16.6 denghongcai/Operon
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.6 denghongcai/Operon
 scripts/verify-release-linux-install-containers.sh --dry-run v0.16.6 denghongcai/Operon
 ```
 

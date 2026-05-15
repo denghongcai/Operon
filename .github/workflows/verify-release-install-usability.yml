@@ -30,6 +30,10 @@ jobs:
         shell: bash
         run: scripts/verify-release-install-usability.sh "${{ inputs.tag }}" "${{ github.repository }}"
 
+      - name: Verify release service management smoke
+        shell: bash
+        run: scripts/verify-release-service-management-smoke.sh "${{ inputs.tag }}" "${{ github.repository }}"
+
   verify-linux-install-containers:
     name: Verify Linux Install Containers
     runs-on: ubuntu-latest
