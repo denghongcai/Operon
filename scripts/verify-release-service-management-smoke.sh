@@ -163,6 +163,25 @@ assert_contains() {
   fi
 }
 
+assert_contains_any() {
+  local file="$1"
+  shift
+
+  local needle
+  for needle in "$@"; do
+    if grep -Fq "$needle" "$file"; then
+      return 0
+    fi
+  done
+
+  echo "missing expected content in $file; tried:" >&2
+  for needle in "$@"; do
+    echo "  $needle" >&2
+  done
+  sed -n '1,160p' "$file" >&2 || true
+  exit 1
+}
+
 run_service_commands() {
   operond service install --config "$config"
   operond service start
@@ -196,7 +215,12 @@ case "$(uname -s)" in
     plist_path="$HOME/Library/LaunchAgents/dev.operon.operond.plist"
     operond service install --config "$config"
     test -f "$plist_path" || { echo "missing generated launchd plist: $plist_path" >&2; exit 1; }
-    assert_contains "<string>$RELEASE_INSTALL_PREFIX_BIN/operond</string>" "$plist_path"
+    macos_operond="$RELEASE_INSTALL_PREFIX_BIN/operond"
+    macos_operond_var_alias="${macos_operond#/private}"
+    assert_contains_any \
+      "$plist_path" \
+      "<string>$macos_operond</string>" \
+      "<string>$macos_operond_var_alias</string>"
     assert_contains "<string>$config</string>" "$plist_path"
     operond service start
     operond service status
@@ -210,7 +234,10 @@ case "$(uname -s)" in
     ;;
   MINGW64_NT-*|MSYS_NT-*|CYGWIN_NT-*|Windows_NT-*)
     write_fake_windows_sc
-    run_service_commands
+    (
+      cd "$fake_bin"
+      run_service_commands
+    )
     assert_contains "sc.exe create OperonDaemon" "$supervisor_log"
     assert_contains "operond.exe\" service run --config" "$supervisor_log"
     assert_contains "sc.exe start OperonDaemon" "$supervisor_log"
