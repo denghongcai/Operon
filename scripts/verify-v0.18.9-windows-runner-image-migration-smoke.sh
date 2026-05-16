@@ -45,8 +45,8 @@ require_pattern 'Windows Runner Image Smoke' AGENTS.md
 require_pattern 'v0.18.9 Windows Runner Image Migration Smoke Validation' scripts/ci/run-validations.sh
 
 bash -n scripts/verify-v0.18.9-windows-runner-image-migration-smoke.sh
-scripts/verify-release-artifacts.sh --dry-run v0.16.6 >/dev/null
-scripts/verify-release-install-usability.sh --dry-run v0.16.6 >/dev/null
-scripts/verify-release-service-management-smoke.sh --dry-run v0.16.6 >/dev/null
+scripts/verify-release-artifacts.sh --dry-run v0.16.7 >/dev/null
+scripts/verify-release-install-usability.sh --dry-run v0.16.7 >/dev/null
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.7 >/dev/null
 
 echo "v0.18.9 Windows runner image migration smoke validation passed"

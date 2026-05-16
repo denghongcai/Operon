@@ -28,10 +28,10 @@ bash -n scripts/verify-release-install-usability.sh
 bash -n scripts/verify-release-service-management-smoke.sh
 bash -n scripts/verify-v0.18.6-downloaded-release-service-management-smoke.sh
 
-dry_run="$(scripts/verify-release-service-management-smoke.sh --dry-run v0.16.6 denghongcai/Operon)"
+dry_run="$(scripts/verify-release-service-management-smoke.sh --dry-run v0.16.7 denghongcai/Operon)"
 for expected in \
-  'tag=v0.16.6' \
-  'asset=operon-v0.16.6-linux-x86_64.tar.gz' \
+  'tag=v0.16.7' \
+  'asset=operon-v0.16.7-linux-x86_64.tar.gz' \
   'operond service install --config' \
   'fake systemctl/launchctl/sc.exe supervisor smoke'
 do

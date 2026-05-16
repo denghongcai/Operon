@@ -160,9 +160,9 @@ Release maintainers verify the post-download install path with the manual
 workflow/doc wiring checks without downloading assets, run:
 
 ```bash
-scripts/verify-release-install-usability.sh --dry-run v0.16.6 denghongcai/Operon
-scripts/verify-release-service-management-smoke.sh --dry-run v0.16.6 denghongcai/Operon
-scripts/verify-release-linux-install-containers.sh --dry-run v0.16.6 denghongcai/Operon
+scripts/verify-release-install-usability.sh --dry-run v0.16.7 denghongcai/Operon
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.7 denghongcai/Operon
+scripts/verify-release-linux-install-containers.sh --dry-run v0.16.7 denghongcai/Operon
 ```
 
 Create a local workspace and guided config:

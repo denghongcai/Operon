@@ -24,9 +24,9 @@ require_pattern 'x86_64-unknown-linux-musl' docs/decisions/musl-alpine-distribut
 bash -n scripts/assess-musl-alpine-distribution.sh
 bash -n scripts/verify-v0.18.7-musl-alpine-distribution-decision.sh
 
-dry_run="$(scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.6 denghongcai/Operon)"
+dry_run="$(scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.7 denghongcai/Operon)"
 for expected in \
-  'tag=v0.16.6' \
+  'tag=v0.16.7' \
   'image=alpine:' \
   'expected=unsupported-glibc-archive-on-musl'
 do

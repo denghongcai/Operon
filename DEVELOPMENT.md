@@ -340,6 +340,15 @@ release publication. It records runner image evidence and proves the Windows
 CI, WinFsp, release-build, release artifact, downloaded install, and downloaded
 service-management paths on the targeted hosted image.
 
+Use `scripts/release-gate-orchestrate.sh plan <tag> <commit> [owner/repo]` as
+the release-maintainer checklist. Before pushing a public tag, run
+`scripts/release-gate-orchestrate.sh pretag <tag> <commit> [owner/repo]` to
+verify CI, CodeQL, live mount release gates, and Windows Runner Image Smoke on
+the exact commit. After publishing, run
+`scripts/release-gate-orchestrate.sh postrelease <tag> <commit> [owner/repo]`
+to verify the Draft Release workflow, public release state, artifact
+verification, install usability, and README Quickstart gates.
+
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
 `armv7` binary tarballs, macOS `x86_64` and `aarch64` binary tarballs, a
 Windows `x86_64` binary zip, a JavaScript SDK tarball, and `SHA256SUMS`. Draft

@@ -371,6 +371,12 @@ Operon should not own:
     `main`, verifying release artifacts and checksums, and README Quickstart
     verification after v0.18.3/v0.18.4.
 
+- `docs/plan/v0.16.7-release-publication.md`
+  - Planned v0.16.7 scope for publishing the current v0.16 release line from
+    `main` after v0.18.5 through v0.18.11 release/install hardening, with
+    public artifact, install usability, service-management, and README
+    Quickstart verification.
+
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
     validation-mode SDK checks, Windows-only test compilation coverage, and
@@ -441,6 +447,10 @@ Operon should not own:
   - Completed v0.18.9 scope for validating Windows Server 2025 hosted runner
     migration across Windows CI, live mount, release build, release artifact
     verification, and downloaded release install/service-management smoke.
+
+- `docs/plan/v0.18.11-release-gate-orchestration-cleanup.md`
+  - Completed v0.18.11 scope for adding a repo-local release gate
+    orchestration helper with pre-tag and post-publication verification modes.
 
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
@@ -730,6 +740,12 @@ Defer:
   [`scripts/verify-release-gates.sh`](scripts/verify-release-gates.sh);
   [`scripts/verify-v0.14-release-gates.sh`](scripts/verify-v0.14-release-gates.sh)
   is only a compatibility wrapper.
+- Use [`scripts/release-gate-orchestrate.sh`](scripts/release-gate-orchestrate.sh)
+  as the public release checklist and evidence verifier. `plan` prints the
+  manual gate order, `pretag` verifies CI/CodeQL/live-mount/Windows-runner
+  evidence on the exact release commit, and `postrelease` verifies Draft
+  Release, public release state, release artifact, install usability, and
+  README Quickstart evidence.
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
   when README Quickstart, release packaging, install prerequisites, or agent
   skills guidance changes. After publishing, verify release artifacts and README
@@ -1218,3 +1234,19 @@ Defer:
   GitHub's Node.js 20 action deprecation and `windows-2025-vs2026` redirect
   notices remain follow-up CI/action hardening inputs outside v0.18.9. Nothing
   remains in v0.18.9.
+- Latest phase status update: v0.18.11 Release Gate Orchestration Cleanup is
+  completed. `scripts/release-gate-orchestrate.sh` now provides `plan`,
+  `pretag`, and `postrelease` modes for release gate sequencing and evidence
+  checks, and `scripts/verify-v0.18.11-release-gate-orchestration-cleanup.sh`
+  is wired through the consolidated `core` validation group. Nothing remains
+  in v0.18.11.
+- Latest phase status update: v0.16.7 Release Publication and Public
+  Verification is in progress. Use
+  `scripts/release-gate-orchestrate.sh plan v0.16.7 <commit> denghongcai/Operon`
+  for the gate order, then record CI, CodeQL, live mount, Windows Runner Image
+  Smoke, Draft Release, public release, artifact, install usability, and README
+  Quickstart evidence in `docs/plan/v0.16.7-release-publication.md`. Local
+  release-preparation validation passed with `cargo check --workspace --locked`,
+  `pnpm --filter @operon/sdk build`, docs/help/skills sync, focused v0.16.7
+  validation, release-gate plan dry run, and consolidated `sdk`/`core`
+  validation groups.

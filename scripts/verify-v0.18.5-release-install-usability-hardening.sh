@@ -23,11 +23,11 @@ require_pattern 'ubuntu:20.04' scripts/verify-release-linux-install-containers.s
 require_pattern 'debian:12' scripts/verify-release-linux-install-containers.sh
 require_pattern 'PATH points at isolated install prefix' scripts/verify-release-install-usability.sh
 require_pattern 'operon doctor --mount-runtime' scripts/verify-release-install-usability.sh
-require_pattern 'verify-release-install-usability.sh --dry-run v0.16.6' README.md
+require_pattern 'verify-release-install-usability.sh --dry-run v0.16.7' README.md
 require_pattern 'v0.18.5 Release / Install Usability Hardening Validation' scripts/ci/run-validations.sh
 
-scripts/verify-release-install-usability.sh --dry-run v0.16.6 denghongcai/Operon >/dev/null
-scripts/verify-release-linux-install-containers.sh --dry-run v0.16.6 denghongcai/Operon >/dev/null
+scripts/verify-release-install-usability.sh --dry-run v0.16.7 denghongcai/Operon >/dev/null
+scripts/verify-release-linux-install-containers.sh --dry-run v0.16.7 denghongcai/Operon >/dev/null
 
 bash -n scripts/verify-release-install-usability.sh
 bash -n scripts/verify-release-linux-install-containers.sh

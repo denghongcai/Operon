@@ -1,6 +1,6 @@
 # Release and CI Observability
 
-Status: Updated for v0.18.9.
+Status: Updated for v0.18.11.
 
 This note records where release-critical checks run and how to handle
 deterministic failures. It does not replace the per-phase acceptance plans; it
@@ -20,6 +20,9 @@ is the operator-facing map for finding the right log quickly.
 
 ## Release Gates
 
+- `scripts/release-gate-orchestrate.sh plan <tag> <commit> [repo]` prints the
+  release gate order for a public release. Use it as the maintainer checklist
+  before dispatching manual gates or pushing a release tag.
 - `Cross-Platform Live Mount Smoke` is the live mount release gate. Run it
   manually before tagging with `platform=all`; macOS artifacts include the
   uploaded `macos-live-mount-<backend>.log` file and Windows logs live on the
@@ -41,6 +44,13 @@ is the operator-facing map for finding the right log quickly.
   runs Linux install smoke inside `ubuntu:20.04` and `debian:12` containers.
 - `Verify README Quickstart` is manual and runs the public README install flow
   in Docker against the provided tag.
+- `scripts/release-gate-orchestrate.sh pretag <tag> <commit> [repo]` verifies
+  that CI, CodeQL, live mount release gates, and Windows Runner Image Smoke
+  passed on the exact commit before the public tag is pushed.
+- `scripts/release-gate-orchestrate.sh postrelease <tag> <commit> [repo]`
+  verifies that the Draft Release workflow, public release state, release
+  artifact verification, release install usability, and README Quickstart
+  verification passed after publication.
 
 ## Failure Triage
 

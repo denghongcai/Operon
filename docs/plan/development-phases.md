@@ -6608,6 +6608,116 @@ Remaining:
 
 - No v0.18.9 Windows runner image migration smoke work remains.
 
+## Phase 119: v0.18.11 Release Gate Orchestration Cleanup
+
+Status: Completed.
+
+Goal: make the release publication gate order executable and auditable from
+one repo-local entrypoint so release work no longer depends on scattered manual
+workflow knowledge.
+
+Detailed plan:
+`docs/plan/v0.18.11-release-gate-orchestration-cleanup.md`.
+
+Planned:
+
+- Add a release gate orchestration helper that prints the required pre-tag and
+  post-publication commands for a public release tag and exact commit.
+- Add a pre-tag verification mode that checks successful CI, CodeQL,
+  cross-platform live mount release gates, and Windows Runner Image Smoke on
+  the exact release commit.
+- Add a post-release verification mode that checks the Draft Release workflow,
+  public release state, release artifact verification, downloaded release
+  install usability, and README Quickstart verification.
+- Keep existing workflow implementations and action versions unchanged; this
+  phase only orchestrates and verifies the gates that already exist.
+- Update release CI observability docs, DEVELOPMENT release guidance,
+  AGENTS.md, and focused validation coverage.
+
+Progress:
+
+- Added `scripts/release-gate-orchestrate.sh` with `plan`, `pretag`, and
+  `postrelease` modes.
+- Kept `scripts/verify-release-gates.sh` as the live-mount release gate source
+  of truth and reused it from the orchestration helper.
+- Added post-publication checks for `Draft Release`, public release state,
+  `Verify Release Artifacts`, `Verify Release Install Usability`, and
+  `Verify README Quickstart`.
+- Updated release observability and maintainer guidance so release gate order
+  is driven by the orchestration helper.
+- Added `scripts/verify-v0.18.11-release-gate-orchestration-cleanup.sh` and
+  wired it through the consolidated `core` validation group.
+
+Verification Evidence:
+
+- Focused validation passed with
+  `scripts/verify-v0.18.11-release-gate-orchestration-cleanup.sh`.
+- Bash syntax validation passed for `scripts/release-gate-orchestrate.sh`.
+- Dry-run planning output covered CI, CodeQL, live mount, Windows Runner Image
+  Smoke, Draft Release, publish, release artifact verification, release install
+  usability, and README Quickstart gates.
+
+Remaining:
+
+- No v0.18.11 release gate orchestration cleanup work remains.
+
+## Phase 120: v0.16.7 Release Publication and Public Verification
+
+Status: In Progress.
+
+Goal: publish the current v0.16 release line from `main` after the v0.18.5
+through v0.18.11 release/install hardening work, then verify public artifacts,
+install usability, service-management smoke, and README Quickstart against the
+published release.
+
+Detailed plan: `docs/plan/v0.16.7-release-publication.md`.
+
+Planned:
+
+- Confirm the release commit is merged to `main` before tagging.
+- Align Rust crate versions, TypeScript SDK package version,
+  `PROTOCOL_VERSION`, CLI `--version`, release dry-run inputs, and README
+  release-maintainer examples to `0.16.7` / `v0.16.7`.
+- Run main CI and CodeQL on the release commit.
+- Run the manual cross-platform live mount release gates and Windows Runner
+  Image Smoke on the release commit.
+- Verify pre-tag gates with
+  `scripts/release-gate-orchestrate.sh pretag v0.16.7 <commit>`.
+- Push tag `v0.16.7`, let the Draft Release workflow build artifacts, publish
+  the release, and verify public artifacts.
+- Run post-publication `Verify Release Artifacts`, `Verify Release Install
+  Usability`, and `Verify README Quickstart` workflows against `v0.16.7`.
+- Verify post-release gates with
+  `scripts/release-gate-orchestrate.sh postrelease v0.16.7 <commit>`.
+- Record run IDs, tag, commit, release URL, and remaining limits in this phase
+  plan, the phase tracker, and AGENTS.md.
+
+Progress:
+
+- Release publication phase added.
+- Aligned Rust crate versions, TypeScript SDK package version,
+  `PROTOCOL_VERSION`, CLI version assertions, workflow release-tag examples,
+  README release-maintainer dry-run examples, and focused validation
+  expectations to `0.16.7` / `v0.16.7`.
+- Added `scripts/verify-v0.16.7-release-publication.sh` and wired it through
+  the consolidated `core` validation group.
+- Local release-preparation validation passed:
+  `cargo metadata --locked --format-version 1`,
+  `cargo check --workspace --locked`, `pnpm --filter @operon/sdk build`,
+  `scripts/verify-docs-help-skills-sync.sh`,
+  `scripts/verify-v0.16.7-release-publication.sh`,
+  `scripts/release-gate-orchestrate.sh plan v0.16.7 HEAD denghongcai/Operon`,
+  `scripts/ci/run-validations.sh sdk`, and
+  `scripts/ci/run-validations.sh core`.
+
+Remaining:
+
+- Push the release commit to `main`.
+- Run remote pre-tag release gates.
+- Create and publish `v0.16.7`.
+- Run post-publication verification workflows.
+- Record final release evidence.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

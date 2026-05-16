@@ -92,6 +92,7 @@ validations=(
   "sdk|v0.16.2 SDK Maintainability Cleanup Validation|scripts/verify-v0.16.2-sdk-maintainability-cleanup.sh"
   "core|v0.16.3 Daemon and Mount Maintainability Cleanup Validation|scripts/verify-v0.16.3-daemon-mount-maintainability-cleanup.sh"
   "runtime|v0.16.4 Mount Runtime Preflight UX Validation|scripts/verify-v0.16.4-mount-runtime-preflight-ux.sh"
+  "core|v0.16.7 Release Publication and Public Verification Validation|scripts/verify-v0.16.7-release-publication.sh"
   "core|v0.17 Release and CI Observability Cleanup Validation|scripts/verify-v0.17-release-ci-observability.sh"
   "sdk|v0.17.1 Maintainability Cleanup Validation|scripts/verify-v0.17.1-maintainability-cleanup.sh"
   "core|v0.17.2 Mount Probe Reliability Cleanup Validation|scripts/verify-v0.17.2-mount-probe-reliability.sh"
@@ -107,6 +108,7 @@ validations=(
   "core|v0.18.6 Downloaded Release Service-Management Smoke Validation|scripts/verify-v0.18.6-downloaded-release-service-management-smoke.sh"
   "core|v0.18.7 musl / Alpine Distribution Decision Validation|scripts/verify-v0.18.7-musl-alpine-distribution-decision.sh"
   "core|v0.18.9 Windows Runner Image Migration Smoke Validation|scripts/verify-v0.18.9-windows-runner-image-migration-smoke.sh"
+  "core|v0.18.11 Release Gate Orchestration Cleanup Validation|scripts/verify-v0.18.11-release-gate-orchestration-cleanup.sh"
 )
 
 failures=()

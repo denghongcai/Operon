@@ -23,7 +23,7 @@ rg -n '^pub trait RemoteFs' crates/operon-mount/src/mount_core.rs
 rg -n 'export type ExecLogStreamEvent' packages/sdk-js/src/types.ts
 rg -n 'ExecLogStreamEvent' packages/sdk-js/src/index.ts
 rg -n 'streamExecLogEvents' packages/sdk-js/src/index.ts
-rg -n 'PROTOCOL_VERSION: &str = "v0.16.6"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.16.7"' crates/operon-protocol/src/lib.rs
 
 cargo test -p operon-store --locked
 cargo test -p operond --locked

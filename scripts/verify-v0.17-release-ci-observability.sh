@@ -25,7 +25,7 @@ if command -v rustup >/dev/null 2>&1; then
 fi
 cargo check -p operond --target x86_64-pc-windows-gnu --tests --locked
 
-scripts/verify-release-artifacts.sh --dry-run v0.16.6 >/dev/null
-OPERON_VERSION=v0.16.6 scripts/verify-readme-quickstart-docker.sh --dry-run >/dev/null
+scripts/verify-release-artifacts.sh --dry-run v0.16.7 >/dev/null
+OPERON_VERSION=v0.16.7 scripts/verify-readme-quickstart-docker.sh --dry-run >/dev/null
 
 echo "v0.17 release and CI observability validation passed"

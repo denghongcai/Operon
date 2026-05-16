@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Public release tag to verify, for example v0.16.6"
+        description: "Public release tag to verify, for example v0.16.7"
         required: true
         type: string
 

@@ -15,7 +15,7 @@ on:
         description: "Public release tag for downloaded release checks"
         required: true
         type: string
-        default: v0.16.6
+        default: v0.16.7
 
 permissions:
   contents: read

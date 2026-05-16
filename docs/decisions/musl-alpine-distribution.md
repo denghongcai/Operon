@@ -68,11 +68,11 @@ follow-up phase with artifact, CI, and support scope.
 Use dry-run mode when editing docs or validation wiring:
 
 ```bash
-scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.6 denghongcai/Operon
+scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.7 denghongcai/Operon
 ```
 
 Use the full assessment when a container runtime is available:
 
 ```bash
-OPERON_CONTAINER_RUNTIME=podman scripts/assess-musl-alpine-distribution.sh v0.16.6 denghongcai/Operon
+OPERON_CONTAINER_RUNTIME=podman scripts/assess-musl-alpine-distribution.sh v0.16.7 denghongcai/Operon
 ```

@@ -27,8 +27,8 @@ require_pattern 'exec.session' docs/plan/v0.10-exec-unification.md
 require_pattern 'PTY/TTY' docs/plan/v0.10-exec-unification.md
 require_pattern 'scripts/verify-v0.10-exec-unification.sh' DEVELOPMENT.md
 require_pattern 'scripts/verify-v0.10-exec-unification.sh' scripts/ci/run-validations.sh
-require_pattern 'PROTOCOL_VERSION: &str = "v0.16.6"' crates/operon-protocol/src/lib.rs
-require_pattern '"version": "0.16.6"' packages/sdk-js/package.json
+require_pattern 'PROTOCOL_VERSION: &str = "v0.16.7"' crates/operon-protocol/src/lib.rs
+require_pattern '"version": "0.16.7"' packages/sdk-js/package.json
 
 require_pattern 'rpc RunExec' proto/operon/runtime.proto
 require_pattern 'rpc GetExec' proto/operon/runtime.proto
