@@ -148,6 +148,12 @@ The v0.18.7 musl / Alpine distribution validation checks
 and user-facing docs that state Alpine and musl-based distributions are
 unsupported by the prebuilt Linux archives.
 
+The v0.18.9 Windows runner image migration validation checks the manual
+`Windows Runner Image Smoke` workflow, the `windows-2025` label policy for
+release-critical Windows jobs, release CI observability docs, and downloaded
+release artifact/install/service-management smoke coverage on the targeted
+Windows hosted image.
+
 The v0.12.5 CLI gRPC maintainability validation checks that the CLI gRPC
 compatibility surface delegates filesystem, exec, service, and audit helpers to
 focused modules while preserving behavior-covered tests.
@@ -327,6 +333,12 @@ Before pushing or moving a public release tag, run the manual
 `platform=windows` dispatches. The draft release workflow rejects public
 release tags unless the exact commit has successful macOS FUSE-T and Windows
 WinFsp live mount smoke jobs.
+
+When Windows hosted runner migration is in scope, run the manual
+`Windows Runner Image Smoke` workflow with `runner_label=windows-2025` before
+release publication. It records runner image evidence and proves the Windows
+CI, WinFsp, release-build, release artifact, downloaded install, and downloaded
+service-management paths on the targeted hosted image.
 
 The workflow creates a draft GitHub Release with Linux `x86_64`, `arm64`, and
 `armv7` binary tarballs, macOS `x86_64` and `aarch64` binary tarballs, a

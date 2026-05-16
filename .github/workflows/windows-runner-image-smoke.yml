@@ -1,0 +1,158 @@
+name: Windows Runner Image Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: "Windows hosted runner label to validate"
+        type: choice
+        required: true
+        default: windows-2025
+        options:
+          - windows-2025
+          - windows-latest
+      release_tag:
+        description: "Public release tag for downloaded release checks"
+        required: true
+        type: string
+        default: v0.16.6
+
+permissions:
+  contents: read
+
+jobs:
+  windows-runner-image-smoke:
+    name: Windows Runner Image Smoke (${{ inputs.runner_label }})
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Print runner image evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $os = Get-CimInstance Win32_OperatingSystem
+          "os.caption=$($os.Caption)"
+          "os.version=$($os.Version)"
+          "os.build=$($os.BuildNumber)"
+          "image.os=$env:ImageOS"
+          "image.version=$env:ImageVersion"
+          "runner.os=$env:RUNNER_OS"
+          "powershell=$($PSVersionTable.PSVersion)"
+          git --version
+          where.exe git
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-runner-image-${{ inputs.runner_label }}
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.3"
+          repo-token: ${{ github.token }}
+
+      - name: Install WinFsp
+        shell: powershell
+        run: choco install winfsp -y
+
+      - name: Print toolchain evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          rustc --version
+          cargo --version
+          protoc --version
+          $programFiles = [Environment]::GetFolderPath("ProgramFiles")
+          $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
+          $candidates = @(
+            (Join-Path $programFiles "WinFsp\bin\winfsp-x64.dll"),
+            (Join-Path $programFilesX86 "WinFsp\bin\winfsp-x64.dll")
+          )
+          foreach ($candidate in $candidates) {
+            if (Test-Path $candidate) {
+              "winfsp.dll=$candidate"
+            }
+          }
+          if (-not ($candidates | Where-Object { Test-Path $_ })) {
+            throw "WinFsp runtime DLL was not found after installation"
+          }
+
+      - name: Check workspace
+        run: cargo check --workspace --locked
+
+      - name: Test protocol
+        run: cargo test -p operon-protocol --locked
+
+      - name: Test config
+        run: cargo test -p operon-config --locked
+
+      - name: Test filesystem core
+        run: cargo test -p operon-fs --locked
+
+      - name: Test mount adapter
+        run: cargo test -p operon-mount --locked
+
+      - name: Test exec policy
+        run: cargo test -p operon-process --locked
+
+      - name: Test daemon platform shell defaults
+        run: cargo test -p operond --locked shell_invocation_matches_platform
+
+      - name: Test daemon exec session support decision
+        run: cargo test -p operond --locked exec_session_platform_is_supported
+
+      - name: Test daemon PTY smoke
+        run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
+
+      - name: Test daemon exec cancellation guarantee
+        run: cargo test -p operond --locked exec_cancellation_guarantee_matches_platform
+
+      - name: Test daemon Windows Job Object cancellation
+        run: cargo test -p operond --locked windows_job_object_cancellation_terminates_descendant_process
+
+      - name: Test daemon service management
+        run: cargo test -p operond --locked service_management
+
+      - name: Test CLI private file platform model
+        run: cargo test -p operon-cli --locked private_file_security_model_is_platform_specific
+
+      - name: Test CLI Windows private file ACL model
+        run: cargo test -p operon-cli --locked windows_private_file_acl_model
+
+      - name: Test CLI Windows private file ACL write
+        run: cargo test -p operon-cli --locked windows_private_file_is_written_with_verified_acl
+
+      - name: Test CLI session dimensions
+        run: cargo test -p operon-cli --locked exec_session_terminal_dimensions
+
+      - name: Build Windows release binaries
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --release --locked --target x86_64-pc-windows-msvc -p operon-cli -p operond
+          target\x86_64-pc-windows-msvc\release\operon.exe --version
+          target\x86_64-pc-windows-msvc\release\operond.exe --version
+
+      - name: Verify release artifacts on Windows runner image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/verify-release-artifacts.sh "$RELEASE_TAG" "$GITHUB_REPOSITORY"
+
+      - name: Verify release install usability on Windows runner image
+        shell: bash
+        run: scripts/verify-release-install-usability.sh "$RELEASE_TAG" "$GITHUB_REPOSITORY"
+
+      - name: Verify release service management smoke on Windows runner image
+        shell: bash
+        run: scripts/verify-release-service-management-smoke.sh "$RELEASE_TAG" "$GITHUB_REPOSITORY"

@@ -14,7 +14,7 @@ require_pattern 'No v0.11.3 work remains' docs/plan/development-phases.md
 
 require_pattern 'rust-platform-smoke' .github/workflows/ci.yml
 require_pattern 'macos-latest' .github/workflows/ci.yml
-require_pattern 'windows-latest' .github/workflows/ci.yml
+require_pattern 'windows-2025' .github/workflows/ci.yml
 require_pattern 'arduino/setup-protoc@v3' .github/workflows/ci.yml
 require_pattern 'repo-token: \$\{\{ github\.token \}\}' .github/workflows/ci.yml
 require_pattern 'cargo check --workspace --locked' .github/workflows/ci.yml

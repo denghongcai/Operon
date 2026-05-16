@@ -6508,6 +6508,84 @@ Remaining:
 
 - No v0.18.7 musl / Alpine distribution decision work remains.
 
+## Phase 118: v0.18.9 Windows Runner Image Migration Smoke
+
+Status: Completed.
+
+Goal: make GitHub-hosted Windows runner image migration an explicit release
+gate by validating Operon's Windows CI, live mount, release build, and
+downloaded release smoke paths on the Windows Server 2025 hosted image.
+
+Detailed plan:
+`docs/plan/v0.18.9-windows-runner-image-migration-smoke.md`.
+
+Planned:
+
+- Inventory every workflow and validation script that names `windows-latest`,
+  including CI, live mount smoke, draft release, release artifact verification,
+  downloaded release install usability, and older validation scripts that
+  assert the current label.
+- Record a Windows runner label policy: migrate release-critical Windows jobs
+  to explicit `windows-2025` once targeted smoke evidence passes, while only
+  keeping `windows-latest` where the repo intentionally wants a floating
+  future-image signal.
+- Add a manual Windows runner image smoke workflow that defaults to
+  `windows-2025`, prints hosted runner image evidence, installs Rust, protoc,
+  and WinFsp, runs Windows-sensitive platform checks, builds release binaries
+  for `x86_64-pc-windows-msvc`, and smoke-tests `operon.exe` / `operond.exe`.
+- Run Windows release-path checks on the targeted image:
+  `scripts/verify-release-artifacts.sh`,
+  `scripts/verify-release-install-usability.sh`, and
+  `scripts/verify-release-service-management-smoke.sh` against public tag
+  `v0.16.6`.
+- Update operational Windows workflow jobs and existing validation scripts to
+  the chosen label policy after targeted Windows Server 2025 evidence passes.
+- Update release CI observability docs, AGENTS guidance, and focused
+  validation coverage.
+
+Progress:
+
+- Added the Windows runner image migration smoke phase.
+- Added `.github/workflows/windows-runner-image-smoke.yml`, a manual workflow
+  that defaults to `windows-2025`, prints runner image and toolchain evidence,
+  installs Rust/protoc/WinFsp, runs Windows-sensitive platform checks, builds
+  Windows release binaries for `x86_64-pc-windows-msvc`, and verifies
+  downloaded release artifacts, install usability, and service-management smoke
+  against a public tag.
+- Updated release-critical Windows workflow jobs in `.github/workflows/ci.yml`,
+  `.github/workflows/live-mount-smoke.yml`,
+  `.github/workflows/release-draft.yml`,
+  `.github/workflows/verify-release-artifacts.yml`, and
+  `.github/workflows/verify-release-install-usability.yml` to use explicit
+  `windows-2025` instead of floating `windows-latest`.
+- Updated older validation scripts so current workflow assertions check the
+  explicit Windows Server 2025 label policy.
+- Updated release CI observability docs and DEVELOPMENT release guidance with
+  the Windows runner image smoke gate.
+- Added `scripts/verify-v0.18.9-windows-runner-image-migration-smoke.sh` and
+  wired it through the consolidated `core` validation group.
+
+Verification Evidence:
+
+- Focused validation passed with
+  `scripts/verify-v0.18.9-windows-runner-image-migration-smoke.sh`.
+- Related regression validation passed with
+  `scripts/verify-v0.11.3-platform-capability-matrix.sh`,
+  `scripts/verify-v0.12-release-distribution-readiness.sh`, and
+  `scripts/verify-v0.12.4-release-artifact-verification.sh`.
+- Workflow YAML parsing passed for the updated workflow set with Ruby's YAML
+  parser.
+- Docs/help/skills synchronization passed with
+  `scripts/verify-docs-help-skills-sync.sh`.
+- Diff whitespace validation passed with `git diff --check`.
+- Consolidated validation passed with `scripts/ci/run-validations.sh core`.
+- Remote Windows Server 2025 workflow evidence is pending for the implementation
+  commit.
+
+Remaining:
+
+- No v0.18.9 Windows runner image migration smoke work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

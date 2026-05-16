@@ -157,7 +157,7 @@ jobs:
   windows-live-mount:
     name: Windows WinFsp Live Mount
     if: ${{ inputs.platform == 'all' || inputs.platform == 'windows' }}
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 15
     steps:
       - name: Checkout

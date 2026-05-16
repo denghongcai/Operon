@@ -25,7 +25,7 @@ require_pattern 'aarch64-apple-darwin' .github/workflows/release-draft.yml
 require_pattern 'x86_64-pc-windows-msvc' .github/workflows/release-draft.yml
 require_pattern 'macos-15-intel' .github/workflows/release-draft.yml
 require_pattern 'macos-15' .github/workflows/release-draft.yml
-require_pattern 'windows-latest' .github/workflows/release-draft.yml
+require_pattern 'windows-2025' .github/workflows/release-draft.yml
 require_pattern 'arduino/setup-protoc@v3' .github/workflows/release-draft.yml
 require_pattern 'repo-token: \$\{\{ github\.token \}\}' .github/workflows/release-draft.yml
 require_pattern 'choco install winfsp -y' .github/workflows/release-draft.yml

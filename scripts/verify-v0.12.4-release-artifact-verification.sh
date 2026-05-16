@@ -29,7 +29,7 @@ require_file .github/workflows/verify-readme-quickstart.yml
 require_pattern 'workflow_dispatch' .github/workflows/verify-release-artifacts.yml
 require_pattern 'ubuntu-latest' .github/workflows/verify-release-artifacts.yml
 require_pattern 'macos-latest' .github/workflows/verify-release-artifacts.yml
-require_pattern 'windows-latest' .github/workflows/verify-release-artifacts.yml
+require_pattern 'windows-2025' .github/workflows/verify-release-artifacts.yml
 require_pattern 'scripts/verify-release-artifacts.sh' .github/workflows/verify-release-artifacts.yml
 require_pattern 'workflow_dispatch' .github/workflows/verify-readme-quickstart.yml
 require_pattern 'OPERON_VERSION: \$\{\{ inputs.tag \}\}' .github/workflows/verify-readme-quickstart.yml

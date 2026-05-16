@@ -1,6 +1,6 @@
 # Release and CI Observability
 
-Status: Updated for v0.17.
+Status: Updated for v0.18.9.
 
 This note records where release-critical checks run and how to handle
 deterministic failures. It does not replace the per-phase acceptance plans; it
@@ -26,6 +26,12 @@ is the operator-facing map for finding the right log quickly.
   `Windows WinFsp Live Mount` job.
 - `Draft Release` runs on tag push. Its `Release Gates` job checks that live
   mount smoke passed for the tag commit before artifacts are built.
+- `Windows Runner Image Smoke` is a manual Windows hosted-image gate. Run it
+  with `runner_label=windows-2025` before release publication when GitHub
+  runner image migration is in scope; the job prints Windows Server image
+  evidence, installs Rust/protoc/WinFsp, runs Windows-sensitive CI checks,
+  builds Windows release binaries, and verifies downloaded release artifacts,
+  install usability, and fake-supervised service-management smoke.
 - `Verify Release Artifacts` is manual and downloads public assets on Linux,
   macOS, and Windows. It validates the complete asset set, SHA256SUMS, archive
   layout, binary smoke, and SDK tarball contents.
@@ -43,7 +49,7 @@ is the operator-facing map for finding the right log quickly.
 - Cancel obsolete workflow runs after a targeted fix is pushed, especially
   release-gate and live-mount runs that are tied to an older commit.
 - Rerun only the workflow that proves the fix: default CI for code/script
-  changes, live mount smoke for mount-runtime changes, release draft for tag
-  packaging, public artifact verification for published assets, release install
-  usability for post-download failures, and README Quickstart for install-flow
-  changes.
+  changes, Windows Runner Image Smoke for Windows hosted-image migration,
+  live mount smoke for mount-runtime changes, release draft for tag packaging,
+  public artifact verification for published assets, release install usability
+  for post-download failures, and README Quickstart for install-flow changes.

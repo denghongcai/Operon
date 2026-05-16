@@ -106,6 +106,7 @@ validations=(
   "core|v0.18.5 Release / Install Usability Hardening Validation|scripts/verify-v0.18.5-release-install-usability-hardening.sh"
   "core|v0.18.6 Downloaded Release Service-Management Smoke Validation|scripts/verify-v0.18.6-downloaded-release-service-management-smoke.sh"
   "core|v0.18.7 musl / Alpine Distribution Decision Validation|scripts/verify-v0.18.7-musl-alpine-distribution-decision.sh"
+  "core|v0.18.9 Windows Runner Image Migration Smoke Validation|scripts/verify-v0.18.9-windows-runner-image-migration-smoke.sh"
 )
 
 failures=()

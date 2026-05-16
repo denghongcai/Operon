@@ -437,6 +437,11 @@ Operon should not own:
     whether Operon keeps glibc-only Linux archives or plans musl/static
     artifacts.
 
+- `docs/plan/v0.18.9-windows-runner-image-migration-smoke.md`
+  - Completed v0.18.9 scope for validating Windows Server 2025 hosted runner
+    migration across Windows CI, live mount, release build, release artifact
+    verification, and downloaded release install/service-management smoke.
+
 - `docs/architecture/runtime-api.md`
   - Current gRPC runtime API shape, CLI/SDK interface boundary, and service capability boundary.
 
@@ -1202,3 +1207,10 @@ Defer:
   glibc-only public Linux archive policy, and README/release-install docs state
   that Alpine and musl-based distributions are unsupported by the prebuilt
   Linux archives. Nothing remains in v0.18.7.
+- Latest phase status update: v0.18.9 Windows Runner Image Migration Smoke is
+  completed. Release-critical Windows workflow jobs use explicit
+  `windows-2025`, `.github/workflows/windows-runner-image-smoke.yml` provides
+  the manual `Windows Runner Image Smoke` Windows Server 2025 hosted-image
+  gate, release CI observability docs explain the gate, and focused validation
+  is wired through the consolidated `core` validation group. Nothing remains
+  in v0.18.9.

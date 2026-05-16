@@ -156,7 +156,7 @@ jobs:
             arch: macos-aarch64
             archive: tar
             binary_suffix: ""
-          - os: windows-latest
+          - os: windows-2025
             target: x86_64-pc-windows-msvc
             arch: windows-x86_64
             archive: zip
