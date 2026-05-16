@@ -1212,5 +1212,9 @@ Defer:
   `windows-2025`, `.github/workflows/windows-runner-image-smoke.yml` provides
   the manual `Windows Runner Image Smoke` Windows Server 2025 hosted-image
   gate, release CI observability docs explain the gate, and focused validation
-  is wired through the consolidated `core` validation group. Nothing remains
-  in v0.18.9.
+  is wired through the consolidated `core` validation group. Remote CI,
+  CodeQL, live mount, release artifact, release install, and Windows Runner
+  Image Smoke runs passed on commit `11fe386792a59979c6edd6b5ee061b7b01048d53`.
+  GitHub's Node.js 20 action deprecation and `windows-2025-vs2026` redirect
+  notices remain follow-up CI/action hardening inputs outside v0.18.9. Nothing
+  remains in v0.18.9.
