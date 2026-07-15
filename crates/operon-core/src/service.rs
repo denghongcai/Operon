@@ -15,7 +15,7 @@ pub struct ServiceDefinition {
     pub permissions: ServicePermissions,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ServicePermissions {
     pub check: bool,
     pub forward: bool,
@@ -26,15 +26,6 @@ pub struct ServicePermissions {
 pub enum ServiceProtocol {
     Tcp,
     Udp,
-}
-
-impl Default for ServicePermissions {
-    fn default() -> Self {
-        Self {
-            check: false,
-            forward: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
