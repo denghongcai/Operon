@@ -321,6 +321,12 @@ fn build_onboard_plan_inner(
         equivalent_cli.push(format!("operon init config {}", config_path.display()));
     }
 
+    let config_contains_inline_token = nodes.values().any(|node| {
+        node.auth
+            .token
+            .as_ref()
+            .is_some_and(|token| !token.is_empty())
+    });
     files.push(GeneratedFile {
         path: config_path.clone(),
         content: serde_yaml::to_string(&OperonConfig {
@@ -330,7 +336,7 @@ fn build_onboard_plan_inner(
             policy,
             secrets: Some(SecretsConfig::default()),
         })?,
-        private: false,
+        private: config_contains_inline_token,
     });
 
     Ok(OnboardPlan {

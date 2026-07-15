@@ -28,7 +28,7 @@ require_pattern 'for example v0.16.7' .github/workflows/verify-release-install-u
 require_pattern 'for example v0.16.7' .github/workflows/verify-readme-quickstart.yml
 
 bash -n scripts/verify-v0.16.7-release-publication.sh
-scripts/verify-release-artifacts.sh --dry-run v0.16.7 >/dev/null
+scripts/verify-release-artifacts.sh --dry-run v0.16.7 denghongcai/Operon >/dev/null
 scripts/verify-release-install-usability.sh --dry-run v0.16.7 denghongcai/Operon >/dev/null
 scripts/verify-release-service-management-smoke.sh --dry-run v0.16.7 denghongcai/Operon >/dev/null
 scripts/verify-release-linux-install-containers.sh --dry-run v0.16.7 denghongcai/Operon >/dev/null

@@ -6709,6 +6709,22 @@ Progress:
   `scripts/release-gate-orchestrate.sh plan v0.16.7 HEAD denghongcai/Operon`,
   `scripts/ci/run-validations.sh sdk`, and
   `scripts/ci/run-validations.sh core`.
+- Responded to GitHub issue #1's first suggested security-floor fixes before
+  publication by requiring daemon auth on non-loopback gRPC binds, comparing
+  bearer tokens without early exit, changing omitted service permissions to
+  default-deny, writing inline-token onboard configs as private files, and
+  redacting config auth tokens from debug output.
+- Extended the issue #1 follow-up with daemon auth startup matrix tests,
+  service omitted-permission denial coverage, `operon doctor` security
+  diagnostics for non-loopback auth, inline tokens, and service permissions,
+  and README/PROTOCOL/runtime API documentation for the hardened defaults.
+- Completed the ordered security hardening follow-up: daemon startup now
+  validates private `daemon.auth.token_file` permissions before reading tokens,
+  `operon doctor` reports config/token/secrets private-file diagnostics, service
+  forwarding tests cover check-only, forward-only, and omitted-permission
+  denial, `scripts/verify-security-hardening.sh` is wired into consolidated
+  core validation, and `docs/quality/security-hardening.md` records upgrade
+  guidance for release operators.
 
 Remaining:
 

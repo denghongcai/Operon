@@ -1027,6 +1027,7 @@ dependencies = [
  "operon-core",
  "serde",
  "serde_yaml",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

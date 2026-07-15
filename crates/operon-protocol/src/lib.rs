@@ -980,11 +980,8 @@ mod tests {
         };
 
         let grpc: runtime::v1::ServiceDefinition = service.clone().into();
-        assert_eq!(grpc.permissions.as_ref().expect("permissions").check, true);
-        assert_eq!(
-            grpc.permissions.as_ref().expect("permissions").forward,
-            false
-        );
+        assert!(grpc.permissions.as_ref().expect("permissions").check);
+        assert!(!grpc.permissions.as_ref().expect("permissions").forward);
         let core = operon_core::ServiceDefinition::try_from(grpc).expect("service definition");
         assert!(core.permissions.check);
         assert!(!core.permissions.forward);

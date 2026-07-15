@@ -77,3 +77,7 @@ and the script entrypoints used by CI validation.
 - If Alpine or another musl-based host reports a loader-style failure, use a
   glibc-based Linux distribution or build from source. Alpine and musl-based
   distributions are unsupported by the prebuilt Linux archives.
+
+## Security hardening preflight
+
+Before publishing release artifacts, run `scripts/verify-security-hardening.sh` and review [security hardening notes](security-hardening.md) for listener auth, private token files, doctor diagnostics, and service permission default-deny migration guidance.

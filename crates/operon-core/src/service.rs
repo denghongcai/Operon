@@ -15,7 +15,7 @@ pub struct ServiceDefinition {
     pub permissions: ServicePermissions,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ServicePermissions {
     pub check: bool,
     pub forward: bool,
@@ -26,15 +26,6 @@ pub struct ServicePermissions {
 pub enum ServiceProtocol {
     Tcp,
     Udp,
-}
-
-impl Default for ServicePermissions {
-    fn default() -> Self {
-        Self {
-            check: true,
-            forward: true,
-        }
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -50,4 +41,17 @@ pub struct ServiceCheck {
     pub ok: bool,
     pub latency_ms: u128,
     pub reason: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn service_permissions_default_to_deny() {
+        let permissions = ServicePermissions::default();
+
+        assert!(!permissions.check);
+        assert!(!permissions.forward);
+    }
 }
