@@ -223,14 +223,28 @@ fn require_auth_for_non_loopback(
     grpc_listen: SocketAddr,
     auth_token: Option<&String>,
 ) -> anyhow::Result<()> {
-    if auth_token.is_none() && !grpc_listen.ip().is_loopback() {
-        return Err(DaemonStartupError::new(
-            DaemonStartupErrorKind::AuthToken,
-            format!(
-                "daemon auth token is required when grpc_listen binds non-loopback address {grpc_listen}"
-            ),
-        )
-        .into());
+    if !grpc_listen.ip().is_loopback() {
+        match auth_token {
+            Some(token) if !token.trim().is_empty() => {}
+            Some(_) => {
+                return Err(DaemonStartupError::new(
+                    DaemonStartupErrorKind::AuthToken,
+                    format!(
+                        "non-empty daemon auth token is required when grpc_listen binds non-loopback address {grpc_listen}"
+                    ),
+                )
+                .into());
+            }
+            None => {
+                return Err(DaemonStartupError::new(
+                    DaemonStartupErrorKind::AuthToken,
+                    format!(
+                        "daemon auth token is required when grpc_listen binds non-loopback address {grpc_listen}"
+                    ),
+                )
+                .into());
+            }
+        }
     }
     Ok(())
 }
@@ -492,6 +506,37 @@ daemon:
                 panic!("non-loopback bind should allow configured auth: {error}")
             });
         }
+    }
+
+    #[test]
+    fn daemon_state_rejects_empty_auth_for_non_loopback_bind() {
+        let base = tempfile::tempdir().expect("temp dir");
+        let token = base.path().join("token");
+        fs::write(&token, "   \n").expect("write empty token");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&token, fs::Permissions::from_mode(0o600)).expect("chmod token");
+        }
+        let config = base.path().join("config.yaml");
+        fs::write(
+            &config,
+            r#"
+version: 1
+daemon:
+  node_id: local
+  grpc_listen: 0.0.0.0:0
+  workspace: /workspace
+  auth:
+    token_file: token
+"#,
+        )
+        .expect("write config");
+
+        let error = load_runtime_error(&config, "empty token");
+
+        assert_startup_error(&error, DaemonStartupErrorKind::AuthToken);
+        assert!(error.to_string().contains("non-empty daemon auth token"));
     }
 
     #[test]
