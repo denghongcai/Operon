@@ -16,7 +16,10 @@ later hardening work.
   [`proto/operon/runtime.proto`](../../proto/operon/runtime.proto).
 - Clients that do not use an SDK should follow `PROTOCOL.md`.
 - Authentication is bearer-token based when `daemon.auth.token`,
-  `daemon.auth.token_file`, or `daemon.auth.token_env` is configured.
+  `daemon.auth.token_file`, or `daemon.auth.token_env` is configured. Daemon
+  startup requires one of those auth sources when `daemon.grpc_listen` binds a
+  non-loopback address. Prefer token file or environment references over inline
+  tokens.
 - Policy is enforced by the daemon for every capability operation.
 - gRPC errors use status codes for auth, policy, validation, missing resources,
   precondition failures, and internal failures.
@@ -157,6 +160,8 @@ service:
         forward: true
 ```
 
+Service permissions are default-deny when omitted; set `permissions.check`
+and/or `permissions.forward` explicitly for each intended action.
 `ListServices` returns configured services and their action permissions.
 `CheckService` requires `permissions.check`, attempts a TCP or UDP service
 check, and records an audit event. TCP health records successful connect or

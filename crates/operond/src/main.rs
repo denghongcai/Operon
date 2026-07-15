@@ -180,7 +180,10 @@ mod tests {
                     port: 7789,
                     protocol: operon_core::ServiceProtocol::Tcp,
                     description: "local daemon".to_string(),
-                    permissions: operon_core::ServicePermissions::default(),
+                    permissions: operon_core::ServicePermissions {
+                        check: true,
+                        forward: true,
+                    },
                 }],
             },
         }
@@ -418,6 +421,18 @@ mod tests {
 
         assert_eq!(service.id, "daemon");
         assert_eq!(service.port, 7789);
+    }
+
+    #[test]
+    fn authorize_service_rejects_omitted_default_permissions() {
+        let mut policy = test_policy();
+        policy.service.services[0].permissions = operon_core::ServicePermissions::default();
+
+        let error = authorize_service(&policy, "daemon", "check")
+            .expect_err("omitted service permissions should deny check");
+
+        assert_eq!(error.0, RuntimeErrorKind::Forbidden);
+        assert!(error.1.contains("denied by policy"));
     }
 
     #[test]

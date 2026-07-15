@@ -31,8 +31,8 @@ pub enum ServiceProtocol {
 impl Default for ServicePermissions {
     fn default() -> Self {
         Self {
-            check: true,
-            forward: true,
+            check: false,
+            forward: false,
         }
     }
 }
@@ -50,4 +50,17 @@ pub struct ServiceCheck {
     pub ok: bool,
     pub latency_ms: u128,
     pub reason: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn service_permissions_default_to_deny() {
+        let permissions = ServicePermissions::default();
+
+        assert!(!permissions.check);
+        assert!(!permissions.forward);
+    }
 }

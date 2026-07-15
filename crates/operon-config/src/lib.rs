@@ -1,9 +1,12 @@
 use std::{
     collections::BTreeMap,
-    env, fs,
+    env, fmt, fs,
     net::SocketAddr,
     path::{Path, PathBuf},
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use operon_core::PolicyConfig;
 
@@ -50,7 +53,7 @@ pub struct ClientConfig {
     pub nodes: BTreeMap<String, NodeConfig>,
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct AuthConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
@@ -66,7 +69,7 @@ pub struct SecretsConfig {
     pub file: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeEndpoint {
     pub node_id: String,
     pub endpoint: String,
@@ -78,6 +81,26 @@ pub struct NodeConfig {
     pub endpoint: String,
     #[serde(default, skip_serializing_if = "AuthConfig::is_empty")]
     pub auth: AuthConfig,
+}
+
+impl fmt::Debug for AuthConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AuthConfig")
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .field("token_file", &self.token_file)
+            .field("token_env", &self.token_env)
+            .finish()
+    }
+}
+
+impl fmt::Debug for NodeEndpoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NodeEndpoint")
+            .field("node_id", &self.node_id)
+            .field("endpoint", &self.endpoint)
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
 }
 
 impl OperonConfig {
@@ -177,6 +200,36 @@ pub fn resolve_path(config_dir: &Path, path: &Path) -> PathBuf {
     }
 }
 
+pub fn validate_private_file_permissions(path: &Path) -> anyhow::Result<()> {
+    validate_private_file_permissions_for_platform(path)
+}
+
+#[cfg(unix)]
+fn validate_private_file_permissions_for_platform(path: &Path) -> anyhow::Result<()> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_file() {
+        anyhow::bail!("private file `{}` is not a regular file", path.display());
+    }
+    let mode = metadata.permissions().mode();
+    if mode & 0o077 != 0 {
+        anyhow::bail!(
+            "private file `{}` permissions {:o} allow group or other access",
+            path.display(),
+            mode & 0o777
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn validate_private_file_permissions_for_platform(path: &Path) -> anyhow::Result<()> {
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        anyhow::bail!("private file `{}` is not a regular file", path.display());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,6 +283,25 @@ secrets:
             .endpoint("gpu", Path::new("."))
             .expect("gpu endpoint");
         assert_eq!(endpoint.endpoint, "grpc://100.96.18.20:7789");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validates_private_file_permissions_on_unix() {
+        let base = env::temp_dir().join(format!("operon-config-test-{}", std::process::id()));
+        fs::create_dir_all(&base).expect("create temp dir");
+        let path = base.join("token");
+        fs::write(&path, "token\n").expect("write token");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("chmod private");
+
+        validate_private_file_permissions(&path).expect("private token should validate");
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("chmod broad");
+        let error =
+            validate_private_file_permissions(&path).expect_err("broad token should be rejected");
+        assert!(error.to_string().contains("group or other access"));
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir(&base);
     }
 
     #[test]
@@ -318,6 +390,25 @@ client:
             .endpoint("local", Path::new("."))
             .expect("local endpoint");
         assert_eq!(endpoint.token.as_deref(), Some("test-token"));
+    }
+
+    #[test]
+    fn debug_redacts_inline_tokens() {
+        let auth = AuthConfig {
+            token: Some("secret-token".to_string()),
+            token_file: None,
+            token_env: None,
+        };
+        let endpoint = NodeEndpoint {
+            node_id: "local".to_string(),
+            endpoint: "grpc://127.0.0.1:7789".to_string(),
+            token: Some("secret-token".to_string()),
+        };
+
+        let rendered = format!("{auth:?} {endpoint:?}");
+
+        assert!(!rendered.contains("secret-token"));
+        assert!(rendered.contains("<redacted>"));
     }
 
     #[test]

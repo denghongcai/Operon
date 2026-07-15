@@ -6,7 +6,7 @@ use std::{
     sync::{atomic::AtomicU64, Arc, Mutex},
 };
 
-use operon_config::{resolve_path, OperonConfig};
+use operon_config::{resolve_path, validate_private_file_permissions, OperonConfig};
 use operon_core::{CapabilityList, NodeInfo};
 
 use crate::{
@@ -116,6 +116,7 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
         )
     })?;
     let policy = config.policy.unwrap_or_else(default_policy);
+    validate_daemon_token_file(&config_dir, &daemon.auth)?;
     let auth_token = daemon.auth.resolve(&config_dir).map_err(|error| {
         DaemonStartupError::with_source(
             DaemonStartupErrorKind::AuthToken,
@@ -123,6 +124,7 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
             error,
         )
     })?;
+    require_auth_for_non_loopback(daemon.grpc_listen, auth_token.as_ref())?;
     let store = resolve_store_path(&config_dir, daemon.store.as_deref()).map_err(|error| {
         DaemonStartupError::with_source(
             DaemonStartupErrorKind::StoreConfig,
@@ -195,6 +197,42 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
         advertise_lan: daemon.advertise_lan,
         capabilities,
     })
+}
+
+fn validate_daemon_token_file(
+    config_dir: &Path,
+    auth: &operon_config::AuthConfig,
+) -> anyhow::Result<()> {
+    if let Some(path) = &auth.token_file {
+        let path = resolve_path(config_dir, path);
+        validate_private_file_permissions(&path).map_err(|error| {
+            DaemonStartupError::with_source(
+                DaemonStartupErrorKind::AuthToken,
+                format!(
+                    "daemon auth token_file `{}` failed private-file validation",
+                    path.display()
+                ),
+                error,
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn require_auth_for_non_loopback(
+    grpc_listen: SocketAddr,
+    auth_token: Option<&String>,
+) -> anyhow::Result<()> {
+    if auth_token.is_none() && !grpc_listen.ip().is_loopback() {
+        return Err(DaemonStartupError::new(
+            DaemonStartupErrorKind::AuthToken,
+            format!(
+                "daemon auth token is required when grpc_listen binds non-loopback address {grpc_listen}"
+            ),
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn load_config(config_path: &Path) -> anyhow::Result<OperonConfig> {
@@ -360,6 +398,122 @@ daemon:
         let error = load_runtime_error(&config, "missing token");
 
         assert_startup_error(&error, DaemonStartupErrorKind::AuthToken);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn daemon_state_rejects_broad_token_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base = tempfile::tempdir().expect("temp dir");
+        let token = base.path().join("token");
+        fs::write(&token, "test-token\n").expect("write token");
+        fs::set_permissions(&token, fs::Permissions::from_mode(0o644)).expect("chmod token");
+        let config = base.path().join("config.yaml");
+        fs::write(
+            &config,
+            r#"
+version: 1
+daemon:
+  node_id: local
+  grpc_listen: 0.0.0.0:0
+  workspace: /workspace
+  auth:
+    token_file: token
+"#,
+        )
+        .expect("write config");
+
+        let error = load_runtime_error(&config, "broad token file");
+
+        assert_startup_error(&error, DaemonStartupErrorKind::AuthToken);
+        assert!(error.to_string().contains("private-file validation"));
+    }
+
+    #[test]
+    fn daemon_state_allows_loopback_without_auth() {
+        for listen in ["127.0.0.1:0", "[::1]:0"] {
+            let base = tempfile::tempdir().expect("temp dir");
+            let config = base.path().join("config.yaml");
+            fs::write(
+                &config,
+                format!(
+                    r#"
+version: 1
+daemon:
+  node_id: local
+  grpc_listen: "{listen}"
+  workspace: /workspace
+"#
+                ),
+            )
+            .expect("write config");
+
+            load_daemon_runtime(&config).unwrap_or_else(|error| {
+                panic!("loopback {listen} should allow missing auth: {error}")
+            });
+        }
+    }
+
+    #[test]
+    fn daemon_state_allows_non_loopback_with_auth_sources() {
+        for (auth_yaml, setup_token_file) in [
+            ("    token: test-token\n", false),
+            ("    token_file: token\n", true),
+        ] {
+            let base = tempfile::tempdir().expect("temp dir");
+            if setup_token_file {
+                let token = base.path().join("token");
+                fs::write(&token, "test-token\n").expect("write token");
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(&token, fs::Permissions::from_mode(0o600))
+                        .expect("chmod token");
+                }
+            }
+            let config = base.path().join("config.yaml");
+            fs::write(
+                &config,
+                format!(
+                    r#"
+version: 1
+daemon:
+  node_id: local
+  grpc_listen: 0.0.0.0:0
+  workspace: /workspace
+  auth:
+{auth_yaml}"#
+                ),
+            )
+            .expect("write config");
+
+            load_daemon_runtime(&config).unwrap_or_else(|error| {
+                panic!("non-loopback bind should allow configured auth: {error}")
+            });
+        }
+    }
+
+    #[test]
+    fn daemon_state_requires_auth_for_non_loopback_bind() {
+        let base = tempfile::tempdir().expect("temp dir");
+        let config = base.path().join("config.yaml");
+        fs::write(
+            &config,
+            r#"
+version: 1
+daemon:
+  node_id: local
+  grpc_listen: 0.0.0.0:0
+  workspace: /workspace
+"#,
+        )
+        .expect("write config");
+
+        let error = load_runtime_error(&config, "missing non-loopback auth");
+
+        assert_startup_error(&error, DaemonStartupErrorKind::AuthToken);
+        assert!(error.to_string().contains("non-loopback"));
     }
 
     #[test]

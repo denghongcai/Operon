@@ -206,9 +206,12 @@ operon node ping local
 operon capability list local
 ```
 
-`operond` and `operon` read `$HOME/.operon/config.yaml` by default. Put daemon
-endpoints on an existing private network such as Cloudflare Mesh, Tailscale,
-WireGuard, LAN, or Kubernetes networking before exposing them to other machines.
+`operond` and `operon` read `$HOME/.operon/config.yaml` by default. Keep daemon
+listeners on loopback for local development, or configure bearer-token auth with
+`daemon.auth.token_file` / `daemon.auth.token_env` before binding `grpc_listen`
+to a LAN, wildcard, or private-network address. Put daemon endpoints on an
+existing private network such as Cloudflare Mesh, Tailscale, WireGuard, LAN, or
+Kubernetes networking before exposing them to other machines.
 
 Optional shell completions:
 
@@ -303,10 +306,14 @@ The config contains:
 External control planes can generate the same endpoint-only `client.nodes`
 shape from Cloudflare, Tailscale, Kubernetes, inventory databases, or DNS.
 Discovery and generated endpoints do not grant capability access; policy still
-controls what each node can do.
+controls what each node can do. Service permissions are default-deny when
+omitted, so set `permissions.check` and/or `permissions.forward` explicitly for
+services that should be inspectable or forwardable. Use `operon doctor` to
+inspect listener auth, inline-token, and service-permission diagnostics.
 
 For full config, policy, command, validation, release, and protocol reference,
-see [DEVELOPMENT.md](DEVELOPMENT.md).
+see [DEVELOPMENT.md](DEVELOPMENT.md). Security hardening and upgrade notes live
+in [docs/quality/security-hardening.md](docs/quality/security-hardening.md).
 
 ---
 

@@ -377,6 +377,42 @@ mod tests {
         assert_eq!(allowed.capability_id, "service:web");
         assert_eq!(allowed.reason_code, operon_core::PolicyReasonCode::Allowed);
 
+        let check_only_forward =
+            authorize_service_decision(&policy, "web", "forward").expect_err("forward denied");
+        assert_eq!(
+            check_only_forward.reason_code,
+            operon_core::PolicyReasonCode::ServiceActionDenied
+        );
+
+        policy.service.services[0].permissions = ServicePermissions {
+            check: false,
+            forward: true,
+        };
+        let forward_only_check =
+            authorize_service_decision(&policy, "web", "check").expect_err("check denied");
+        assert_eq!(
+            forward_only_check.reason_code,
+            operon_core::PolicyReasonCode::ServiceActionDenied
+        );
+        let (_, forward_allowed) =
+            authorize_service_decision(&policy, "web", "forward").expect("forward allowed");
+        assert!(forward_allowed.allowed);
+
+        policy.service.services[0].permissions = ServicePermissions::default();
+        for action in ["check", "forward"] {
+            let denied = authorize_service_decision(&policy, "web", action)
+                .expect_err(&format!("{action} should be denied"));
+            assert_eq!(
+                denied.reason_code,
+                operon_core::PolicyReasonCode::ServiceActionDenied
+            );
+        }
+
+        policy.service.services[0].permissions = ServicePermissions {
+            check: true,
+            forward: false,
+        };
+
         let denied =
             authorize_service_decision(&policy, "web", "forward").expect_err("forward denied");
         assert_eq!(denied.capability_id, "service:web");

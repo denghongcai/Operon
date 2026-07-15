@@ -42,6 +42,12 @@ mTLS policy are separate roadmap items.
 
 ## Authentication
 
+Daemon listeners bound to non-loopback addresses require bearer-token auth at
+startup. Configure `daemon.auth.token_file` or `daemon.auth.token_env` for LAN,
+private-network, or wildcard binds; loopback-only development configs may omit
+auth. Inline `daemon.auth.token` remains supported but is discouraged because it
+places the secret directly in `config.yaml`.
+
 If the daemon config sets `daemon.auth.token`, `daemon.auth.token_file`, or
 `daemon.auth.token_env`, send bearer metadata on every call:
 
@@ -50,6 +56,16 @@ authorization: Bearer <token>
 ```
 
 Missing or invalid metadata returns gRPC `Unauthenticated`.
+
+Service permissions are default-deny when omitted. Set `permissions.check`
+and/or `permissions.forward` explicitly for each service that should be
+inspectable or forwardable.
+
+Upgrade note: configurations that previously bound `daemon.grpc_listen` to
+`0.0.0.0`, `::`, or another non-loopback address without daemon auth must add
+`daemon.auth.token_file` / `daemon.auth.token_env` or bind to loopback before
+starting the daemon. Services that relied on omitted permissions must now set
+`permissions.check` or `permissions.forward` explicitly.
 
 ## Policy Decision Vocabulary
 
