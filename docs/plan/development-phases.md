@@ -6779,7 +6779,7 @@ Remaining:
 
 ## Phase 121: v0.16.8 Security Hardening Release Publication
 
-Status: In Progress.
+Status: Completed.
 
 Goal: publish the current v0.16 release line after the post-v0.16.7 security
 hardening commit on `main`, then verify public artifacts, install usability,
@@ -6822,18 +6822,40 @@ Progress:
   `scripts/verify-v0.14-cross-platform-live-mount.sh`,
   `scripts/release-gate-orchestrate.sh plan v0.16.8 HEAD denghongcai/Operon`,
   and `scripts/ci/run-validations.sh core`.
+- Release preparation commit
+  `38b3345d06fc6f013a79e6d37fd9ace4775cf608` was pushed to `main`.
+- Main CI `29515068351` and CodeQL `29515067347` passed on the release
+  commit.
+- Pre-tag release gates passed: Cross-Platform Live Mount Smoke
+  `29515551915` and Windows Runner Image Smoke `29515554278`.
+- `scripts/release-gate-orchestrate.sh pretag v0.16.8
+  38b3345d06fc6f013a79e6d37fd9ace4775cf608 denghongcai/Operon` passed.
+- Tag `v0.16.8` was pushed and Draft Release workflow `29516387465`
+  produced the release archives, SDK archive, and checksums.
+- `v0.16.8` was published at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.8`.
+- Post-publication verification passed: Verify Release Artifacts
+  `29516923647`, Verify Release Install Usability `29516920573`, and Verify
+  README Quickstart `29516919959`.
+- `scripts/release-gate-orchestrate.sh postrelease v0.16.8
+  38b3345d06fc6f013a79e6d37fd9ace4775cf608 denghongcai/Operon` passed.
 
 Verification Evidence:
 
 - Local release-preparation validation passed with the commands listed above.
+- CI passed in workflow run `29515068351`.
+- CodeQL passed in workflow run `29515067347`.
+- Cross-Platform Live Mount Smoke passed in workflow run `29515551915`.
+- Windows Runner Image Smoke passed in workflow run `29515554278`.
+- Draft Release passed in workflow run `29516387465`.
+- Public release: `https://github.com/denghongcai/Operon/releases/tag/v0.16.8`.
+- Verify Release Artifacts passed in workflow run `29516923647`.
+- Verify Release Install Usability passed in workflow run `29516920573`.
+- Verify README Quickstart passed in workflow run `29516919959`.
 
 Remaining:
 
-- Commit and push the release-preparation changes.
-- Run remote pre-tag release gates.
-- Create and publish `v0.16.8`.
-- Run post-publication verification workflows.
-- Record final release evidence.
+- No v0.16.8 release publication or public verification work remains.
 
 ## Planning Principle
 
