@@ -9,6 +9,16 @@ HTTP endpoints, daemon flags, and split config files. For the current runtime
 contract, use `PROTOCOL.md`, `README.md`, `docs/architecture/runtime-api.md`,
 and the latest completed phase entries.
 
+Version-line note:
+
+- Public release artifact versions track the current release line, currently
+  `v0.16.x`.
+- Phase names such as `v0.18.x` in this historical tracker are internal
+  maintenance and validation batch identifiers. They do not imply that a
+  `v0.18.x` public artifact was published.
+- Publication phases such as `v0.16.7` and `v0.16.8` package completed
+  maintenance batches into the public release line.
+
 Related documents:
 
 - `docs/decisions/computer-mesh-operon-summary.md`
@@ -6656,6 +6666,10 @@ Verification Evidence:
 - Dry-run planning output covered CI, CodeQL, live mount, Windows Runner Image
   Smoke, Draft Release, publish, release artifact verification, release install
   usability, and README Quickstart gates.
+- The orchestration helper was exercised on the real `v0.16.7` release:
+  `pretag` passed against release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9`, and `postrelease` passed after
+  the public release and post-publication verification workflows completed.
 
 Remaining:
 
@@ -6663,7 +6677,7 @@ Remaining:
 
 ## Phase 120: v0.16.7 Release Publication and Public Verification
 
-Status: In Progress.
+Status: Completed.
 
 Goal: publish the current v0.16 release line from `main` after the v0.18.5
 through v0.18.11 release/install hardening work, then verify public artifacts,
@@ -6725,12 +6739,99 @@ Progress:
   denial, `scripts/verify-security-hardening.sh` is wired into consolidated
   core validation, and `docs/quality/security-hardening.md` records upgrade
   guidance for release operators.
+- Release prep commit `9af17148b521e77a7a3b571cf68c5b64925197b9` was pushed to
+  `main`.
+- Tag `v0.16.7` was created from release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9` and pushed.
+- Published GitHub Release `v0.16.7` at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.7`.
+
+Verification Evidence:
+
+- Main CI run `25960351837` passed on release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9`.
+- CodeQL run `25960351641` passed on release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9`.
+- Cross-platform live mount smoke run `25960443625` passed on release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9`.
+- Windows Runner Image Smoke run `25960443613` passed on release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9`.
+- `scripts/release-gate-orchestrate.sh pretag v0.16.7
+  9af17148b521e77a7a3b571cf68c5b64925197b9 denghongcai/Operon` passed.
+- Draft Release run `25960547311` passed and produced release assets for Linux
+  x86_64, Linux arm64, Linux armv7, macOS x86_64, macOS aarch64, Windows
+  x86_64, TypeScript SDK, and `SHA256SUMS`.
+- `gh release view v0.16.7 --repo denghongcai/Operon` reported
+  `isDraft=false`, `isPrerelease=false`, and the public release URL above.
+- Verify Release Artifacts run `25960666924` passed against public tag
+  `v0.16.7`.
+- Verify Release Install Usability run `25960666937` passed against public tag
+  `v0.16.7`, including downloaded service-management smoke and Linux container
+  install checks.
+- Verify README Quickstart run `25960666938` passed against public tag
+  `v0.16.7`.
+- `scripts/release-gate-orchestrate.sh postrelease v0.16.7
+  9af17148b521e77a7a3b571cf68c5b64925197b9 denghongcai/Operon` passed.
 
 Remaining:
 
-- Push the release commit to `main`.
+- No v0.16.7 release publication or public verification work remains.
+
+## Phase 121: v0.16.8 Security Hardening Release Publication
+
+Status: In Progress.
+
+Goal: publish the current v0.16 release line after the post-v0.16.7 security
+hardening commit on `main`, then verify public artifacts, install usability,
+service-management smoke, and README Quickstart against the published release.
+
+Detailed plan: `docs/plan/v0.16.8-release-publication.md`.
+
+Planned:
+
+- Clarify that the v0.18.x maintenance entries are internal cleanup batch
+  identifiers on the v0.16 public release line, not published artifact
+  versions.
+- Align Rust crate versions, TypeScript SDK package version,
+  `PROTOCOL_VERSION`, CLI version output, release dry-run inputs, and README
+  release-maintainer examples to `0.16.8` / `v0.16.8`.
+- Add focused validation for the `v0.16.8` release publication surface.
+- Run local release-preparation validation.
+- Commit and push the release-preparation changes to `main`.
+- Run remote pre-tag release gates on the exact release commit.
+- Create and publish `v0.16.8`.
+- Run post-publication verification workflows and record final evidence.
+
+Progress:
+
+- Added the v0.16.8 security hardening release publication phase.
+- Added a tracker-level version-line note separating public artifact versions
+  from internal maintenance batch identifiers.
+- Aligned current crate, SDK, protocol, CLI assertion, release dry-run, and
+  focused validation expectations to `0.16.8` / `v0.16.8`.
+- Added `scripts/verify-v0.16.8-release-publication.sh` and wired it through
+  the consolidated `core` validation group.
+- Local release-preparation validation passed:
+  `cargo metadata --locked --format-version 1`,
+  `cargo check --workspace --locked`,
+  `pnpm --filter @operon/sdk build`,
+  `scripts/verify-docs-help-skills-sync.sh`,
+  `scripts/verify-v0.16.7-release-publication.sh`,
+  `scripts/verify-v0.16.8-release-publication.sh`,
+  `scripts/verify-v0.18.5-release-install-usability-hardening.sh`,
+  `scripts/verify-v0.14-cross-platform-live-mount.sh`,
+  `scripts/release-gate-orchestrate.sh plan v0.16.8 HEAD denghongcai/Operon`,
+  and `scripts/ci/run-validations.sh core`.
+
+Verification Evidence:
+
+- Local release-preparation validation passed with the commands listed above.
+
+Remaining:
+
+- Commit and push the release-preparation changes.
 - Run remote pre-tag release gates.
-- Create and publish `v0.16.7`.
+- Create and publish `v0.16.8`.
 - Run post-publication verification workflows.
 - Record final release evidence.
 

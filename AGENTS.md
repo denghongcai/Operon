@@ -377,6 +377,11 @@ Operon should not own:
     public artifact, install usability, service-management, and README
     Quickstart verification.
 
+- `docs/plan/v0.16.8-release-publication.md`
+  - Active v0.16.8 scope for publishing the latest post-v0.16.7 security
+    hardening on the public v0.16 release line. The v0.18.x phase names are
+    internal maintenance batch identifiers, not published artifact versions.
+
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
     validation-mode SDK checks, Windows-only test compilation coverage, and
@@ -1238,15 +1243,28 @@ Defer:
   completed. `scripts/release-gate-orchestrate.sh` now provides `plan`,
   `pretag`, and `postrelease` modes for release gate sequencing and evidence
   checks, and `scripts/verify-v0.18.11-release-gate-orchestration-cleanup.sh`
-  is wired through the consolidated `core` validation group. Nothing remains
-  in v0.18.11.
+  is wired through the consolidated `core` validation group. The helper passed
+  real `pretag` and `postrelease` checks for `v0.16.7`. Nothing remains in
+  v0.18.11.
 - Latest phase status update: v0.16.7 Release Publication and Public
-  Verification is in progress. Use
-  `scripts/release-gate-orchestrate.sh plan v0.16.7 <commit> denghongcai/Operon`
-  for the gate order, then record CI, CodeQL, live mount, Windows Runner Image
-  Smoke, Draft Release, public release, artifact, install usability, and README
-  Quickstart evidence in `docs/plan/v0.16.7-release-publication.md`. Local
-  release-preparation validation passed with `cargo check --workspace --locked`,
-  `pnpm --filter @operon/sdk build`, docs/help/skills sync, focused v0.16.7
-  validation, release-gate plan dry run, and consolidated `sdk`/`core`
-  validation groups.
+  Verification is completed. Release commit
+  `9af17148b521e77a7a3b571cf68c5b64925197b9` was pushed to `main`, tag
+  `v0.16.7` was published at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.7`, CI
+  `25960351837`, CodeQL `25960351641`, live mount `25960443625`, Windows
+  Runner Image Smoke `25960443613`, Draft Release `25960547311`, release
+  artifact verification `25960666924`, install usability `25960666937`, and
+  README Quickstart `25960666938` all passed. Nothing remains in v0.16.7.
+- Latest phase status update: v0.16.8 Security Hardening Release Publication
+  is in progress. Current crate versions, SDK package version,
+  `PROTOCOL_VERSION`, CLI version assertions, release dry-run examples, and
+  focused validation expectations are aligned to `0.16.8` / `v0.16.8`.
+  `scripts/verify-v0.16.8-release-publication.sh` is wired through the
+  consolidated `core` validation group. Local release-preparation validation
+  passed with `cargo metadata --locked --format-version 1`,
+  `cargo check --workspace --locked`, `pnpm --filter @operon/sdk build`,
+  docs/help/skills sync, focused v0.16.7 and v0.16.8 validation, v0.18.5
+  release-install validation, v0.14 live mount validation, release-gate plan,
+  and consolidated `core`. Push the release preparation commit, then use
+  `scripts/release-gate-orchestrate.sh pretag v0.16.8 <commit>
+  denghongcai/Operon` before tagging and `postrelease` after publication.

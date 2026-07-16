@@ -120,7 +120,7 @@ Release gate orchestration plan for $REPO@$TAG on commit $COMMIT_SHA
 
 2. Dispatch release-only pre-tag gates on the exact commit:
    gh workflow run "Cross-Platform Live Mount Smoke" --repo "$REPO" --ref main -f platform=all -f macos_backend=nfs -f macos_runner=hosted
-   gh workflow run "Windows Runner Image Smoke" --repo "$REPO" --ref main -f runner_label=windows-2025 -f release_tag=v0.16.6
+   gh workflow run "Windows Runner Image Smoke" --repo "$REPO" --ref main -f runner_label=windows-2025 -f release_tag=v0.16.7
 
 3. Verify pre-tag gates:
    scripts/release-gate-orchestrate.sh pretag "$TAG" "$COMMIT_SHA" "$REPO"
