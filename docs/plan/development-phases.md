@@ -6857,6 +6857,46 @@ Remaining:
 
 - No v0.16.8 release publication or public verification work remains.
 
+## Phase 122: Post-v0.16.8 NPM Dependency Vulnerability Cleanup
+
+Status: Completed.
+
+Goal: clear the open GitHub Dependabot npm alerts after the v0.16.8 release
+without changing the Rust runtime, gRPC protocol, or public package version.
+
+Planned:
+
+- Inspect current GitHub Dependabot alerts for affected npm dependencies.
+- Upgrade direct SDK dependencies where needed.
+- Use focused pnpm overrides for vulnerable transitive dependencies that are
+  still pinned by upstream packages.
+- Verify the SDK type surface, tests, build, and npm audit results.
+
+Progress:
+
+- Inspected GitHub Dependabot alerts and found all 14 open alerts were npm
+  alerts in `packages/sdk-js/package.json` or `pnpm-lock.yaml`.
+- Upgraded direct SDK dependency `protobufjs` from `8.0.3` to `8.7.1`.
+- Refreshed transitive `protobufjs` from `7.5.6` to `7.6.5` through the
+  lockfile.
+- Added root pnpm overrides to force patched transitive versions:
+  `@grpc/grpc-js` `1.14.4`, `vite` `8.0.16`, and `esbuild` `0.28.1`.
+
+Verification Evidence:
+
+- `pnpm --filter @operon/sdk list protobufjs @grpc/grpc-js vite esbuild --depth 10`
+  shows patched resolved versions: `protobufjs` `8.7.1` and `7.6.5`,
+  `@grpc/grpc-js` `1.14.4`, `vite` `8.0.16`, and `esbuild` `0.28.1`.
+- `pnpm --filter @operon/sdk typecheck` passed.
+- `pnpm --filter @operon/sdk test` passed.
+- `pnpm --filter @operon/sdk build` passed.
+- `pnpm audit --prod --audit-level low` reported no known vulnerabilities.
+- `pnpm audit --audit-level low` reported no known vulnerabilities.
+
+Remaining:
+
+- No local npm dependency vulnerability cleanup work remains.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:
