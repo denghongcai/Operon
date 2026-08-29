@@ -6934,7 +6934,7 @@ See `docs/plan/v0.18.12-architecture-boundary-cleanup.md`.
 
 ## Phase 124: v0.16.9 Architecture Boundary Release Publication
 
-Status: In Progress.
+Status: Completed.
 
 Goal: publish the v0.18.12 architecture boundary cleanup on the public v0.16
 patch line as `v0.16.9`, with exact-commit release gates and public artifact
@@ -6949,11 +6949,21 @@ Progress:
 - Aligned the release surface to `0.16.9` / `v0.16.9`; SDK checks,
   docs/help/skills synchronization, focused release validation, and all 48
   consolidated core validations passed locally.
+- Release commit `3b13a4ebb35a8552a2807f2f894b99883c50e9c0` passed CI
+  `33240581793`, CodeQL `33240581596`, Cross-Platform Live Mount Smoke
+  `33240803280`, and Windows Runner Image Smoke `33240802218`.
+- Tag `v0.16.9` was published at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.9`; Draft Release
+  `33241165888` produced the cross-platform archives, SDK archive, and
+  checksums.
+- Public release artifact verification `33241405981`, install usability
+  `33241409216`, and README Quickstart `33241407123` passed.
+- The release gate orchestrator passed both `pretag` and `postrelease` checks
+  against the exact release commit.
 
 Remaining:
 
-- Complete local validation, CI, CodeQL, pre-tag gates, publication, and
-  post-publication verification.
+- No v0.16.9 release publication or public verification work remains.
 
 ## Planning Principle
 

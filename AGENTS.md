@@ -385,8 +385,9 @@ Operon should not own:
     identifiers, not published artifact versions.
 
 - `docs/plan/v0.16.9-release-publication.md`
-  - Active v0.16.9 scope for publishing the v0.18.12 architecture boundary
-    cleanup on the public v0.16 patch release line.
+  - Completed v0.16.9 scope for publishing the v0.18.12 architecture boundary
+    cleanup on the public v0.16 patch release line, with CI, CodeQL, live
+    mount, Windows runner, artifact, install, and README verification.
 
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
@@ -1270,3 +1271,12 @@ Defer:
   Runner Image Smoke `29515554278`, Draft Release `29516387465`, release
   artifact verification `29516923647`, install usability `29516920573`, and
   README Quickstart `29516919959` all passed. Nothing remains in v0.16.8.
+- Latest phase status update: v0.16.9 Architecture Boundary Release
+  Publication is completed. Release commit
+  `3b13a4ebb35a8552a2807f2f894b99883c50e9c0` was pushed to `main`, tag
+  `v0.16.9` was published at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.9`, CI
+  `33240581793`, CodeQL `33240581596`, live mount `33240803280`, Windows
+  Runner Image Smoke `33240802218`, Draft Release `33241165888`, release
+  artifact verification `33241405981`, install usability `33241409216`, and
+  README Quickstart `33241407123` all passed. Nothing remains in v0.16.9.
