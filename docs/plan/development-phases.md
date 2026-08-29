@@ -6932,6 +6932,29 @@ Remaining:
 
 See `docs/plan/v0.18.12-architecture-boundary-cleanup.md`.
 
+## Phase 124: v0.16.9 Architecture Boundary Release Publication
+
+Status: In Progress.
+
+Goal: publish the v0.18.12 architecture boundary cleanup on the public v0.16
+patch line as `v0.16.9`, with exact-commit release gates and public artifact
+verification.
+
+Progress:
+
+- Added `docs/plan/v0.16.9-release-publication.md`.
+- Began `0.16.9` / `v0.16.9` version alignment and focused validation.
+- Repaired validation paths affected by moving protocol conversions out of the
+  crate entrypoint.
+- Aligned the release surface to `0.16.9` / `v0.16.9`; SDK checks,
+  docs/help/skills synchronization, focused release validation, and all 48
+  consolidated core validations passed locally.
+
+Remaining:
+
+- Complete local validation, CI, CodeQL, pre-tag gates, publication, and
+  post-publication verification.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

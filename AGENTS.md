@@ -384,6 +384,10 @@ Operon should not own:
     verification. The v0.18.x phase names are internal maintenance batch
     identifiers, not published artifact versions.
 
+- `docs/plan/v0.16.9-release-publication.md`
+  - Active v0.16.9 scope for publishing the v0.18.12 architecture boundary
+    cleanup on the public v0.16 patch release line.
+
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
     validation-mode SDK checks, Windows-only test compilation coverage, and

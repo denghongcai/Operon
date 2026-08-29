@@ -1,4 +1,5 @@
-pub const PROTOCOL_VERSION: &str = "v0.16.8";
+#[cfg(test)]
+use crate::PROTOCOL_VERSION;
 
 pub mod runtime {
     pub mod v1 {
@@ -787,7 +788,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.16.8");
+        assert_eq!(PROTOCOL_VERSION, "v0.16.9");
     }
 
     #[test]

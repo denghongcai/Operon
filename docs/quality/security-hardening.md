@@ -1,6 +1,6 @@
 # Security Hardening Notes
 
-This note records the operator-facing security defaults that protect the v0.16.8
+This note records the operator-facing security defaults that protect the v0.16.9
 release line and later local validation.
 
 ## Listener authentication
