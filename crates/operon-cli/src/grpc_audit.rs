@@ -1,5 +1,5 @@
+use operon_core::runtime::NodeEndpoint;
 use operon_core::AuditLog;
-use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::ListAuditRequest;
 
 use crate::grpc::{call, with_auth, DEFAULT_LIST_PAGE_SIZE};

@@ -3,8 +3,8 @@ use std::{
     thread,
 };
 
+use operon_core::runtime::NodeEndpoint;
 use operon_core::{ExecSessionEvent, ExecSessionStart, ExecStatus};
-use operon_network::NodeEndpoint;
 #[cfg(unix)]
 use operon_protocol::runtime::v1::ExecSessionResize;
 use operon_protocol::runtime::v1::{

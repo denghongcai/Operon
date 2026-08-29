@@ -3,7 +3,7 @@ use std::{
     env, fmt, fs,
     net::SocketAddr,
     path::Path,
-    sync::{atomic::AtomicU64, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use operon_config::{resolve_path, validate_private_file_permissions, OperonConfig};
@@ -169,7 +169,6 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
         arch: env::consts::ARCH.to_string(),
     };
     let capabilities = capabilities_from_policy(&node.id, &policy);
-    let execs = Arc::new(Mutex::new(stored_execs));
     let state = AppState {
         capabilities: capabilities.clone(),
         node,
@@ -179,15 +178,11 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
         store_writer,
         secrets: Arc::new(secrets),
         audit: Arc::new(Mutex::new(bounded_audit_events(stored_audit_events))),
-        execs,
-        exec_logs: Arc::new(Mutex::new(exec_log_buffers_from_persisted_logs(
-            stored_exec_logs,
-        ))),
-        exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-        next_exec_id: Arc::new(AtomicU64::new(next_exec_id)),
+        exec: crate::state::ExecRegistry::new(
+            stored_execs,
+            exec_log_buffers_from_persisted_logs(stored_exec_logs),
+            next_exec_id,
+        ),
     };
 
     Ok(LoadedDaemonRuntime {
@@ -328,13 +323,7 @@ pub(crate) fn test_state(
         store_writer: operon_store::StoreWriter::new(None),
         secrets: Arc::new(BTreeMap::new()),
         audit: Arc::new(Mutex::new(std::collections::VecDeque::new())),
-        execs: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-        exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-        next_exec_id: Arc::new(AtomicU64::new(1)),
+        exec: crate::state::ExecRegistry::default(),
     }
 }
 

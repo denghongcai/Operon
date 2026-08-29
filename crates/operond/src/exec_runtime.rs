@@ -1,10 +1,11 @@
 use std::{
     collections::BTreeMap,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use operon_core::{
-    AuditEvent, ExecEvent, ExecLog, ExecLogList, ExecRecord, ExecRunRequest, ExecStatus,
+    audit::AuditEvent,
+    exec::{ExecEvent, ExecLog, ExecLogList, ExecRecord, ExecRunRequest, ExecStatus},
 };
 use operon_fs::resolve_existing_workspace_path;
 use operon_process::{authorize_exec_decision, exec_environment, resolve_exec_secrets_decision};
@@ -73,7 +74,7 @@ pub(crate) fn start_exec(state: &AppState, request: ExecRunRequest) -> Result<Ex
     };
     let env = exec_environment(&state.policy.exec, secret_env);
 
-    let exec_id = format!("exec-{}", state.next_exec_id.fetch_add(1, Ordering::SeqCst));
+    let exec_id = state.exec.allocate_id();
     let record = ExecRecord {
         id: exec_id.clone(),
         node_id: state.node.id.clone(),
@@ -86,10 +87,7 @@ pub(crate) fn start_exec(state: &AppState, request: ExecRunRequest) -> Result<Ex
     };
     let (event_tx, _) = broadcast::channel(32);
     let (log_tx, _) = broadcast::channel(1024);
-    lock(&state.execs, "exec map")?.insert(exec_id.clone(), record.clone());
-    lock(&state.exec_logs, "exec log")?.insert(exec_id.clone(), ExecLogBuffer::default());
-    lock(&state.exec_events, "exec event")?.insert(exec_id.clone(), event_tx);
-    lock(&state.exec_log_events, "exec log event")?.insert(exec_id.clone(), log_tx);
+    state.exec.register(record.clone(), event_tx, log_tx)?;
     record_audit_capability(state, "exec:default", "run", &exec_id, true, "allowed");
     for secret in &request.secrets {
         record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
@@ -97,16 +95,16 @@ pub(crate) fn start_exec(state: &AppState, request: ExecRunRequest) -> Result<Ex
 
     let (cancel_tx, cancel_rx) = oneshot::channel();
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
-    lock(&state.exec_cancel, "exec cancel")?.insert(exec_id.clone(), cancel_tx);
-    lock(&state.exec_stdin, "exec stdin")?.insert(exec_id.clone(), stdin_tx);
+    state.exec.register_cancel(exec_id.clone(), cancel_tx)?;
+    state.exec.register_stdin(exec_id.clone(), stdin_tx)?;
 
     let audit = state.audit.clone();
-    let execs = state.execs.clone();
-    let logs = state.exec_logs.clone();
-    let events = state.exec_events.clone();
-    let log_events = state.exec_log_events.clone();
-    let cancels = state.exec_cancel.clone();
-    let stdin = state.exec_stdin.clone();
+    let execs = state.exec.records.clone();
+    let logs = state.exec.logs.clone();
+    let events = state.exec.events.clone();
+    let log_events = state.exec.log_events.clone();
+    let cancels = state.exec.cancels.clone();
+    let stdin = state.exec.stdin.clone();
     let store_writer = state.store_writer.clone();
     let command = request.command;
     let argv = request.argv;
@@ -151,7 +149,7 @@ pub(crate) fn start_exec(state: &AppState, request: ExecRunRequest) -> Result<Ex
 }
 
 pub(crate) fn get_exec_record(state: &AppState, exec_id: &str) -> Result<ExecRecord, Status> {
-    lock(&state.execs, "exec map")?
+    lock(&state.exec.records, "exec map")?
         .get(exec_id)
         .cloned()
         .ok_or_else(|| Status::not_found(format!("exec `{exec_id}` not found")))
@@ -282,7 +280,7 @@ pub(crate) fn exec_event_from_record(record: &ExecRecord) -> ExecEvent {
 }
 
 pub(crate) fn exec_log_list(state: &AppState, exec_id: &str) -> Result<ExecLogList, Status> {
-    let logs = lock(&state.exec_logs, "exec log")?;
+    let logs = lock(&state.exec.logs, "exec log")?;
     let Some(buffer) = logs.get(exec_id) else {
         return Ok(ExecLogList {
             exec_id: exec_id.to_string(),
@@ -303,7 +301,7 @@ pub(crate) fn exec_log_snapshot(
     state: &AppState,
     exec_id: &str,
 ) -> Result<(ExecLogSnapshot, u64), Status> {
-    let logs = lock(&state.exec_logs, "exec log")?;
+    let logs = lock(&state.exec.logs, "exec log")?;
     let Some(buffer) = logs.get(exec_id) else {
         return Ok((
             ExecLogSnapshot {

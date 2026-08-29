@@ -1,5 +1,7 @@
-import { createChannel, createClient, type CallOptions, type Channel } from "nice-grpc";
+import type { CallOptions } from "nice-grpc";
+import { GrpcClientPool } from "./client-transport";
 import { OperonRuntimeDefinition, type OperonRuntimeClient } from "./generated/operon/runtime";
+import { runGraph } from "./graph-runner";
 import {
   fromGrpcAuditEvent,
   fromGrpcCapability,
@@ -36,8 +38,6 @@ import {
   bodyToBytes,
   concatChunks,
   DEFAULT_LIST_PAGE_SIZE,
-  grpcOptions,
-  grpcTarget,
   required,
   streamToBytes,
   toArrayBuffer,
@@ -64,7 +64,6 @@ import type {
   NodeEndpoint,
   OperonRunRequest,
   OperonStep,
-  OperonStepTrace,
   OperonTrace,
   PolicyDecision,
   ServiceCheck,
@@ -111,40 +110,18 @@ export type {
 } from "./types";
 
 export class OperonClient {
-  private readonly endpoints: Map<string, NodeEndpoint>;
-  private readonly grpcClients = new Map<string, { channel: Channel; client: OperonRuntimeClient }>();
+  private readonly transport: GrpcClientPool;
 
   constructor(endpoints: NodeEndpoint[]) {
-    this.endpoints = new Map(endpoints.map((endpoint) => [endpoint.nodeId, endpoint]));
+    this.transport = new GrpcClientPool(endpoints);
   }
 
   close(): void {
-    for (const { channel } of this.grpcClients.values()) {
-      channel.close();
-    }
-    this.grpcClients.clear();
+    this.transport.close();
   }
 
   async run(request: OperonRunRequest): Promise<OperonTrace> {
-    const trace: OperonTrace = {
-      runId: `run-${Date.now()}`,
-      name: request.name,
-      status: "running",
-      steps: [],
-    };
-
-    for (const [index, step] of request.steps.entries()) {
-      const stepTrace = await this.runStep(step, index, trace.runId);
-      trace.steps.push(stepTrace);
-
-      if (stepTrace.status === "failed") {
-        trace.status = "failed";
-        return trace;
-      }
-    }
-
-    trace.status = "succeeded";
-    return trace;
+    return runGraph(request, (step, context) => this.runAction(step, context));
   }
 
   async readFileBytes(nodeId: string, path: string): Promise<ArrayBuffer> {
@@ -420,60 +397,21 @@ export class OperonClient {
     return mapGrpcServiceDatagramTunnelEvents(responses);
   }
 
-  private async runStep(step: OperonStep, index: number, runId: string): Promise<OperonStepTrace> {
-    const startedAtMs = Date.now();
-    const id = step.id ?? `step-${index + 1}`;
-
-    try {
-      const output = await this.runAction(step, { runId, stepId: id });
-      return {
-        id,
-        node: step.node,
-        action: step.action,
-        status: "succeeded",
-        startedAtMs,
-        endedAtMs: Date.now(),
-        output,
-      };
-    } catch (error) {
-      return {
-        id,
-        node: step.node,
-        action: step.action,
-        status: "failed",
-        startedAtMs,
-        endedAtMs: Date.now(),
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
   private async runAction(step: OperonStep, context?: RequestContext): Promise<unknown> {
     const endpoint = this.endpointFor(step.node);
     return this.runGrpcAction(endpoint, step, context);
   }
 
   private endpointFor(nodeId: string): NodeEndpoint {
-    const endpoint = this.endpoints.get(nodeId);
-    if (!endpoint) {
-      throw new Error(`node ${nodeId} not found`);
-    }
-    return endpoint;
+    return this.transport.endpoint(nodeId);
   }
 
   private grpcClient(endpoint: NodeEndpoint): OperonRuntimeClient {
-    const cached = this.grpcClients.get(endpoint.nodeId);
-    if (cached) {
-      return cached.client;
-    }
-    const channel = createChannel(grpcTarget(endpoint.endpoint));
-    const client = createClient(OperonRuntimeDefinition, channel);
-    this.grpcClients.set(endpoint.nodeId, { channel, client });
-    return client;
+    return this.transport.client(endpoint);
   }
 
   private grpcOptions(endpoint: NodeEndpoint, context?: RequestContext): CallOptions {
-    return grpcOptions(endpoint, context);
+    return this.transport.options(endpoint, context);
   }
 
   private async runGrpcAction(endpoint: NodeEndpoint, step: OperonStep, context?: RequestContext): Promise<unknown> {

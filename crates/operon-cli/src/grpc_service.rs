@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use operon_network::NodeEndpoint;
+use operon_core::runtime::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     service_datagram_tunnel_request, service_datagram_tunnel_response, service_tunnel_request,
     service_tunnel_response, ServiceDatagram, ServiceDatagramTunnelRequest,

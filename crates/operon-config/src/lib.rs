@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub use operon_core::runtime::NodeEndpoint;
+
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
@@ -90,13 +92,6 @@ pub struct SecretsConfig {
     pub file: Option<PathBuf>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct NodeEndpoint {
-    pub node_id: String,
-    pub endpoint: String,
-    pub token: Option<String>,
-}
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeConfig {
     pub endpoint: String,
@@ -110,16 +105,6 @@ impl fmt::Debug for AuthConfig {
             .field("token", &self.token.as_ref().map(|_| "<redacted>"))
             .field("token_file", &self.token_file)
             .field("token_env", &self.token_env)
-            .finish()
-    }
-}
-
-impl fmt::Debug for NodeEndpoint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NodeEndpoint")
-            .field("node_id", &self.node_id)
-            .field("endpoint", &self.endpoint)
-            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
             .finish()
     }
 }

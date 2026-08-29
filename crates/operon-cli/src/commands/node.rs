@@ -180,7 +180,7 @@ struct DiscoveryNodeView {
 async fn check_discovered_health(list: &DiscoveryList) -> BTreeMap<String, DiscoveryHealth> {
     let mut health = BTreeMap::new();
     for node in &list.nodes {
-        let endpoint = operon_network::NodeEndpoint {
+        let endpoint = operon_core::runtime::NodeEndpoint {
             node_id: node.node_id.clone(),
             endpoint: node.endpoint.clone(),
             token: None,

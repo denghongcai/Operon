@@ -1,6 +1,23 @@
 pub type NodeId = String;
 pub type CapabilityId = String;
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct NodeEndpoint {
+    pub node_id: String,
+    pub endpoint: String,
+    pub token: Option<String>,
+}
+
+impl std::fmt::Debug for NodeEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeEndpoint")
+            .field("node_id", &self.node_id)
+            .field("endpoint", &self.endpoint)
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RuntimeErrorKind {

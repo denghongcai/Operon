@@ -59,7 +59,7 @@ pub(crate) fn list_execs(
     state: &AppState,
     request: ListExecsRequest,
 ) -> Result<operon_protocol::runtime::v1::ExecList, Status> {
-    let execs = lock(&state.execs, "exec map")?
+    let execs = lock(&state.exec.records, "exec map")?
         .values()
         .cloned()
         .collect::<Vec<_>>();
@@ -74,7 +74,7 @@ pub(crate) fn list_execs(
 }
 
 pub(crate) fn watch_exec(state: AppState, exec_id: String) -> Result<ExecEventStream, Status> {
-    let mut receiver = lock(&state.exec_events, "exec event")?
+    let mut receiver = lock(&state.exec.events, "exec event")?
         .get(&exec_id)
         .map(ExecEventSender::subscribe);
     let initial = exec_event_from_record(&get_exec_record(&state, &exec_id)?);
@@ -126,10 +126,10 @@ pub(crate) fn list_exec_logs(
 }
 
 pub(crate) fn stream_exec_logs(state: AppState, exec_id: String) -> Result<ExecLogStream, Status> {
-    let mut log_receiver = lock(&state.exec_log_events, "exec log event")?
+    let mut log_receiver = lock(&state.exec.log_events, "exec log event")?
         .get(&exec_id)
         .map(ExecLogSender::subscribe);
-    let mut event_receiver = lock(&state.exec_events, "exec event")?
+    let mut event_receiver = lock(&state.exec.events, "exec event")?
         .get(&exec_id)
         .map(ExecEventSender::subscribe);
     let initial_record = get_exec_record(&state, &exec_id)?;
@@ -223,7 +223,7 @@ pub(crate) async fn write_exec_stdin(
                     ));
                 }
                 sender = Some(
-                    lock(&state.exec_stdin, "exec stdin")?
+                    lock(&state.exec.stdin, "exec stdin")?
                         .get(&target.exec_id)
                         .cloned()
                         .ok_or_else(|| {
@@ -269,7 +269,7 @@ pub(crate) fn close_exec_stdin(
     state: &AppState,
     exec_id: String,
 ) -> Result<operon_protocol::runtime::v1::ExecStdinClose, Status> {
-    let closed = lock(&state.exec_stdin, "exec stdin")?
+    let closed = lock(&state.exec.stdin, "exec stdin")?
         .remove(&exec_id)
         .is_some();
     Ok(ExecStdinClose { exec_id, closed }.into())
@@ -279,7 +279,7 @@ pub(crate) fn cancel_exec(
     state: &AppState,
     exec_id: String,
 ) -> Result<operon_protocol::runtime::v1::ExecRecord, Status> {
-    if let Some(sender) = lock(&state.exec_cancel, "exec cancel")?.remove(&exec_id) {
+    if let Some(sender) = lock(&state.exec.cancels, "exec cancel")?.remove(&exec_id) {
         let _ = sender.send(());
         crate::audit::record_audit_capability(
             state,

@@ -5,7 +5,7 @@ use std::{
     fs,
     path::Path,
     path::PathBuf,
-    sync::{atomic::AtomicU64, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use clap::Parser;
@@ -561,13 +561,7 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(secrets),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            execs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_exec_id: Arc::new(AtomicU64::new(1)),
+            exec: state::ExecRegistry::default(),
         };
 
         let resolved = resolve_exec_secrets(
@@ -606,13 +600,7 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            execs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_exec_id: Arc::new(AtomicU64::new(1)),
+            exec: state::ExecRegistry::default(),
         };
 
         AUDIT_CONTEXT
@@ -660,13 +648,7 @@ mod tests {
             store_writer: operon_store::StoreWriter::new(None),
             secrets: Arc::new(BTreeMap::new()),
             audit: Arc::new(Mutex::new(VecDeque::new())),
-            execs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_logs: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_log_events: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_cancel: Arc::new(Mutex::new(BTreeMap::new())),
-            exec_stdin: Arc::new(Mutex::new(BTreeMap::new())),
-            next_exec_id: Arc::new(AtomicU64::new(1)),
+            exec: state::ExecRegistry::default(),
         };
 
         for index in 0..(MAX_IN_MEMORY_AUDIT_EVENTS + 5) {

@@ -1,8 +1,12 @@
+//! Shared gRPC transport primitives.
+//!
+//! This crate owns channels, metadata, authentication, timeouts, and request
+//! chunking. Domain-level RPC orchestration remains with each application.
+
 use std::{future::Future, time::Duration};
 
 use anyhow::Context;
-use operon_core::RequestContext;
-use operon_network::NodeEndpoint;
+use operon_core::runtime::{NodeEndpoint, RequestContext};
 use operon_protocol::runtime::v1::{
     exec_stdin_request, operon_runtime_client::OperonRuntimeClient, write_file_request,
     ExecStdinRequest, ExecStdinTarget, FileChunk, FsPrecondition, WriteFileRequest,

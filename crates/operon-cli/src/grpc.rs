@@ -1,8 +1,8 @@
+use operon_core::runtime::NodeEndpoint;
 use operon_core::{
     CapabilityDiagnosticRequest, CapabilityList, HealthStatus, NodeInfo, PolicyDecision,
     RequestContext,
 };
-use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     operon_runtime_client::OperonRuntimeClient, GetNodeRequest, HealthRequest,
     ListCapabilitiesRequest,

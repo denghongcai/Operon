@@ -200,14 +200,17 @@ pub(crate) async fn load(
 }
 
 async fn wait_for_exec(
-    endpoint: &operon_network::NodeEndpoint,
+    endpoint: &operon_core::runtime::NodeEndpoint,
     exec_id: &str,
 ) -> anyhow::Result<ExecRecord> {
     let _ = grpc::watch_exec_to_terminal(endpoint, exec_id).await?;
     grpc::get_exec(endpoint, exec_id).await
 }
 
-async fn print_logs(endpoint: &operon_network::NodeEndpoint, exec_id: &str) -> anyhow::Result<()> {
+async fn print_logs(
+    endpoint: &operon_core::runtime::NodeEndpoint,
+    exec_id: &str,
+) -> anyhow::Result<()> {
     let mut stdout = io::stdout();
     for log in grpc::list_exec_logs(endpoint, exec_id).await?.logs {
         stdout.write_all(&log.data)?;

@@ -9,7 +9,6 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 operon-core = { path = "../operon-core" }
-operon-network = { path = "../operon-network" }
 operon-protocol = { path = "../operon-protocol" }
 tokio.workspace = true
 tonic.workspace = true

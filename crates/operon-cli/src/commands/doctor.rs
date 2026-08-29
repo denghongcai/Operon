@@ -367,7 +367,7 @@ fn pty_session_diagnostic() -> &'static str {
 
 async fn diagnose_node(
     node_id: String,
-    endpoint: operon_network::NodeEndpoint,
+    endpoint: operon_core::runtime::NodeEndpoint,
 ) -> DoctorNodeReport {
     let mut report = DoctorNodeReport {
         node_id,

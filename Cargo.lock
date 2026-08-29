@@ -1054,7 +1054,6 @@ version = "0.16.8"
 dependencies = [
  "anyhow",
  "operon-core",
- "operon-network",
  "operon-protocol",
  "tokio",
  "tonic",
@@ -1087,7 +1086,6 @@ version = "0.16.8"
 dependencies = [
  "anyhow",
  "mdns-sd",
- "operon-config",
  "operon-core",
  "tokio",
 ]

@@ -2,12 +2,12 @@ use std::{fs, io::Read, path::Path};
 
 use anyhow::Context;
 use futures_util::stream;
+use operon_core::runtime::NodeEndpoint;
 use operon_core::{
     ExecEvent, ExecList, ExecLogList, ExecRecord, ExecRunRequest, ExecStatus, ExecStdin,
     ExecStdinClose,
 };
 use operon_grpc_client::chunk_stdin_requests;
-use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     exec_log_stream_event, ExecCancelRequest, ExecIdRequest, ListExecsRequest,
 };

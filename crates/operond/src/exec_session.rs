@@ -1,12 +1,12 @@
 use std::{
     io::{Read, Write},
     path::PathBuf,
-    sync::{atomic::Ordering, mpsc as std_mpsc, Arc, Mutex},
+    sync::{mpsc as std_mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 
-use operon_core::{
+use operon_core::exec::{
     ExecLog, ExecRecord, ExecSessionEvent, ExecSessionExit, ExecSessionOutput, ExecSessionStart,
     ExecSessionStarted, ExecStatus,
 };
@@ -26,7 +26,6 @@ use crate::{
     audit::{current_request_context, record_audit_capability, record_policy_decision},
     exec_runtime::{append_exec_log, finish_exec},
     grpc_status::status_from_error,
-    locks::lock,
     state::{AppState, ExecCompletion, ExecLogBuffer, ExecLogSender},
 };
 
@@ -180,7 +179,7 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
     };
     let env = exec_environment(&state.policy.exec, secret_env);
     let size = pty_size(start.rows as u32, start.cols as u32)?;
-    let exec_id = format!("exec-{}", state.next_exec_id.fetch_add(1, Ordering::SeqCst));
+    let exec_id = state.exec.allocate_id();
     let command_label = if start.argv.is_empty() {
         start.command.clone()
     } else {
@@ -198,17 +197,14 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
     };
     let (exec_event_tx, _) = tokio::sync::broadcast::channel(32);
     let (log_tx, _) = tokio::sync::broadcast::channel(1024);
-    lock(&state.execs, "exec map")?.insert(exec_id.clone(), record.clone());
-    lock(&state.exec_logs, "exec log")?.insert(exec_id.clone(), ExecLogBuffer::default());
-    lock(&state.exec_events, "exec event")?.insert(exec_id.clone(), exec_event_tx);
-    lock(&state.exec_log_events, "exec log event")?.insert(exec_id.clone(), log_tx);
+    state.exec.register(record.clone(), exec_event_tx, log_tx)?;
     record_audit_capability(state, "exec:default", "session", &exec_id, true, "allowed");
     for secret in &start.secrets {
         record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
     }
 
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    lock(&state.exec_cancel, "exec cancel")?.insert(exec_id.clone(), cancel_tx);
+    state.exec.register_cancel(exec_id.clone(), cancel_tx)?;
     let (control_tx, control_rx) = std_mpsc::channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let cancel_control_tx = control_tx.clone();
@@ -219,12 +215,12 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
 
     let completion = ExecCompletion {
         audit: state.audit.clone(),
-        execs: state.execs.clone(),
-        logs: state.exec_logs.clone(),
-        events: state.exec_events.clone(),
-        log_events: state.exec_log_events.clone(),
-        cancels: state.exec_cancel.clone(),
-        stdin: state.exec_stdin.clone(),
+        execs: state.exec.records.clone(),
+        logs: state.exec.logs.clone(),
+        events: state.exec.events.clone(),
+        log_events: state.exec.log_events.clone(),
+        cancels: state.exec.cancels.clone(),
+        stdin: state.exec.stdin.clone(),
         store_writer: state.store_writer.clone(),
         exec_id: exec_id.clone(),
         subject: state.policy.subject.clone(),
@@ -233,9 +229,9 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
     };
     let task = SessionTask {
         completion,
-        execs: state.execs.clone(),
-        logs: state.exec_logs.clone(),
-        log_events: state.exec_log_events.clone(),
+        execs: state.exec.records.clone(),
+        logs: state.exec.logs.clone(),
+        log_events: state.exec.log_events.clone(),
         store_writer: state.store_writer.clone(),
         exec_id,
         command: start.command,

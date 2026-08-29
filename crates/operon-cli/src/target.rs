@@ -24,7 +24,7 @@ pub(crate) fn parse_node_path(target: &str) -> anyhow::Result<NodePath> {
 pub(crate) fn load_endpoint(
     config_path: PathBuf,
     node_id: &str,
-) -> anyhow::Result<operon_network::NodeEndpoint> {
+) -> anyhow::Result<operon_core::runtime::NodeEndpoint> {
     let config = OperonConfig::load(&config_path)?;
     let config_dir = OperonConfig::config_dir(&config_path);
     config.endpoint(node_id, &config_dir)

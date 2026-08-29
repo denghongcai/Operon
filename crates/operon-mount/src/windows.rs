@@ -10,8 +10,8 @@ use std::{
 };
 
 use anyhow::Context;
+use operon_core::runtime::NodeEndpoint;
 use operon_core::FsStat;
-use operon_network::NodeEndpoint;
 use winfsp_wrs::{
     u16cstr, u16str, CreateOptions, U16CStr, U16CString, NTSTATUS, STATUS_FILE_IS_A_DIRECTORY,
     STATUS_INVALID_PARAMETER, STATUS_NOT_A_DIRECTORY, STATUS_SUCCESS,

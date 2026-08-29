@@ -6897,6 +6897,41 @@ Remaining:
 
 - No local npm dependency vulnerability cleanup work remains.
 
+## Phase 123: v0.18.12 Architecture Boundary Cleanup
+
+Status: Completed.
+
+Goal: reduce daemon execution-state, endpoint ownership, protocol facade, and
+SDK entrypoint coupling without changing public behavior.
+
+Progress:
+
+- Added daemon `ExecRegistry` ownership for execution records, log buffers,
+  event channels, cancellation senders, stdin senders, and ID allocation.
+- Routed normal exec and interactive session registration through the shared
+  registry.
+- Moved `NodeEndpoint` to `operon_core::runtime`, retained the config
+  compatibility re-export, and removed unnecessary network/config/client
+  dependency edges.
+- Documented `operon-grpc-client` as the shared gRPC transport boundary.
+- Moved protocol conversions out of the crate entrypoint while keeping stable
+  root exports.
+- Extracted SDK graph execution and gRPC client pooling behind the stable
+  `OperonClient` API.
+- Updated touched Rust modules to use domain-qualified core paths.
+
+Verification Evidence:
+
+- `cargo check --workspace --locked` passed.
+- `cargo test --workspace --locked` passed.
+- `pnpm --filter @operon/sdk typecheck`, `test`, and `build` passed.
+
+Remaining:
+
+- No v0.18.12 architecture boundary cleanup work remains.
+
+See `docs/plan/v0.18.12-architecture-boundary-cleanup.md`.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

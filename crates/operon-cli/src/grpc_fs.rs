@@ -6,9 +6,9 @@ use std::{
 
 use anyhow::Context;
 use futures_util::stream;
+use operon_core::runtime::NodeEndpoint;
 use operon_core::{FsList, FsStat, FsWrite};
 use operon_grpc_client::chunk_write_requests;
-use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     FsCopyRequest, FsListRequest, FsPathRequest, FsRenameRequest, FsTruncateRequest,
 };

@@ -6,8 +6,6 @@ use std::{
 use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent};
 use operon_core::{DiscoveryList, DiscoveryRecord, ServiceCheck, ServiceDefinition};
 
-pub use operon_config::NodeEndpoint;
-
 pub const OPERON_MDNS_SERVICE: &str = "_operon._tcp.local.";
 const UDP_SOCKET_CONNECT_REASON: &str = "udp socket connected; datagram response not verified";
 

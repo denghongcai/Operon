@@ -1,7 +1,7 @@
 use std::{future::Future, panic};
 
+use operon_core::runtime::NodeEndpoint;
 use operon_core::{FsList, FsStat};
-use operon_network::NodeEndpoint;
 use operon_protocol::runtime::v1::{
     operon_runtime_client::OperonRuntimeClient, FsListRequest, FsPathRequest, FsReadRangeRequest,
     FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest,

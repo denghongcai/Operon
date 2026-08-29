@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::Context;
-use operon_network::NodeEndpoint;
+use operon_core::runtime::NodeEndpoint;
 
 use crate::{
     fuse_fs::OperonFuseFs,
