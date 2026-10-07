@@ -1202,25 +1202,117 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn replacement_preserves_windows_dacl_and_sharing_failure_preserves_target() {
-        use std::os::windows::fs::OpenOptionsExt;
+        use std::os::windows::{ffi::OsStrExt, fs::OpenOptionsExt};
+        use windows_sys::Win32::{
+            Foundation::LocalFree,
+            Security::{
+                Authorization::{
+                    ConvertSecurityDescriptorToStringSecurityDescriptorW,
+                    ConvertStringSecurityDescriptorToSecurityDescriptorW, GetNamedSecurityInfoW,
+                    SetNamedSecurityInfoW, SE_FILE_OBJECT,
+                },
+                GetSecurityDescriptorDacl, DACL_SECURITY_INFORMATION,
+                PROTECTED_DACL_SECURITY_INFORMATION,
+            },
+        };
+        struct LocalBuffer(*mut std::ffi::c_void);
+        impl Drop for LocalBuffer {
+            fn drop(&mut self) {
+                unsafe {
+                    LocalFree(self.0);
+                }
+            }
+        }
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file");
         std::fs::write(&path, b"ORIGINAL").unwrap();
-        let powershell = |script: &str| {
-            let output = std::process::Command::new("powershell.exe")
-                .args(["-NoProfile", "-NonInteractive", "-Command", script])
-                .env("OPERON_ACL_TEST_PATH", &path)
-                .output()
-                .unwrap();
-            assert!(
-                output.status.success(),
-                "{}",
-                String::from_utf8_lossy(&output.stderr)
+        let wide = path
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        // A protected owner-rights ACL is intentionally distinct from the
+        // staging file's inherited ACL. Use Win32 directly: PowerShell module
+        // autoload depends on the runner's PSModulePath/shell-version pairing.
+        let sddl = "D:P(A;;FA;;;OW)"
+            .encode_utf16()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        let mut descriptor = std::ptr::null_mut();
+        assert_ne!(
+            unsafe {
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                )
+            },
+            0
+        );
+        let descriptor = LocalBuffer(descriptor);
+        let (mut present, mut defaulted, mut dacl) = (0, 0, std::ptr::null_mut());
+        assert_ne!(
+            unsafe {
+                GetSecurityDescriptorDacl(descriptor.0, &mut present, &mut dacl, &mut defaulted)
+            },
+            0
+        );
+        assert_ne!(present, 0);
+        assert_eq!(
+            unsafe {
+                SetNamedSecurityInfoW(
+                    wide.as_ptr(),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    dacl,
+                    std::ptr::null(),
+                )
+            },
+            0
+        );
+        let acl = || {
+            let mut descriptor = std::ptr::null_mut();
+            assert_eq!(
+                unsafe {
+                    GetNamedSecurityInfoW(
+                        wide.as_ptr(),
+                        SE_FILE_OBJECT,
+                        DACL_SECURITY_INFORMATION,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        &mut descriptor,
+                    )
+                },
+                0
             );
-            String::from_utf8(output.stdout).unwrap().trim().to_string()
+            let descriptor = LocalBuffer(descriptor);
+            let mut string = std::ptr::null_mut();
+            assert_ne!(
+                unsafe {
+                    ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                        descriptor.0,
+                        1,
+                        DACL_SECURITY_INFORMATION,
+                        &mut string,
+                        std::ptr::null_mut(),
+                    )
+                },
+                0
+            );
+            let _string = LocalBuffer(string.cast());
+            let mut length = 0;
+            while unsafe { *string.add(length) } != 0 {
+                length += 1;
+            }
+            String::from_utf16(unsafe { std::slice::from_raw_parts(string, length) }).unwrap()
         };
-        powershell("$ErrorActionPreference='Stop'; $acl=Get-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH; $acl.SetAccessRuleProtection($true,$false); $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($sid,'FullControl','Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH -AclObject $acl");
-        let before = powershell("(Get-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH).Sddl");
+        let before = acl();
+        assert!(before.contains("OW"));
         let state = writable_state(dir.path().into());
         // Allow reads/writes but deny delete-sharing required by ReplaceFile.
         let old = std::fs::OpenOptions::new()
@@ -1236,10 +1328,7 @@ mod tests {
         let mut stream = futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
         write_stream(&state, &mut stream).await.unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"NEW");
-        assert_eq!(
-            powershell("(Get-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH).Sddl"),
-            before
-        );
+        assert_eq!(acl(), before);
     }
 
     #[tokio::test]
