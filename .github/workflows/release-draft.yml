@@ -187,7 +187,7 @@ jobs:
       - name: Install WinFsp build dependency
         if: runner.os == 'Windows'
         shell: powershell
-        run: choco install winfsp -y
+        run: ./scripts/install-winfsp.ps1
 
       - name: Install Rust target
         run: rustup target add "${{ matrix.target }}"

@@ -118,7 +118,7 @@ require_pattern 'OPERON_MOUNT_MACOS_BACKEND: \$\{\{ inputs.macos_backend \}\}' .
 require_pattern 'OPERON_MOUNT_MACOS_OPTIONS: \$\{\{ inputs.macos_options \}\}' .github/workflows/live-mount-smoke.yml
 require_pattern 'macOS live mount smoke exit code' .github/workflows/live-mount-smoke.yml
 require_pattern 'actions/upload-artifact@v7' .github/workflows/live-mount-smoke.yml
-require_pattern 'choco install winfsp -y' .github/workflows/live-mount-smoke.yml
+require_pattern 'scripts/install-winfsp.ps1' .github/workflows/live-mount-smoke.yml
 require_pattern 'scripts/smoke-macos-live-mount.sh' .github/workflows/live-mount-smoke.yml
 require_pattern 'scripts/smoke-windows-live-mount.ps1' .github/workflows/live-mount-smoke.yml
 require_pattern 'SMOKE_TIMEOUT_SECS="\$\{OPERON_SMOKE_TIMEOUT_SECS:-600\}"' scripts/smoke-macos-live-mount.sh

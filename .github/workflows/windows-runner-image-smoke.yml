@@ -62,7 +62,7 @@ jobs:
 
       - name: Install WinFsp
         shell: powershell
-        run: choco install winfsp -y
+        run: ./scripts/install-winfsp.ps1
 
       - name: Print toolchain evidence
         shell: powershell

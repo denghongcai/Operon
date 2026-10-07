@@ -18,7 +18,7 @@ require_pattern 'default: windows-2025' .github/workflows/windows-runner-image-s
 require_pattern 'runs-on: \$\{\{ inputs\.runner_label \}\}' .github/workflows/windows-runner-image-smoke.yml
 require_pattern 'Get-CimInstance Win32_OperatingSystem' .github/workflows/windows-runner-image-smoke.yml
 require_pattern 'image.version=\$env:ImageVersion' .github/workflows/windows-runner-image-smoke.yml
-require_pattern 'choco install winfsp -y' .github/workflows/windows-runner-image-smoke.yml
+require_pattern 'scripts/install-winfsp.ps1' .github/workflows/windows-runner-image-smoke.yml
 require_pattern 'cargo test -p operond --locked windows_job_object_cancellation_terminates_descendant_process' .github/workflows/windows-runner-image-smoke.yml
 require_pattern 'cargo build --release --locked --target x86_64-pc-windows-msvc -p operon-cli -p operond' .github/workflows/windows-runner-image-smoke.yml
 require_pattern 'scripts/verify-release-artifacts.sh "\$RELEASE_TAG" "\$GITHUB_REPOSITORY"' .github/workflows/windows-runner-image-smoke.yml

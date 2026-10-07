@@ -2,6 +2,9 @@
 use crate::PROTOCOL_VERSION;
 
 pub mod runtime {
+    // async-trait emits redundant must_use on boxed futures under newer
+    // Clippy. Keep the exemption confined to generated tonic/prost code.
+    #[allow(clippy::double_must_use)]
     pub mod v1 {
         tonic::include_proto!("operon.runtime.v1");
     }
