@@ -168,6 +168,7 @@ export function fromGrpcFsWrite(write: GrpcFsWrite) {
     path: write.path,
     bytes_written: Number(write.bytesWritten),
     version: write.version,
+    ...(write.stat ? { stat: fromGrpcFsStat(write.stat) } : {}),
   };
 }
 

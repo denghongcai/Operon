@@ -6965,6 +6965,168 @@ Remaining:
 
 - No v0.16.9 release publication or public verification work remains.
 
+## Phase 125: v0.16.9 Performance and Persistence Investigation
+
+Status: Investigation completed; remediation pending.
+
+Goal: verify the external performance analysis using isolated Docker tests
+before selecting runtime optimizations.
+
+Progress:
+
+- Added `docs/plan/v0.16.9-performance-review.md` with measured conclusions
+  and the location of local scripts, configuration and raw evidence.
+- Confirmed synchronous persistence as a major small-file latency cost using
+  default-store, no-store and benchmark-only fdatasync-bypass comparisons.
+- Reproduced concurrent JSONL record corruption and consequent daemon
+  restart failure; prioritized serialized store integrity over throughput.
+- Reproduced partial file contents after a failed streaming write, transport
+  receive-limit mismatches, and 2MiB short responses to larger range reads.
+- Verified existing kernel attribute caching and corrected same-file
+  concurrent throughput claims using actual network bytes and distinct files.
+
+Remaining:
+
+- Implement and validate the identified correctness fixes and selected
+  optimizations in a separately authorized implementation task.
+- Preserve explicit durability and filesystem contracts; the investigation
+  does not establish a release-ready fix or promise target performance.
+
+Follow-up roadmap:
+`docs/plan/v0.18.13-runtime-correctness-performance-roadmap.md`.
+
+## Phase 126: v0.18.13 Store Record Integrity and Restart Recovery
+
+Status: Implemented; Linux validation passed; native platform CI pending.
+
+Implemented complete-record serialization shared across clones and independent
+writers, consistent recovery loaders, source-preserving recovery backups and
+startup recovery diagnostics. Concurrent mixed records, malformed interior
+data, incomplete tails and real Docker restart were validated.
+
+Goal: serialize complete mixed store records and restore state safely after
+the reproduced concurrent JSONL corruption.
+
+Scope:
+
+- Share an append boundary across writer clones and preserve default Always
+  syncing and private-file protections.
+- Define explicit, source-preserving recovery of unambiguous complete records
+  and incomplete tails; report unsupported interior corruption.
+- Validate concurrent mixed records, persistence failures and real restart.
+
+Dependencies: Phase 125 investigation.
+
+## Phase 127: v0.18.14 Range-Read Contract and gRPC Message Limits
+
+Status: Completed (local implementation and validation).
+
+Implemented fill-until-size-or-EOF reads, centralized 8MiB data / 16MiB encoded
+limits and configured daemon, shared Rust, mount and SDK transports. Real gRPC
+tests validate exact bytes, offsets, EOF, application bounds and encoded limits.
+
+Goal: fulfill range reads until requested size or actual EOF and make the
+8MiB data contract usable through supported clients.
+
+Scope:
+
+- Replace premature completion after one read with a fill loop; preserve
+  EOF, authorization, bounds and live-read semantics.
+- Align bounded encoded-message limits across daemon, Rust, mount and SDK
+  clients while retaining the 8MiB application limit.
+- Validate byte contents at 2MiB/4MiB/8MiB boundaries, nonzero offsets, EOF,
+  invalid bounds and oversize messages through real gRPC.
+
+Dependencies: Phase 126 for reliable integration persistence.
+
+## Phase 128: v0.18.15 Streaming File Replacement Failure Semantics
+
+Status: Implemented; complete Linux acceptance passed; native CI pending.
+
+Implemented same-directory staging, commit-time precondition checks, coordinated
+daemon mutations, cleanup and platform replacement helpers. Tested malformed
+and cancelled streams, actual future cancellation, empty replacement, metadata,
+Unix modes and old-handle/hard-link visibility. Write/flush/commit injection,
+commit-time require_absent races, symlinks and Linux ACL tests also pass.
+Native macOS ACL and Windows DACL/sharing fixtures are awaiting CI.
+
+Goal: a failed full-file stream preserves the previous target contents.
+
+Scope:
+
+- Stage writes and commit after valid completion/flush, with explicit cleanup
+  and platform replacement behavior.
+- Recheck preconditions at commit and define coordination with other fs
+  mutations, permissions/ACLs, symlinks, hard links and open handles.
+- Validate cancellation, malformed streams, injected failures and successful
+  replacement; keep range writes write-through.
+
+Dependencies: Phases 126–127.
+
+## Phase 129: v0.18.16 Serialized Store I/O and Group Commit
+
+Status: Completed (local implementation and validation).
+
+Implemented a persistent OS writer thread, bounded 256-record queue, groups of
+up to 64 records, sticky failures, an ordered flush barrier and disconnect drain.
+Always acknowledgements follow successful sync; instrumented tests cover queue
+saturation, acknowledgement timing and failure propagation. No periodic mode
+was added and full exec logs are retained.
+
+Goal: reduce persistence overhead without implicit durability weakening.
+
+Scope:
+
+- Use a bounded single writer outside Tokio worker threads, reusing its file
+  handle and grouping concurrent durable acknowledgements.
+- Preserve Always by default; any periodic mode is explicit opt-in with
+  documented crash-loss window and config diagnostics.
+- Define backpressure, failure and shutdown behavior; retain complete exec
+  logs and measure sequential/concurrent loads separately.
+
+Dependencies: Phase 126; sequence after Phases 127–128 correctness fixes.
+
+## Phase 130: v0.18.17 Filesystem RPC Efficiency and Benchmarks
+
+Status: Implemented; repeated Linux Docker validation passed.
+
+Added optional authoritative FsWrite metadata, old-peer Stat fallback, mount
+inode refresh reuse, CLI pagination connection reuse and 64KiB read streams.
+Added an isolated benchmark harness recording exact bytes, latency distributions,
+network/audit counts, real fdatasync counts, resource counters and restart checks.
+Completed ops/s is the primary comparison; latency is supporting evidence.
+Real TCP CLI tests verify one connection per multipage operation and preserve
+auth/context, ordering and page-error propagation.
+See the roadmap validation evidence for results and remaining acceptance cases.
+
+Goal: reduce measured RPC/stream overhead and produce repeatable evidence.
+
+Scope:
+
+- Return additive authoritative mutation metadata with old-peer Stat fallback
+  and refresh mount inodes without redundant RPCs.
+- Reuse CLI pagination connections and tune streaming read chunk size.
+- Add isolated benchmarks recording network bytes, RPC counts, data integrity
+  and latency distributions; retain existing kernel cache/write-through rules.
+
+Dependencies: Phases 127–129.
+
+For detailed scope, acceptance and deferred items for Phases 126–130, see
+`docs/plan/v0.18.13-runtime-correctness-performance-roadmap.md`. These are
+internal maintenance identifiers; no public version bump or publication is
+included in this implementation task. Native cross-platform CI remains a
+release gate, not a result inferred from cross-compilation.
+
+## Phase 131: v0.16.10 Runtime Correctness and Performance Release
+
+Status: In Progress.
+
+Complete remaining Phase 126–130 acceptance on all supported platforms,
+evaluate performance primarily in ops/s, commit and push, pass exact-commit
+CI/CodeQL/live-mount/Windows-runner gates, publish `v0.16.10` and verify public
+artifacts, install usability and README Quickstart. See
+`docs/plan/v0.16.10-release-publication.md` for gate evidence.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

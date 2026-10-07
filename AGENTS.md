@@ -389,6 +389,10 @@ Operon should not own:
     cleanup on the public v0.16 patch release line, with CI, CodeQL, live
     mount, Windows runner, artifact, install, and README verification.
 
+- `docs/plan/v0.16.10-release-publication.md`
+  - Active v0.16.10 scope for runtime correctness/performance acceptance,
+    ops/s-based evidence and exact-commit public release verification.
+
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
     validation-mode SDK checks, Windows-only test compilation coverage, and

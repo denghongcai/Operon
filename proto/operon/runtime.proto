@@ -189,6 +189,8 @@ message FsWrite {
   string path = 1;
   uint64 bytes_written = 2;
   string version = 3;
+  // Authoritative post-mutation attributes. Absent on older peers.
+  optional FsStat stat = 4;
 }
 
 message FsWriteRangeRequest {

@@ -1,6 +1,6 @@
 [package]
 name = "operond"
-version = "0.16.9"
+version = "0.16.10"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -29,9 +29,11 @@ tokio-util.workspace = true
 tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tempfile.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Services"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Services"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+operon-grpc-client = { path = "../operon-grpc-client" }

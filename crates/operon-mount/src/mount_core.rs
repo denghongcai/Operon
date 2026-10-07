@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, sync::Arc};
 
-use operon_core::{FsList, FsStat};
+use operon_core::{FsList, FsStat, FsWrite};
 
 /// Platform-neutral filesystem operations needed by live mount adapters.
 pub trait RemoteFs: Send + Sync {
@@ -8,6 +8,19 @@ pub trait RemoteFs: Send + Sync {
     fn list(&self, path: &str) -> anyhow::Result<FsList>;
     fn read_range(&self, path: &str, offset: u64, size: u32) -> anyhow::Result<Vec<u8>>;
     fn write_range(&self, path: &str, offset: u64, data: &[u8]) -> anyhow::Result<u64>;
+    fn write_range_with_stat(
+        &self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+    ) -> anyhow::Result<FsWrite> {
+        Ok(FsWrite {
+            path: path.into(),
+            bytes_written: self.write_range(path, offset, data)?,
+            version: String::new(),
+            stat: None,
+        })
+    }
     fn truncate(&self, path: &str, size: u64) -> anyhow::Result<FsStat>;
     fn mkdir(&self, path: &str) -> anyhow::Result<FsStat>;
     fn delete(&self, path: &str) -> anyhow::Result<()>;
@@ -72,6 +85,20 @@ impl MountAdapterCore {
             .write_range(&normalize_remote_path(path)?, offset, data)
     }
 
+    pub fn write_file_with_stat(
+        &self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+    ) -> anyhow::Result<FsWrite> {
+        let path = normalize_remote_path(path)?;
+        let mut result = self.remote_fs.write_range_with_stat(&path, offset, data)?;
+        if result.stat.is_none() {
+            result.stat = Some(self.remote_fs.stat(&path)?);
+        }
+        Ok(result)
+    }
+
     pub fn truncate(&self, path: &str, size: u64) -> anyhow::Result<FsStat> {
         self.remote_fs.truncate(&normalize_remote_path(path)?, size)
     }
@@ -107,8 +134,9 @@ impl MountAdapterCore {
 
     pub fn create_file(&self, path: &str) -> anyhow::Result<FsStat> {
         let path = normalize_remote_path(path)?;
-        self.remote_fs.write_range(&path, 0, &[])?;
-        self.remote_fs.stat(&path)
+        self.write_file_with_stat(&path, 0, &[])?
+            .stat
+            .ok_or_else(|| anyhow::anyhow!("write response is missing file attributes"))
     }
 
     pub fn delete(&self, path: &str) -> anyhow::Result<()> {
@@ -370,6 +398,7 @@ mod tests {
     }
 
     struct MockRemoteFs {
+        with_metadata: bool,
         stats: Mutex<BTreeMap<String, FsStat>>,
         lists: Mutex<BTreeMap<String, FsList>>,
         calls: Mutex<Vec<String>>,
@@ -378,6 +407,7 @@ mod tests {
     impl MockRemoteFs {
         fn new() -> Self {
             Self {
+                with_metadata: false,
                 stats: Mutex::new(BTreeMap::new()),
                 lists: Mutex::new(BTreeMap::new()),
                 calls: Mutex::new(Vec::new()),
@@ -404,6 +434,25 @@ mod tests {
     }
 
     impl RemoteFs for MockRemoteFs {
+        fn write_range_with_stat(
+            &self,
+            path: &str,
+            offset: u64,
+            data: &[u8],
+        ) -> anyhow::Result<FsWrite> {
+            let bytes_written = self.write_range(path, offset, data)?;
+            let stat = if self.with_metadata {
+                self.stats.lock().unwrap().get(path).cloned()
+            } else {
+                None
+            };
+            Ok(FsWrite {
+                path: path.into(),
+                bytes_written,
+                version: stat.as_ref().map(|s| s.version.clone()).unwrap_or_default(),
+                stat,
+            })
+        }
         fn stat(&self, path: &str) -> anyhow::Result<FsStat> {
             self.calls
                 .lock()
@@ -493,6 +542,28 @@ mod tests {
             is_dir: true,
             size: 0,
             version: "dir-version".to_string(),
+        }
+    }
+
+    #[test]
+    fn write_metadata_avoids_stat_with_old_peer_fallback() {
+        for with_metadata in [true, false] {
+            let mut remote = MockRemoteFs::new();
+            remote.with_metadata = with_metadata;
+            remote.insert_stat(file_stat("/file", 99));
+            remote.insert_stat(file_stat("/new", 0));
+            let remote = Arc::new(remote);
+            let core = MountAdapterCore::new(remote.clone());
+            let write = core.write_file_with_stat("/file", 4, b"abc").unwrap();
+            assert_eq!(write.bytes_written, 3);
+            assert_eq!(write.stat.unwrap().size, 99); // authority, not offset+len
+            assert_eq!(core.create_file("/new").unwrap().size, 0);
+            let calls = remote.calls();
+            assert_eq!(
+                calls.iter().filter(|s| s.starts_with("stat:")).count(),
+                if with_metadata { 0 } else { 2 }
+            );
+            assert_eq!(calls.iter().filter(|s| s.starts_with("write:")).count(), 2);
         }
     }
 

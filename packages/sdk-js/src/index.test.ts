@@ -114,7 +114,10 @@ describe("OperonClient", () => {
 
     expect(trace.status).toBe("succeeded");
     expect(trace.steps.map((step) => step.id)).toEqual(["write", "run", "read"]);
-    expect(niceGrpcMock.createChannel).toHaveBeenCalledWith("http://127.0.0.1:7789");
+    expect(niceGrpcMock.createChannel).toHaveBeenCalledWith("http://127.0.0.1:7789", undefined, {
+      "grpc.max_receive_message_length": 16 * 1024 * 1024,
+      "grpc.max_send_message_length": 16 * 1024 * 1024,
+    });
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("authorization", "Bearer test-token");
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith(expect.stringMatching(/^x-operon-run-id$/), expect.stringMatching(/^run-/));
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("x-operon-step-id", "write");

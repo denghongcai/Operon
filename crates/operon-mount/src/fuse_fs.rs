@@ -425,15 +425,15 @@ impl fuser::Filesystem for OperonFuseFs {
             reply.error(fuser::Errno::EISDIR);
             return;
         }
-        match self.core.write_file(&entry.path, offset, data) {
-            Ok(bytes_written) => {
-                if let Ok(stat) = self.core.stat(&entry.path) {
+        match self.core.write_file_with_stat(&entry.path, offset, data) {
+            Ok(write) => {
+                if let Some(stat) = write.stat {
                     if let Err(error) = self.refresh_inode_stat(entry, stat) {
                         reply.error(errno_for_error(&error));
                         return;
                     }
                 }
-                reply.written(bytes_written.min(u32::MAX as u64) as u32);
+                reply.written(write.bytes_written.min(u32::MAX as u64) as u32);
             }
             Err(error) => reply.error(errno_for_error(&error)),
         }

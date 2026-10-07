@@ -60,6 +60,8 @@ pub struct FsWrite {
     pub bytes_written: u64,
     #[serde(default)]
     pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stat: Option<FsStat>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

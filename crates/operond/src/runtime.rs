@@ -25,7 +25,21 @@ pub(crate) struct GrpcRuntime {
     pub(crate) state: AppState,
 }
 
+impl GrpcRuntime {
+    pub(crate) fn into_service(
+        self,
+    ) -> operon_protocol::runtime::v1::operon_runtime_server::OperonRuntimeServer<Self> {
+        operon_protocol::runtime::v1::operon_runtime_server::OperonRuntimeServer::new(self)
+            .max_decoding_message_size(operon_protocol::MAX_GRPC_MESSAGE_BYTES)
+            .max_encoding_message_size(operon_protocol::MAX_GRPC_MESSAGE_BYTES)
+    }
+}
+
 type GrpcFileStream = fs_service::FileStream;
+
+#[cfg(test)]
+#[path = "runtime_tests.rs"]
+mod tests;
 type GrpcExecLogStream = exec_service::ExecLogStream;
 type GrpcExecEventStream = exec_service::ExecEventStream;
 type GrpcServiceTunnelStream = service_forward::ServiceTunnelStream;

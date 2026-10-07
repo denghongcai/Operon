@@ -20,7 +20,6 @@ use operon_core::{
 use operon_fs::authorize_fs;
 #[cfg(test)]
 use operon_process::{authorize_exec, resolve_exec_secrets};
-use operon_protocol::runtime::v1::operon_runtime_server::OperonRuntimeServer;
 use tonic::transport::Server;
 
 mod audit;
@@ -68,7 +67,7 @@ use state::{
     MAX_IN_MEMORY_EXEC_LOGS,
 };
 
-pub(crate) const MAX_FS_WRITE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_FS_WRITE_CHUNK_BYTES: usize = operon_protocol::MAX_FS_DATA_BYTES;
 pub(crate) const MAX_FS_FILE_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
 const MAX_SERVICE_DATAGRAM_BYTES: usize = 65_507;
 const SERVICE_DATAGRAM_PEER_IDLE_SECS: u64 = 60;
@@ -126,9 +125,12 @@ where
 
     tracing::info!("operond gRPC listening on {}", loaded.grpc_listen);
     Server::builder()
-        .add_service(OperonRuntimeServer::new(GrpcRuntime {
-            state: loaded.state,
-        }))
+        .add_service(
+            GrpcRuntime {
+                state: loaded.state,
+            }
+            .into_service(),
+        )
         .serve_with_shutdown(loaded.grpc_listen, shutdown)
         .await
         .map_err(|error| daemon_state::server_start_error(loaded.grpc_listen, error))?;

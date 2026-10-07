@@ -35,7 +35,10 @@ export class GrpcClientPool {
     if (cached) {
       return cached.client;
     }
-    const channel = createChannel(grpcTarget(endpoint.endpoint));
+    const channel = createChannel(grpcTarget(endpoint.endpoint), undefined, {
+      "grpc.max_receive_message_length": 16 * 1024 * 1024,
+      "grpc.max_send_message_length": 16 * 1024 * 1024,
+    });
     const client = createClient(OperonRuntimeDefinition, channel);
     this.clients.set(endpoint.nodeId, { channel, client });
     return client;

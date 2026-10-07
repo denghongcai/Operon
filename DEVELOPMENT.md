@@ -220,6 +220,52 @@ The v0.7.1 UDP datagram forwarding validation checks policy-configured UDP
 service metadata, local UDP forwarding, packet-boundary preservation, and audit
 events.
 
+Store appends use a bounded queue (256 records) and one writer per store path.
+The default Always policy acknowledges appends only after `sync_data` succeeds;
+concurrent queued records can share a sync without a fixed batching delay.
+No periodic/queued-only persistence mode is enabled. An I/O failure latches the
+writer into an error state to avoid appending after a partial record. Audit
+persistence errors remain logged warnings, so RPC success is not a guarantee
+that its audit event was persisted successfully.
+
+Startup can recover unambiguous concatenated JSON objects and an incomplete
+unterminated final record. It saves the original bytes in a private
+`.operon-store-recovery-*` file before normalization and logs the backup path
+and lost-tail byte count. Unsupported interior corruption fails startup.
+All recovery loaders use the same parser. This is recovery of available data,
+not reconstruction of lost events; external concurrent store writers are
+unsupported.
+
+For opt-in Docker correctness/performance comparison, build release binaries
+and the JS SDK, then run:
+
+```bash
+cargo build --release --locked -p operond -p operon-cli
+pnpm --filter @operon/sdk build
+python3 scripts/performance/docker-benchmark.py --baseline-bin-dir /path/to/baseline-binaries
+```
+
+The harness requires a host C compiler, Linux `/dev/fuse`, Docker, a local daemon image (default
+`operon-node-a:latest`) and a client image (default `node:22-bookworm`; fuse3 is
+installed if needed). It creates isolated nodes and reports the retained
+evidence directory. It records binary checksums, dirty source status, RPC/audit
+counts, completed operations per second, network bytes and mean/p50/p95/p99
+latency. Ops/s is the primary performance comparison; absolute latency is
+supporting evidence. Small workloads count completed loop iterations, transfer
+workloads count complete files, and failed operations contribute zero completed
+ops. Byte throughput and RPC counts are separate, not relabeled as ops.
+Client-remount cold reads
+do not clear the server disk cache. Same-file concurrency is measured separately
+from distinct-file remote throughput. It verifies SDK boundaries, byte contents
+and exec/log/audit restart recovery for candidate binaries. Large benchmarks
+are opt-in and do not impose host-dependent CI throughput thresholds.
+
+Its benchmark-only preload library counts real `fdatasync` calls and elapsed
+sync time; it does not bypass syncing. Container CPU and cgroup memory are
+recorded too. Cgroup memory includes page cache and is not isolated daemon RSS;
+candidate SDK preflight also affects resource baselines. Combined RPC and
+group-commit changes must not be attributed to group commit alone.
+
 The v0.8 agent skills validation checks repo-local skill metadata, public CLI
 help paths, `operon config explain`, current service forwarding command names,
 and safety guidance for agent workflows.

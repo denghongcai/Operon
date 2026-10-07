@@ -624,8 +624,13 @@ unsafe extern "C" fn write_cb(
     let data = std::slice::from_raw_parts(buffer.cast::<u8>(), length as usize);
     match fs
         .core
-        .write_file(&context.path, offset, data)
-        .and_then(|written| fs.core.stat(&context.path).map(|stat| (written, stat)))
+        .write_file_with_stat(&context.path, offset, data)
+        .and_then(|write| {
+            write
+                .stat
+                .map(|stat| (write.bytes_written, stat))
+                .ok_or_else(|| anyhow::anyhow!("write response is missing file attributes"))
+        })
         .map_err(ntstatus_for_error)
     {
         Ok((written, stat)) => {

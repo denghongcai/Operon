@@ -191,6 +191,14 @@ and returns a single `FileChunk`. It is the efficient random-read API for OS
 mount adapters and direct clients that need seek-style reads. `ReadFile`
 remains the streaming full-file API.
 
+Range reads fill the requested size until actual EOF or an I/O error. Zero-size
+reads and offsets at/beyond EOF return empty data; crossing EOF returns the
+remaining bytes. Internal short reads are retried. Reads observe a live file,
+so concurrent truncation may cause an earlier EOF; no snapshot is promised.
+The maximum range/chunk data size is 8MiB. Operon's server, Rust clients and SDK
+use a bounded 16MiB encoded-message limit to accommodate protobuf metadata.
+Direct clients must configure compatible receive/send limits themselves.
+
 `WriteFile` accepts ordered `WriteFileRequest` messages. The first message must
 set the `target` variant with `WriteFileTarget.path`. Later messages must set
 the `chunk` variant with `FileChunk.data`. A stream cannot send duplicate
@@ -198,11 +206,35 @@ targets or switch paths. It replaces the file content. An empty file write is
 encoded as target metadata followed by a single empty `FileChunk.data`; clients
 should not treat that as an omitted write.
 
+Full-file writes stage a temporary file in the destination directory and commit
+after valid stream completion and flush. A rejected or cancelled stream before
+commit preserves an existing target and does not publish a new target. The
+final mutation precondition is rechecked at commit. Daemon filesystem mutations
+share a coordination boundary; external filesystem writers are not coordinated.
+Commit itself has no cancellation point: a disconnect cannot roll back a commit
+that has already begun.
+
+Replacement changes the file object: on Unix, existing open handles and other
+hard links continue referring to the old object. Unix modes, ownership and
+access ACLs are preserved for existing targets; Windows replacement uses
+ReplaceFile to preserve the target DACL and reports incompatible open-handle
+sharing as an error. Other extended attributes are not copied. New Unix files
+use normal 0666 creation permissions restricted by umask/default ACLs.
+Flush before replacement is not a promise of file/directory power-loss
+durability. Store syncing and file-data durability are separate contracts.
+Handled failures clean up staging files; crashes may leave `.operon-write-*`
+files. Inspect these leftovers after stopping the daemon before removing them;
+startup does not delete files merely because they have this prefix.
+
 `WriteFileRange` writes one byte range at `offset`. It is intended for OS mount
 adapters and other clients that need write-through random write behavior. The
 daemon rejects oversized chunks, offset/data overflow, and writes beyond its
 maximum fs object size bound. `ReadFileRange` applies the same offset/size bound
 checks before reading.
+
+`FsWrite.stat` is optional authoritative post-mutation metadata. Updated peers
+return it for stream and range writes. Older clients can ignore this additive
+field; updated mount clients fall back to Stat when an older daemon omits it.
 
 `TruncateFs`, `MkdirFs`, `DeleteFs`, and `RenameFs` are unary filesystem
 mutation calls used by the Linux mount adapter. `CopyFs` is a daemon-side,

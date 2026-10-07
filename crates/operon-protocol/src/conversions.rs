@@ -256,6 +256,7 @@ impl From<operon_core::FsWrite> for runtime::v1::FsWrite {
             path: value.path,
             bytes_written: value.bytes_written,
             version: value.version,
+            stat: value.stat.map(Into::into),
         }
     }
 }
@@ -266,6 +267,7 @@ impl From<runtime::v1::FsWrite> for operon_core::FsWrite {
             path: value.path,
             bytes_written: value.bytes_written,
             version: value.version,
+            stat: value.stat.map(Into::into),
         }
     }
 }
@@ -788,7 +790,7 @@ mod tests {
 
     #[test]
     fn protocol_version_matches_grpc_release_line() {
-        assert_eq!(PROTOCOL_VERSION, "v0.16.9");
+        assert_eq!(PROTOCOL_VERSION, "v0.16.10");
     }
 
     #[test]

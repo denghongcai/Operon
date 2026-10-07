@@ -103,7 +103,15 @@ pub(crate) fn append_store_record(
     writer: &operon_store::StoreWriter,
     record: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    writer.append_json_value(record)
+    if tokio::runtime::Handle::try_current()
+        .is_ok_and(|handle| handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread)
+    {
+        // The synchronous helper retains durable completion semantics while
+        // letting Tokio replace this worker during queue backpressure/sync wait.
+        tokio::task::block_in_place(|| writer.append_json_value(record))
+    } else {
+        writer.append_json_value(record)
+    }
 }
 
 pub(crate) fn now_ms() -> u64 {

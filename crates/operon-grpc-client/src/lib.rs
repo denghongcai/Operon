@@ -30,9 +30,15 @@ pub fn grpc_channel_uri(endpoint: &str) -> anyhow::Result<String> {
 }
 
 pub async fn connect(endpoint: &NodeEndpoint) -> anyhow::Result<OperonRuntimeClient<Channel>> {
-    Ok(OperonRuntimeClient::new(
+    Ok(runtime_client(
         connect_channel(endpoint, DEFAULT_CONNECT_TIMEOUT).await?,
     ))
+}
+
+pub fn runtime_client(channel: Channel) -> OperonRuntimeClient<Channel> {
+    OperonRuntimeClient::new(channel)
+        .max_decoding_message_size(operon_protocol::MAX_GRPC_MESSAGE_BYTES)
+        .max_encoding_message_size(operon_protocol::MAX_GRPC_MESSAGE_BYTES)
 }
 
 pub async fn connect_channel(

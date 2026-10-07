@@ -56,23 +56,18 @@ pub async fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthS
 pub async fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<CapabilityList> {
     let mut capabilities = Vec::new();
     let mut page_token = String::new();
+    let mut client = operon_grpc_client::connect(endpoint).await?;
     loop {
-        let response = call(endpoint, |mut client, endpoint| {
-            let page_token = page_token.clone();
-            async move {
-                Ok(client
-                    .list_capabilities(with_auth(
-                        &endpoint,
-                        ListCapabilitiesRequest {
-                            page_size: DEFAULT_LIST_PAGE_SIZE,
-                            page_token,
-                        },
-                    )?)
-                    .await?
-                    .into_inner())
-            }
-        })
-        .await?;
+        let response = client
+            .list_capabilities(with_auth(
+                endpoint,
+                ListCapabilitiesRequest {
+                    page_size: DEFAULT_LIST_PAGE_SIZE,
+                    page_token,
+                },
+            )?)
+            .await?
+            .into_inner();
         capabilities.extend(
             response
                 .capabilities

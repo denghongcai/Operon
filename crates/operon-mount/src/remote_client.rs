@@ -1,10 +1,10 @@
 use std::{future::Future, panic};
 
 use operon_core::runtime::NodeEndpoint;
-use operon_core::{FsList, FsStat};
+use operon_core::{FsList, FsStat, FsWrite};
 use operon_protocol::runtime::v1::{
-    operon_runtime_client::OperonRuntimeClient, FsListRequest, FsPathRequest, FsReadRangeRequest,
-    FsRenameRequest, FsTruncateRequest, FsWriteRangeRequest,
+    FsListRequest, FsPathRequest, FsReadRangeRequest, FsRenameRequest, FsTruncateRequest,
+    FsWriteRangeRequest,
 };
 use tonic::transport::Channel;
 
@@ -48,7 +48,7 @@ impl RemoteFs for GrpcRemoteFs {
     fn stat(&self, path: &str) -> anyhow::Result<FsStat> {
         let path = path.to_string();
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .stat_fs(operon_grpc_client::request(
                     &self.endpoint,
@@ -66,7 +66,7 @@ impl RemoteFs for GrpcRemoteFs {
     fn list(&self, path: &str) -> anyhow::Result<FsList> {
         let path = path.to_string();
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             let mut entries = Vec::new();
             let mut page_token = String::new();
             loop {
@@ -102,7 +102,7 @@ impl RemoteFs for GrpcRemoteFs {
             size,
         };
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .read_file_range(operon_grpc_client::request(&self.endpoint, request)?)
                 .await?
@@ -112,6 +112,17 @@ impl RemoteFs for GrpcRemoteFs {
     }
 
     fn write_range(&self, path: &str, offset: u64, data: &[u8]) -> anyhow::Result<u64> {
+        Ok(self
+            .write_range_with_stat(path, offset, data)?
+            .bytes_written)
+    }
+
+    fn write_range_with_stat(
+        &self,
+        path: &str,
+        offset: u64,
+        data: &[u8],
+    ) -> anyhow::Result<FsWrite> {
         let request = FsWriteRangeRequest {
             path: path.to_string(),
             offset,
@@ -121,12 +132,12 @@ impl RemoteFs for GrpcRemoteFs {
             require_absent: false,
         };
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .write_file_range(operon_grpc_client::request(&self.endpoint, request)?)
                 .await?
                 .into_inner()
-                .bytes_written)
+                .into())
         })
     }
 
@@ -139,7 +150,7 @@ impl RemoteFs for GrpcRemoteFs {
             require_absent: false,
         };
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .truncate_fs(operon_grpc_client::request(&self.endpoint, request)?)
                 .await?
@@ -154,7 +165,7 @@ impl RemoteFs for GrpcRemoteFs {
             precondition: None,
         };
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .mkdir_fs(operon_grpc_client::request(&self.endpoint, request)?)
                 .await?
@@ -169,7 +180,7 @@ impl RemoteFs for GrpcRemoteFs {
             precondition: None,
         };
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             client
                 .delete_fs(operon_grpc_client::request(&self.endpoint, request)?)
                 .await?;
@@ -188,7 +199,7 @@ impl RemoteFs for GrpcRemoteFs {
             to_require_absent: false,
         };
         block_on_runtime(self.runtime()?, async {
-            let mut client = OperonRuntimeClient::new(self.channel.clone());
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             client
                 .rename_fs(operon_grpc_client::request(&self.endpoint, request)?)
                 .await?;

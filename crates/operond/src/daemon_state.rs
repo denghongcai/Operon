@@ -132,6 +132,13 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
             error,
         )
     })?;
+    operon_store::recover_store(store.as_deref()).map_err(|error| {
+        DaemonStartupError::with_source(
+            DaemonStartupErrorKind::StateRestore,
+            "failed to recover persisted store records",
+            error,
+        )
+    })?;
     let store_writer = operon_store::StoreWriter::new(store.clone());
     let secrets_path = config
         .secrets

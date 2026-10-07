@@ -106,6 +106,15 @@ Runtime schema constraints:
 - `ReadFile` is the streaming full-file API. `ReadFileRange` is the efficient
   unary random-read API for mount adapters and generated clients that need
   offset/size reads.
+- Range reads fill the requested size or stop at actual EOF, rather than at
+  an internal buffer boundary. FS chunk/range data is limited to 8MiB; Operon
+  transports configure a bounded 16MiB encoded-message limit.
+- Full-file WriteFile stages and replaces on valid completion, preserving the
+  old target on failures before commit. Range writes remain in-place,
+  write-through operations. Replacement changes inode/open-handle and
+  hard-link behavior; see PROTOCOL.md for permissions and durability semantics.
+- FsWrite optionally carries authoritative post-mutation stat metadata;
+  mount clients use it or fall back to Stat for older peers.
 - Filesystem stat/list/write/copy responses carry opaque `version` values.
   Mutating filesystem requests can carry `FsPrecondition` with
   `expected_version` or `require_absent`; stale or violated preconditions map to

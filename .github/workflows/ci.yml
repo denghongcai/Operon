@@ -101,6 +101,15 @@ jobs:
       - name: Test exec policy
         run: cargo test -p operon-process --locked
 
+      - name: Test store integrity and durability
+        run: cargo test -p operon-store --locked
+
+      - name: Test daemon filesystem replacement and ranges
+        run: cargo test -p operond --locked fs_service::tests
+
+      - name: Test daemon gRPC filesystem contracts
+        run: cargo test -p operond --locked runtime::tests
+
       - name: Test daemon platform shell defaults
         run: cargo test -p operond --locked shell_invocation_matches_platform
 
@@ -119,6 +128,16 @@ jobs:
 
       - name: Test daemon service management
         run: cargo test -p operond --locked service_management
+
+      - name: Test CLI pagination transport contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            cargo test -p operon-cli --locked --features operon-mount/macos-no-mount grpc_pagination_tests
+          else
+            cargo test -p operon-cli --locked grpc_pagination_tests
+          fi
 
       - name: Test CLI private file platform model
         shell: bash

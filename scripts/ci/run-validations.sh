@@ -33,6 +33,7 @@ case "$requested_group" in
 esac
 
 validations=(
+  "runtime|Runtime Correctness and Filesystem Efficiency Validation|scripts/verify-runtime-correctness-performance.sh"
   "linux-system|v0.5 Docker Validation|scripts/verify-v0.5-docker.sh"
   "linux-system|v0.6 Linux Mount Validation|scripts/verify-v0.6-linux-mount.sh"
   "linux-system|v0.6.1 Linux Write Mount Validation|scripts/verify-v0.6.1-linux-write-mount.sh"
@@ -95,6 +96,7 @@ validations=(
   "core|v0.16.7 Release Publication and Public Verification Validation|scripts/verify-v0.16.7-release-publication.sh"
   "core|v0.16.8 Security Hardening Release Publication Validation|scripts/verify-v0.16.8-release-publication.sh"
   "core|v0.16.9 Architecture Boundary Release Publication Validation|scripts/verify-v0.16.9-release-publication.sh"
+  "core|v0.16.10 Runtime Correctness and Performance Release Validation|scripts/verify-v0.16.10-release-publication.sh"
   "core|Security hardening validation|scripts/verify-security-hardening.sh"
   "core|v0.17 Release and CI Observability Cleanup Validation|scripts/verify-v0.17-release-ci-observability.sh"
   "sdk|v0.17.1 Maintainability Cleanup Validation|scripts/verify-v0.17.1-maintainability-cleanup.sh"

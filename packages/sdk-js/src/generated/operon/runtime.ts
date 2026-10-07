@@ -293,6 +293,8 @@ export interface FsWrite {
   path: string;
   bytesWritten: string;
   version: string;
+  /** Authoritative post-mutation attributes. Absent on older peers. */
+  stat?: FsStat | undefined;
 }
 
 export interface FsWriteRangeRequest {
@@ -2648,7 +2650,7 @@ export const WriteFileTarget: MessageFns<WriteFileTarget> = {
 };
 
 function createBaseFsWrite(): FsWrite {
-  return { path: "", bytesWritten: "0", version: "" };
+  return { path: "", bytesWritten: "0", version: "", stat: undefined };
 }
 
 export const FsWrite: MessageFns<FsWrite> = {
@@ -2661,6 +2663,9 @@ export const FsWrite: MessageFns<FsWrite> = {
     }
     if (message.version !== "") {
       writer.uint32(26).string(message.version);
+    }
+    if (message.stat !== undefined) {
+      FsStat.encode(message.stat, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -2696,6 +2701,14 @@ export const FsWrite: MessageFns<FsWrite> = {
           message.version = reader.string();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.stat = FsStat.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2714,6 +2727,7 @@ export const FsWrite: MessageFns<FsWrite> = {
         ? globalThis.String(object.bytes_written)
         : "0",
       version: isSet(object.version) ? globalThis.String(object.version) : "",
+      stat: isSet(object.stat) ? FsStat.fromJSON(object.stat) : undefined,
     };
   },
 
@@ -2728,6 +2742,9 @@ export const FsWrite: MessageFns<FsWrite> = {
     if (message.version !== "") {
       obj.version = message.version;
     }
+    if (message.stat !== undefined) {
+      obj.stat = FsStat.toJSON(message.stat);
+    }
     return obj;
   },
 
@@ -2739,6 +2756,7 @@ export const FsWrite: MessageFns<FsWrite> = {
     message.path = object.path ?? "";
     message.bytesWritten = object.bytesWritten ?? "0";
     message.version = object.version ?? "";
+    message.stat = (object.stat !== undefined && object.stat !== null) ? FsStat.fromPartial(object.stat) : undefined;
     return message;
   },
 };

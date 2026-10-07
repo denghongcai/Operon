@@ -16,7 +16,8 @@ require_file crates/operond/src/runtime.rs
 require_pattern 'pub\(crate\) struct GrpcRuntime' crates/operond/src/runtime.rs
 require_pattern 'impl OperonRuntime for GrpcRuntime' crates/operond/src/runtime.rs
 reject_pattern 'impl OperonRuntime for GrpcRuntime' crates/operond/src/main.rs
-require_pattern 'OperonRuntimeServer::new\(GrpcRuntime' crates/operond/src/main.rs
+require_pattern '\.into_service\(\)' crates/operond/src/main.rs
+require_pattern 'OperonRuntimeServer::new\(self\)' crates/operond/src/runtime.rs
 
 require_file crates/operon-cli/src/commands/exec_args.rs
 require_file crates/operon-cli/src/commands/exec_session.rs

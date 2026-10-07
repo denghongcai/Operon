@@ -12,20 +12,9 @@ require_pattern 'Status: (In Progress|Completed)' docs/plan/v0.16.9-release-publ
 require_pattern 'Phase 124: v0.16.9 Architecture Boundary Release Publication' docs/plan/development-phases.md
 require_pattern 'v0.16.9 Architecture Boundary Release Publication Validation' scripts/ci/run-validations.sh
 
-for crate_manifest in crates/*/Cargo.toml; do
-  require_pattern 'version = "0.16.9"' "$crate_manifest"
-done
-require_pattern '"version": "0.16.9"' packages/sdk-js/package.json
-require_pattern 'PROTOCOL_VERSION: &str = "v0.16.9"' crates/operon-protocol/src/lib.rs
-require_pattern 'assert_eq!\(PROTOCOL_VERSION, "v0.16.9"\)' crates/operon-protocol/src/conversions.rs
-require_pattern 'stdout.contains\("0.16.9"\)' crates/operon-cli/tests/cli_static_integration.rs
-
-require_pattern 'verify-release-install-usability.sh --dry-run v0.16.9' README.md docs/quality/release-install-usability.md
-require_pattern 'verify-release-service-management-smoke.sh --dry-run v0.16.9' README.md docs/quality/release-install-usability.md
-require_pattern 'verify-release-linux-install-containers.sh --dry-run v0.16.9' README.md docs/quality/release-install-usability.md
-require_pattern 'default: v0.16.9' .github/workflows/windows-runner-image-smoke.yml
-require_pattern 'for example v0.16.9' .github/workflows/verify-release-install-usability.yml
-require_pattern 'for example v0.16.9' .github/workflows/verify-readme-quickstart.yml
+# Historical release evidence stays at v0.16.9; current version alignment is
+# validated by the active release phase, not frozen to this historical tag.
+require_pattern 'https://github.com/denghongcai/Operon/releases/tag/v0.16.9' docs/plan/v0.16.9-release-publication.md
 
 bash -n scripts/verify-v0.16.9-release-publication.sh
 scripts/verify-release-artifacts.sh --dry-run v0.16.9 denghongcai/Operon >/dev/null

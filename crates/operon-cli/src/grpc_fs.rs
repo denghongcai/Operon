@@ -37,25 +37,19 @@ pub async fn fs_list(endpoint: &NodeEndpoint, path: &str) -> anyhow::Result<FsLi
     let path = path.to_string();
     let mut entries = Vec::new();
     let mut page_token = String::new();
+    let mut client = operon_grpc_client::connect(endpoint).await?;
     loop {
-        let response = call(endpoint, |mut client, endpoint| {
-            let path = path.clone();
-            let page_token = page_token.clone();
-            async move {
-                Ok(client
-                    .list_fs(with_auth(
-                        &endpoint,
-                        FsListRequest {
-                            path,
-                            page_size: DEFAULT_LIST_PAGE_SIZE,
-                            page_token,
-                        },
-                    )?)
-                    .await?
-                    .into_inner())
-            }
-        })
-        .await?;
+        let response = client
+            .list_fs(with_auth(
+                endpoint,
+                FsListRequest {
+                    path: path.clone(),
+                    page_size: DEFAULT_LIST_PAGE_SIZE,
+                    page_token,
+                },
+            )?)
+            .await?
+            .into_inner();
         entries.extend(response.entries.into_iter().map(Into::into));
         if response.next_page_token.is_empty() {
             break;

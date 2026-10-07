@@ -9,6 +9,8 @@ mod grpc_audit;
 mod grpc_exec;
 mod grpc_exec_api;
 mod grpc_fs;
+#[cfg(test)]
+mod grpc_pagination_tests;
 mod grpc_service;
 mod grpc_service_api;
 mod onboard;

@@ -21,6 +21,10 @@ use crate::{
 pub(crate) type FileStream =
     Pin<Box<dyn Stream<Item = Result<FileChunk, Status>> + Send + 'static>>;
 
+// Serializes daemon-owned mutations, including aliases and directory renames.
+// External filesystem writers are outside this coordination boundary.
+static MUTATION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub(crate) fn validate_write_chunk(data_len: usize) -> Result<(), Status> {
     if data_len > MAX_FS_WRITE_CHUNK_BYTES {
         return Err(Status::invalid_argument(format!(
@@ -325,7 +329,7 @@ pub(crate) async fn read_stream(state: &AppState, path: String) -> Result<FileSt
         .await
         .map_err(status_from_io_error)?;
     record_audit(state, "read-stream", &path, true, "allowed");
-    let stream = ReaderStream::new(file).map(|chunk| {
+    let stream = ReaderStream::with_capacity(file, 64 * 1024).map(|chunk| {
         chunk
             .map(|data| FileChunk {
                 data: data.to_vec(),
@@ -352,19 +356,281 @@ pub(crate) async fn read_range(
         .await
         .map_err(status_from_io_error)?;
     let mut data = vec![0_u8; size as usize];
-    let bytes_read = file.read(&mut data).await.map_err(status_from_io_error)?;
+    let bytes_read = fill_range(&mut file, &mut data)
+        .await
+        .map_err(status_from_io_error)?;
     data.truncate(bytes_read);
     record_audit(state, "read-range", &path, true, "allowed");
     Ok(FileChunk { data })
 }
 
-pub(crate) async fn write_stream(
+async fn fill_range<R: tokio::io::AsyncRead + Unpin>(
+    reader: &mut R,
+    data: &mut [u8],
+) -> std::io::Result<usize> {
+    let mut filled = 0;
+    while filled < data.len() {
+        match reader.read(&mut data[filled..]).await {
+            Ok(0) => break,
+            Ok(count) => filled += count,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(filled)
+}
+
+async fn preserve_replacement_permissions(
+    path: &std::path::Path,
+    file: &mut tokio::fs::File,
+) -> Result<(), Status> {
+    let metadata = match tokio::fs::metadata(path).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(());
+        }
+        Err(error) => return Err(status_from_io_error(error)),
+    };
+    if !metadata.is_file() {
+        return Err(Status::failed_precondition(
+            "write target is not a regular file",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::{fs::MetadataExt, io::AsRawFd};
+        let staged = file
+            .try_clone()
+            .await
+            .map_err(status_from_io_error)?
+            .into_std()
+            .await;
+        let source = path.to_path_buf();
+        tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+            let current = staged.metadata()?;
+            if (current.uid() != metadata.uid() || current.gid() != metadata.gid())
+                && unsafe { libc::fchown(staged.as_raw_fd(), metadata.uid(), metadata.gid()) } != 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            copy_access_acl(&source, &staged)?;
+            staged.set_permissions(metadata.permissions())
+        })
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?
+        .map_err(status_from_io_error)?;
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    file.set_permissions(metadata.permissions())
+        .await
+        .map_err(status_from_io_error)
+}
+
+#[cfg(target_os = "linux")]
+fn copy_access_acl(source: &std::path::Path, destination: &std::fs::File) -> std::io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let source = std::fs::OpenOptions::new().write(true).open(source)?;
+    let name = c"system.posix_acl_access";
+    let size =
+        unsafe { libc::fgetxattr(source.as_raw_fd(), name.as_ptr(), std::ptr::null_mut(), 0) };
+    if size < 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ENODATA) {
+            let result = unsafe { libc::fremovexattr(destination.as_raw_fd(), name.as_ptr()) };
+            if result != 0 {
+                let error = std::io::Error::last_os_error();
+                if !matches!(error.raw_os_error(), Some(libc::ENODATA | libc::ENOTSUP)) {
+                    return Err(error);
+                }
+            }
+            return Ok(());
+        }
+        if error.raw_os_error() == Some(libc::ENOTSUP) {
+            return Ok(());
+        }
+        return Err(error);
+    }
+    let mut acl = vec![0u8; size as usize];
+    let size = unsafe {
+        libc::fgetxattr(
+            source.as_raw_fd(),
+            name.as_ptr(),
+            acl.as_mut_ptr().cast(),
+            acl.len(),
+        )
+    };
+    if size < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if unsafe {
+        libc::fsetxattr(
+            destination.as_raw_fd(),
+            name.as_ptr(),
+            acl.as_ptr().cast(),
+            size as usize,
+            0,
+        )
+    } != 0
+    {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn copy_access_acl(source: &std::path::Path, destination: &std::fs::File) -> std::io::Result<()> {
+    use std::os::fd::AsRawFd;
+    unsafe extern "C" {
+        fn acl_get_fd(fd: libc::c_int) -> *mut libc::c_void;
+        fn acl_set_fd(fd: libc::c_int, acl: *mut libc::c_void) -> libc::c_int;
+        fn acl_free(acl: *mut libc::c_void) -> libc::c_int;
+    }
+    let source = std::fs::OpenOptions::new().write(true).open(source)?;
+    let acl = unsafe { acl_get_fd(source.as_raw_fd()) };
+    if acl.is_null() {
+        let error = std::io::Error::last_os_error();
+        if matches!(error.raw_os_error(), Some(libc::ENOENT | libc::ENOTSUP)) {
+            return Ok(());
+        }
+        return Err(error);
+    }
+    let result = unsafe { acl_set_fd(destination.as_raw_fd(), acl) };
+    let error = std::io::Error::last_os_error();
+    unsafe {
+        acl_free(acl);
+    }
+    if result != 0 {
+        return Err(error);
+    }
+    Ok(())
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+fn copy_access_acl(_source: &std::path::Path, _destination: &std::fs::File) -> std::io::Result<()> {
+    Ok(())
+}
+
+fn commit_replacement(
+    staging: tempfile::TempPath,
+    destination: &std::path::Path,
+) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+        if destination.exists() {
+            let target = destination
+                .as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect::<Vec<_>>();
+            let source = staging
+                .as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect::<Vec<_>>();
+            // ReplaceFile preserves the destination's DACL. Open-handle sharing
+            // restrictions surface as ordinary commit errors, preserving target.
+            let result = unsafe {
+                ReplaceFileW(
+                    target.as_ptr(),
+                    source.as_ptr(),
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                )
+            };
+            if result == 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            return Ok(());
+        }
+    }
+    if destination.exists() {
+        staging.persist(destination).map_err(|e| e.error)
+    } else {
+        staging.persist_noclobber(destination).map_err(|e| e.error)
+    }
+}
+
+struct StreamAuditGuard<'a> {
+    state: &'a AppState,
+    path: Option<String>,
+    committed: bool,
+}
+
+impl Drop for StreamAuditGuard<'_> {
+    fn drop(&mut self) {
+        if !self.committed {
+            if let Some(path) = &self.path {
+                record_audit(
+                    self.state,
+                    "write-stream",
+                    path,
+                    false,
+                    "stream ended without commit",
+                );
+            }
+        }
+    }
+}
+
+pub(crate) async fn write_stream<S>(state: &AppState, stream: &mut S) -> Result<FsWrite, Status>
+where
+    S: Stream<Item = Result<WriteFileRequest, Status>> + Unpin,
+{
+    write_stream_impl(
+        state,
+        stream,
+        #[cfg(test)]
+        None,
+    )
+    .await
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, PartialEq)]
+enum StreamIoFailure {
+    Write,
+    Flush,
+    Commit,
+}
+
+#[cfg(test)]
+fn inject_stream_io_failure(
+    failure: Option<StreamIoFailure>,
+    point: StreamIoFailure,
+) -> Result<(), Status> {
+    if failure == Some(point) {
+        Err(status_from_io_error(std::io::Error::other(
+            "injected stream I/O failure",
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+async fn write_stream_impl<S>(
     state: &AppState,
-    stream: &mut tonic::Streaming<WriteFileRequest>,
-) -> Result<FsWrite, Status> {
+    stream: &mut S,
+    #[cfg(test)] failure: Option<StreamIoFailure>,
+) -> Result<FsWrite, Status>
+where
+    S: Stream<Item = Result<WriteFileRequest, Status>> + Unpin,
+{
     let mut path = None;
     let mut file = None;
     let mut bytes_written = 0_u64;
+    let mut staging = None;
+    let mut destination = None;
+    let mut commit_precondition = None;
+    let mut outcome = StreamAuditGuard {
+        state,
+        path: None,
+        committed: false,
+    };
 
     while let Some(message) = stream.next().await {
         let message = message?;
@@ -381,6 +647,8 @@ pub(crate) async fn write_stream(
                     ));
                 }
                 authorize_fs_action(state, "write-stream", &target.path, "write", &target.path)?;
+                outcome.path = Some(target.path.clone());
+                let _mutation = MUTATION_LOCK.lock().await;
                 let full_path =
                     resolve_write_path(state, "write-stream", &target.path, &target.path)?;
                 let precondition = grpc_precondition(
@@ -394,11 +662,30 @@ pub(crate) async fn write_stream(
                         .await
                         .map_err(status_from_io_error)?;
                 }
-                file = Some(
-                    tokio::fs::File::create(&full_path)
-                        .await
-                        .map_err(status_from_io_error)?,
-                );
+                let parent = full_path
+                    .parent()
+                    .ok_or_else(|| Status::invalid_argument("write target has no parent"))?
+                    .to_path_buf();
+                let staged = tokio::task::spawn_blocking(move || {
+                    let mut builder = tempfile::Builder::new();
+                    builder.prefix(".operon-write-");
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        builder.permissions(std::fs::Permissions::from_mode(0o666));
+                    }
+                    builder.tempfile_in(parent)
+                })
+                .await
+                .map_err(|e| Status::internal(e.to_string()))?
+                .map_err(status_from_io_error)?;
+                let (std_file, temp_path) = staged.into_parts();
+                let mut staged_file = tokio::fs::File::from_std(std_file);
+                preserve_replacement_permissions(&full_path, &mut staged_file).await?;
+                file = Some(staged_file);
+                staging = Some(temp_path);
+                destination = Some(full_path);
+                commit_precondition = precondition;
                 path = Some(target.path);
             }
             Some(write_file_request::Payload::Chunk(chunk)) => {
@@ -409,6 +696,8 @@ pub(crate) async fn write_stream(
                 };
                 validate_write_chunk(chunk.data.len())?;
                 bytes_written = checked_file_end(bytes_written, chunk.data.len(), "write stream")?;
+                #[cfg(test)]
+                inject_stream_io_failure(failure, StreamIoFailure::Write)?;
                 file.write_all(&chunk.data)
                     .await
                     .map_err(status_from_io_error)?;
@@ -426,15 +715,41 @@ pub(crate) async fn write_stream(
             "write stream did not include target metadata",
         ));
     };
-    let full_path = resolve_existing_path(state, "write-stream", &path, &path)?;
-    let metadata = tokio::fs::metadata(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
+    let mut file = file.ok_or_else(|| Status::internal("missing staged file"))?;
+    #[cfg(test)]
+    inject_stream_io_failure(failure, StreamIoFailure::Flush)?;
+    file.flush().await.map_err(status_from_io_error)?;
+    let _mutation = MUTATION_LOCK.lock().await;
+    let full_path = resolve_write_path(state, "write-stream", &path, &path)?;
+    if destination.as_ref() != Some(&full_path) {
+        return Err(Status::failed_precondition(
+            "write destination changed while streaming",
+        ));
+    }
+    check_precondition(&full_path, commit_precondition.as_ref())?;
+    preserve_replacement_permissions(&full_path, &mut file).await?;
+    let metadata = file.metadata().await.map_err(status_from_io_error)?;
+    drop(file);
+    let staged = staging.ok_or_else(|| Status::internal("missing staged path"))?;
+    // There is no cancellation point between the final decision and commit.
+    #[cfg(test)]
+    inject_stream_io_failure(failure, StreamIoFailure::Commit)?;
+    commit_replacement(staged, &full_path).map_err(status_from_io_error)?;
+    outcome.committed = true;
+    drop(_mutation);
     record_audit(state, "write-stream", &path, true, "allowed");
+    let stat = FsStat {
+        path: path.clone(),
+        is_file: metadata.is_file(),
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+        version: fs_version(&metadata),
+    };
     Ok(FsWrite {
         path,
         bytes_written,
         version: version_from_metadata(metadata),
+        stat: Some(stat),
     })
 }
 
@@ -448,6 +763,7 @@ pub(crate) async fn write_range(
     validate_write_chunk(data.len())?;
     checked_file_end(offset, data.len(), "write range")?;
     authorize_fs_action(state, "write-range", &path, "write", &path)?;
+    let _mutation = MUTATION_LOCK.lock().await;
     let full_path = resolve_write_path(state, "write-range", &path, &path)?;
     check_precondition(&full_path, precondition.as_ref())?;
     if let Some(parent) = full_path.parent() {
@@ -470,11 +786,20 @@ pub(crate) async fn write_range(
     let metadata = tokio::fs::metadata(&full_path)
         .await
         .map_err(status_from_io_error)?;
+    let stat = FsStat {
+        path: path.clone(),
+        is_file: metadata.is_file(),
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+        version: fs_version(&metadata),
+    };
+    drop(_mutation);
     record_audit(state, "write-range", &path, true, "allowed");
     Ok(FsWrite {
         path,
         bytes_written: data.len() as u64,
         version: version_from_metadata(metadata),
+        stat: Some(stat),
     })
 }
 
@@ -491,6 +816,7 @@ pub(crate) async fn truncate(
         )));
     }
     authorize_fs_action(state, "truncate", &path, "write", &path)?;
+    let _mutation = MUTATION_LOCK.lock().await;
     let full_path = resolve_write_path(state, "truncate", &path, &path)?;
     check_precondition(&full_path, precondition.as_ref())?;
     if let Some(parent) = full_path.parent() {
@@ -521,6 +847,7 @@ pub(crate) async fn truncate(
 
 pub(crate) async fn mkdir(state: &AppState, path: String) -> Result<FsStat, Status> {
     authorize_fs_action(state, "mkdir", &path, "write", &path)?;
+    let _mutation = MUTATION_LOCK.lock().await;
     let full_path = resolve_create_path(state, "mkdir", &path, &path)?;
     tokio::fs::create_dir_all(&full_path)
         .await
@@ -544,6 +871,7 @@ pub(crate) async fn delete(
     precondition: Option<FsPrecondition>,
 ) -> Result<String, Status> {
     authorize_fs_action(state, "delete", &path, "delete", &path)?;
+    let _mutation = MUTATION_LOCK.lock().await;
     let full_path = resolve_existing_leaf_path(state, "delete", &path, &path)?;
     check_precondition(&full_path, precondition.as_ref())?;
     let metadata = tokio::fs::symlink_metadata(&full_path)
@@ -572,6 +900,7 @@ pub(crate) async fn rename(
     let resource = format!("{from_path} -> {to_path}");
     authorize_fs_action(state, "rename", &resource, "delete", from_path)?;
     authorize_fs_action(state, "rename", &resource, "write", to_path)?;
+    let _mutation = MUTATION_LOCK.lock().await;
     let from_full_path = resolve_existing_leaf_path(state, "rename", &resource, from_path)?;
     let to_full_path = resolve_write_path(state, "rename", &resource, to_path)?;
     check_precondition(&from_full_path, from_precondition.as_ref())?;
@@ -593,6 +922,7 @@ pub(crate) async fn copy(
     let resource = format!("{from_path} -> {to_path}");
     authorize_fs_action(state, "copy", &resource, "read", from_path)?;
     authorize_fs_action(state, "copy", &resource, "write", to_path)?;
+    let _mutation = MUTATION_LOCK.lock().await;
     let from_full_path = resolve_existing_path(state, "copy", &resource, from_path)?;
     let to_full_path = resolve_write_path(state, "copy", &resource, to_path)?;
     check_precondition(&from_full_path, from_precondition.as_ref())?;
@@ -617,6 +947,486 @@ pub(crate) async fn copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn writable_state(workspace: PathBuf) -> AppState {
+        let mut policy = crate::defaults::default_policy();
+        policy.fs.mounts = vec![operon_core::FsMountPolicy {
+            name: "workspace".into(),
+            path: "/".into(),
+            permissions: operon_core::FsPermissions {
+                read: true,
+                write: true,
+                delete: true,
+            },
+        }];
+        crate::daemon_state::test_state(policy, workspace)
+    }
+
+    fn target(path: &str, expected_version: Option<String>) -> WriteFileRequest {
+        WriteFileRequest {
+            payload: Some(write_file_request::Payload::Target(
+                operon_protocol::runtime::v1::WriteFileTarget {
+                    path: path.into(),
+                    expected_version,
+                    require_absent: false,
+                    precondition: None,
+                },
+            )),
+        }
+    }
+
+    fn chunk(data: &[u8]) -> WriteFileRequest {
+        WriteFileRequest {
+            payload: Some(write_file_request::Payload::Chunk(FileChunk {
+                data: data.into(),
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn write_flush_and_commit_failures_preserve_target_and_cleanup() {
+        for exists in [false, true] {
+            for failure in [
+                StreamIoFailure::Write,
+                StreamIoFailure::Flush,
+                StreamIoFailure::Commit,
+            ] {
+                let dir = tempfile::tempdir().unwrap();
+                let path = dir.path().join("file");
+                if exists {
+                    std::fs::write(&path, b"ORIGINAL").unwrap();
+                }
+                let state = writable_state(dir.path().into());
+                let mut stream =
+                    futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
+                assert!(write_stream_impl(&state, &mut stream, Some(failure))
+                    .await
+                    .is_err());
+                let audit = state.audit.lock().unwrap();
+                let event = audit.back().unwrap();
+                assert_eq!(event.action, "write-stream");
+                assert!(!event.allowed);
+                drop(audit);
+                if exists {
+                    assert_eq!(std::fs::read(&path).unwrap(), b"ORIGINAL");
+                } else {
+                    assert!(!path.exists());
+                }
+                assert_eq!(
+                    std::fs::read_dir(dir.path()).unwrap().count(),
+                    usize::from(exists)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_require_absent_rechecked_at_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = writable_state(dir.path().into());
+        let mut request = target("/file", None);
+        if let Some(write_file_request::Payload::Target(target)) = &mut request.payload {
+            target.require_absent = true;
+        }
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        tx.send(Ok(request)).await.unwrap();
+        tx.send(Ok(chunk(b"NEW"))).await.unwrap();
+        let task_state = state.clone();
+        let task = tokio::spawn(async move {
+            let mut stream = futures_util::stream::unfold(rx, |mut rx| async {
+                rx.recv().await.map(|v| (v, rx))
+            })
+            .boxed();
+            write_stream(&task_state, &mut stream).await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if std::fs::read_dir(dir.path()).unwrap().any(|e| {
+                    e.unwrap()
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".operon-write-")
+                }) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        write_range(&state, "/file".into(), 0, b"CONCURRENT".to_vec(), None)
+            .await
+            .unwrap();
+        drop(tx);
+        assert_eq!(
+            task.await.unwrap().unwrap_err().code(),
+            tonic::Code::FailedPrecondition
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("file")).unwrap(),
+            b"CONCURRENT"
+        );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stream_replaces_leaf_symlink_target_without_replacing_link() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file"), b"ORIGINAL").unwrap();
+        std::os::unix::fs::symlink("file", dir.path().join("link")).unwrap();
+        let state = writable_state(dir.path().into());
+        let mut stream = futures_util::stream::iter([Ok(target("/link", None)), Ok(chunk(b"NEW"))]);
+        write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("file")).unwrap(), b"NEW");
+        assert_eq!(
+            std::fs::read_link(dir.path().join("link")).unwrap(),
+            std::path::Path::new("file")
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(target_os = "linux")]
+    async fn replacement_preserves_posix_acl_and_removes_inherited_acl_when_absent() {
+        use std::os::fd::AsRawFd;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, b"ORIGINAL").unwrap();
+        let mut acl = 2u32.to_le_bytes().to_vec();
+        // Linux POSIX ACL xattr: owner, named user, group, mask, other.
+        for (tag, permissions, id) in [
+            (1u16, 6u16, u32::MAX),
+            (2, 4, 12345),
+            (4, 0, u32::MAX),
+            (16, 4, u32::MAX),
+            (32, 0, u32::MAX),
+        ] {
+            acl.extend_from_slice(&tag.to_le_bytes());
+            acl.extend_from_slice(&permissions.to_le_bytes());
+            acl.extend_from_slice(&id.to_le_bytes());
+        }
+        let set_acl = |file: &std::fs::File, name: &std::ffi::CStr| {
+            assert_eq!(
+                unsafe {
+                    libc::fsetxattr(
+                        file.as_raw_fd(),
+                        name.as_ptr(),
+                        acl.as_ptr().cast(),
+                        acl.len(),
+                        0,
+                    )
+                },
+                0,
+                "{}",
+                std::io::Error::last_os_error()
+            );
+        };
+        let read_acl = |path: &std::path::Path| {
+            let file = std::fs::File::open(path).unwrap();
+            let mut result = vec![0u8; 1024];
+            let length = unsafe {
+                libc::fgetxattr(
+                    file.as_raw_fd(),
+                    c"system.posix_acl_access".as_ptr(),
+                    result.as_mut_ptr().cast(),
+                    result.len(),
+                )
+            };
+            if length < 0 {
+                assert_eq!(
+                    std::io::Error::last_os_error().raw_os_error(),
+                    Some(libc::ENODATA)
+                );
+                return None;
+            }
+            result.truncate(length as usize);
+            Some(result)
+        };
+        set_acl(
+            &std::fs::File::open(&path).unwrap(),
+            c"system.posix_acl_access",
+        );
+        let state = writable_state(dir.path().into());
+        let mut stream = futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
+        write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(read_acl(&path), Some(acl.clone()));
+
+        // The old plain file has no ACL, but a new staged file would inherit
+        // this directory default ACL. Replacement must remove that inheritance.
+        std::fs::write(dir.path().join("plain"), b"ORIGINAL").unwrap();
+        assert_eq!(read_acl(&dir.path().join("plain")), None);
+        set_acl(
+            &std::fs::File::open(dir.path()).unwrap(),
+            c"system.posix_acl_default",
+        );
+        let mut stream =
+            futures_util::stream::iter([Ok(target("/plain", None)), Ok(chunk(b"NEW"))]);
+        write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(read_acl(&dir.path().join("plain")), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn replacement_preserves_macos_extended_acl() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, b"ORIGINAL").unwrap();
+        assert!(std::process::Command::new("chmod")
+            .args(["+a", "everyone allow read"])
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success());
+        let acl = || {
+            let output = std::process::Command::new("ls")
+                .arg("-le")
+                .arg(&path)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .lines()
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let before = acl();
+        assert!(before.contains("everyone allow read"));
+        let state = writable_state(dir.path().into());
+        let mut stream = futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
+        write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(acl(), before);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn replacement_preserves_windows_dacl_and_sharing_failure_preserves_target() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, b"ORIGINAL").unwrap();
+        let powershell = |script: &str| {
+            let output = std::process::Command::new("powershell.exe")
+                .args(["-NoProfile", "-NonInteractive", "-Command", script])
+                .env("OPERON_ACL_TEST_PATH", &path)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8(output.stdout).unwrap().trim().to_string()
+        };
+        powershell("$ErrorActionPreference='Stop'; $acl=Get-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH; $acl.SetAccessRuleProtection($true,$false); $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($sid,'FullControl','Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH -AclObject $acl");
+        let before = powershell("(Get-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH).Sddl");
+        let state = writable_state(dir.path().into());
+        // Allow reads/writes but deny delete-sharing required by ReplaceFile.
+        let old = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(3)
+            .open(&path)
+            .unwrap();
+        let mut stream = futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
+        assert!(write_stream(&state, &mut stream).await.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"ORIGINAL");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        drop(old);
+        let mut stream = futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
+        write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"NEW");
+        assert_eq!(
+            powershell("(Get-Acl -LiteralPath $env:OPERON_ACL_TEST_PATH).Sddl"),
+            before
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_stream_preserves_existing_and_absent_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = writable_state(dir.path().into());
+        for exists in [true, false] {
+            let path = if exists { "/existing" } else { "/absent" };
+            if exists {
+                std::fs::write(dir.path().join("existing"), b"ORIGINAL").unwrap();
+            }
+            for failure in [
+                Ok(WriteFileRequest { payload: None }),
+                Err(Status::cancelled("test")),
+                Ok(chunk(&vec![0; MAX_FS_WRITE_CHUNK_BYTES + 1])),
+            ] {
+                let mut stream = futures_util::stream::iter([
+                    Ok(target(path, None)),
+                    Ok(chunk(b"NEW")),
+                    failure,
+                ]);
+                assert!(write_stream(&state, &mut stream).await.is_err());
+                if exists {
+                    assert_eq!(
+                        std::fs::read(dir.path().join("existing")).unwrap(),
+                        b"ORIGINAL"
+                    );
+                } else {
+                    assert!(!dir.path().join("absent").exists());
+                }
+                assert!(!std::fs::read_dir(dir.path()).unwrap().any(|e| e
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".operon-write-")));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn dropped_stream_cleans_staging_and_empty_stream_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file"), b"ORIGINAL").unwrap();
+        let state = writable_state(dir.path().into());
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        tx.send(Ok(target("/file", None))).await.unwrap();
+        tx.send(Ok(chunk(b"NEW"))).await.unwrap();
+        let task_state = state.clone();
+        let task = tokio::spawn(async move {
+            let mut stream = futures_util::stream::unfold(rx, |mut rx| async {
+                rx.recv().await.map(|v| (v, rx))
+            })
+            .boxed();
+            write_stream(&task_state, &mut stream).await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if std::fs::read_dir(dir.path()).unwrap().any(|e| {
+                    e.unwrap()
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".operon-write-")
+                }) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        drop(tx);
+        assert_eq!(std::fs::read(dir.path().join("file")).unwrap(), b"ORIGINAL");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        let mut stream = futures_util::stream::iter([Ok(target("/file", None))]);
+        let result = write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(result.bytes_written, 0);
+        assert_eq!(result.stat.unwrap().size, 0);
+        assert!(std::fs::read(dir.path().join("file")).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn stream_rechecks_version_after_concurrent_mutation() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = writable_state(dir.path().into());
+        std::fs::write(dir.path().join("file"), b"ORIGINAL").unwrap();
+        let version = fs_version(&std::fs::metadata(dir.path().join("file")).unwrap());
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        tx.send(Ok(target("/file", Some(version)))).await.unwrap();
+        tx.send(Ok(chunk(b"NEW"))).await.unwrap();
+        let task_state = state.clone();
+        let task = tokio::spawn(async move {
+            let mut stream = futures_util::stream::unfold(rx, |mut rx| async {
+                rx.recv().await.map(|v| (v, rx))
+            })
+            .boxed();
+            write_stream(&task_state, &mut stream).await
+        });
+        for _ in 0..1000 {
+            if std::fs::read_dir(dir.path()).unwrap().any(|e| {
+                e.unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".operon-write-")
+            }) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        // A successful range mutation is coordinated with stream commit, but
+        // never held behind an unfinished client stream.
+        write_range(&state, "/file".into(), 0, b"CONCURRENT".to_vec(), None)
+            .await
+            .unwrap();
+        drop(tx);
+        assert_eq!(
+            task.await.unwrap().unwrap_err().code(),
+            tonic::Code::FailedPrecondition
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("file")).unwrap(),
+            b"CONCURRENT"
+        );
+    }
+
+    #[tokio::test]
+    async fn replacement_preserves_mode_and_old_handles() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, b"ORIGINAL").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+            std::fs::hard_link(&path, dir.path().join("link")).unwrap();
+        }
+        #[cfg(unix)]
+        let mut old = std::fs::File::open(&path).unwrap();
+        #[cfg(not(unix))]
+        let _old = std::fs::File::open(&path).unwrap();
+        let state = writable_state(dir.path().into());
+        let mut stream = futures_util::stream::iter([Ok(target("/file", None)), Ok(chunk(b"NEW"))]);
+        write_stream(&state, &mut stream).await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"NEW");
+        #[cfg(unix)]
+        {
+            use std::io::Read;
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o640
+            );
+            let mut data = Vec::new();
+            old.read_to_end(&mut data).unwrap();
+            assert_eq!(data, b"ORIGINAL");
+            assert_eq!(std::fs::read(dir.path().join("link")).unwrap(), b"ORIGINAL");
+        }
+    }
+
+    #[tokio::test]
+    async fn range_fill_handles_small_reads_eof_and_zero_size() {
+        let (mut writer, mut reader) = tokio::io::duplex(3);
+        let send = tokio::spawn(async move {
+            writer.write_all(b"0123456789").await.unwrap();
+        });
+        let mut data = [0; 16];
+        assert_eq!(fill_range(&mut reader, &mut data).await.unwrap(), 10);
+        assert_eq!(&data[..10], b"0123456789");
+        assert_eq!(fill_range(&mut reader, &mut []).await.unwrap(), 0);
+        send.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn range_fill_exceeds_tokio_file_buffer_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("large");
+        let source = (0..9 * 1024 * 1024)
+            .map(|i| (i % 251) as u8)
+            .collect::<Vec<_>>();
+        std::fs::write(&path, &source).unwrap();
+        let mut file = tokio::fs::File::open(path).await.unwrap();
+        file.seek(std::io::SeekFrom::Start(37)).await.unwrap();
+        let mut data = vec![0; 8 * 1024 * 1024];
+        assert_eq!(fill_range(&mut file, &mut data).await.unwrap(), data.len());
+        assert_eq!(data, source[37..37 + data.len()]);
+    }
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(

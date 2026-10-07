@@ -1,12 +1,21 @@
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use anyhow::Context;
 use operon_core::{AuditEvent, ExecLog, ExecRecord};
 
 pub const DEFAULT_STORE_PATH: &str = "operon.db";
+
+mod recovery;
+mod writer;
+pub use recovery::recover_store;
+
+// Includes independent writers and the legacy append_record entrypoint.
+// A complete record may require more than one OS write, even with O_APPEND.
+static APPEND_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum FsyncPolicy {
@@ -19,6 +28,7 @@ pub enum FsyncPolicy {
 pub struct StoreWriter {
     path: Option<PathBuf>,
     fsync_policy: FsyncPolicy,
+    worker: Arc<Mutex<Option<Arc<writer::Worker>>>>,
 }
 
 impl StoreWriter {
@@ -26,6 +36,7 @@ impl StoreWriter {
         Self {
             path,
             fsync_policy: FsyncPolicy::default(),
+            worker: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -35,37 +46,40 @@ impl StoreWriter {
     }
 
     pub fn append_json_value(&self, record: &serde_json::Value) -> anyhow::Result<()> {
-        append_record_with_policy(self.path.as_deref(), record, self.fsync_policy)
+        let Some(path) = self.path.as_deref() else {
+            return Ok(());
+        };
+        let mut line = serde_json::to_vec(record).context("failed to serialize store record")?;
+        line.push(b'\n');
+        self.worker(path)?
+            .append(line, self.fsync_policy)
+            .with_context(|| format!("failed to append store record {}", path.display()))
+    }
+
+    fn worker(&self, path: &Path) -> anyhow::Result<Arc<writer::Worker>> {
+        let mut worker = self
+            .worker
+            .lock()
+            .map_err(|_| anyhow::anyhow!("store writer lock poisoned"))?;
+        if worker.is_none() {
+            *worker = Some(writer::worker_for(path)?);
+        }
+        worker
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("store writer unavailable"))
+    }
+
+    /// Ordered barrier: all preceding records have been written and synced.
+    pub fn flush(&self) -> anyhow::Result<()> {
+        let Some(path) = self.path.as_deref() else {
+            return Ok(());
+        };
+        self.worker(path)?.append(Vec::new(), FsyncPolicy::Always)
     }
 }
 
 pub fn append_record(path: Option<&Path>, record: &serde_json::Value) -> anyhow::Result<()> {
-    append_record_with_policy(path, record, FsyncPolicy::default())
-}
-
-fn append_record_with_policy(
-    path: Option<&Path>,
-    record: &serde_json::Value,
-    fsync_policy: FsyncPolicy,
-) -> anyhow::Result<()> {
-    let Some(path) = path else {
-        return Ok(());
-    };
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create store directory {}", parent.display()))?;
-    }
-    let line = serde_json::to_string(record).context("failed to serialize store record")?;
-    open_store_file(path)
-        .and_then(|mut file| {
-            use std::io::Write;
-            writeln!(file, "{line}")?;
-            if fsync_policy == FsyncPolicy::Always {
-                file.sync_data()?;
-            }
-            Ok(())
-        })
-        .with_context(|| format!("failed to append store record {}", path.display()))
+    StoreWriter::new(path.map(Path::to_path_buf)).append_json_value(record)
 }
 
 fn open_store_file(path: &Path) -> std::io::Result<std::fs::File> {
@@ -95,10 +109,8 @@ pub fn load_execs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, ExecRe
     if !path.exists() {
         return Ok(BTreeMap::new());
     }
-    let content = std::fs::read_to_string(path)?;
     let mut execs = BTreeMap::new();
-    for line in content.lines().filter(|line| !line.trim().is_empty()) {
-        let value: serde_json::Value = serde_json::from_str(line)?;
+    for value in recovery::load_records(path)? {
         if value.get("kind").and_then(serde_json::Value::as_str) != Some("exec") {
             continue;
         }
@@ -117,10 +129,8 @@ pub fn load_audit_events(path: Option<&Path>) -> anyhow::Result<Vec<AuditEvent>>
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let content = std::fs::read_to_string(path)?;
     let mut events = Vec::new();
-    for line in content.lines().filter(|line| !line.trim().is_empty()) {
-        let value: serde_json::Value = serde_json::from_str(line)?;
+    for value in recovery::load_records(path)? {
         if value.get("kind").and_then(serde_json::Value::as_str) != Some("audit") {
             continue;
         }
@@ -138,10 +148,8 @@ pub fn load_exec_logs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, Ve
     if !path.exists() {
         return Ok(BTreeMap::new());
     }
-    let content = std::fs::read_to_string(path)?;
     let mut logs = BTreeMap::<String, Vec<ExecLog>>::new();
-    for line in content.lines().filter(|line| !line.trim().is_empty()) {
-        let value: serde_json::Value = serde_json::from_str(line)?;
+    for value in recovery::load_records(path)? {
         if value.get("kind").and_then(serde_json::Value::as_str) != Some("exec_log") {
             continue;
         }
@@ -164,6 +172,45 @@ pub fn default_store_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concurrent_writers_preserve_complete_records_and_producer_order() {
+        for policy in [FsyncPolicy::Always, FsyncPolicy::Disabled] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("store");
+            let writer = StoreWriter::new(Some(path.clone())).with_fsync_policy(policy);
+            std::thread::scope(|scope| {
+                for producer in 0..8 {
+                    // Exercise both clones and independently constructed writers.
+                    let writer = if producer % 2 == 0 {
+                        writer.clone()
+                    } else {
+                        StoreWriter::new(Some(path.clone())).with_fsync_policy(policy)
+                    };
+                    scope.spawn(move || {
+                        for sequence in 0..30 {
+                            writer
+                                .append_json_value(&serde_json::json!({
+                                    "kind": (["audit", "exec", "exec_log"][sequence % 3]),
+                                    "producer": producer, "sequence": sequence,
+                                    "text": r#"中文 \"{}\""#,
+                                }))
+                                .unwrap();
+                        }
+                    });
+                }
+            });
+            let content = std::fs::read_to_string(path).unwrap();
+            let mut next = [0; 8];
+            for line in content.lines() {
+                let value: serde_json::Value = serde_json::from_str(line).unwrap();
+                let producer = value["producer"].as_u64().unwrap() as usize;
+                assert_eq!(value["sequence"].as_u64().unwrap(), next[producer]);
+                next[producer] += 1;
+            }
+            assert_eq!(next, [30; 8]);
+        }
+    }
 
     #[test]
     fn default_store_path_is_stable() {
