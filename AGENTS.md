@@ -390,8 +390,13 @@ Operon should not own:
     mount, Windows runner, artifact, install, and README verification.
 
 - `docs/plan/v0.16.10-release-publication.md`
-  - Active v0.16.10 scope for runtime correctness/performance acceptance,
+  - Completed v0.16.10 scope for runtime correctness/performance acceptance,
     ops/s-based evidence and exact-commit public release verification.
+
+- `docs/plan/v0.18.13-runtime-correctness-performance-roadmap.md`
+  - Completed Phases 126–130 for store integrity/recovery, range-read and
+    transport limits, staged filesystem replacement, bounded group commit,
+    filesystem RPC reuse and ops/s-first benchmarks with native platform CI.
 
 - `docs/plan/v0.17-release-ci-observability.md`
   - Completed v0.17 scope for CI/release observability cleanup, including
@@ -1284,3 +1289,13 @@ Defer:
   Runner Image Smoke `33240802218`, Draft Release `33241165888`, release
   artifact verification `33241405981`, install usability `33241409216`, and
   README Quickstart `33241407123` all passed. Nothing remains in v0.16.9.
+- Latest phase status update: Phases 126–130 runtime correctness/performance
+  acceptance and Phase 131 v0.16.10 public release are completed. Release
+  commit `f395ae5af18a1c2a62219b1974a99e5b11498f81` was published at
+  `https://github.com/denghongcai/Operon/releases/tag/v0.16.10`. CI
+  `37635047230`, CodeQL `37635047043`, cross-platform live mount `37635047604`,
+  Windows runner `37635052512`, Draft Release `37636157453`, public artifacts
+  `37637935879`, install/service verification `37637942865` and README
+  Quickstart `37637950656` passed. Ops/s is the primary performance evidence;
+  distinct-file parallel FUSE reads regress 10–15% and remain a documented
+  tradeoff, not a generic read-speedup claim. Nothing remains in these phases.

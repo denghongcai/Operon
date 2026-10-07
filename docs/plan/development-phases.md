@@ -6967,7 +6967,7 @@ Remaining:
 
 ## Phase 125: v0.16.9 Performance and Persistence Investigation
 
-Status: Investigation completed; remediation pending.
+Status: Investigation completed; remediation completed in Phases 126–130.
 
 Goal: verify the external performance analysis using isolated Docker tests
 before selecting runtime optimizations.
@@ -6997,7 +6997,7 @@ Follow-up roadmap:
 
 ## Phase 126: v0.18.13 Store Record Integrity and Restart Recovery
 
-Status: Implemented; Linux validation passed; native platform CI pending.
+Status: Completed.
 
 Implemented complete-record serialization shared across clones and independent
 writers, consistent recovery loaders, source-preserving recovery backups and
@@ -7041,14 +7041,15 @@ Dependencies: Phase 126 for reliable integration persistence.
 
 ## Phase 128: v0.18.15 Streaming File Replacement Failure Semantics
 
-Status: Implemented; complete Linux acceptance passed; native CI pending.
+Status: Completed.
 
 Implemented same-directory staging, commit-time precondition checks, coordinated
 daemon mutations, cleanup and platform replacement helpers. Tested malformed
 and cancelled streams, actual future cancellation, empty replacement, metadata,
 Unix modes and old-handle/hard-link visibility. Write/flush/commit injection,
 commit-time require_absent races, symlinks and Linux ACL tests also pass.
-Native macOS ACL and Windows DACL/sharing fixtures are awaiting CI.
+Native macOS ACL and Windows DACL/sharing fixtures also passed in final CI
+`37635047230` on release commit `f395ae5af18a1c2a62219b1974a99e5b11498f81`.
 
 Goal: a failed full-file stream preserves the previous target contents.
 
@@ -7088,7 +7089,7 @@ Dependencies: Phase 126; sequence after Phases 127–128 correctness fixes.
 
 ## Phase 130: v0.18.17 Filesystem RPC Efficiency and Benchmarks
 
-Status: Implemented; repeated Linux Docker validation passed.
+Status: Completed.
 
 Added optional authoritative FsWrite metadata, old-peer Stat fallback, mount
 inode refresh reuse, CLI pagination connection reuse and 64KiB read streams.
@@ -7114,18 +7115,29 @@ Dependencies: Phases 127–129.
 For detailed scope, acceptance and deferred items for Phases 126–130, see
 `docs/plan/v0.18.13-runtime-correctness-performance-roadmap.md`. These are
 internal maintenance identifiers; no public version bump or publication is
-included in this implementation task. Native cross-platform CI remains a
-release gate, not a result inferred from cross-compilation.
+included in the initial implementation task; the subsequent user authorization
+adds Phase 131 publication. Native CI `37635047230`, CodeQL `37635047043`, live
+mount `37635047604` and Windows runner `37635052512` passed on the exact release
+commit. Final ops/s evidence is `/tmp/operon-phases-zpjxhhzb` (clean source HEAD).
 
 ## Phase 131: v0.16.10 Runtime Correctness and Performance Release
 
-Status: In Progress.
+Status: Completed.
 
 Complete remaining Phase 126–130 acceptance on all supported platforms,
 evaluate performance primarily in ops/s, commit and push, pass exact-commit
 CI/CodeQL/live-mount/Windows-runner gates, publish `v0.16.10` and verify public
 artifacts, install usability and README Quickstart. See
 `docs/plan/v0.16.10-release-publication.md` for gate evidence.
+
+Published `v0.16.10` from `f395ae5af18a1c2a62219b1974a99e5b11498f81` at
+`https://github.com/denghongcai/Operon/releases/tag/v0.16.10`. CI `37635047230`,
+CodeQL `37635047043`, live mount `37635047604`, Windows runner `37635052512`,
+Draft Release `37636157453`, public artifacts `37637935879`, install/service
+verification `37637942865` and README Quickstart `37637950656` passed.
+Both release orchestration modes passed. All Phase 126–131 acceptance work
+is complete; performance conclusions use ops/s first and retain the disclosed
+10–15% distinct-file parallel FUSE read regression.
 
 ## Planning Principle
 
