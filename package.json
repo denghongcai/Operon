@@ -9,7 +9,10 @@
   },
   "pnpm": {
     "overrides": {
-      "@grpc/grpc-js": "1.14.4",
+      "@grpc/grpc-js": "1.14.5",
+      "nanoid": "3.3.18",
+      "postcss": "8.5.23",
+      "source-map-js": "1.2.2",
       "esbuild": "0.28.1",
       "vite": "8.0.16"
     }
