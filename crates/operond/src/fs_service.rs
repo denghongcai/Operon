@@ -1424,7 +1424,17 @@ mod tests {
         assert!(task.await.unwrap_err().is_cancelled());
         drop(tx);
         assert_eq!(std::fs::read(dir.path().join("file")).unwrap(), b"ORIGINAL");
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        // Aborting an async task does not stop Tokio's already-started blocking
+        // file operations. On Windows a deleted open file can remain visible
+        // until those handles close. Require cleanup, but allow that work to
+        // finish instead of asserting synchronously after JoinHandle abort.
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while std::fs::read_dir(dir.path()).unwrap().count() != 1 {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("cancelled upload must clean its staging file");
         let mut stream = futures_util::stream::iter([Ok(target("/file", None))]);
         let result = write_stream(&state, &mut stream).await.unwrap();
         assert_eq!(result.bytes_written, 0);
