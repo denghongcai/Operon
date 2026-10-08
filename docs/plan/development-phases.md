@@ -7251,7 +7251,17 @@ versions and avoid inferring runtime support from compilation alone.
 
 ## Phase 138: v0.18.23 Alpine Runtime and Live FUSE Acceptance
 
-Status: Planned. Depends on Phase 137.
+Status: In progress. Native builds and packaged integration passed on both
+architectures in run `37793265644`, commit `bef76d2cf7283d5a4e7b101bfbd8f6dce469f684`.
+
+Actual x86_64 Alpine 3.22/3.23 packaged-binary integration passed. The new real
+runtime/FUSE fixture passed root mounting, binary range/truncate/rename, daemon
+restart recovery, clean unmount, auth rejection, PTY, TCP/UDP, source errors and
+root replacement rejection on Alpine 3.22. Non-root live acceptance also passed
+on Alpine 3.22 and 3.23 (UID 1000). Composite create/read/delete measured 115.97
+and 120.92 ops/s respectively; these are fixture metrics, not comparative claims.
+Native arm64 live mounts and broader failure/comparative performance evidence
+remain required. Required live FUSE acceptance is now wired into the native CI.
 
 Validate packaged binaries on both native architectures: config/auth/policy,
 foreground daemon, filesystem/exec/PTY/forwarding, deadlines, containment,

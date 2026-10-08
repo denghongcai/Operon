@@ -8,6 +8,7 @@ on:
       - 'vendor/**'
       - 'Cargo.*'
       - 'scripts/*musl*'
+      - 'scripts/alpine-*'
       - '.github/workflows/alpine-musl-acceptance.yml'
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'vendor/**'
       - 'Cargo.*'
       - 'scripts/*musl*'
+      - 'scripts/alpine-*'
       - '.github/workflows/alpine-musl-acceptance.yml'
 
 permissions:
@@ -83,6 +85,31 @@ jobs:
                 cd /workspace
                 bash scripts/verify-v0.8.1-integration-coverage.sh
               '
+          done
+      - name: Native Alpine live FUSE and runtime acceptance
+        run: |
+          if ! test -c /dev/fuse; then sudo modprobe fuse; fi
+          test -c /dev/fuse
+          for image in \
+            alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
+            alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0; do
+            for identity in root nonroot; do
+              docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined \
+                --mount type=bind,src="$PWD",dst=/workspace,readonly \
+                --mount type=bind,src="$PWD/target/alpine-native/${{ matrix.target }}/release",dst=/operon,readonly \
+                -e OPERON_ALPINE_IDENTITY="$identity" \
+                -e OPERON_ALPINE_ACCEPT_TIMEOUT_SECS="${OPERON_ALPINE_ACCEPT_TIMEOUT_SECS:-120}" \
+                -e OPERON_ALPINE_STOP_TIMEOUT_SECS="${OPERON_ALPINE_STOP_TIMEOUT_SECS:-60}" \
+                "$image" /bin/sh -ec '
+                  apk add --no-cache python3 fuse3 >/dev/null
+                  if [ "$OPERON_ALPINE_IDENTITY" = nonroot ]; then
+                    adduser -D -u 1000 operon-test
+                    su operon-test -s /bin/sh -c "python3 /workspace/scripts/alpine-runtime-acceptance.py --bin-dir /operon --live-mount"
+                  else
+                    python3 /workspace/scripts/alpine-runtime-acceptance.py --bin-dir /operon --live-mount
+                  fi
+                '
+            done
           done
       - name: Upload native binaries
         uses: actions/upload-artifact@v7
