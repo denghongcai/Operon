@@ -533,6 +533,12 @@ Clients should handle normal gRPC status codes:
 The status message is intended to be human-readable. Scripts should branch on
 the gRPC status code, not on message text.
 
+Filesystem deletion of a non-empty directory returns `FailedPrecondition` with
+status metadata `operon-fs-error-kind: directory-not-empty`. Mount adapters use
+this portable discriminator for Unix `ENOTEMPTY` / Windows
+`STATUS_DIRECTORY_NOT_EMPTY`; other failed preconditions retain their existing
+mapping. Clients must not infer an OS errno from localized error text.
+
 ## grpcurl Examples
 
 `grpcurl` can call unary methods without an SDK:

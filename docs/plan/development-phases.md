@@ -7274,6 +7274,10 @@ integrity-checked stream write 93.65/76.36 and read 107.94/83.29 operations/s.
 CLI startup is included; these are not pure RPC throughput measurements.
 musl is not universally faster. Native arm64 comparative and final-release
 downloaded-binary comparison remain required and are wired into CI/public gates.
+Real non-root failure acceptance exposed a directory-not-empty error being
+reported as generic EIO. Added portable gRPC filesystem-error metadata and
+platform mappings to Unix ENOTEMPTY / Windows STATUS_DIRECTORY_NOT_EMPTY,
+with focused tests and actual FUSE negative checks; final native reruns remain.
 
 Validate packaged binaries on both native architectures: config/auth/policy,
 foreground daemon, filesystem/exec/PTY/forwarding, deadlines, containment,
@@ -7343,7 +7347,19 @@ do not imply a protocol schema change; OpenRC has dedicated service acceptance.
 
 ## Phase 141: v0.16.12 Verified musl / Alpine Public Release
 
-Status: Planned. Depends on Phases 137–140. Public version is prospective.
+Status: In progress. Depends on final Phases 137–140 acceptance.
+
+Confirmed v0.16.12 is not yet published. Rust/SDK package versions, reported
+protocol version, binary tests and current workflow/examples are aligned to
+0.16.12 / v0.16.12. Historical v0.16.11 evidence remains pinned without forcing
+current manifests back to the historical version. Release preparation checks
+are registered in the core group. Publication and final exact-SHA gates remain.
+Local full Rust workspace tests, all 13 SDK validation scripts, all 17 runtime
+scripts, all four Linux system/Docker/read-write FUSE/glibc checks and SDK
+typecheck/test/build passed. Production dependency audit reports no known
+vulnerabilities. Strict Rust 1.88 workspace clippy passed after three mechanical
+CLI format-argument alignments (same output). A repeated core run is finishing
+cross-target compilation; final commit native/platform/public gates remain.
 
 Complete full local/native/Alpine acceptance, confirm/align the next public
 version, commit/push and pass exact-SHA pretag gates before tagging. Verify

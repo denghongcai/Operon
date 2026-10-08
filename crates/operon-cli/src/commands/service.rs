@@ -77,7 +77,7 @@ pub(crate) async fn forward(
             "listen": local_addr.to_string(),
         }))?;
     } else if !output.quiet {
-        println!("forwarding {} -> {}:{}", local_addr, node_id, service_id);
+        println!("forwarding {local_addr} -> {node_id}:{service_id}");
     }
 
     loop {
@@ -88,10 +88,7 @@ pub(crate) async fn forward(
             if let Err(error) =
                 grpc_service::forward_service_connection(&endpoint, &service_id, socket).await
             {
-                eprintln!(
-                    "service forward connection from {} failed: {:#}",
-                    peer_addr, error
-                );
+                eprintln!("service forward connection from {peer_addr} failed: {error:#}");
             }
         });
     }
@@ -115,10 +112,7 @@ pub(crate) async fn forward_udp(
             "protocol": "udp",
         }))?;
     } else if !output.quiet {
-        println!(
-            "forwarding udp {} -> {}:{}",
-            local_addr, node_id, service_id
-        );
+        println!("forwarding udp {local_addr} -> {node_id}:{service_id}");
     }
 
     grpc_service::forward_service_datagrams(&endpoint, &service_id, socket).await

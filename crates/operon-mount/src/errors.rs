@@ -6,6 +6,7 @@ pub(crate) fn errno_for_error(error: &anyhow::Error) -> fuser::Errno {
     match classify_mount_error(error) {
         MountErrorKind::NotFound => fuser::Errno::ENOENT,
         MountErrorKind::AlreadyExists => fuser::Errno::EEXIST,
+        MountErrorKind::DirectoryNotEmpty => fuser::Errno::ENOTEMPTY,
         MountErrorKind::PermissionDenied => fuser::Errno::EACCES,
         MountErrorKind::InvalidInput => fuser::Errno::EINVAL,
         MountErrorKind::FailedPrecondition => fuser::Errno::EPERM,
@@ -60,6 +61,21 @@ mod tests {
         assert_eq!(
             errno_debug(errno_for_error(&anyhow::anyhow!("plain error"))),
             errno_debug(fuser::Errno::EIO)
+        );
+    }
+
+    #[test]
+    fn maps_typed_nonempty_directory_without_parsing_error_text() {
+        let mut status = tonic::Status::failed_precondition("localized error text");
+        status.metadata_mut().insert(
+            operon_protocol::FS_ERROR_KIND_METADATA,
+            tonic::metadata::MetadataValue::from_static(
+                operon_protocol::FS_ERROR_DIRECTORY_NOT_EMPTY,
+            ),
+        );
+        assert_eq!(
+            errno_debug(errno_for_error(&status.into())),
+            errno_debug(fuser::Errno::ENOTEMPTY)
         );
     }
 

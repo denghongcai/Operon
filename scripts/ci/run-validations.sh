@@ -37,6 +37,7 @@ validations=(
   "runtime|Alpine OpenRC and Shutdown Contracts|scripts/verify-alpine-openrc-contract.sh"
   "core|musl Build and Static Verifier Contract|scripts/verify-musl-build-contract.sh"
   "core|v0.16.11 Release Publication Validation|scripts/verify-v0.16.11-release-publication.sh"
+  "core|v0.16.12 Release Publication Validation|scripts/verify-v0.16.12-release-publication.sh"
   "runtime|Transport Workspace and Secondary Hardening Validation|scripts/verify-transport-workspace-secondary.sh"
   "runtime|Runtime Correctness and Filesystem Efficiency Validation|scripts/verify-runtime-correctness-performance.sh"
   "linux-system|v0.5 Docker Validation|scripts/verify-v0.5-docker.sh"

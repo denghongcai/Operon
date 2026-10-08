@@ -47,7 +47,9 @@ require_pattern 'platform live mount' README.md
 require_pattern 'macos-x86_64' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'macos-aarch64' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'windows-x86_64' docs/architecture/technology-and-protocol-decisions.md
-require_pattern 'core runtime preview' docs/architecture/technology-and-protocol-decisions.md
+# Preview wording is historical; current architecture documents live-mount parity.
+require_pattern 'preview' docs/plan/v0.12-release-distribution-readiness.md
+require_pattern 'FUSE-T|WinFsp' docs/architecture/technology-and-protocol-decisions.md
 
 require_pattern 'macos-x86_64' scripts/verify-readme-quickstart-docker.sh
 

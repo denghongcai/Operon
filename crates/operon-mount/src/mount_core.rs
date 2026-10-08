@@ -42,6 +42,7 @@ pub struct MountDirectoryEntry {
 pub enum MountErrorKind {
     NotFound,
     AlreadyExists,
+    DirectoryNotEmpty,
     PermissionDenied,
     InvalidInput,
     FailedPrecondition,
@@ -160,7 +161,17 @@ pub fn classify_mount_error(error: &anyhow::Error) -> MountErrorKind {
                 return MountErrorKind::PermissionDenied;
             }
             tonic::Code::InvalidArgument => return MountErrorKind::InvalidInput,
-            tonic::Code::FailedPrecondition => return MountErrorKind::FailedPrecondition,
+            tonic::Code::FailedPrecondition => {
+                if status
+                    .metadata()
+                    .get(operon_protocol::FS_ERROR_KIND_METADATA)
+                    .and_then(|value| value.to_str().ok())
+                    == Some(operon_protocol::FS_ERROR_DIRECTORY_NOT_EMPTY)
+                {
+                    return MountErrorKind::DirectoryNotEmpty;
+                }
+                return MountErrorKind::FailedPrecondition;
+            }
             _ => {}
         }
     }

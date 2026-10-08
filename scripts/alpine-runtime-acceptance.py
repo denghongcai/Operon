@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual packaged-binary Alpine runtime/live-FUSE acceptance (no skip gates)."""
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -192,6 +193,23 @@ with tempfile.TemporaryDirectory(prefix='operon-alpine-runtime-') as tmp:
             wait_for(lambda: os.path.ismount(mount), 'real FUSE mount')
             mounted = True
             assert (mount / 'survivor').read_bytes() == b'ORIGINAL'
+            def expect_errno(expected, operation):
+                try:
+                    operation()
+                except OSError as error:
+                    assert error.errno == expected, (expected, error)
+                else:
+                    raise AssertionError('expected FUSE errno', expected)
+
+            expect_errno(errno.ENOENT, lambda: (mount / 'absent').read_bytes())
+            directory = mount / 'errno-directory'
+            directory.mkdir()
+            expect_errno(errno.EEXIST, directory.mkdir)
+            (directory / 'child').write_bytes(b'errno-integrity')
+            expect_errno(errno.ENOTEMPTY, directory.rmdir)
+            assert (directory / 'child').read_bytes() == b'errno-integrity'
+            (directory / 'child').unlink()
+            directory.rmdir()
             start = time.monotonic()
             for i in range(args.operations):
                 path = mount / f'item-{i}'
