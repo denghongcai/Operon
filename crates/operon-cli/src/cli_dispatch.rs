@@ -14,6 +14,12 @@ use crate::{
 };
 
 pub(crate) async fn dispatch(args: Args) -> anyhow::Result<()> {
+    crate::target::TRANSPORT_OVERRIDES
+        .scope(args.transport.clone(), dispatch_inner(args))
+        .await
+}
+
+async fn dispatch_inner(args: Args) -> anyhow::Result<()> {
     let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
     let output = OutputMode {
         json: args.json,

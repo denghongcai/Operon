@@ -125,6 +125,13 @@ where
 
     tracing::info!("operond gRPC listening on {}", loaded.grpc_listen);
     Server::builder()
+        .http2_keepalive_interval(operon_config::TransportConfig::timeout(
+            loaded.transport.keepalive_interval_secs,
+        ))
+        .http2_keepalive_timeout(operon_config::TransportConfig::timeout(
+            loaded.transport.keepalive_timeout_secs,
+        ))
+        .http2_adaptive_window(Some(loaded.transport.adaptive_window))
         .add_service(
             GrpcRuntime {
                 state: loaded.state,
@@ -550,6 +557,7 @@ mod tests {
         let mut secrets = BTreeMap::new();
         secrets.insert("TEST_SECRET".to_string(), "secret-value".to_string());
         let state = AppState {
+            workspace_resolver: None,
             node: NodeInfo {
                 id: "node-a".to_string(),
                 hostname: "host".to_string(),
@@ -557,7 +565,6 @@ mod tests {
                 arch: "x86_64".to_string(),
             },
             capabilities: capabilities_from_policy("node-a", &test_policy()),
-            workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
             store_writer: operon_store::StoreWriter::new(None),
@@ -589,6 +596,7 @@ mod tests {
     #[tokio::test]
     async fn audit_event_uses_policy_subject_capability_and_context() {
         let state = AppState {
+            workspace_resolver: None,
             node: NodeInfo {
                 id: "node-a".to_string(),
                 hostname: "host".to_string(),
@@ -596,7 +604,6 @@ mod tests {
                 arch: "x86_64".to_string(),
             },
             capabilities: capabilities_from_policy("node-a", &test_policy()),
-            workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
             store_writer: operon_store::StoreWriter::new(None),
@@ -637,6 +644,7 @@ mod tests {
     #[test]
     fn audit_log_is_bounded_in_memory() {
         let state = AppState {
+            workspace_resolver: None,
             node: NodeInfo {
                 id: "node-a".to_string(),
                 hostname: "host".to_string(),
@@ -644,7 +652,6 @@ mod tests {
                 arch: "x86_64".to_string(),
             },
             capabilities: capabilities_from_policy("node-a", &test_policy()),
-            workspace: PathBuf::from("/workspace"),
             policy: test_policy(),
             auth_token: None,
             store_writer: operon_store::StoreWriter::new(None),

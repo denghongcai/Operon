@@ -148,6 +148,7 @@ fn discovered_nodes(list: &DiscoveryList) -> BTreeMap<String, NodeConfig> {
         nodes.insert(
             node.node_id.clone(),
             NodeConfig {
+                transport: Default::default(),
                 endpoint: node.endpoint.clone(),
                 auth: operon_config::AuthConfig::default(),
             },
@@ -181,6 +182,7 @@ async fn check_discovered_health(list: &DiscoveryList) -> BTreeMap<String, Disco
     let mut health = BTreeMap::new();
     for node in &list.nodes {
         let endpoint = operon_core::runtime::NodeEndpoint {
+            transport: Default::default(),
             node_id: node.node_id.clone(),
             endpoint: node.endpoint.clone(),
             token: None,

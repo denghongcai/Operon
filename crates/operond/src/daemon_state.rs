@@ -18,6 +18,7 @@ use crate::{
 };
 
 pub(crate) struct LoadedDaemonRuntime {
+    pub(crate) transport: operon_config::TransportConfig,
     pub(crate) state: AppState,
     pub(crate) grpc_listen: SocketAddr,
     pub(crate) node_id: String,
@@ -176,10 +177,17 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
         arch: env::consts::ARCH.to_string(),
     };
     let capabilities = capabilities_from_policy(&node.id, &policy);
+    let workspace_resolver =
+        operon_fs::WorkspaceResolver::new(&daemon.workspace).map_err(|(_, message)| {
+            DaemonStartupError::new(
+                DaemonStartupErrorKind::DaemonSection,
+                format!("invalid workspace root: {message}"),
+            )
+        })?;
     let state = AppState {
+        workspace_resolver: Some(Arc::new(workspace_resolver)),
         capabilities: capabilities.clone(),
         node,
-        workspace: daemon.workspace,
         policy,
         auth_token,
         store_writer,
@@ -193,6 +201,7 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
     };
 
     Ok(LoadedDaemonRuntime {
+        transport: daemon.transport,
         state,
         grpc_listen: daemon.grpc_listen,
         node_id: daemon.node_id,
@@ -317,6 +326,9 @@ pub(crate) fn test_state(
     workspace: std::path::PathBuf,
 ) -> AppState {
     AppState {
+        workspace_resolver: operon_fs::WorkspaceResolver::new(&workspace)
+            .ok()
+            .map(Arc::new),
         node: NodeInfo {
             id: "node-a".to_string(),
             hostname: "host".to_string(),
@@ -324,7 +336,6 @@ pub(crate) fn test_state(
             arch: "x86_64".to_string(),
         },
         capabilities: capabilities_from_policy("node-a", &policy),
-        workspace,
         policy,
         auth_token: None,
         store_writer: operon_store::StoreWriter::new(None),
@@ -453,7 +464,7 @@ version: 1
 daemon:
   node_id: local
   grpc_listen: "{listen}"
-  workspace: /workspace
+  workspace: .
 "#
                 ),
             )
@@ -491,7 +502,7 @@ version: 1
 daemon:
   node_id: local
   grpc_listen: 0.0.0.0:0
-  workspace: /workspace
+  workspace: .
   auth:
 {auth_yaml}"#
                 ),

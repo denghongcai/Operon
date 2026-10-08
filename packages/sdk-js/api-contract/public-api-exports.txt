@@ -34,3 +34,4 @@ ServiceDatagramTunnelEvent
 ServiceDefinition
 ServiceList
 ServicePermissions
+TransportConfig

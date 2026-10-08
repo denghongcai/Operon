@@ -33,6 +33,8 @@ case "$requested_group" in
 esac
 
 validations=(
+  "core|v0.16.11 Release Publication Validation|scripts/verify-v0.16.11-release-publication.sh"
+  "runtime|Transport Workspace and Secondary Hardening Validation|scripts/verify-transport-workspace-secondary.sh"
   "runtime|Runtime Correctness and Filesystem Efficiency Validation|scripts/verify-runtime-correctness-performance.sh"
   "linux-system|v0.5 Docker Validation|scripts/verify-v0.5-docker.sh"
   "linux-system|v0.6 Linux Mount Validation|scripts/verify-v0.6-linux-mount.sh"

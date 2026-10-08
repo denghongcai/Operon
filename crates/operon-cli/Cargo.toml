@@ -1,6 +1,6 @@
 [package]
 name = "operon-cli"
-version = "0.16.10"
+version = "0.16.11"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -28,6 +28,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tonic.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
@@ -41,5 +42,6 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Securit
 winfsp_wrs_build = "0.4.1"
 
 [dev-dependencies]
+http-body = "1"
 tempfile.workspace = true
 tonic-prost.workspace = true

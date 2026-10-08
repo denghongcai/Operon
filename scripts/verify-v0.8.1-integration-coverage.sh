@@ -132,6 +132,44 @@ assert stat["size"] == 5, stat
 PY
 "$OPERON" --config "$CONFIG_PATH" fs rm local:/copy.txt
 
+# P10: bounded uploads and binary stdout across many protobuf chunks.
+dd if=/dev/urandom of="$TMP_DIR/binary-input" bs=1048576 count=40 status=none
+"$OPERON" --config "$CONFIG_PATH" --rpc-timeout-secs 1 --transfer-timeout-secs 120 \
+  fs write local:/binary --file "$TMP_DIR/binary-input"
+"$OPERON" --config "$CONFIG_PATH" fs read local:/binary >"$TMP_DIR/binary-stdout"
+cmp "$TMP_DIR/binary-input" "$TMP_DIR/binary-stdout"
+"$OPERON" --config "$CONFIG_PATH" fs read local:/binary --output "$TMP_DIR/binary-output"
+cmp "$TMP_DIR/binary-input" "$TMP_DIR/binary-output"
+"$OPERON" --config "$CONFIG_PATH" --quiet fs read local:/binary >"$TMP_DIR/binary-quiet"
+test ! -s "$TMP_DIR/binary-quiet"
+if "$OPERON" --config "$CONFIG_PATH" --json fs read local:/binary >"$TMP_DIR/binary-json" 2>"$TMP_DIR/binary-json-error"; then
+  echo "JSON content must reject non-UTF8 data" >&2
+  exit 1
+fi
+touch "$TMP_DIR/empty-input"
+"$OPERON" --config "$CONFIG_PATH" fs write local:/empty --file "$TMP_DIR/empty-input"
+"$OPERON" --config "$CONFIG_PATH" fs read local:/empty >"$TMP_DIR/empty-output"
+test ! -s "$TMP_DIR/empty-output"
+
+# Ordinary deadlines must not expire healthy watch/log stream lifetimes.
+"$OPERON" --config "$CONFIG_PATH" --rpc-timeout-secs 1 exec run local --timeout-secs 10 \
+  -- 'sleep 2; printf long-lived-ok' >"$TMP_DIR/long-lived-exec"
+grep -q 'Succeeded' "$TMP_DIR/long-lived-exec"
+
+"$OPERON" --config "$CONFIG_PATH" --json exec run local --detach --timeout-secs 30 \
+  -- 'cat > stdin-binary' >"$TMP_DIR/stdin-exec.json"
+STDIN_EXEC_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$TMP_DIR/stdin-exec.json")"
+"$OPERON" --config "$CONFIG_PATH" --transfer-timeout-secs 120 exec stdin local "$STDIN_EXEC_ID" --file "$TMP_DIR/binary-input"
+"$OPERON" --config "$CONFIG_PATH" exec stdin local "$STDIN_EXEC_ID" --close
+for _ in $(seq 1 80); do
+  "$OPERON" --config "$CONFIG_PATH" exec status local "$STDIN_EXEC_ID" >"$TMP_DIR/stdin-status"
+  if grep -q 'Succeeded' "$TMP_DIR/stdin-status"; then break; fi
+  sleep 0.1
+done
+grep -q 'Succeeded' "$TMP_DIR/stdin-status"
+"$OPERON" --config "$CONFIG_PATH" fs read local:/stdin-binary --output "$TMP_DIR/stdin-output"
+cmp "$TMP_DIR/binary-input" "$TMP_DIR/stdin-output"
+
 "$OPERON" --config "$CONFIG_PATH" --json exec run local --timeout-secs 10 -- "printf exec-integration" \
   >"$TMP_DIR/exec.json"
 EXEC_ID="$(

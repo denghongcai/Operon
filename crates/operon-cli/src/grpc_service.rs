@@ -17,7 +17,7 @@ use tokio::{
     sync::mpsc,
 };
 
-use crate::grpc::{call, with_auth};
+use crate::grpc::{call, stream_response, with_auth_stream};
 
 pub async fn forward_service_connection(
     endpoint: &NodeEndpoint,
@@ -62,8 +62,8 @@ pub async fn forward_service_connection(
                 }
             }
         };
-        let mut inbound = client
-            .open_service_tunnel(with_auth(&endpoint, outbound)?)
+        let mut inbound = stream_response(&endpoint, client
+            .open_service_tunnel(with_auth_stream(&endpoint, outbound)?))
             .await?
             .into_inner();
         while let Some(message) = inbound.message().await? {
@@ -140,20 +140,21 @@ pub async fn forward_service_datagrams(
                 yield request;
             }
         };
-        let request = match with_auth(&endpoint, outbound) {
+        let request = match with_auth_stream(&endpoint, outbound) {
             Ok(request) => request,
             Err(error) => {
                 abort_and_wait(local_read_task).await;
                 return Err(error);
             }
         };
-        let response = match client.open_service_datagram_tunnel(request).await {
-            Ok(response) => response,
-            Err(error) => {
-                abort_and_wait(local_read_task).await;
-                return Err(error.into());
-            }
-        };
+        let response =
+            match stream_response(&endpoint, client.open_service_datagram_tunnel(request)).await {
+                Ok(response) => response,
+                Err(error) => {
+                    abort_and_wait(local_read_task).await;
+                    return Err(error.into());
+                }
+            };
         let mut inbound = response.into_inner();
         while let Some(message) = inbound.message().await? {
             match message.payload {

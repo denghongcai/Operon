@@ -7139,6 +7139,95 @@ Both release orchestration modes passed. All Phase 126–131 acceptance work
 is complete; performance conclusions use ops/s first and retain the disclosed
 10–15% distinct-file parallel FUSE read regression.
 
+## Phase 132: v0.18.18 Transport Liveness
+
+Status: In progress. Add RPC-specific deadlines, transfer progress bounds,
+HTTP/2 keepalive and adaptive windows without expiring healthy long-lived
+exec/session/service streams. Failure-mode acceptance remains pending.
+
+Initial Rust/SDK transport policy, per-node YAML settings, daemon keepalive,
+four global CLI timeout overrides and config explain visibility are implemented.
+Focused Rust tests and a real TCP delayed-response/deadline recovery test passed;
+SDK typecheck and tests passed (19); docs/help/skills synchronization passed. Remaining:
+full fault/native acceptance and documentation synchronization. Runtime CI now
+includes a focused transport gate. Real TCP tests also passed for stalled
+headers/body/upload acknowledgement, slow progressing downloads, recovery and
+no automatic mutation replay. Stream-establishment timeouts are separate from
+long-lived body lifetime; upload consumption resets its inactivity bound.
+
+Real TCP acceptance now also verifies keepalive-only blackhole detection with
+RPC deadlines disabled (about 2s with configured 1s ping interval/timeout),
+explicit reconnect, and partial unary response-body stalls. Shared DeadlineChannel
+enforces configured deadlines through body completion independently of server
+support; metadata/context and long-lived stream exceptions are preserved.
+
+## Phase 133: v0.18.19 Workspace Root Reuse
+
+Status: In progress. Cache canonical root/Linux root fd without weakening
+containment or commit revalidation; define root-change failure semantics.
+
+Daemon filesystem and exec paths now share WorkspaceResolver. Root replacement,
+deletion and alias changes fail closed; Linux operations remain anchored to the
+held descriptor. Local filesystem/daemon regressions passed. Repeated resolver
+microbenchmarks remain around 393k–403k ops/s for both paths; syscall counts for
+10,000 resolutions dropped from 100,216 to 70,215. This is not an end-to-end
+throughput improvement claim. Native/release acceptance remains pending.
+
+## Phase 134: v0.18.20 Bounded Streaming and Mount Runtime
+
+Status: In progress. Bounded/lazy CLI uploads, binary stdout, compatible chunk-copy
+reductions and continuously driven mount transport without per-call OS threads.
+
+File/stdin uploads now read on demand with bounded chunks and explicit source
+failure cancellation. Raw stdout is binary-safe; JSON text behavior is retained.
+The nested mount bridge uses the continuously driven runtime without a thread
+per call, and its timer/spawn regression passed. Full integration remains pending.
+
+Real daemon acceptance now passed for 40MiB binary uploads/raw stdout/output,
+quiet, UTF-8-only JSON rejection, empty uploads, stdin file integrity and healthy
+exec streams exceeding the ordinary RPC deadline. Nested async connect failure
+also returns an error without a runtime-drop panic. Native/full acceptance remains.
+
+Eight concurrent nested mount callers completed 160 timer/cancellation cycles on
+the shared runtime without per-call threads. All four full validation groups
+passed after disk recovery (49 core, 16 runtime, 13 SDK, 4 Linux system). Final
+source/version changes still require revalidation and native release gates.
+
+## Phase 135: v0.18.21 Secondary Allocation Cleanup
+
+Status: In progress. Cached tracing, page-only audit clones, direct audit
+serialization and store loader deep-copy removal with restart tests.
+
+Trace selection is cached on first use, audit pagination clones only the page,
+typed audit persistence avoids constructing a JSON tree, and store loaders
+consume record values instead of deep-cloning them. Regression acceptance and
+typed records are prepared before moving events into the retention queue, removing
+the AuditEvent clone while keeping file IO outside its lock. Additional acceptance
+and allocation measurements remain pending.
+
+Initial full validation groups were invalidated by disk exhaustion. Removed only
+rebuildable Rust incremental cache (6.7GiB), restored the interrupted script from
+HEAD, and restarted all four groups with CARGO_INCREMENTAL=0. Full workspace
+tests and strict Clippy passed before this environment failure; final-source
+revalidation is still required.
+
+## Phase 136: v0.16.11 Acceptance and Public Release
+
+Status: In progress. Full local/native acceptance, exact-commit pre-tag gates,
+publication and public artifact/install/README verification remain required.
+
+Public versions and workflow examples are aligned to v0.16.11; a new release
+alignment gate supersedes frozen historical v0.16.10 assertions. Final groups
+passed (50 core, 16 runtime, 13 SDK, 4 Linux system), workspace/Clippy passed,
+SDK 23 tests/typecheck/build passed and dependency audit reports zero known
+vulnerabilities. Trace caching is verified in an isolated subprocess. Candidate
+commit, idle-host ops/RSS evidence, exact-commit native gates and publication
+remain pending; see `docs/plan/v0.16.11-release-publication.md`.
+
+Detailed P5/P8/P10 scope and acceptance are in
+`docs/plan/v0.18.18-transport-workspace-secondary-roadmap.md`. No parallel-read
+tuning is included; all five phases remain unfinished.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

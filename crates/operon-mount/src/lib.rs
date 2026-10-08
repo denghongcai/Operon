@@ -33,9 +33,42 @@ pub use windows::{spawn_mount, MountOptions, MountSession};
 
 pub const MOUNT_CAPABILITY: &str = "mount";
 
+/// Trace selection is process-wide and captured on first use.
+fn trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("OPERON_MOUNT_TRACE").is_some())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trace_enablement_is_cached_for_process_lifetime() {
+        const CHILD: &str = "OPERON_TRACE_CACHE_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            assert!(!trace_enabled());
+            std::env::set_var("OPERON_MOUNT_TRACE", "1");
+            assert!(!trace_enabled());
+            return;
+        }
+        // Isolate environment mutation from the parallel test runner.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::trace_enablement_is_cached_for_process_lifetime",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1")
+            .env_remove("OPERON_MOUNT_TRACE")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     #[test]
     fn mount_core_api_is_available_from_crate_root() {

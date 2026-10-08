@@ -31,6 +31,9 @@ pub struct StoreWriter {
     worker: Arc<Mutex<Option<Arc<writer::Worker>>>>,
 }
 
+/// A complete serialized JSON line, constructed only from a serializable value.
+pub struct PreparedStoreRecord(Vec<u8>);
+
 impl StoreWriter {
     pub fn new(path: Option<PathBuf>) -> Self {
         Self {
@@ -46,13 +49,39 @@ impl StoreWriter {
     }
 
     pub fn append_json_value(&self, record: &serde_json::Value) -> anyhow::Result<()> {
+        self.append_serializable(record)
+    }
+
+    /// Serialize a borrowed typed record directly, without an intermediate JSON tree.
+    pub fn append_serializable<T: serde::Serialize + ?Sized>(
+        &self,
+        record: &T,
+    ) -> anyhow::Result<()> {
+        let record = self.prepare_record(record)?;
+        self.append_prepared(record)
+    }
+
+    pub fn prepare_record<T: serde::Serialize + ?Sized>(
+        &self,
+        record: &T,
+    ) -> anyhow::Result<Option<PreparedStoreRecord>> {
+        if self.path.is_none() {
+            return Ok(None);
+        }
+        let mut line = serde_json::to_vec(record).context("failed to serialize store record")?;
+        line.push(b'\n');
+        Ok(Some(PreparedStoreRecord(line)))
+    }
+
+    pub fn append_prepared(&self, record: Option<PreparedStoreRecord>) -> anyhow::Result<()> {
+        let Some(record) = record else {
+            return Ok(());
+        };
         let Some(path) = self.path.as_deref() else {
             return Ok(());
         };
-        let mut line = serde_json::to_vec(record).context("failed to serialize store record")?;
-        line.push(b'\n');
         self.worker(path)?
-            .append(line, self.fsync_policy)
+            .append(record.0, self.fsync_policy)
             .with_context(|| format!("failed to append store record {}", path.display()))
     }
 
@@ -110,12 +139,15 @@ pub fn load_execs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, ExecRe
         return Ok(BTreeMap::new());
     }
     let mut execs = BTreeMap::new();
-    for value in recovery::load_records(path)? {
+    for mut value in recovery::load_records(path)? {
         if value.get("kind").and_then(serde_json::Value::as_str) != Some("exec") {
             continue;
         }
-        if let Some(record) = value.get("record") {
-            let record: ExecRecord = serde_json::from_value(record.clone())?;
+        if let Some(record) = value
+            .as_object_mut()
+            .and_then(|object| object.remove("record"))
+        {
+            let record: ExecRecord = serde_json::from_value(record)?;
             execs.insert(record.id.clone(), record);
         }
     }
@@ -130,12 +162,15 @@ pub fn load_audit_events(path: Option<&Path>) -> anyhow::Result<Vec<AuditEvent>>
         return Ok(Vec::new());
     }
     let mut events = Vec::new();
-    for value in recovery::load_records(path)? {
+    for mut value in recovery::load_records(path)? {
         if value.get("kind").and_then(serde_json::Value::as_str) != Some("audit") {
             continue;
         }
-        if let Some(event) = value.get("event") {
-            events.push(serde_json::from_value(event.clone())?);
+        if let Some(event) = value
+            .as_object_mut()
+            .and_then(|object| object.remove("event"))
+        {
+            events.push(serde_json::from_value(event)?);
         }
     }
     Ok(events)
@@ -149,17 +184,24 @@ pub fn load_exec_logs(path: Option<&Path>) -> anyhow::Result<BTreeMap<String, Ve
         return Ok(BTreeMap::new());
     }
     let mut logs = BTreeMap::<String, Vec<ExecLog>>::new();
-    for value in recovery::load_records(path)? {
+    for mut value in recovery::load_records(path)? {
         if value.get("kind").and_then(serde_json::Value::as_str) != Some("exec_log") {
             continue;
         }
-        let Some(exec_id) = value.get("exec_id").and_then(serde_json::Value::as_str) else {
+        let Some(exec_id) = value
+            .get("exec_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+        else {
             continue;
         };
-        if let Some(log) = value.get("log") {
-            logs.entry(exec_id.to_string())
+        if let Some(log) = value
+            .as_object_mut()
+            .and_then(|object| object.remove("log"))
+        {
+            logs.entry(exec_id)
                 .or_default()
-                .push(serde_json::from_value(log.clone())?);
+                .push(serde_json::from_value(log)?);
         }
     }
     Ok(logs)
@@ -172,6 +214,41 @@ pub fn default_store_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_typed_record_preserves_json_and_can_outlive_source() {
+        #[derive(serde::Serialize)]
+        struct Record<'a> {
+            kind: &'static str,
+            message: &'a str,
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("store");
+        let writer = StoreWriter::new(Some(path.clone()));
+        let source = String::from("跨国\ntransfer");
+        let prepared = writer
+            .prepare_record(&Record {
+                kind: "test",
+                message: &source,
+            })
+            .unwrap();
+        drop(source);
+        writer.append_prepared(prepared).unwrap();
+        writer.flush().unwrap();
+        let records = recovery::load_records(&path).unwrap();
+        assert_eq!(
+            records,
+            vec![serde_json::json!({ "kind": "test", "message": "跨国\ntransfer" })]
+        );
+        let disabled = StoreWriter::new(None);
+        assert!(disabled
+            .prepare_record(&Record {
+                kind: "test",
+                message: "ignored"
+            })
+            .unwrap()
+            .is_none());
+    }
 
     #[test]
     fn concurrent_writers_preserve_complete_records_and_producer_order() {

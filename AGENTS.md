@@ -28,6 +28,12 @@ Operon should not own:
 
 ## Key Design Documents
 
+- `docs/plan/v0.16.11-release-publication.md`
+  - In-progress verified public release for Phases 132–136 and report P5/P8/P10.
+
+- `docs/plan/v0.18.18-transport-workspace-secondary-roadmap.md`
+  - In-progress Phases 132–136 for report P5/P8/P10 and verified public release.
+
 - `docs/plan/development-phases.md`
   - Authoritative phase plan and phase status tracker.
   - Every completed task must update this document with what changed and which phase advanced.

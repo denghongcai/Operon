@@ -87,21 +87,22 @@ pub(crate) async fn read(
                 bytes_written,
             })?;
         }
-    } else {
+    } else if output.json {
         let mut content = Vec::new();
         grpc::read_file_to_writer(&endpoint, &target.path, &mut content).await?;
         let read = FsRead {
             path: target.path.clone(),
             content: String::from_utf8(content)?,
         };
-        if output.json {
-            print_json(&read)?;
-            return Ok(());
-        }
-        if output.quiet {
-            return Ok(());
-        }
-        print!("{}", read.content);
+        print_json(&read)?;
+    } else if output.quiet {
+        grpc::read_file_to_writer(&endpoint, &target.path, &mut std::io::sink()).await?;
+    } else {
+        use std::io::Write;
+        let stdout = std::io::stdout();
+        let mut writer = stdout.lock();
+        grpc::read_file_to_writer(&endpoint, &target.path, &mut writer).await?;
+        writer.flush()?;
     }
 
     Ok(())

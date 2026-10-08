@@ -107,6 +107,7 @@ export type {
   ServiceDefinition,
   ServiceList,
   ServicePermissions,
+  TransportConfig,
 } from "./types";
 
 export class OperonClient {

@@ -19,7 +19,7 @@ use crate::{
 };
 
 fn trace_mount_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
-    if std::env::var_os("OPERON_MOUNT_TRACE").is_some() {
+    if crate::trace_enabled() {
         eprintln!("operon-mount unix {}: {}", event.as_ref(), detail.as_ref());
     }
 }

@@ -2,11 +2,7 @@ use std::{path::PathBuf, pin::Pin};
 
 use futures_util::{Stream, StreamExt};
 use operon_core::{FsEntry, FsList, FsPrecondition, FsStat, FsWrite};
-use operon_fs::{
-    authorize_fs_decision, join_virtual_path, resolve_create_workspace_path,
-    resolve_existing_workspace_leaf_path, resolve_existing_workspace_path,
-    resolve_write_workspace_path,
-};
+use operon_fs::{authorize_fs_decision, join_virtual_path};
 use operon_protocol::runtime::v1::{write_file_request, FileChunk, WriteFileRequest};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio_util::io::ReaderStream;
@@ -226,7 +222,7 @@ fn resolve_existing_path(
     audit_resource: &str,
     path: &str,
 ) -> Result<PathBuf, Status> {
-    resolve_existing_workspace_path(&state.workspace, path).map_err(|error| {
+    workspace_resolver(state)?.existing(path).map_err(|error| {
         record_audit(state, audit_action, audit_resource, false, &error.1);
         status_from_error(error)
     })
@@ -238,10 +234,12 @@ fn resolve_existing_leaf_path(
     audit_resource: &str,
     path: &str,
 ) -> Result<PathBuf, Status> {
-    resolve_existing_workspace_leaf_path(&state.workspace, path).map_err(|error| {
-        record_audit(state, audit_action, audit_resource, false, &error.1);
-        status_from_error(error)
-    })
+    workspace_resolver(state)?
+        .existing_leaf(path)
+        .map_err(|error| {
+            record_audit(state, audit_action, audit_resource, false, &error.1);
+            status_from_error(error)
+        })
 }
 
 fn resolve_write_path(
@@ -250,10 +248,21 @@ fn resolve_write_path(
     audit_resource: &str,
     path: &str,
 ) -> Result<PathBuf, Status> {
-    resolve_write_workspace_path(&state.workspace, path).map_err(|error| {
-        record_audit(state, audit_action, audit_resource, false, &error.1);
-        status_from_error(error)
-    })
+    resolve_write_target(state, audit_action, audit_resource, path).map(|(path, _)| path)
+}
+
+fn resolve_write_target(
+    state: &AppState,
+    audit_action: &str,
+    audit_resource: &str,
+    path: &str,
+) -> Result<(PathBuf, bool), Status> {
+    workspace_resolver(state)?
+        .write_with_parent(path)
+        .map_err(|error| {
+            record_audit(state, audit_action, audit_resource, false, &error.1);
+            status_from_error(error)
+        })
 }
 
 fn resolve_create_path(
@@ -262,10 +271,17 @@ fn resolve_create_path(
     audit_resource: &str,
     path: &str,
 ) -> Result<PathBuf, Status> {
-    resolve_create_workspace_path(&state.workspace, path).map_err(|error| {
+    workspace_resolver(state)?.create(path).map_err(|error| {
         record_audit(state, audit_action, audit_resource, false, &error.1);
         status_from_error(error)
     })
+}
+
+fn workspace_resolver(state: &AppState) -> Result<&operon_fs::WorkspaceResolver, Status> {
+    state
+        .workspace_resolver
+        .as_deref()
+        .ok_or_else(|| Status::failed_precondition("workspace resolver is unavailable"))
 }
 
 pub(crate) async fn stat(state: &AppState, path: String) -> Result<FsStat, Status> {
@@ -649,15 +665,15 @@ where
                 authorize_fs_action(state, "write-stream", &target.path, "write", &target.path)?;
                 outcome.path = Some(target.path.clone());
                 let _mutation = MUTATION_LOCK.lock().await;
-                let full_path =
-                    resolve_write_path(state, "write-stream", &target.path, &target.path)?;
+                let (full_path, parent_exists) =
+                    resolve_write_target(state, "write-stream", &target.path, &target.path)?;
                 let precondition = grpc_precondition(
                     target.precondition,
                     target.expected_version,
                     target.require_absent,
                 );
                 check_precondition(&full_path, precondition.as_ref())?;
-                if let Some(parent) = full_path.parent() {
+                if let Some(parent) = full_path.parent().filter(|_| !parent_exists) {
                     tokio::fs::create_dir_all(parent)
                         .await
                         .map_err(status_from_io_error)?;
@@ -764,9 +780,9 @@ pub(crate) async fn write_range(
     checked_file_end(offset, data.len(), "write range")?;
     authorize_fs_action(state, "write-range", &path, "write", &path)?;
     let _mutation = MUTATION_LOCK.lock().await;
-    let full_path = resolve_write_path(state, "write-range", &path, &path)?;
+    let (full_path, parent_exists) = resolve_write_target(state, "write-range", &path, &path)?;
     check_precondition(&full_path, precondition.as_ref())?;
-    if let Some(parent) = full_path.parent() {
+    if let Some(parent) = full_path.parent().filter(|_| !parent_exists) {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(status_from_io_error)?;
@@ -817,9 +833,9 @@ pub(crate) async fn truncate(
     }
     authorize_fs_action(state, "truncate", &path, "write", &path)?;
     let _mutation = MUTATION_LOCK.lock().await;
-    let full_path = resolve_write_path(state, "truncate", &path, &path)?;
+    let (full_path, parent_exists) = resolve_write_target(state, "truncate", &path, &path)?;
     check_precondition(&full_path, precondition.as_ref())?;
-    if let Some(parent) = full_path.parent() {
+    if let Some(parent) = full_path.parent().filter(|_| !parent_exists) {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(status_from_io_error)?;

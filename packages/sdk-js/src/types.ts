@@ -2,6 +2,17 @@ export type NodeEndpoint = {
   nodeId: string;
   endpoint: string;
   token?: string;
+  transport?: Partial<TransportConfig>;
+};
+
+export type TransportConfig = {
+  connectTimeoutSecs: number;
+  rpcTimeoutSecs: number;
+  transferTimeoutSecs: number;
+  progressTimeoutSecs: number;
+  keepaliveIntervalSecs: number;
+  keepaliveTimeoutSecs: number;
+  keepaliveWhileIdle: boolean;
 };
 
 export type OperonStep = {

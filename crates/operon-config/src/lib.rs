@@ -6,6 +6,7 @@ use std::{
 };
 
 pub use operon_core::runtime::NodeEndpoint;
+pub use operon_core::runtime::TransportConfig;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -59,6 +60,8 @@ pub struct OperonConfig {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DaemonConfig {
+    #[serde(default)]
+    pub transport: TransportConfig,
     pub node_id: String,
     pub grpc_listen: SocketAddr,
     pub workspace: PathBuf,
@@ -94,6 +97,8 @@ pub struct SecretsConfig {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeConfig {
+    #[serde(default)]
+    pub transport: TransportConfig,
     pub endpoint: String,
     #[serde(default, skip_serializing_if = "AuthConfig::is_empty")]
     pub auth: AuthConfig,
@@ -134,6 +139,12 @@ impl OperonConfig {
         if config.version != 1 {
             anyhow::bail!("unsupported config version `{}`", config.version);
         }
+        if let Some(daemon) = &config.daemon {
+            daemon.transport.validate().map_err(anyhow::Error::msg)?;
+        }
+        for node in config.client.nodes.values() {
+            node.transport.validate().map_err(anyhow::Error::msg)?;
+        }
         Ok(LoadedOperonConfig { config, warnings })
     }
 
@@ -165,10 +176,12 @@ impl OperonConfig {
 
 impl NodeConfig {
     pub fn to_endpoint(&self, node_id: &str, config_dir: &Path) -> anyhow::Result<NodeEndpoint> {
+        self.transport.validate().map_err(anyhow::Error::msg)?;
         Ok(NodeEndpoint {
             node_id: node_id.to_string(),
             endpoint: self.endpoint.clone(),
             token: self.auth.resolve(config_dir)?,
+            transport: self.transport.clone(),
         })
     }
 }
@@ -535,6 +548,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn transport_configuration_preserves_defaults_overrides_and_zero() {
+        let loaded = OperonConfig::from_str_with_warnings(
+            r#"
+version: 1
+daemon:
+  node_id: local
+  grpc_listen: 127.0.0.1:7789
+  workspace: .
+  transport:
+    keepalive_interval_secs: 120
+    keepalive_timeout_secs: 90
+client:
+  nodes:
+    remote:
+      endpoint: grpc://example:7789
+      transport:
+        connect_timeout_secs: 120
+        rpc_timeout_secs: 300
+        transfer_timeout_secs: 0
+        progress_timeout_secs: 180
+        adaptive_window: false
+"#,
+        )
+        .unwrap();
+        assert!(loaded.warnings.is_empty());
+        let endpoint = loaded.config.endpoint("remote", Path::new(".")).unwrap();
+        assert_eq!(endpoint.transport.connect_timeout_secs, 120);
+        assert_eq!(endpoint.transport.rpc_timeout_secs, 300);
+        assert_eq!(endpoint.transport.progress_timeout_secs, 180);
+        assert!(TransportConfig::timeout(endpoint.transport.transfer_timeout_secs).is_none());
+        assert!(!endpoint.transport.adaptive_window);
+        assert_eq!(endpoint.transport.keepalive_interval_secs, 30);
+        let daemon = loaded.config.daemon.unwrap();
+        assert_eq!(daemon.transport.keepalive_timeout_secs, 90);
+        assert_eq!(daemon.transport.keepalive_interval_secs, 120);
+    }
+
+    #[test]
     fn reports_unknown_fields_without_blocking_config_parse() {
         let loaded = OperonConfig::from_str_with_warnings(
             r#"
@@ -715,6 +766,7 @@ client:
             token_env: None,
         };
         let endpoint = NodeEndpoint {
+            transport: TransportConfig::default(),
             node_id: "local".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
             token: Some("secret-token".to_string()),
@@ -732,6 +784,7 @@ client:
         nodes.insert(
             "local".to_string(),
             NodeConfig {
+                transport: TransportConfig::default(),
                 endpoint: "grpc://127.0.0.1:7789".to_string(),
                 auth: AuthConfig::default(),
             },

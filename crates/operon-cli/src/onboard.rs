@@ -273,6 +273,7 @@ fn build_onboard_plan_inner(
             service_port_from_listen_address(&listen),
         )?);
         daemon = Some(DaemonConfig {
+            transport: Default::default(),
             node_id: node_id.clone(),
             grpc_listen: listen.parse()?,
             workspace: PathBuf::from(&workspace),
@@ -297,6 +298,7 @@ fn build_onboard_plan_inner(
         nodes.insert(
             node_id.clone(),
             NodeConfig {
+                transport: Default::default(),
                 endpoint: endpoint.clone(),
                 auth: client_token_auth(client_token.clone(), matches!(role, OnboardRole::Both)),
             },
@@ -306,6 +308,7 @@ fn build_onboard_plan_inner(
             let discovered = discover_lan_nodes(Duration::from_secs(args.timeout_secs))?;
             for node in discovered.nodes {
                 nodes.entry(node.node_id).or_insert(NodeConfig {
+                    transport: Default::default(),
                     endpoint: node.endpoint,
                     auth: client_token_auth(
                         client_token.clone(),

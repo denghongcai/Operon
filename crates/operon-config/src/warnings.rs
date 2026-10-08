@@ -21,6 +21,7 @@ pub(crate) fn collect_unknown_config_fields(value: &serde_yaml::Value) -> Vec<Co
             "advertise_lan",
             "store",
             "auth",
+            "transport",
         ],
         &mut warnings,
     );
@@ -30,6 +31,14 @@ pub(crate) fn collect_unknown_config_fields(value: &serde_yaml::Value) -> Vec<Co
             .and_then(|daemon| daemon.get("auth"))
             .unwrap_or(&serde_yaml::Value::Null),
         "daemon.auth",
+        &mut warnings,
+    );
+    collect_transport(
+        value
+            .get("daemon")
+            .and_then(|daemon| daemon.get("transport"))
+            .unwrap_or(&serde_yaml::Value::Null),
+        "daemon.transport",
         &mut warnings,
     );
     collect_object(
@@ -64,7 +73,12 @@ fn collect_client_nodes(value: &serde_yaml::Value, warnings: &mut Vec<ConfigWarn
             continue;
         };
         let path = format!("client.nodes.{node_id}");
-        collect_object(node, &path, &["endpoint", "auth"], warnings);
+        collect_object(node, &path, &["endpoint", "auth", "transport"], warnings);
+        collect_transport(
+            node.get("transport").unwrap_or(&serde_yaml::Value::Null),
+            &format!("{path}.transport"),
+            warnings,
+        );
         collect_auth(
             node.get("auth").unwrap_or(&serde_yaml::Value::Null),
             &format!("{path}.auth"),
@@ -75,6 +89,24 @@ fn collect_client_nodes(value: &serde_yaml::Value, warnings: &mut Vec<ConfigWarn
 
 fn collect_auth(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<ConfigWarning>) {
     collect_object(value, path, &["token", "token_file", "token_env"], warnings);
+}
+
+fn collect_transport(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<ConfigWarning>) {
+    collect_object(
+        value,
+        path,
+        &[
+            "connect_timeout_secs",
+            "rpc_timeout_secs",
+            "transfer_timeout_secs",
+            "progress_timeout_secs",
+            "keepalive_interval_secs",
+            "keepalive_timeout_secs",
+            "keepalive_while_idle",
+            "adaptive_window",
+        ],
+        warnings,
+    );
 }
 
 fn collect_policy(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<ConfigWarning>) {

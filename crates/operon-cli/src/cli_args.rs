@@ -24,8 +24,27 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) quiet: bool,
 
+    #[command(flatten)]
+    pub(crate) transport: TransportOverrides,
+
     #[command(subcommand)]
     pub(crate) command: Command,
+}
+
+#[derive(Debug, Clone, Default, clap::Args)]
+pub(crate) struct TransportOverrides {
+    /// Connection timeout in seconds; 0 disables it. Overrides node config.
+    #[arg(long, global = true)]
+    pub(crate) connect_timeout_secs: Option<u64>,
+    /// Ordinary RPC deadline in seconds; 0 disables it. Not an exec lifetime.
+    #[arg(long, global = true)]
+    pub(crate) rpc_timeout_secs: Option<u64>,
+    /// Upload overall deadline in seconds; 0 disables it.
+    #[arg(long, global = true)]
+    pub(crate) transfer_timeout_secs: Option<u64>,
+    /// File-transfer progress timeout in seconds; 0 disables it.
+    #[arg(long, global = true)]
+    pub(crate) progress_timeout_secs: Option<u64>,
 }
 
 #[derive(Debug, Subcommand)]

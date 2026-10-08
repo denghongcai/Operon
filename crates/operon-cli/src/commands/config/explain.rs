@@ -38,6 +38,7 @@ fn print_config_explain(explain: &ConfigExplain) {
             println!("  advertise_lan: {}", daemon.advertise_lan);
             println!("  store: {}", daemon.store.as_deref().unwrap_or("<none>"));
             println!("  auth: {}", daemon.auth);
+            println!("  transport: {:?}", daemon.transport);
         }
         None => println!("daemon: <none>"),
     }
@@ -51,6 +52,7 @@ fn print_config_explain(explain: &ConfigExplain) {
             "  {} -> {} (auth: {})",
             node.node_id, node.endpoint, node.auth
         );
+        println!("    transport: {:?}", node.transport);
     }
 
     match &explain.policy {

@@ -10,7 +10,6 @@ use operon_core::exec::{
     ExecLog, ExecRecord, ExecSessionEvent, ExecSessionExit, ExecSessionOutput, ExecSessionStart,
     ExecSessionStarted, ExecStatus,
 };
-use operon_fs::resolve_existing_workspace_path;
 use operon_process::{
     authorize_exec_session_decision, exec_environment, resolve_exec_secrets_decision,
 };
@@ -163,7 +162,17 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
             return Err(status_from_error(decision.runtime_error()));
         }
     };
-    let cwd = match resolve_existing_workspace_path(&state.workspace, &cwd_virtual) {
+    let cwd = match state
+        .workspace_resolver
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                operon_core::RuntimeErrorKind::Internal,
+                "workspace resolver is unavailable".into(),
+            )
+        })
+        .and_then(|resolver| resolver.existing(&cwd_virtual))
+    {
         Ok(path) => path,
         Err(error) => {
             record_audit_capability(

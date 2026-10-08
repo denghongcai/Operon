@@ -40,6 +40,57 @@ URI, not an Operon HTTP API.
 `grpcs://host:port` is reserved for TLS gRPC endpoints. Full TLS identity and
 mTLS policy are separate roadmap items.
 
+## Transport liveness configuration
+
+Timeouts are local client policy, not fixed protocol limits. Configure them
+per node under `client.nodes.<id>.transport`; configure server keepalive under
+`daemon.transport`. Existing configurations inherit these defaults:
+
+```yaml
+client:
+  nodes:
+    remote:
+      endpoint: grpc://remote.example:7789
+      transport:
+        connect_timeout_secs: 10
+        rpc_timeout_secs: 30
+        transfer_timeout_secs: 600
+        progress_timeout_secs: 60
+        keepalive_interval_secs: 30
+        keepalive_timeout_secs: 10
+        keepalive_while_idle: true
+        adaptive_window: true
+```
+
+CLI global `--connect-timeout-secs`, `--rpc-timeout-secs`,
+`--transfer-timeout-secs` and `--progress-timeout-secs` override node values
+for one invocation, including mount and graph filesystem clients. For example:
+
+```sh
+operon --rpc-timeout-secs 300 --progress-timeout-secs 180 fs read remote:/large.bin --output large.bin
+```
+
+Zero disables a connection/RPC/transfer/progress deadline or the keepalive
+interval. Ping timeout must be positive while keepalive is enabled. Values
+must not exceed 604800 seconds. Tune values for high-latency international
+links; timeout does not imply a mutation was rolled back, and clients must
+not automatically replay a timed-out mutation.
+
+Ordinary requests advertise `grpc-timeout` and enforce a local deadline through
+response-body completion independently of server support; downloads bound response-header
+and next-chunk waits without imposing a short whole-file lifetime. Uploads
+use the separately configurable transfer deadline. Exec watch/log streams,
+PTY sessions and TCP/UDP tunnels do not inherit an ordinary RPC lifetime.
+Keepalive detects an unresponsive HTTP/2 transport, not stalled application
+work on a live connection. Rust transports use adaptive flow control when
+enabled; the SDK transport does not expose that Rust-specific setting.
+
+TypeScript `NodeEndpoint.transport` accepts equivalent camelCase timeout and
+keepalive fields, for example `{ rpcTimeoutSecs: 300, progressTimeoutSecs: 180 }`.
+
+Phase 132 acceptance is still in progress; complete network-fault and native
+release verification is tracked in the transport/workspace roadmap.
+
 ## Authentication
 
 Daemon listeners bound to non-loopback addresses require bearer-token auth at
@@ -284,6 +335,26 @@ time.
 
 The daemon resolves filesystem targets under the configured workspace and
 rejects symlink-resolved paths that escape that workspace.
+
+The canonical workspace root and its directory handle are retained for the
+daemon lifetime; each target still undergoes containment validation. Renaming,
+deleting or replacing the configured root (including retargeting its configured
+symlink) causes subsequent requests to fail closed. Restore the configured root
+and restart the daemon to deliberately select a new root. Linux operations are
+anchored to the held root through `/proc/self/fd`, so that path must be available
+at startup. Other platforms retain canonical-path containment and root identity
+checks; this does not promise race-free resolution of arbitrary concurrent
+external symlink changes or multi-file transactions.
+
+CLI `fs write --file` and exec stdin file uploads produce bounded chunks on
+demand. A local source error cancels the RPC instead of producing clean EOF;
+bytes already delivered to an exec cannot be rolled back. Raw `fs read` stdout
+and `--output` are binary-safe; JSON content output remains UTF-8 text.
+Generated protobuf `FileChunk.data` owns a byte vector, so streaming retains
+one required copy at that wire boundary rather than buffering every request.
+
+Set `OPERON_MOUNT_TRACE` before starting the process to enable mount tracing.
+Enablement is cached on first use and cannot be toggled later in the process.
 
 `DeleteFs` and `RenameFs` use leaf-symlink semantics: when the requested path
 itself is a symlink inside the workspace, the operation applies to the symlink

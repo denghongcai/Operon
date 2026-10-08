@@ -108,7 +108,7 @@ impl Default for ExecRegistry {
 pub(crate) struct AppState {
     pub(crate) node: NodeInfo,
     pub(crate) capabilities: CapabilityList,
-    pub(crate) workspace: PathBuf,
+    pub(crate) workspace_resolver: Option<Arc<operon_fs::WorkspaceResolver>>,
     pub(crate) policy: PolicyConfig,
     pub(crate) auth_token: Option<String>,
     pub(crate) store_writer: operon_store::StoreWriter,

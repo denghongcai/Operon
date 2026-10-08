@@ -1,6 +1,6 @@
 [package]
 name = "operon-fs"
-version = "0.16.10"
+version = "0.16.11"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -9,3 +9,9 @@ rust-version.workspace = true
 [dependencies]
 libc.workspace = true
 operon-core = { path = "../operon-core" }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile.workspace = true

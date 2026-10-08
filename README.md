@@ -160,9 +160,9 @@ Release maintainers verify the post-download install path with the manual
 workflow/doc wiring checks without downloading assets, run:
 
 ```bash
-scripts/verify-release-install-usability.sh --dry-run v0.16.10 denghongcai/Operon
-scripts/verify-release-service-management-smoke.sh --dry-run v0.16.10 denghongcai/Operon
-scripts/verify-release-linux-install-containers.sh --dry-run v0.16.10 denghongcai/Operon
+scripts/verify-release-install-usability.sh --dry-run v0.16.11 denghongcai/Operon
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.11 denghongcai/Operon
+scripts/verify-release-linux-install-containers.sh --dry-run v0.16.11 denghongcai/Operon
 ```
 
 Create a local workspace and guided config:
@@ -205,6 +205,10 @@ In another terminal, verify the local node:
 operon node ping local
 operon capability list local
 ```
+
+Timeouts for slow or international links are configurable per node under
+`transport`, with CLI per-invocation overrides; see
+[transport liveness configuration](PROTOCOL.md#transport-liveness-configuration).
 
 `operond` and `operon` read `$HOME/.operon/config.yaml` by default. Keep daemon
 listeners on loopback for local development, or configure bearer-token auth with

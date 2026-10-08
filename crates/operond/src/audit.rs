@@ -67,22 +67,27 @@ pub(crate) fn push_audit_event(
     store_writer: &operon_store::StoreWriter,
     event: AuditEvent,
 ) {
+    #[derive(serde::Serialize)]
+    struct StoredAudit<'a> {
+        kind: &'static str,
+        event: &'a AuditEvent,
+    }
+    let record = store_writer.prepare_record(&StoredAudit {
+        kind: "audit",
+        event: &event,
+    });
     let Ok(mut audit) = audit.lock() else {
         tracing::error!("audit log mutex poisoned");
         return;
     };
-    audit.push_back(event.clone());
+    audit.push_back(event);
     while audit.len() > MAX_IN_MEMORY_AUDIT_EVENTS {
         audit.pop_front();
     }
     drop(audit);
-    if let Err(error) = append_store_record(
-        store_writer,
-        &serde_json::json!({
-            "kind": "audit",
-            "event": event,
-        }),
-    ) {
+    if let Err(error) =
+        record.and_then(|record| with_store_blocking(|| store_writer.append_prepared(record)))
+    {
         tracing::warn!("failed to persist audit event: {error:#}");
     }
 }
@@ -103,14 +108,18 @@ pub(crate) fn append_store_record(
     writer: &operon_store::StoreWriter,
     record: &serde_json::Value,
 ) -> anyhow::Result<()> {
+    with_store_blocking(|| writer.append_json_value(record))
+}
+
+fn with_store_blocking(operation: impl FnOnce() -> anyhow::Result<()>) -> anyhow::Result<()> {
     if tokio::runtime::Handle::try_current()
         .is_ok_and(|handle| handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread)
     {
         // The synchronous helper retains durable completion semantics while
         // letting Tokio replace this worker during queue backpressure/sync wait.
-        tokio::task::block_in_place(|| writer.append_json_value(record))
+        tokio::task::block_in_place(operation)
     } else {
-        writer.append_json_value(record)
+        operation()
     }
 }
 

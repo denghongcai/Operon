@@ -14,10 +14,17 @@ use operon_protocol::runtime::v1::{
 };
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
+mod deadline_channel;
+pub use deadline_channel::DeadlineChannel;
+
 pub const RUN_ID_METADATA: &str = "x-operon-run-id";
 pub const STEP_ID_METADATA: &str = "x-operon-step-id";
 pub const STREAM_CHUNK_BYTES: usize = 64 * 1024;
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub const DEFAULT_RPC_TIMEOUT: Duration = Duration::from_secs(30);
+pub const DEFAULT_TRANSFER_TIMEOUT: Duration = Duration::from_secs(600);
+pub const DEFAULT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(60);
+pub use operon_protocol::{KEEPALIVE_INTERVAL, KEEPALIVE_TIMEOUT};
 
 pub fn grpc_channel_uri(endpoint: &str) -> anyhow::Result<String> {
     if let Some(rest) = endpoint.strip_prefix("grpc://") {
@@ -29,14 +36,20 @@ pub fn grpc_channel_uri(endpoint: &str) -> anyhow::Result<String> {
     }
 }
 
-pub async fn connect(endpoint: &NodeEndpoint) -> anyhow::Result<OperonRuntimeClient<Channel>> {
+pub async fn connect(
+    endpoint: &NodeEndpoint,
+) -> anyhow::Result<OperonRuntimeClient<DeadlineChannel>> {
     Ok(runtime_client(
-        connect_channel(endpoint, DEFAULT_CONNECT_TIMEOUT).await?,
+        connect_channel(
+            endpoint,
+            Duration::from_secs(endpoint.transport.connect_timeout_secs),
+        )
+        .await?,
     ))
 }
 
-pub fn runtime_client(channel: Channel) -> OperonRuntimeClient<Channel> {
-    OperonRuntimeClient::new(channel)
+pub fn runtime_client(channel: Channel) -> OperonRuntimeClient<DeadlineChannel> {
+    OperonRuntimeClient::new(DeadlineChannel(channel))
         .max_decoding_message_size(operon_protocol::MAX_GRPC_MESSAGE_BYTES)
         .max_encoding_message_size(operon_protocol::MAX_GRPC_MESSAGE_BYTES)
 }
@@ -45,7 +58,21 @@ pub async fn connect_channel(
     endpoint: &NodeEndpoint,
     timeout: Duration,
 ) -> anyhow::Result<Channel> {
-    let channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?;
+    let config = &endpoint.transport;
+    config.validate().map_err(anyhow::Error::msg)?;
+    let mut channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?
+        .keep_alive_while_idle(config.keepalive_while_idle)
+        .http2_adaptive_window(config.adaptive_window);
+    if let Some(interval) =
+        operon_core::runtime::TransportConfig::timeout(config.keepalive_interval_secs)
+    {
+        channel = channel.http2_keep_alive_interval(interval);
+    }
+    if let Some(timeout) =
+        operon_core::runtime::TransportConfig::timeout(config.keepalive_timeout_secs)
+    {
+        channel = channel.keep_alive_timeout(timeout);
+    }
     with_connect_timeout(&endpoint.endpoint, timeout, async {
         channel
             .connect()
@@ -63,13 +90,19 @@ async fn with_connect_timeout<T, F>(
 where
     F: Future<Output = anyhow::Result<T>>,
 {
+    if timeout.is_zero() {
+        return future.await;
+    }
     tokio::time::timeout(timeout, future)
         .await
         .map_err(|_| anyhow::anyhow!("gRPC connection to {endpoint} timed out after {timeout:?}"))?
 }
 
 pub fn request<T>(endpoint: &NodeEndpoint, message: T) -> anyhow::Result<Request<T>> {
-    request_with_context(endpoint, None, message)
+    Ok(with_deadline(
+        request_with_context(endpoint, None, message)?,
+        operon_core::runtime::TransportConfig::timeout(endpoint.transport.rpc_timeout_secs),
+    ))
 }
 
 pub fn request_with_context<T>(
@@ -80,6 +113,60 @@ pub fn request_with_context<T>(
     let mut request = Request::new(message);
     apply_metadata(endpoint, context, request.metadata_mut())?;
     Ok(request)
+}
+
+/// Apply an explicit call policy without changing authentication or context.
+/// None is reserved for long-lived calls, not ordinary filesystem operations.
+pub fn with_deadline<T>(mut request: Request<T>, timeout: Option<Duration>) -> Request<T> {
+    if let Some(timeout) = timeout {
+        request.set_timeout(timeout);
+        request
+            .extensions_mut()
+            .insert(deadline_channel::RequestDeadline(timeout));
+    }
+    request
+}
+
+/// Bound response/header or chunk progress locally as well as advertising a
+/// deadline to the peer. This does not replay a timed-out mutation.
+pub async fn bounded_rpc<T>(
+    timeout: Duration,
+    future: impl Future<Output = Result<T, tonic::Status>>,
+) -> Result<T, tonic::Status> {
+    if timeout.is_zero() {
+        return future.await;
+    }
+    tokio::time::timeout(timeout, future)
+        .await
+        .map_err(|_| tonic::Status::deadline_exceeded("gRPC progress deadline exceeded"))?
+}
+
+/// Reset the inactivity deadline as the transport consumes request chunks.
+/// Keep the final deadline armed after input EOF while awaiting acknowledgement.
+pub async fn transfer_progress<T>(
+    timeout: Duration,
+    mut progress: tokio::sync::watch::Receiver<u64>,
+    future: impl Future<Output = Result<T, tonic::Status>>,
+) -> Result<T, tonic::Status> {
+    if timeout.is_zero() {
+        return future.await;
+    }
+    tokio::pin!(future);
+    let timer = tokio::time::sleep(timeout);
+    tokio::pin!(timer);
+    let mut input_open = true;
+    loop {
+        tokio::select! {
+            result = &mut future => return result,
+            _ = &mut timer => return Err(tonic::Status::deadline_exceeded("gRPC upload progress deadline exceeded")),
+            changed = progress.changed(), if input_open => {
+                match changed {
+                    Ok(()) => timer.as_mut().reset(tokio::time::Instant::now() + timeout),
+                    Err(_) => input_open = false,
+                }
+            }
+        }
+    }
 }
 
 pub fn apply_metadata(
@@ -108,9 +195,9 @@ pub fn chunk_write_requests(
     path: String,
     body: &[u8],
     expected_version: Option<String>,
-) -> Vec<WriteFileRequest> {
+) -> impl Iterator<Item = WriteFileRequest> + Send + 'static {
     let expected_version_for_precondition = expected_version.clone();
-    let mut chunks = vec![WriteFileRequest {
+    let target = WriteFileRequest {
         payload: Some(write_file_request::Payload::Target(WriteFileTarget {
             path,
             precondition: expected_version_for_precondition.map(|expected_version| {
@@ -122,54 +209,116 @@ pub fn chunk_write_requests(
             expected_version,
             require_absent: false,
         })),
-    }];
-    if body.is_empty() {
-        chunks.push(WriteFileRequest {
-            payload: Some(write_file_request::Payload::Chunk(FileChunk {
-                data: Vec::new(),
-            })),
-        });
-        return chunks;
-    }
-    chunks.extend(
-        body.chunks(STREAM_CHUNK_BYTES)
-            .map(|chunk| WriteFileRequest {
-                payload: Some(write_file_request::Payload::Chunk(FileChunk {
-                    data: chunk.to_vec(),
-                })),
-            }),
-    );
-    chunks
+    };
+    std::iter::once(target).chain(byte_chunks(body).map(|chunk| WriteFileRequest {
+        payload: Some(write_file_request::Payload::Chunk(chunk)),
+    }))
 }
 
-pub fn chunk_stdin_requests(exec_id: String, body: &[u8]) -> Vec<ExecStdinRequest> {
-    let mut chunks = vec![ExecStdinRequest {
+pub fn chunk_stdin_requests(
+    exec_id: String,
+    body: &[u8],
+) -> impl Iterator<Item = ExecStdinRequest> + Send + 'static {
+    let target = ExecStdinRequest {
         payload: Some(exec_stdin_request::Payload::Target(ExecStdinTarget {
             exec_id,
         })),
-    }];
-    if body.is_empty() {
-        chunks.push(ExecStdinRequest {
-            payload: Some(exec_stdin_request::Payload::Chunk(FileChunk {
-                data: Vec::new(),
-            })),
-        });
-        return chunks;
-    }
-    chunks.extend(
-        body.chunks(STREAM_CHUNK_BYTES)
-            .map(|chunk| ExecStdinRequest {
-                payload: Some(exec_stdin_request::Payload::Chunk(FileChunk {
-                    data: chunk.to_vec(),
-                })),
-            }),
-    );
-    chunks
+    };
+    std::iter::once(target).chain(byte_chunks(body).map(|chunk| ExecStdinRequest {
+        payload: Some(exec_stdin_request::Payload::Chunk(chunk)),
+    }))
+}
+
+fn byte_chunks(body: &[u8]) -> impl Iterator<Item = FileChunk> + Send + 'static {
+    // A slice-based public helper must own input for tonic's 'static stream.
+    // Only this source buffer and the currently polled chunk are retained;
+    // file-based callers stream directly without this whole-input buffer.
+    // The tonic request stream must own its input for its 'static lifetime.
+    let owned = body.to_vec();
+    let mut bytes = owned.into_iter();
+    let mut empty_chunk = bytes.len() == 0;
+    std::iter::from_fn(move || {
+        if bytes.len() == 0 && !empty_chunk {
+            return None;
+        }
+        empty_chunk = false;
+        Some(FileChunk {
+            data: bytes.by_ref().take(STREAM_CHUNK_BYTES).collect(),
+        })
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn progress_deadlines_expire_and_zero_disables_them() {
+        let error = bounded_rpc(
+            Duration::from_millis(10),
+            std::future::pending::<Result<(), tonic::Status>>(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::DeadlineExceeded);
+        let result = bounded_rpc(Duration::ZERO, async {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            Ok::<_, tonic::Status>(42)
+        })
+        .await
+        .unwrap();
+        assert_eq!(result, 42);
+    }
+
+    #[tokio::test]
+    async fn upload_progress_resets_and_eof_still_bounds_acknowledgement() {
+        let (sender, receiver) = tokio::sync::watch::channel(0_u64);
+        let timeout = Duration::from_millis(40);
+        let result = transfer_progress(timeout, receiver, async {
+            for _ in 0..4 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                sender.send_modify(|count| *count += 1);
+            }
+            Ok::<_, tonic::Status>(42)
+        })
+        .await
+        .unwrap();
+        assert_eq!(result, 42);
+        let (sender, receiver) = tokio::sync::watch::channel(0_u64);
+        drop(sender);
+        let error = transfer_progress(
+            Duration::from_millis(10),
+            receiver,
+            std::future::pending::<Result<(), tonic::Status>>(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::DeadlineExceeded);
+    }
+
+    #[test]
+    fn deadline_policy_preserves_metadata_and_long_lived_requests() {
+        let mut endpoint = NodeEndpoint {
+            node_id: "remote".into(),
+            endpoint: "grpc://example:7789".into(),
+            token: Some("secret".into()),
+            transport: Default::default(),
+        };
+        endpoint.transport.rpc_timeout_secs = 300;
+        let request = request(&endpoint, ()).unwrap();
+        assert!(request.metadata().contains_key("grpc-timeout"));
+        assert_eq!(
+            request.metadata().get("authorization").unwrap(),
+            "Bearer secret"
+        );
+        let long_lived = request_with_context(&endpoint, None, ()).unwrap();
+        assert!(!long_lived.metadata().contains_key("grpc-timeout"));
+        endpoint.transport.rpc_timeout_secs = 0;
+        assert!(!super::request(&endpoint, ())
+            .unwrap()
+            .metadata()
+            .contains_key("grpc-timeout"));
+    }
     use operon_protocol::runtime::v1::{exec_stdin_request, write_file_request};
 
     #[test]
@@ -188,6 +337,7 @@ mod tests {
     #[test]
     fn request_includes_auth_and_execution_context_metadata() {
         let endpoint = NodeEndpoint {
+            transport: Default::default(),
             node_id: "local".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
             token: Some("token".to_string()),
@@ -223,10 +373,10 @@ mod tests {
     #[test]
     fn chunks_empty_streams_with_explicit_empty_chunk() {
         assert_eq!(
-            chunk_write_requests("/empty".to_string(), &[], None).len(),
+            chunk_write_requests("/empty".to_string(), &[], None).count(),
             2
         );
-        assert_eq!(chunk_stdin_requests("exec-1".to_string(), &[]).len(), 2);
+        assert_eq!(chunk_stdin_requests("exec-1".to_string(), &[]).count(), 2);
     }
 
     #[test]
@@ -235,7 +385,8 @@ mod tests {
             "/file.txt".to_string(),
             &[1, 2, 3],
             Some("version-1".to_string()),
-        );
+        )
+        .collect::<Vec<_>>();
         let target = chunks
             .first()
             .and_then(|chunk| chunk.payload.as_ref())
@@ -249,6 +400,7 @@ mod tests {
     #[test]
     fn request_without_auth_or_context_leaves_operon_metadata_empty() {
         let endpoint = NodeEndpoint {
+            transport: Default::default(),
             node_id: "local".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
             token: None,
@@ -264,6 +416,7 @@ mod tests {
     #[test]
     fn request_metadata_allows_partial_execution_context() {
         let endpoint = NodeEndpoint {
+            transport: Default::default(),
             node_id: "local".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
             token: None,
@@ -304,7 +457,7 @@ mod tests {
     fn chunks_non_empty_stdin_streams_at_configured_boundary() {
         let body = vec![7_u8; STREAM_CHUNK_BYTES + 3];
 
-        let chunks = chunk_stdin_requests("exec-1".to_string(), &body);
+        let chunks = chunk_stdin_requests("exec-1".to_string(), &body).collect::<Vec<_>>();
 
         assert_eq!(chunks.len(), 3);
         let exec_stdin_request::Payload::Target(target) =
@@ -331,7 +484,7 @@ mod tests {
     fn chunks_non_empty_write_streams_at_configured_boundary() {
         let body = vec![9_u8; STREAM_CHUNK_BYTES * 2 + 1];
 
-        let chunks = chunk_write_requests("/file.bin".to_string(), &body, None);
+        let chunks = chunk_write_requests("/file.bin".to_string(), &body, None).collect::<Vec<_>>();
 
         assert_eq!(chunks.len(), 4);
         let write_file_request::Payload::Target(target) =

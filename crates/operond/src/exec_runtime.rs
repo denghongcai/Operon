@@ -7,7 +7,6 @@ use operon_core::{
     audit::AuditEvent,
     exec::{ExecEvent, ExecLog, ExecLogList, ExecRecord, ExecRunRequest, ExecStatus},
 };
-use operon_fs::resolve_existing_workspace_path;
 use operon_process::{authorize_exec_decision, exec_environment, resolve_exec_secrets_decision};
 use operon_protocol::runtime::v1::{
     exec_log_stream_event, ExecLogComplete, ExecLogEntry, ExecLogSnapshot, ExecLogStreamEvent,
@@ -65,7 +64,17 @@ pub(crate) fn start_exec(state: &AppState, request: ExecRunRequest) -> Result<Ex
             return Err(status_from_error(decision.runtime_error()));
         }
     };
-    let cwd = match resolve_existing_workspace_path(&state.workspace, &cwd_virtual) {
+    let cwd = match state
+        .workspace_resolver
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                operon_core::RuntimeErrorKind::Internal,
+                "workspace resolver is unavailable".into(),
+            )
+        })
+        .and_then(|resolver| resolver.existing(&cwd_virtual))
+    {
         Ok(path) => path,
         Err(error) => {
             record_audit_capability(state, "exec:default", "run", &cwd_virtual, false, &error.1);

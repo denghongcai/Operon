@@ -21,7 +21,7 @@ use crate::{
 const TTL: Duration = Duration::from_secs(1);
 
 fn trace_fuse_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
-    if std::env::var_os("OPERON_MOUNT_TRACE").is_some() {
+    if crate::trace_enabled() {
         eprintln!("operon-mount fuse {}: {}", event.as_ref(), detail.as_ref());
     }
 }

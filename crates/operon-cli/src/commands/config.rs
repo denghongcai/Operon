@@ -21,6 +21,7 @@ struct ConfigExplain {
 
 #[derive(Debug, serde::Serialize)]
 struct DaemonExplain {
+    transport: operon_config::TransportConfig,
     node_id: String,
     grpc_listen: String,
     workspace: String,
@@ -36,6 +37,7 @@ struct ClientExplain {
 
 #[derive(Debug, serde::Serialize)]
 struct NodeExplain {
+    transport: operon_config::TransportConfig,
     node_id: String,
     endpoint: String,
     auth: String,
@@ -100,6 +102,7 @@ impl ConfigExplain {
         let config_dir = OperonConfig::config_dir(config_path);
         let default_path = OperonConfig::default_path();
         let daemon = config.daemon.as_ref().map(|daemon| DaemonExplain {
+            transport: daemon.transport.clone(),
             node_id: daemon.node_id.clone(),
             grpc_listen: daemon.grpc_listen.to_string(),
             workspace: display_path(resolve_path(&config_dir, &daemon.workspace)),
@@ -115,6 +118,7 @@ impl ConfigExplain {
             .nodes
             .iter()
             .map(|(node_id, node)| NodeExplain {
+                transport: node.transport.clone(),
                 node_id: node_id.clone(),
                 endpoint: node.endpoint.clone(),
                 auth: auth_source(&node.auth, &config_dir),

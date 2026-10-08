@@ -506,12 +506,10 @@ impl OperonRuntime for GrpcRuntime {
     ) -> Result<GrpcResponse<operon_protocol::runtime::v1::AuditLog>, Status> {
         authorize_grpc(&self.state, request.metadata())?;
         let request = request.into_inner();
-        let events = lock(&self.state.audit, "audit log")?
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        let audit = lock(&self.state.audit, "audit log")?;
         let (events, next_page_token) =
-            paginate_items(&events, request.page_size, &request.page_token)?;
+            crate::pagination::paginate_deque(&audit, request.page_size, &request.page_token)?;
+        drop(audit);
         let mut response: operon_protocol::runtime::v1::AuditLog = AuditLog {
             events,
             next_page_token: String::new(),

@@ -33,6 +33,7 @@ async fn grpc_range_limits_content_and_failed_stream_contract() {
             .serve_with_incoming(incoming),
     ));
     let endpoint = operon_core::runtime::NodeEndpoint {
+        transport: Default::default(),
         node_id: "local".into(),
         endpoint: format!("grpc://{address}"),
         token: None,

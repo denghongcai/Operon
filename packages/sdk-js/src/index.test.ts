@@ -45,6 +45,7 @@ const niceGrpcMock = vi.hoisted(() => {
 vi.mock("nice-grpc", () => ({
   createChannel: niceGrpcMock.createChannel,
   createClient: niceGrpcMock.createClient,
+  createClientFactory: () => ({ use: () => ({ create: niceGrpcMock.createClient }) }),
   Metadata: niceGrpcMock.Metadata,
 }));
 
@@ -117,6 +118,9 @@ describe("OperonClient", () => {
     expect(niceGrpcMock.createChannel).toHaveBeenCalledWith("http://127.0.0.1:7789", undefined, {
       "grpc.max_receive_message_length": 16 * 1024 * 1024,
       "grpc.max_send_message_length": 16 * 1024 * 1024,
+      "grpc.keepalive_time_ms": 30000,
+      "grpc.keepalive_timeout_ms": 10000,
+      "grpc.keepalive_permit_without_calls": 1,
     });
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith("authorization", "Bearer test-token");
     expect(niceGrpcMock.metadata.set).toHaveBeenCalledWith(expect.stringMatching(/^x-operon-run-id$/), expect.stringMatching(/^run-/));

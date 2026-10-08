@@ -6,6 +6,9 @@ use operon_core::{
 
 pub const FILESYSTEM_CAPABILITY: &str = "fs";
 
+mod workspace;
+pub use workspace::WorkspaceResolver;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTraversalHardening {
     CanonicalContainedPath,
@@ -165,6 +168,17 @@ fn validate_existing_path_fd_relative(workspace: &Path, raw: &Path) -> RuntimeRe
 
 #[cfg(target_os = "linux")]
 fn linux_openat2_resolve_beneath(workspace: &Path, raw: &Path) -> RuntimeResult<()> {
+    let workspace_file = std::fs::File::open(workspace)
+        .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
+    linux_openat2_with_root(workspace, raw, &workspace_file)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_openat2_with_root(
+    workspace: &Path,
+    raw: &Path,
+    workspace_file: &std::fs::File,
+) -> RuntimeResult<()> {
     use std::{ffi::CString, os::fd::RawFd, os::unix::ffi::OsStrExt, os::unix::io::AsRawFd};
 
     #[repr(C)]
@@ -187,8 +201,6 @@ fn linux_openat2_resolve_beneath(workspace: &Path, raw: &Path) -> RuntimeResult<
         return Ok(());
     }
 
-    let workspace_file = std::fs::File::open(workspace)
-        .map_err(|error| (RuntimeErrorKind::NotFound, error.to_string()))?;
     let path = CString::new(relative.as_os_str().as_bytes()).map_err(|_| {
         (
             RuntimeErrorKind::InvalidArgument,

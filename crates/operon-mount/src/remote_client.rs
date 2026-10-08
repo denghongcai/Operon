@@ -20,16 +20,26 @@ pub struct GrpcRemoteFs {
 
 impl GrpcRemoteFs {
     pub fn connect(endpoint: NodeEndpoint) -> anyhow::Result<Self> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
             .enable_all()
             .build()?;
-        let channel = block_on_runtime(&runtime, async {
+        let connected = block_on_runtime(&runtime, async {
             operon_grpc_client::connect_channel(
                 &endpoint,
-                operon_grpc_client::DEFAULT_CONNECT_TIMEOUT,
+                std::time::Duration::from_secs(endpoint.transport.connect_timeout_secs),
             )
             .await
-        })?;
+        });
+        let channel = match connected {
+            Ok(channel) => channel,
+            Err(error) => {
+                // Runtime::drop panics inside an async caller. Failed setup
+                // must use the same nonblocking shutdown discipline as Drop.
+                runtime.shutdown_background();
+                return Err(error);
+            }
+        };
         Ok(Self {
             endpoint,
             channel,
@@ -235,10 +245,109 @@ where
         return runtime.block_on(future);
     }
 
-    std::thread::scope(
-        |scope| match scope.spawn(|| runtime.block_on(future)).join() {
-            Ok(result) => result,
-            Err(payload) => panic::resume_unwind(payload),
-        },
-    )
+    // The transport runtime owns continuously running reactor workers. Enter
+    // it while polling on this synchronous caller instead of starting an OS
+    // thread per nested call. Async callers should use spawn_blocking for this
+    // inherently synchronous API, especially on a current-thread parent runtime.
+    struct WakeThread(std::thread::Thread);
+    impl std::task::Wake for WakeThread {
+        fn wake(self: std::sync::Arc<Self>) {
+            self.0.unpark();
+        }
+        fn wake_by_ref(self: &std::sync::Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+    let _entered = runtime.enter();
+    let waker = std::task::Waker::from(std::sync::Arc::new(WakeThread(std::thread::current())));
+    let mut context = std::task::Context::from_waker(&waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(result) => return result,
+            std::task::Poll::Pending => std::thread::park(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn failed_connect_inside_async_runtime_returns_error_without_drop_panic() {
+        let endpoint = NodeEndpoint {
+            node_id: "unreachable".into(),
+            endpoint: "grpc://127.0.0.1:0".into(),
+            token: None,
+            transport: operon_core::runtime::TransportConfig {
+                connect_timeout_secs: 1,
+                ..Default::default()
+            },
+        };
+        assert!(GrpcRemoteFs::connect(endpoint).is_err());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn nested_bridge_drives_timers_without_a_per_call_thread() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let caller = std::thread::current().id();
+        for value in 0..8 {
+            let borrowed = &value;
+            assert_eq!(
+                block_on_runtime(&runtime, async {
+                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                    assert_eq!(std::thread::current().id(), caller);
+                    tokio::spawn(async { 42 }).await.unwrap() + *borrowed
+                }),
+                42 + value
+            );
+        }
+        runtime.shutdown_background();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn shared_runtime_supports_concurrent_nested_bridges_and_cancellation() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let parent = tokio::runtime::Handle::current();
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            let handles = (0..8)
+                .map(|_| {
+                    let runtime = &runtime;
+                    let parent = &parent;
+                    let barrier = &barrier;
+                    scope.spawn(move || {
+                        let _entered = parent.enter();
+                        let caller = std::thread::current().id();
+                        barrier.wait();
+                        for _ in 0..20 {
+                            block_on_runtime(runtime, async {
+                                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                                assert_eq!(std::thread::current().id(), caller);
+                                assert!(operon_grpc_client::bounded_rpc(
+                                    std::time::Duration::from_millis(1),
+                                    std::future::pending::<Result<(), tonic::Status>>(),
+                                )
+                                .await
+                                .is_err());
+                            });
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            for handle in handles {
+                handle.join().unwrap();
+            }
+        });
+        runtime.shutdown_background();
+    }
 }

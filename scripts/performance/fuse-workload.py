@@ -138,6 +138,32 @@ def cli_read():
     assert hashlib.sha256((root/'cli-read.bin').read_bytes()).hexdigest()==expected_digest
     return args.mib*1024*1024
 measure('cli/read-stream',cli_read)
+
+def cli_transfer(arguments, output=None):
+    # wait4(Python child) can include the parent's pre-exec RSS high-water mark.
+    # GNU time launches CLI from a small fresh process and reports CLI-only RSS.
+    resource_file = root/'cli-transfer-rss.txt'
+    process = subprocess.Popen(['/usr/bin/time', '-f', '%M', '-o', str(resource_file),
+                                'operon', '--config', '/review/config.yaml', *arguments],
+                               stdout=output if output is not None else subprocess.DEVNULL)
+    _, status, _usage = os.wait4(process.pid, 0)
+    process.returncode = os.waitstatus_to_exitcode(status)
+    assert process.returncode == 0
+    return dict(operations=1, bytes=args.mib*1024*1024, max_rss_kib=int(resource_file.read_text().strip()))
+
+def cli_write():
+    result = cli_transfer(['fs', 'write', 'local:/cli-upload.bin', '--file', '/review/workspace/large.bin'])
+    assert hashlib.sha256((root/'workspace/cli-upload.bin').read_bytes()).hexdigest() == expected_digest
+    return result
+
+def cli_raw_read():
+    with open(root/'cli-raw-read.bin', 'wb') as output:
+        result = cli_transfer(['fs', 'read', 'local:/large.bin'], output)
+    assert hashlib.sha256((root/'cli-raw-read.bin').read_bytes()).hexdigest() == expected_digest
+    return result
+
+measure('cli/write-stream', cli_write)
+measure('cli/read-raw', cli_raw_read)
 def exec_output():
     result=subprocess.run(['operon','--config','/review/config.yaml','exec','run','local','--cwd','/','--argv','--','/usr/bin/head','-c','4194304','/dev/zero'],capture_output=True)
     # Human exec output may also contain the execution summary; persisted logs

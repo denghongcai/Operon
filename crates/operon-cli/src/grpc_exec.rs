@@ -13,7 +13,7 @@ use operon_protocol::runtime::v1::{
 };
 use tokio::sync::mpsc;
 
-use crate::grpc::{call, with_auth};
+use crate::grpc::{call, stream_response, with_auth_stream};
 
 pub(crate) enum ExecSessionInputSource {
     Inline(Vec<u8>),
@@ -27,10 +27,12 @@ pub(crate) async fn stream_exec_logs_to_writer(
 ) -> anyhow::Result<()> {
     let exec_id = exec_id.to_string();
     call(endpoint, |mut client, endpoint| async move {
-        let mut stream = client
-            .stream_exec_logs(with_auth(&endpoint, ExecIdRequest { exec_id })?)
-            .await?
-            .into_inner();
+        let mut stream = stream_response(
+            &endpoint,
+            client.stream_exec_logs(with_auth_stream(&endpoint, ExecIdRequest { exec_id })?),
+        )
+        .await?
+        .into_inner();
         let mut next_sequence = 0;
         while let Some(event) = stream.message().await? {
             match event.event {
@@ -92,10 +94,12 @@ pub(crate) async fn open_exec_session_to_writer(
                 yield message;
             }
         };
-        let mut stream = client
-            .open_exec_session(with_auth(&endpoint, request_stream)?)
-            .await?
-            .into_inner();
+        let mut stream = stream_response(
+            &endpoint,
+            client.open_exec_session(with_auth_stream(&endpoint, request_stream)?),
+        )
+        .await?
+        .into_inner();
         let mut terminal = None;
         while let Some(event) = stream.message().await? {
             match event.event {

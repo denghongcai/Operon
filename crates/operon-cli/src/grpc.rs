@@ -7,7 +7,6 @@ use operon_protocol::runtime::v1::{
     operon_runtime_client::OperonRuntimeClient, GetNodeRequest, HealthRequest,
     ListCapabilitiesRequest,
 };
-use tonic::transport::Channel;
 
 pub use crate::grpc_audit::list_audit;
 pub use crate::grpc_exec_api::{
@@ -54,6 +53,8 @@ pub async fn health_and_node(endpoint: &NodeEndpoint) -> anyhow::Result<(HealthS
 }
 
 pub async fn list_capabilities(endpoint: &NodeEndpoint) -> anyhow::Result<CapabilityList> {
+    let effective = crate::target::endpoint_with_overrides(endpoint.clone());
+    let endpoint = &effective;
     let mut capabilities = Vec::new();
     let mut page_token = String::new();
     let mut client = operon_grpc_client::connect(endpoint).await?;
@@ -104,24 +105,46 @@ pub async fn explain_capability(
 
 pub(crate) async fn call<T, Fut>(
     endpoint: &NodeEndpoint,
-    f: impl FnOnce(OperonRuntimeClient<Channel>, NodeEndpoint) -> Fut,
+    f: impl FnOnce(OperonRuntimeClient<operon_grpc_client::DeadlineChannel>, NodeEndpoint) -> Fut,
 ) -> anyhow::Result<T>
 where
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    let endpoint = endpoint.clone();
+    let endpoint = crate::target::endpoint_with_overrides(endpoint.clone());
     let client = operon_grpc_client::connect(&endpoint).await?;
     f(client, endpoint).await
+}
+
+// Only stream establishment is bounded; healthy idle streams have no short lifetime.
+pub(crate) async fn stream_response<T>(
+    endpoint: &NodeEndpoint,
+    future: impl std::future::Future<Output = Result<T, tonic::Status>>,
+) -> Result<T, tonic::Status> {
+    operon_grpc_client::bounded_rpc(
+        std::time::Duration::from_secs(endpoint.transport.rpc_timeout_secs),
+        future,
+    )
+    .await
 }
 
 pub(crate) fn with_auth<T>(
     endpoint: &NodeEndpoint,
     message: T,
 ) -> anyhow::Result<tonic::Request<T>> {
+    Ok(operon_grpc_client::with_deadline(
+        with_auth_stream(endpoint, message)?,
+        operon_core::runtime::TransportConfig::timeout(endpoint.transport.rpc_timeout_secs),
+    ))
+}
+
+pub(crate) fn with_auth_stream<T>(
+    endpoint: &NodeEndpoint,
+    message: T,
+) -> anyhow::Result<tonic::Request<T>> {
     if let Ok(context) = REQUEST_CONTEXT.try_with(Clone::clone) {
         return operon_grpc_client::request_with_context(endpoint, Some(&context), message);
     }
-    operon_grpc_client::request(endpoint, message)
+    operon_grpc_client::request_with_context(endpoint, None, message)
 }
 
 pub(crate) fn grpc_exec_run_request(
@@ -151,6 +174,7 @@ mod tests {
     #[tokio::test]
     async fn with_auth_includes_execution_context_metadata() {
         let endpoint = NodeEndpoint {
+            transport: Default::default(),
             node_id: "node-a".to_string(),
             endpoint: "grpc://127.0.0.1:7789".to_string(),
             token: Some("test-token".to_string()),

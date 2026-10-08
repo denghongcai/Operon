@@ -1,6 +1,6 @@
 {
   "name": "@operon/sdk",
-  "version": "0.16.10",
+  "version": "0.16.11",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

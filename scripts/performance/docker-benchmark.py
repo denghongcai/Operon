@@ -22,6 +22,7 @@ parser.add_argument('--output',type=Path)
 parser.add_argument('--operations',type=int,default=500)
 parser.add_argument('--mib',type=int,default=64)
 parser.add_argument('--repeats',type=int,default=2)
+parser.add_argument('--compress-payloads',action='store_true',help='Compress regenerable large test payloads after each completed case; retain all evidence')
 parser.add_argument('--client-image',default='node:22-bookworm')
 parser.add_argument('--daemon-image',default='operon-node-a:latest')
 args=parser.parse_args()
@@ -87,6 +88,7 @@ policy:
            '-v',f'{case}/bin/operon:/usr/local/bin/operon:ro',args.client_image,'sleep','infinity')
     containers.append(client)
     docker('exec',client,'sh','-c','command -v fusermount3 >/dev/null || (apt-get update -qq && apt-get install -y -qq fuse3)')
+    docker('exec',client,'sh','-c','test -x /usr/bin/time || (apt-get update -qq && apt-get install -y -qq time)')
     for _ in range(200):
         try:
             docker('exec',client,'operon','--config','/review/config.yaml','node','ping','local')
@@ -149,6 +151,12 @@ policy:
     (case/'daemon.log').write_text(docker('logs',daemon,check=False))
     docker('stop','--time','2',client,daemon,check=False)
     docker('rm',client,daemon); containers.remove(client); containers.remove(daemon)
+    if args.compress_payloads:
+        # These exact files belong to this newly created isolated case and are
+        # verified above. gzip keeps recoverable bytes, avoiding multi-GiB growth.
+        payloads=[case/'cli-read.bin',case/'cli-raw-read.bin',case/'workspace/large.bin',
+                  case/'workspace/cli-upload.bin',*[case/f'workspace/distinct-{i}.bin' for i in range(1,4)]]
+        subprocess.run(['gzip','--',*[str(path) for path in payloads]],check=True)
     return summary
 
 try:
