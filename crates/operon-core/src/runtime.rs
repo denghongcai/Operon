@@ -27,7 +27,8 @@ impl Default for TransportConfig {
             keepalive_interval_secs: 30,
             keepalive_timeout_secs: 10,
             keepalive_while_idle: true,
-            adaptive_window: true,
+            // Opt in for links where measurements demonstrate a benefit.
+            adaptive_window: false,
         }
     }
 }

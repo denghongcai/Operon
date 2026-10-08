@@ -59,7 +59,7 @@ client:
         keepalive_interval_secs: 30
         keepalive_timeout_secs: 10
         keepalive_while_idle: true
-        adaptive_window: true
+        adaptive_window: false
 ```
 
 CLI global `--connect-timeout-secs`, `--rpc-timeout-secs`,
@@ -82,8 +82,10 @@ and next-chunk waits without imposing a short whole-file lifetime. Uploads
 use the separately configurable transfer deadline. Exec watch/log streams,
 PTY sessions and TCP/UDP tunnels do not inherit an ordinary RPC lifetime.
 Keepalive detects an unresponsive HTTP/2 transport, not stalled application
-work on a live connection. Rust transports use adaptive flow control when
-enabled; the SDK transport does not expose that Rust-specific setting.
+work on a live connection. Rust adaptive flow control is opt-in (default false):
+enable `adaptive_window: true` only when measurements on your link show a benefit.
+The local single-file ops/s acceptance found a regression when enabled. The SDK
+transport does not expose that Rust-specific setting.
 
 TypeScript `NodeEndpoint.transport` accepts equivalent camelCase timeout and
 keepalive fields, for example `{ rpcTimeoutSecs: 300, progressTimeoutSecs: 180 }`.

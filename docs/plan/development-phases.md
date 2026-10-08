@@ -7224,6 +7224,13 @@ vulnerabilities. Trace caching is verified in an isolated subprocess. Candidate
 commit, idle-host ops/RSS evidence, exact-commit native gates and publication
 remain pending; see `docs/plan/v0.16.11-release-publication.md`.
 
+All remote gates passed on fcb26aa and pretag orchestration passed, but no tag
+was created. Clean-commit ops/s isolated a client adaptive-window regression;
+make adaptive flow opt-in/default off and rerun all gates on the new exact SHA.
+Deadline/keepalive defaults are retained. Real partial-upload source-error
+acceptance also passed against the actual daemon with progress/transfer bounds
+disabled, proving old-target integrity and staging cleanup after cancellation.
+
 Detailed P5/P8/P10 scope and acceptance are in
 `docs/plan/v0.18.18-transport-workspace-secondary-roadmap.md`. No parallel-read
 tuning is included; all five phases remain unfinished.

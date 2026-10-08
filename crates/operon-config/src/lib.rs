@@ -549,6 +549,10 @@ mod tests {
 
     #[test]
     fn transport_configuration_preserves_defaults_overrides_and_zero() {
+        assert!(!TransportConfig::default().adaptive_window);
+        let enabled: TransportConfig = serde_yaml::from_str("adaptive_window: true").unwrap();
+        assert!(enabled.adaptive_window);
+        enabled.validate().unwrap();
         let loaded = OperonConfig::from_str_with_warnings(
             r#"
 version: 1
