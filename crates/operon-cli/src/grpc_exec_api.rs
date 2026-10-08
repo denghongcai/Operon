@@ -11,6 +11,7 @@ use operon_grpc_client::chunk_stdin_requests;
 use operon_protocol::runtime::v1::{
     exec_log_stream_event, ExecCancelRequest, ExecIdRequest, ListExecsRequest,
 };
+use tokio::io::AsyncReadExt;
 
 use crate::grpc::{
     call, grpc_exec_run_request, stream_response, with_auth, with_auth_stream,
@@ -218,7 +219,7 @@ pub async fn write_exec_stdin_file(
         .next()
         .ok_or_else(|| anyhow::anyhow!("stdin target metadata unavailable"))?;
     call(endpoint, |mut client, endpoint| async move {
-        let mut source = tokio_util::io::ReaderStream::with_capacity(file, operon_grpc_client::STREAM_CHUNK_BYTES);
+        let mut source = file;
         let (read_error, read_failure) = tokio::sync::oneshot::channel();
         let (progress, receiver) = tokio::sync::watch::channel(0_u64);
         let outbound = async_stream::stream! {
@@ -226,14 +227,16 @@ pub async fn write_exec_stdin_file(
             let mut sent_data = false;
             progress.send_modify(|count| *count += 1);
             yield target;
-            while let Some(chunk) = source.next().await {
-                match chunk {
-                    Ok(data) => {
+            loop {
+                let mut data = Vec::with_capacity(operon_grpc_client::STREAM_CHUNK_BYTES);
+                match source.read_buf(&mut data).await {
+                    Ok(0) => break,
+                    Ok(_) => {
                         sent_data = true;
                         progress.send_modify(|count| *count += 1);
                         yield operon_protocol::runtime::v1::ExecStdinRequest {
                             payload: Some(operon_protocol::runtime::v1::exec_stdin_request::Payload::Chunk(
-                                operon_protocol::runtime::v1::FileChunk { data: data.to_vec() }
+                                operon_protocol::runtime::v1::FileChunk { data }
                             )),
                         };
                     }

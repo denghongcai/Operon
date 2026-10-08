@@ -1,7 +1,6 @@
 use std::{io::Write, path::Path};
 
 use anyhow::Context;
-use futures_util::StreamExt;
 use operon_core::runtime::NodeEndpoint;
 use operon_core::{FsList, FsStat, FsWrite};
 use operon_grpc_client::chunk_write_requests;
@@ -9,6 +8,7 @@ use operon_protocol::runtime::v1::{
     write_file_request, FsCopyRequest, FsListRequest, FsPathRequest, FsRenameRequest,
     FsTruncateRequest, WriteFileRequest,
 };
+use tokio::io::AsyncReadExt;
 
 use crate::grpc::{call, with_auth, with_auth_stream, DEFAULT_LIST_PAGE_SIZE};
 
@@ -148,7 +148,7 @@ pub(crate) async fn write_reader(
         .next()
         .ok_or_else(|| anyhow::anyhow!("write target metadata unavailable"))?;
     call(endpoint, |mut client, endpoint| async move {
-        let mut source = tokio_util::io::ReaderStream::with_capacity(file, operon_grpc_client::STREAM_CHUNK_BYTES);
+        let mut source = file;
         let (read_error, read_failure) = tokio::sync::oneshot::channel();
         let (progress, receiver) = tokio::sync::watch::channel(0_u64);
         let outbound = async_stream::stream! {
@@ -156,13 +156,15 @@ pub(crate) async fn write_reader(
             let mut sent_data = false;
             progress.send_modify(|count| *count += 1);
             yield target;
-            while let Some(chunk) = source.next().await {
-                match chunk {
-                    Ok(data) => {
+            loop {
+                let mut data = Vec::with_capacity(operon_grpc_client::STREAM_CHUNK_BYTES);
+                match source.read_buf(&mut data).await {
+                    Ok(0) => break,
+                    Ok(_) => {
                         sent_data = true;
                         progress.send_modify(|count| *count += 1);
                         yield WriteFileRequest { payload: Some(write_file_request::Payload::Chunk(
-                            operon_protocol::runtime::v1::FileChunk { data: data.to_vec() }
+                            operon_protocol::runtime::v1::FileChunk { data }
                         )) };
                     }
                     Err(error) => {

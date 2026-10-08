@@ -352,8 +352,10 @@ CLI `fs write --file` and exec stdin file uploads produce bounded chunks on
 demand. A local source error cancels the RPC instead of producing clean EOF;
 bytes already delivered to an exec cannot be rolled back. Raw `fs read` stdout
 and `--output` are binary-safe; JSON content output remains UTF-8 text.
-Generated protobuf `FileChunk.data` owns a byte vector, so streaming retains
-one required copy at that wire boundary rather than buffering every request.
+File readers fill the owned protobuf `FileChunk.data` vector directly, avoiding
+an intermediate reader-buffer copy. Borrowed byte uploads still need an owned
+chunk, and protobuf encoding/decoding is not end-to-end zero-copy. Requests are
+produced on demand rather than buffered for the whole file.
 
 Set `OPERON_MOUNT_TRACE` before starting the process to enable mount tracing.
 Enablement is cached on first use and cannot be toggled later in the process.

@@ -5,7 +5,6 @@ use operon_core::{FsEntry, FsList, FsPrecondition, FsStat, FsWrite};
 use operon_fs::{authorize_fs_decision, join_virtual_path};
 use operon_protocol::runtime::v1::{write_file_request, FileChunk, WriteFileRequest};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use tokio_util::io::ReaderStream;
 use tonic::Status;
 
 use crate::{
@@ -341,17 +340,23 @@ pub(crate) async fn list_page(
 pub(crate) async fn read_stream(state: &AppState, path: String) -> Result<FileStream, Status> {
     authorize_fs_action(state, "read-stream", &path, "read", &path)?;
     let full_path = resolve_existing_path(state, "read-stream", &path, &path)?;
-    let file = tokio::fs::File::open(&full_path)
+    let mut file = tokio::fs::File::open(&full_path)
         .await
         .map_err(status_from_io_error)?;
     record_audit(state, "read-stream", &path, true, "allowed");
-    let stream = ReaderStream::with_capacity(file, 64 * 1024).map(|chunk| {
-        chunk
-            .map(|data| FileChunk {
-                data: data.to_vec(),
-            })
-            .map_err(status_from_io_error)
-    });
+    let stream = async_stream::stream! {
+        loop {
+            let mut data = Vec::with_capacity(64 * 1024);
+            match file.read_buf(&mut data).await {
+                Ok(0) => break,
+                Ok(_) => yield Ok(FileChunk { data }),
+                Err(error) => {
+                    yield Err(status_from_io_error(error));
+                    break;
+                }
+            }
+        }
+    };
     Ok(Box::pin(stream))
 }
 

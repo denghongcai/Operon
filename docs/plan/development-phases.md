@@ -7180,6 +7180,9 @@ reductions and continuously driven mount transport without per-call OS threads.
 
 File/stdin uploads now read on demand with bounded chunks and explicit source
 failure cancellation. Raw stdout is binary-safe; JSON text behavior is retained.
+File/stdin uploads and daemon downloads now read directly into owned protobuf
+vectors, eliminating intermediate reader-buffer copies without changing public
+types or chunk sizing. Borrowed byte uploads and serialization are not zero-copy.
 The nested mount bridge uses the continuously driven runtime without a thread
 per call, and its timer/spawn regression passed. Full integration remains pending.
 
