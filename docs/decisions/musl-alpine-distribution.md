@@ -1,6 +1,22 @@
 # musl / Alpine Distribution Decision
 
-Status: Accepted for v0.18.7.
+Status: Current glibc-only release policy; musl follow-up approved and planned.
+
+## Approved Follow-up
+
+The user approved Phases 137–141 in
+`docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`: add fully static
+x86_64/arm64 musl archives alongside GNU/glibc, with native Alpine runtime/FUSE/OpenRC
+and complete verified release coverage. This supersedes the earlier decision
+not to plan musl builds, not the current released support boundary. Existing
+glibc archives remain unsupported on Alpine until new artifacts are published
+and verified. The tested Alpine baseline will be selected in the build phase.
+
+apk, ARMv7 musl and Cloudsmith are excluded. OpenRC service management is now
+approved as a dedicated phase, preserving current systemd behavior and requiring
+real supervision/lifecycle acceptance on both native Alpine architectures.
+Current released Linux `operond service` remains systemd-based until that phase
+is implemented and published; fake-systemd tests do not establish OpenRC support.
 
 ## Decision
 
@@ -8,9 +24,9 @@ Decision: keep glibc-only public Linux archives for now.
 
 Operon will continue publishing the current GNU/glibc Linux release archives
 and will document Alpine and musl-based distributions as unsupported by the
-prebuilt Linux archives. A separate musl/static artifact line is not planned
-until there is concrete user demand, a release blocker, or a maintainer-owned
-follow-up phase with artifact, CI, and support scope.
+prebuilt Linux archives. A separate musl/static artifact line is now planned
+following user demand, with artifact, CI, runtime and release scope in the
+approved roadmap. This is not yet a claim of released Alpine support.
 
 ## Current Evidence
 

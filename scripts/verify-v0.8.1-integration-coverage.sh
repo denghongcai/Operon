@@ -84,9 +84,16 @@ policy:
           forward: true
 YAML
 
-cargo build --workspace --locked
-OPERON="$ROOT_DIR/target/debug/operon"
-OPEROND="$ROOT_DIR/target/debug/operond"
+if [[ -n "${OPERON_INTEGRATION_BIN_DIR:-}" ]]; then
+  BIN_DIR="$(cd "$OPERON_INTEGRATION_BIN_DIR" && pwd)"
+  OPERON="$BIN_DIR/operon"
+  OPEROND="$BIN_DIR/operond"
+  test -x "$OPERON" && test -x "$OPEROND"
+else
+  cargo build --workspace --locked
+  OPERON="$ROOT_DIR/target/debug/operon"
+  OPEROND="$ROOT_DIR/target/debug/operond"
+fi
 
 "$OPEROND" start --config "$CONFIG_PATH" >"$TMP_DIR/operond.log" 2>&1 &
 DAEMON_PID="$!"
@@ -229,8 +236,9 @@ assert events[0]["action"] == "write-stream", events
 assert events[0]["allowed"] is True, events
 PY
 
-cargo test --workspace --locked -- --list >"$TMP_DIR/test-list.txt"
-for expected in \
+if [[ -z "${OPERON_INTEGRATION_BIN_DIR:-}" ]]; then
+  cargo test --workspace --locked -- --list >"$TMP_DIR/test-list.txt"
+  for expected in \
   "loads_unified_config_with_client_nodes" \
   "policy_config_round_trips_from_yaml" \
   "filesystem_capability_id_is_stable" \
@@ -241,7 +249,10 @@ for expected in \
   "append_record_writes_json_line" \
   "audit_event_uses_policy_subject_capability_and_context" \
   "init_config_then_explain_json_is_machine_readable"; do
-  grep -q "$expected" "$TMP_DIR/test-list.txt"
-done
+    grep -q "$expected" "$TMP_DIR/test-list.txt"
+  done
+else
+  echo 'Packaged-binary integration: source unit-list check is separate from runtime acceptance'
+fi
 
 echo "v0.8.1 integration coverage validation passed"

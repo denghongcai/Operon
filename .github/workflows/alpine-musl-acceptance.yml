@@ -1,0 +1,95 @@
+name: Alpine musl Acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'vendor/**'
+      - 'Cargo.*'
+      - 'scripts/*musl*'
+      - '.github/workflows/alpine-musl-acceptance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'vendor/**'
+      - 'Cargo.*'
+      - 'scripts/*musl*'
+      - '.github/workflows/alpine-musl-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-build:
+    name: Native musl Build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    env:
+      MUSL_BUILDER: rust@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify native architecture
+        run: test "$(uname -m)" = '${{ matrix.arch }}'
+      - name: Cache native build
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/alpine-native
+            .musl-cargo-cache
+          key: alpine-musl-rust188-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: alpine-musl-rust188-${{ matrix.arch }}-
+      - name: Build and test in pinned native Alpine environment
+        run: |
+          mkdir -p target/alpine-native .musl-cargo-cache
+          docker run --rm \
+            --mount type=bind,src="$PWD",dst=/workspace,readonly \
+            --mount type=bind,src="$PWD/target/alpine-native",dst=/output \
+            --mount type=bind,src="$PWD/.musl-cargo-cache",dst=/usr/local/cargo/registry \
+            -e CARGO_TARGET_DIR=/output -e CARGO_INCREMENTAL=0 \
+            "$MUSL_BUILDER" /bin/sh -ec '
+              apk add --no-cache bash protobuf=29.4-r0 musl=1.2.5-r12 musl-dev=1.2.5-r12 acl >/dev/null
+              cd /workspace
+              bash scripts/build-musl-release.sh "${{ matrix.target }}"
+              cargo +1.88.0 test --workspace --release --locked --target "${{ matrix.target }}"
+              bash scripts/package-musl-release.sh "${{ matrix.target }}" \
+                /output/${{ matrix.target }}/release /output/dist
+            '
+      - name: Baseline and secondary Alpine runtime integration
+        run: |
+          for image in \
+            alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
+            alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0; do
+            docker run --rm \
+              --mount type=bind,src="$PWD/target/alpine-native/${{ matrix.target }}/release",dst=/operon,readonly \
+              --mount type=bind,src="$PWD",dst=/workspace,readonly \
+              -e OPERON_INTEGRATION_BIN_DIR=/operon \
+              "$image" /bin/sh -ec '
+                apk add --no-cache bash python3 coreutils >/dev/null
+                cat /etc/alpine-release
+                /operon/operon --version
+                /operon/operond --version
+                /operon/operon mount --help >/dev/null
+                cd /workspace
+                bash scripts/verify-v0.8.1-integration-coverage.sh
+              '
+          done
+      - name: Upload native binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: musl-native-${{ matrix.arch }}
+          path: |
+            target/alpine-native/${{ matrix.target }}/release/operon
+            target/alpine-native/${{ matrix.target }}/release/operond
+            target/alpine-native/dist/*.tar.gz
+          if-no-files-found: error

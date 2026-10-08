@@ -7231,6 +7231,71 @@ Detailed report P5/P8/P10 scope is in
 Parallel-read tuning, P3 attribute caching, P9 directory pagination/cache and
 store compaction remain explicitly deferred, not unfinished release gates.
 
+## Phase 137: v0.18.22 musl Build and Artifact Contract
+
+Status: In progress. Local musl toolchain setup and dependency audit started;
+Alpine 3.22/3.23 runtime images resolved to digests in the detailed roadmap.
+Static verification and repeatable build scripts are implemented; x86_64
+host musl workspace tests and pinned native Alpine build passed. Native arm64
+build/test and complete runtime/FUSE acceptance remain. The dedicated workflow
+uses native x86_64/arm64 runners rather than emulation.
+Pinned native Alpine workspace tests, x86_64 static archive packaging/smoke and
+Alpine 3.22 packaged-binary integration (including 40MiB streams) passed.
+Verifier positive/dynamic/wrong-architecture/missing-file tests are registered
+in the existing core group. Full FUSE/OpenRC and native arm64 remain required.
+
+Add x86_64/arm64 musl targets alongside glibc. Audit dependencies, pin build
+toolchains/images and verify fully static ELF/archive contracts without disabling
+FUSE. Select a tested Alpine baseline plus a second release; retain current
+versions and avoid inferring runtime support from compilation alone.
+
+## Phase 138: v0.18.23 Alpine Runtime and Live FUSE Acceptance
+
+Status: Planned. Depends on Phase 137.
+
+Validate packaged binaries on both native architectures: config/auth/policy,
+foreground daemon, filesystem/exec/PTY/forwarding, deadlines, containment,
+durability/restart and root/non-root live FUSE. Pin images and retain hashes,
+logs and ops/s-first evidence. Emulation does not replace native acceptance;
+missing required FUSE access is not a passing skip. OpenRC follows in Phase 139;
+apk packaging remains excluded.
+
+## Phase 139: v0.18.24 OpenRC Service Management
+
+Status: Planned. Depends on Phases 137–138.
+
+Implement OpenRC-backed install/start/stop/status/uninstall and boot enablement,
+with explicit backend/scope/privilege semantics, non-root daemon identity,
+private configuration, safe supervision and owned-resource-only cleanup.
+Preserve systemd user services and macOS/Windows behavior. Validate real OpenRC
+boot/lifecycle/readiness/crash recovery/reinstall on both native Alpine
+architectures; fake commands do not count as live acceptance.
+
+## Phase 140: v0.18.25 CI, Install and Release Integration
+
+Status: Planned. Depends on Phases 137–139.
+
+Extend CI/release/checksum/public verification with both musl archives, libc-aware
+download selection and Alpine FUSE/OpenRC gates while preserving platforms. New
+release asset count is ten; historical eight-asset releases remain verifiable.
+Synchronize docs/decisions/validation and exact-SHA orchestration. Added builds
+do not imply a protocol schema change; OpenRC has dedicated service acceptance.
+
+## Phase 141: v0.16.12 Verified musl / Alpine Public Release
+
+Status: Planned. Depends on Phases 137–140. Public version is prospective.
+
+Complete full local/native/Alpine acceptance, confirm/align the next public
+version, commit/push and pass exact-SHA pretag gates before tagging. Verify
+draft checksums, publish and complete public artifact/install/runtime/FUSE
+and README gates (including real downloaded OpenRC lifecycle), then record
+evidence and mark phases complete.
+
+Detailed contracts and acceptance are in
+`docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`. This planning task
+adds no builds or public support claim. Cloudsmith, apk, ARMv7 musl
+and parallel-read tuning remain outside scope.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:
