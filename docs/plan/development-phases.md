@@ -7141,105 +7141,95 @@ is complete; performance conclusions use ops/s first and retain the disclosed
 
 ## Phase 132: v0.18.18 Transport Liveness
 
-Status: In progress. Add RPC-specific deadlines, transfer progress bounds,
-HTTP/2 keepalive and adaptive windows without expiring healthy long-lived
-exec/session/service streams. Failure-mode acceptance remains pending.
+Status: Completed.
 
-Initial Rust/SDK transport policy, per-node YAML settings, daemon keepalive,
-four global CLI timeout overrides and config explain visibility are implemented.
-Focused Rust tests and a real TCP delayed-response/deadline recovery test passed;
-SDK typecheck and tests passed (19); docs/help/skills synchronization passed. Remaining:
-full fault/native acceptance and documentation synchronization. Runtime CI now
-includes a focused transport gate. Real TCP tests also passed for stalled
-headers/body/upload acknowledgement, slow progressing downloads, recovery and
-no automatic mutation replay. Stream-establishment timeouts are separate from
-long-lived body lifetime; upload consumption resets its inactivity bound.
+Rust CLI/mount and SDK now enforce configurable ordinary RPC deadlines through
+response-body completion, separate connection/transfer/progress bounds, and
+HTTP/2 keepalive. Per-node YAML, daemon transport configuration and four global
+CLI timeout overrides support high-latency links and zero/disable semantics.
+Healthy watch/log/PTY/service streams have establishment bounds rather than an
+ordinary lifetime limit; mutations are not automatically replayed.
 
-Real TCP acceptance now also verifies keepalive-only blackhole detection with
-RPC deadlines disabled (about 2s with configured 1s ping interval/timeout),
-explicit reconnect, and partial unary response-body stalls. Shared DeadlineChannel
-enforces configured deadlines through body completion independently of server
-support; metadata/context and long-lived stream exceptions are preserved.
+Real TCP and SDK HTTP2 tests cover stalled headers/bodies/upload acknowledgements,
+slow progressing transfers, incomplete unary bodies, blackholes with RPC
+deadlines disabled, explicit reconnect and recovery. Adaptive flow windows are
+configurable but default off after ops/s acceptance exposed a regression.
+Config explain, docs/help/skills and native macOS/Windows acceptance passed.
 
 ## Phase 133: v0.18.19 Workspace Root Reuse
 
-Status: In progress. Cache canonical root/Linux root fd without weakening
-containment or commit revalidation; define root-change failure semantics.
+Status: Completed.
 
-Daemon filesystem and exec paths now share WorkspaceResolver. Root replacement,
-deletion and alias changes fail closed; Linux operations remain anchored to the
-held descriptor. Local filesystem/daemon regressions passed. Repeated resolver
-microbenchmarks remain around 393k–403k ops/s for both paths; syscall counts for
-10,000 resolutions dropped from 100,216 to 70,215. This is not an end-to-end
-throughput improvement claim. Native/release acceptance remains pending.
+Filesystem and exec/PTY paths share a daemon-owned WorkspaceResolver with
+canonical root and held root handle; Linux resolution remains descriptor-relative.
+Root deletion/replacement/alias changes fail closed. Per-target containment,
+leaf-symlink semantics and mutation commit-time checks remain; redundant parent
+setup is skipped only when safe.
+
+Traversal, root/alias changes, permissions and native platform regressions passed.
+For 10,000 resolutions syscall counts dropped from 100,216 to 70,215 while both
+resolver paths stayed around 393k–403k ops/s. No end-to-end speedup is inferred.
 
 ## Phase 134: v0.18.20 Bounded Streaming and Mount Runtime
 
-Status: In progress. Bounded/lazy CLI uploads, binary stdout, compatible chunk-copy
-reductions and continuously driven mount transport without per-call OS threads.
+Status: Completed.
 
-File/stdin uploads now read on demand with bounded chunks and explicit source
-failure cancellation. Raw stdout is binary-safe; JSON text behavior is retained.
-File/stdin uploads and daemon downloads now read directly into owned protobuf
-vectors, eliminating intermediate reader-buffer copies without changing public
-types or chunk sizing. Borrowed byte uploads and serialization are not zero-copy.
-Windows cancellation acceptance now waits with a bounded deadline for already
-started blocking file operations to release handles and staging files, while
-still requiring old-target integrity and complete cleanup.
-The nested mount bridge uses the continuously driven runtime without a thread
-per call, and its timer/spawn regression passed. Full integration remains pending.
+CLI file/stdin and borrowed-byte uploads produce bounded lazy chunks; local
+source errors cancel instead of committing clean EOF. File readers and daemon
+downloads fill owned protobuf vectors directly. Raw stdout/output are binary-safe;
+quiet and UTF-8-only JSON contracts remain. Borrowed chunks and serialization
+still carry ownership costs; no end-to-end zero-copy claim is made.
 
-Real daemon acceptance now passed for 40MiB binary uploads/raw stdout/output,
-quiet, UTF-8-only JSON rejection, empty uploads, stdin file integrity and healthy
-exec streams exceeding the ordinary RPC deadline. Nested async connect failure
-also returns an error without a runtime-drop panic. Native/full acceptance remains.
+Actual-daemon 40MiB streams, empty uploads, healthy long-lived exec and partial
+upload fault injection passed. Existing targets survive source errors and staging
+is cleaned even with transfer/progress bounds disabled. Native Windows cleanup
+acceptance waits within a bounded deadline for already-started blocking work.
 
-Eight concurrent nested mount callers completed 160 timer/cancellation cycles on
-the shared runtime without per-call threads. All four full validation groups
-passed after disk recovery (49 core, 16 runtime, 13 SDK, 4 Linux system). Final
-source/version changes still require revalidation and native release gates.
+Mounts use a continuously driven runtime without per-call OS threads. Eight
+concurrent nested callers completed 160 timer/cancellation cycles; setup failure
+and runtime destruction regressions passed on supported native platforms.
 
 ## Phase 135: v0.18.21 Secondary Allocation Cleanup
 
-Status: In progress. Cached tracing, page-only audit clones, direct audit
-serialization and store loader deep-copy removal with restart tests.
+Status: Completed.
 
-Trace selection is cached on first use, audit pagination clones only the page,
-typed audit persistence avoids constructing a JSON tree, and store loaders
-consume record values instead of deep-cloning them. Regression acceptance and
-typed records are prepared before moving events into the retention queue, removing
-the AuditEvent clone while keeping file IO outside its lock. Additional acceptance
-and allocation measurements remain pending.
-
-Initial full validation groups were invalidated by disk exhaustion. Removed only
-rebuildable Rust incremental cache (6.7GiB), restored the interrupted script from
-HEAD, and restarted all four groups with CARGO_INCREMENTAL=0. Full workspace
-tests and strict Clippy passed before this environment failure; final-source
-revalidation is still required.
+Mount tracing is cached on first use; audit pagination clones only the page
+(10 clones for a 10-record page from 10,000 retained events). Typed audit records
+are prepared before moving events into retention, avoiding event/JSON-tree
+clones and keeping durable queue waiting outside the audit lock. Store loaders
+consume values instead of deep-cloning them. Mixed-record restart restoration,
+corrupted tails, sticky write failures and isolated trace-cache tests passed.
+Store compaction and retention changes remain outside scope.
 
 ## Phase 136: v0.16.11 Acceptance and Public Release
 
-Status: In progress. Full local/native acceptance, exact-commit pre-tag gates,
-publication and public artifact/install/README verification remain required.
+Status: Completed.
 
-Public versions and workflow examples are aligned to v0.16.11; a new release
-alignment gate supersedes frozen historical v0.16.10 assertions. Final groups
-passed (50 core, 16 runtime, 13 SDK, 4 Linux system), workspace/Clippy passed,
-SDK 23 tests/typecheck/build passed and dependency audit reports zero known
-vulnerabilities. Trace caching is verified in an isolated subprocess. Candidate
-commit, idle-host ops/RSS evidence, exact-commit native gates and publication
-remain pending; see `docs/plan/v0.16.11-release-publication.md`.
+Published [v0.16.11](https://github.com/denghongcai/Operon/releases/tag/v0.16.11)
+from `79132f27a306e8737cec802a310278c14c310e13`. Workspace tests, strict
+Clippy, SDK API/typecheck/build/23 tests/audit and all full groups (50 core,
+16 runtime, 13 SDK, 4 Linux system) passed. Current open dependency alerts: zero.
 
-All remote gates passed on fcb26aa and pretag orchestration passed, but no tag
-was created. Clean-commit ops/s isolated a client adaptive-window regression;
-make adaptive flow opt-in/default off and rerun all gates on the new exact SHA.
-Deadline/keepalive defaults are retained. Real partial-upload source-error
-acceptance also passed against the actual daemon with progress/transfer bounds
-disabled, proving old-target integrity and staging cleanup after cancellation.
+Exact-SHA CI `37725563718`, tag CI `37726081500`, CodeQL `37725562854`,
+native live mount `37725577419`, Windows runner `37725580125`, Draft Release
+`37726081507`, public artifacts `37726586546`, install/service verification
+`37726590018` and README Quickstart `37726593757` passed. Both pretag and
+postrelease orchestration passed; all eight release assets are present and
+downloaded checksums/archive smoke passed before publication.
 
-Detailed P5/P8/P10 scope and acceptance are in
-`docs/plan/v0.18.18-transport-workspace-secondary-roadmap.md`. No parallel-read
-tuning is included; all five phases remain unfinished.
+Final clean-source ops/s evidence is `/tmp/operon-phases-r9bbfodv`. CLI 64MiB
+upload improved from 6.00–6.10 to 9.19–9.47 ops/s, raw reads from 7.71–8.15 to
+9.82–9.92, and output-file reads stayed around 10 ops/s. Upload/raw-read RSS fell
+to roughly 8MiB. FUSE measurements are mixed and regressions are disclosed in
+`docs/plan/v0.16.11-release-publication.md`; no universal speedup is claimed.
+
+Earlier green commits were not reused after the adaptive-window default and
+Windows cleanup-test corrections. ENOSPC/inherited-RSS-contaminated runs are
+excluded; source/logs remain and only scoped regenerable build caches were removed.
+Detailed report P5/P8/P10 scope is in
+`docs/plan/v0.18.18-transport-workspace-secondary-roadmap.md`.
+Parallel-read tuning, P3 attribute caching, P9 directory pagination/cache and
+store compaction remain explicitly deferred, not unfinished release gates.
 
 ## Planning Principle
 
