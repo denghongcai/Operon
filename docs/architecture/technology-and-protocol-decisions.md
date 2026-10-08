@@ -389,11 +389,13 @@ macos-aarch64
 windows-x86_64
 ```
 
-Current public release automation builds Linux archives plus macOS and Windows
-core runtime preview archives. The preview target covers daemon and CLI runtime
-behavior, not mount parity. macOS and Windows are covered by CI smoke checks and
-the platform capability matrix below remains the release gate for expanding
-claims beyond core runtime preview:
+Release automation preserves GNU/glibc Linux archives, native macOS FUSE-T and
+Windows WinFsp archives and the TypeScript SDK. The Alpine extension adds native
+x86_64/arm64 static musl archives from v0.16.12 after verified publication,
+without changing GNU names or introducing a new protocol. Native Alpine
+runtime/live FUSE/rebooted OpenRC gates complement existing macOS/Windows mount
+and runtime gates. The following table records the historical first-pass stance;
+current live mount parity supersedes its original core-only preview restriction:
 
 | Capability group | macOS / Windows first-pass stance |
 | --- | --- |

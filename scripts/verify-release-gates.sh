@@ -19,6 +19,8 @@ fi
 TAG="$1"
 COMMIT_SHA="$2"
 REPO="${3:-denghongcai/Operon}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/lib/release-assets.sh"
 WORKFLOW_NAMES=(
   "Cross-Platform Live Mount Smoke"
   "v0.14 Live Mount Smoke"
@@ -35,6 +37,8 @@ if [[ "$TAG" != v* ]]; then
   echo "no public release gates for non-release tag $TAG"
   exit 0
 fi
+release_validate_tag "$TAG"
+[[ "$COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo 'release gates require a full exact commit SHA' >&2; exit 1; }
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh is required to verify release gates" >&2
@@ -81,6 +85,26 @@ find_successful_job() {
 missing=0
 find_successful_job "macOS FUSE-T" "${MACOS_JOB_NAMES[@]}" || missing=1
 find_successful_job "Windows WinFsp" "${WINDOWS_JOB_NAMES[@]}" || missing=1
+
+if release_has_musl_assets "$TAG"; then
+  for architecture in x86_64 aarch64; do
+    passed=false
+    while IFS= read -r run_id; do
+      [[ -n "$run_id" ]] || continue
+      if gh run view "$run_id" --repo "$REPO" --json headSha,jobs --jq \
+        ".headSha == \"$COMMIT_SHA\" and any(.jobs[]; .name == \"Native musl Build ($architecture)\" and .conclusion == \"success\" and any(.steps[]; .name == \"Native Alpine live FUSE and runtime acceptance\" and .conclusion == \"success\") and any(.steps[]; .name == \"Native rebooted Alpine OpenRC service acceptance\" and .conclusion == \"success\") and any(.steps[]; .name == \"Native identical-environment GNU and musl ops comparison\" and .conclusion == \"success\"))" \
+        | grep -Fxq true; then
+        echo "native $architecture Alpine runtime/FUSE/OpenRC gate passed in run $run_id"
+        passed=true
+        break
+      fi
+    done < <(gh run list --repo "$REPO" --workflow "Alpine musl Acceptance" --commit "$COMMIT_SHA" --status success --limit 20 --json databaseId --jq '.[].databaseId')
+    if [[ "$passed" != true ]]; then
+      echo "missing release gate: native $architecture Alpine runtime/FUSE/OpenRC on $COMMIT_SHA" >&2
+      missing=1
+    fi
+  done
+fi
 
 if [[ "$missing" -ne 0 ]]; then
   echo "run '${WORKFLOW_NAMES[0]}' with platform=all, or run separate platform=macos and platform=windows dispatches, before creating or updating a public release" >&2

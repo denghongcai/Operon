@@ -149,8 +149,10 @@ supervisors.
 
 The v0.18.7 musl / Alpine distribution validation checks
 `scripts/assess-musl-alpine-distribution.sh`, the Alpine/musl decision record,
-and user-facing docs that state Alpine and musl-based distributions are
-unsupported by the prebuilt Linux archives.
+and historical GNU-on-Alpine incompatibility. The approved additional static
+musl line has native runtime/FUSE/OpenRC gates in `Alpine musl Acceptance` and
+downloaded public gates in `Verify Alpine Release`; GNU incompatibility remains
+a separate negative test, not a blanket rejection of musl archives.
 
 The v0.18.9 Windows runner image migration validation checks the manual
 `Windows Runner Image Smoke` workflow, the `windows-2025` label policy for

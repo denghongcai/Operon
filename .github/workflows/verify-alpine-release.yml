@@ -1,0 +1,37 @@
+name: Verify Alpine Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Public musl-enabled release tag, for example v0.16.12
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Alpine Release (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify native runner and required FUSE device
+        run: |
+          test "$(uname -m)" = '${{ matrix.arch }}'
+          if ! test -c /dev/fuse; then sudo modprobe fuse; fi
+          test -c /dev/fuse
+      - name: Verify public Alpine install, runtime, live FUSE and rebooted OpenRC
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERON_RELEASE_TAG: ${{ inputs.tag }}
+        run: bash scripts/verify-alpine-release.sh "$OPERON_RELEASE_TAG" "$GITHUB_REPOSITORY"

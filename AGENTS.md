@@ -29,7 +29,7 @@ Operon should not own:
 ## Key Design Documents
 
 - `docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`
-  - Planned Phases 137–141 for static x86_64/arm64 musl builds, native Alpine
+  - In-progress Phases 137–141 for static x86_64/arm64 musl builds, native Alpine
     runtime/FUSE/OpenRC service acceptance and verified release; excludes apk,
     Cloudsmith and ARMv7 musl.
 
@@ -500,9 +500,9 @@ Operon should not own:
 
 - `docs/decisions/musl-alpine-distribution.md`
   - Current Linux distribution decision.
-  - Keeps public Linux archives glibc-only for now and documents Alpine/musl as
-    unsupported by prebuilt archives unless a later phase adds musl/static
-    artifacts.
+  - Records additional static musl archives alongside GNU/glibc, versioned
+    asset contracts, native Alpine/OpenRC acceptance and published-versus-source
+    support boundaries. GNU archives remain incompatible with Alpine.
 
 - `docs/architecture/technology-and-protocol-decisions.md`
   - Technical architecture decisions.
@@ -1252,9 +1252,10 @@ Defer:
 - Latest phase status update: v0.18.7 musl / Alpine Distribution Decision is
   completed. `scripts/assess-musl-alpine-distribution.sh` records Alpine/musl
   evidence, `docs/decisions/musl-alpine-distribution.md` accepts the current
-  glibc-only public Linux archive policy, and README/release-install docs state
-  that Alpine and musl-based distributions are unsupported by the prebuilt
-  Linux archives. Nothing remains in v0.18.7.
+  historical glibc-only public Linux archive policy. Phases 137–141 supersede
+  that policy with additional musl artifacts and real native Alpine/OpenRC
+  gates; GNU-on-Alpine incompatibility remains a separate negative check.
+  Nothing remains in the historical v0.18.7 decision phase.
 - Latest phase status update: v0.18.9 Windows Runner Image Migration Smoke is
   completed. Release-critical Windows workflow jobs use explicit
   `windows-2025`, `.github/workflows/windows-runner-image-smoke.yml` provides

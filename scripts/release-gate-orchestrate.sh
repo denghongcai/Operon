@@ -29,6 +29,8 @@ MODE="${1:-}"
 TAG="${2:-}"
 COMMIT_SHA="${3:-}"
 REPO="${4:-${GITHUB_REPOSITORY:-}}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/lib/release-assets.sh"
 
 if [[ -z "$MODE" || -z "$TAG" || -z "$COMMIT_SHA" ]]; then
   usage
@@ -59,6 +61,13 @@ require_gh() {
     echo "gh is required for release gate orchestration" >&2
     exit 1
   fi
+}
+
+require_exact_sha() {
+  release_validate_tag "$TAG"
+  [[ "$COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || {
+    echo 'release verification requires the full 40-character commit SHA, not HEAD or a short SHA' >&2; exit 1;
+  }
 }
 
 successful_run_ids() {
@@ -117,6 +126,7 @@ Release gate orchestration plan for $REPO@$TAG on commit $COMMIT_SHA
 1. Push the release-preparation commit to main and wait for:
    gh run list --repo "$REPO" --workflow "CI" --commit "$COMMIT_SHA"
    gh run list --repo "$REPO" --workflow "CodeQL" --commit "$COMMIT_SHA"
+   gh run list --repo "$REPO" --workflow "Alpine musl Acceptance" --commit "$COMMIT_SHA"
 
 2. Dispatch release-only pre-tag gates on the exact commit:
    gh workflow run "Cross-Platform Live Mount Smoke" --repo "$REPO" --ref main -f platform=all -f macos_backend=nfs -f macos_runner=hosted
@@ -137,6 +147,7 @@ Release gate orchestration plan for $REPO@$TAG on commit $COMMIT_SHA
    gh workflow run "Verify Release Artifacts" --repo "$REPO" --ref main -f tag="$TAG"
    gh workflow run "Verify Release Install Usability" --repo "$REPO" --ref main -f tag="$TAG"
    gh workflow run "Verify README Quickstart" --repo "$REPO" --ref main -f tag="$TAG"
+   gh workflow run "Verify Alpine Release" --repo "$REPO" --ref main -f tag="$TAG"
 
 7. Verify post-release gates and record run IDs in the active phase docs:
    scripts/release-gate-orchestrate.sh postrelease "$TAG" "$COMMIT_SHA" "$REPO"
@@ -145,6 +156,7 @@ PLAN
 
 verify_pretag() {
   require_public_tag
+  require_exact_sha
   require_gh
 
   require_successful_workflow "CI"
@@ -162,9 +174,14 @@ verify_postrelease() {
   local is_draft is_prerelease release_url
 
   require_public_tag
+  require_exact_sha
   require_gh
 
   require_successful_workflow "Draft Release"
+  actual_sha="$(gh api "repos/$REPO/commits/$TAG" --jq '.sha')"
+  [[ "$actual_sha" == "$COMMIT_SHA" ]] || {
+    echo "published tag points at $actual_sha, not verified source $COMMIT_SHA" >&2; exit 1;
+  }
 
   is_draft="$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq '.isDraft')"
   is_prerelease="$(gh release view "$TAG" --repo "$REPO" --json isPrerelease --jq '.isPrerelease')"
@@ -183,6 +200,10 @@ verify_postrelease() {
   require_successful_workflow "Verify Release Artifacts"
   require_successful_workflow "Verify Release Install Usability"
   require_successful_workflow "Verify README Quickstart"
+  if release_has_musl_assets "$TAG"; then
+    require_successful_job "Verify Alpine Release" "downloaded native x86_64 Alpine release" "Verify Alpine Release (x86_64)"
+    require_successful_job "Verify Alpine Release" "downloaded native arm64 Alpine release" "Verify Alpine Release (aarch64)"
+  fi
 
   echo "post-release verification gates passed for $REPO@$TAG on $COMMIT_SHA"
 }

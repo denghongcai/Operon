@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/lib/release-assets.sh"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -30,6 +32,7 @@ if [[ -z "$TAG" ]]; then
   usage
   exit 1
 fi
+release_validate_tag "$TAG"
 
 if [[ -z "$REPO" ]]; then
   if remote_url="$(git remote get-url origin 2>/dev/null)"; then
@@ -44,33 +47,11 @@ if [[ -z "$REPO" ]]; then
 fi
 
 expected_assets() {
-  local tag="$1"
-  cat <<ASSETS
-operon-${tag}-linux-x86_64.tar.gz
-operon-${tag}-linux-arm64.tar.gz
-operon-${tag}-linux-armv7.tar.gz
-operon-${tag}-macos-x86_64.tar.gz
-operon-${tag}-macos-aarch64.tar.gz
-operon-${tag}-windows-x86_64.zip
-operon-sdk-js-${tag}.tar.gz
-SHA256SUMS
-ASSETS
+  release_expected_assets "$1"
 }
 
 current_asset_name() {
-  local tag="$1"
-  local system machine
-  system="$(uname -s)"
-  machine="$(uname -m)"
-  case "${system}-${machine}" in
-    Linux-x86_64) printf 'operon-%s-linux-x86_64.tar.gz\n' "$tag" ;;
-    Linux-aarch64|Linux-arm64) printf 'operon-%s-linux-arm64.tar.gz\n' "$tag" ;;
-    Linux-armv7l|Linux-armv7*) printf 'operon-%s-linux-armv7.tar.gz\n' "$tag" ;;
-    Darwin-x86_64) printf 'operon-%s-macos-x86_64.tar.gz\n' "$tag" ;;
-    Darwin-arm64) printf 'operon-%s-macos-aarch64.tar.gz\n' "$tag" ;;
-    MINGW64_NT-*|MSYS_NT-*|CYGWIN_NT-*|Windows_NT-*) printf 'operon-%s-windows-x86_64.zip\n' "$tag" ;;
-    *) echo "unsupported release verification platform: ${system}-${machine}" >&2; return 1 ;;
-  esac
+  release_current_asset_name "$1"
 }
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -90,7 +71,12 @@ command -v sha256sum >/dev/null || {
   exit 1
 }
 
-WORKDIR="${OPERON_RELEASE_VERIFY_DIR:-$(mktemp -d)}"
+if [[ -n "${OPERON_RELEASE_VERIFY_DIR:-}" ]]; then
+  mkdir -p "$OPERON_RELEASE_VERIFY_DIR"
+  WORKDIR="$(mktemp -d "$OPERON_RELEASE_VERIFY_DIR/operon-artifacts.XXXXXX")"
+else
+  WORKDIR="$(mktemp -d)"
+fi
 trap 'rm -rf "$WORKDIR"' EXIT
 mkdir -p "$WORKDIR/assets" "$WORKDIR/extracted"
 

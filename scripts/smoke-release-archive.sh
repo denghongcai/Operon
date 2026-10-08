@@ -101,6 +101,20 @@ if [[ "$run_binaries" != true ]]; then
   exit 0
 fi
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/release-assets.sh"
+archive_tag="$(basename "$archive" | sed -E 's/^operon-(v[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?)-(linux|macos|windows)-.*/\1/')"
+expected_version="$(release_expected_version "$archive_tag")"
+version_environment=(env)
+if [[ "$(uname -s)" == Darwin ]]; then
+  version_environment+=(-u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH)
+fi
+[[ "$("${version_environment[@]}" "$operon_bin" --version)" == "operon $expected_version" ]] || {
+  echo 'packaged operon version does not match the archive tag' >&2; exit 1;
+}
+[[ "$("${version_environment[@]}" "$operond_bin" --version)" == "operond $expected_version" ]] || {
+  echo 'packaged operond version does not match the archive tag' >&2; exit 1;
+}
+
 if [[ "$(uname -s)" == "Darwin" ]]; then
   env -u DYLD_LIBRARY_PATH \
     -u DYLD_FALLBACK_LIBRARY_PATH \

@@ -85,7 +85,7 @@ echo "running musl/Alpine distribution assessment in $image with $container_runt
       source scripts/lib/release-install.sh
       tag="$0"
       repo="$1"
-      asset="$(release_install_current_asset_name "$tag")"
+      asset="$(OPERON_RELEASE_LIBC=gnu release_install_current_asset_name "$tag")"
       workdir="${OPERON_RELEASE_INSTALL_WORKDIR:-/tmp/operon-musl-assessment}"
       assets_dir="$workdir/assets"
       extract_dir="$workdir/extracted"

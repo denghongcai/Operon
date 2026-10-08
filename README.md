@@ -117,8 +117,14 @@ through Linux FUSE, macOS FUSE-T, and Windows WinFsp; hosts must have the
 corresponding platform runtime installed before `operon mount` can start a
 filesystem session.
 
-The prebuilt Linux archives are glibc-based and currently target glibc 2.31 or
-newer, such as Ubuntu 20.04+. Alpine and musl-based distributions are unsupported by the prebuilt Linux archives; build from source or use a glibc-based environment there.
+GNU/glibc Linux archives target glibc 2.31 or newer, such as Ubuntu 20.04+.
+These archives remain unsupported on Alpine. Additional static musl x86_64/arm64
+archives are under acceptance for v0.16.12, covering Alpine 3.22/3.23; v0.16.11
+and older releases remain GNU-only. No ARMv7 musl archive is provided.
+Use `OPERON_RELEASE_LIBC=gnu|musl` to override libc selection explicitly; unknown
+or ambiguous environments must not silently choose an incompatible archive.
+Alpine needs `bash`, `curl`, `tar`, and `fuse3` plus `/dev/fuse` for live mount.
+For system services see [Alpine/OpenRC guidance](docs/quality/alpine-openrc.md).
 
 ```bash
 VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
@@ -131,6 +137,31 @@ case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) ARCH=macos-aarch64 ;;
   *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
+
+if [[ "$ARCH" == linux-* ]]; then
+  LIBC="${OPERON_RELEASE_LIBC:-auto}"
+  if [[ "$LIBC" == auto ]]; then
+    GNU=false; MUSL=false
+    GNU_VERSION="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
+    LDD_VERSION="$(LC_ALL=C ldd --version 2>&1 || true)"
+    [[ "$GNU_VERSION" == glibc\ * ]] && GNU=true
+    [[ "$LDD_VERSION" == *GLIBC* || "$LDD_VERSION" == *'GNU libc'* || "$LDD_VERSION" == *'GNU C Library'* ]] && GNU=true
+    [[ "$LDD_VERSION" == *musl* || -f /etc/alpine-release ]] && MUSL=true
+    case "$GNU-$MUSL" in
+      true-false) LIBC=gnu ;;
+      false-true) LIBC=musl ;;
+      *) echo 'unknown/ambiguous libc; set OPERON_RELEASE_LIBC=gnu or musl' >&2; exit 1 ;;
+    esac
+  fi
+  case "$LIBC" in
+    gnu) ;;
+    musl)
+      [[ "$ARCH" != linux-armv7 ]] || { echo 'ARMv7 musl is unsupported' >&2; exit 1; }
+      ARCH="linux-musl-${ARCH#linux-}"
+      ;;
+    *) echo 'OPERON_RELEASE_LIBC must be auto, gnu or musl' >&2; exit 1 ;;
+  esac
+fi
 
 curl -fL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/operon-${VERSION}-${ARCH}.tar.gz" -o /tmp/operon.tar.gz
 tar -xzf /tmp/operon.tar.gz -C /tmp

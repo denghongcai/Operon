@@ -40,8 +40,10 @@ from the host Service Control Manager.
 The Linux container wrapper is the release compatibility check for documented
 glibc-based archives. It uses Docker on GitHub runners and can use Docker or
 Podman locally. `ubuntu:20.04` represents the current glibc 2.31 minimum
-baseline, while `debian:12` catches a current stable distribution path. Alpine
-and musl-based distributions are unsupported by the prebuilt Linux archives.
+baseline, while `debian:12` catches a current stable distribution path. GNU/glibc
+archives remain unsupported on Alpine. Additional fully static musl archives
+from prospective v0.16.12 have separate native Alpine acceptance; the current
+published v0.16.11 remains GNU-only until the new release is verified.
 The decision is recorded in `docs/decisions/musl-alpine-distribution.md`.
 
 ## Local Dry Run
@@ -75,8 +77,37 @@ and the script entrypoints used by CI validation.
   workflow output first. It shows whether the installed `operond` binary
   generated the expected systemd, launchd, or Windows Service command.
 - If Alpine or another musl-based host reports a loader-style failure, use a
-  glibc-based Linux distribution or build from source. Alpine and musl-based
-  distributions are unsupported by the prebuilt Linux archives.
+  matching musl archive (v0.16.12 or newer once published), not the GNU/glibc
+  archive. Older releases require source builds or a glibc environment.
+
+## Native Alpine verification and selection
+
+`Verify Alpine Release` downloads and verifies each native musl archive on
+x86_64/arm64. Both pinned Alpine 3.22/3.23 releases must pass automatic libc
+selection, first-use installation, full packaged integration, root/non-root
+live FUSE and real rebooted OpenRC lifecycle; absent FUSE access is not a skip.
+Public acceptance uses actual release binaries, not locally rebuilt substitutes.
+OpenRC requires system privileges and an existing non-root account; fake
+systemd/launchd/SCM smoke is retained separately, not OpenRC support evidence.
+
+The shared asset contract requires ten assets from v0.16.12 onward, versus eight
+for older tags. Selection uses runtime libc signals; installing a musl toolchain
+on a glibc host does not change the chosen asset. Set `OPERON_RELEASE_LIBC=gnu`
+or `musl` for an explicit override; unknown/ambiguous detection errors instead
+of silently choosing. ARMv7 musl has no archive and is never mapped to GNU.
+
+```sh
+OPERON_RELEASE_LIBC=musl scripts/verify-release-install-usability.sh --dry-run v0.16.12 denghongcai/Operon
+scripts/verify-alpine-release.sh v0.16.12 denghongcai/Operon
+```
+
+Download connect/total waits are configurable with
+`OPERON_RELEASE_CONNECT_TIMEOUT_SECS` (default 30) and
+`OPERON_RELEASE_DOWNLOAD_TIMEOUT_SECS` (default 0, no total deadline).
+Native harness waits are configurable as documented in
+`docs/quality/alpine-openrc.md`. A custom verification work directory is only a
+parent for a newly created owned temp child; cleanup never recursively deletes
+the caller's directory.
 
 ## Security hardening preflight
 

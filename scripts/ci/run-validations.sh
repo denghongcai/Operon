@@ -33,6 +33,7 @@ case "$requested_group" in
 esac
 
 validations=(
+  "core|musl Release Integration Contracts|scripts/verify-musl-release-integration.sh"
   "runtime|Alpine OpenRC and Shutdown Contracts|scripts/verify-alpine-openrc-contract.sh"
   "core|musl Build and Static Verifier Contract|scripts/verify-musl-build-contract.sh"
   "core|v0.16.11 Release Publication Validation|scripts/verify-v0.16.11-release-publication.sh"

@@ -16,10 +16,11 @@ require_file scripts/verify-release-artifacts.sh
 require_file scripts/smoke-release-archive.sh
 require_pattern 'gh release download' scripts/verify-release-artifacts.sh
 require_pattern 'sha256sum -c SHA256SUMS' scripts/verify-release-artifacts.sh
-require_pattern 'operon-\$\{tag\}-linux-x86_64\.tar\.gz' scripts/verify-release-artifacts.sh
-require_pattern 'operon-\$\{tag\}-macos-aarch64\.tar\.gz' scripts/verify-release-artifacts.sh
-require_pattern 'operon-\$\{tag\}-windows-x86_64\.zip' scripts/verify-release-artifacts.sh
-require_pattern 'operon-sdk-js-\$\{tag\}\.tar\.gz' scripts/verify-release-artifacts.sh
+require_pattern 'release_expected_assets' scripts/verify-release-artifacts.sh
+require_pattern 'operon-\$\{tag\}-linux-x86_64\.tar\.gz' scripts/lib/release-assets.sh
+require_pattern 'operon-\$\{tag\}-macos-aarch64\.tar\.gz' scripts/lib/release-assets.sh
+require_pattern 'operon-\$\{tag\}-windows-x86_64\.zip' scripts/lib/release-assets.sh
+require_pattern 'operon-sdk-js-\$\{tag\}\.tar\.gz' scripts/lib/release-assets.sh
 require_pattern 'scripts/smoke-release-archive.sh "\$WORKDIR/assets/\$asset"' scripts/verify-release-artifacts.sh
 require_pattern 'doctor --help' scripts/smoke-release-archive.sh
 require_pattern 'exec --help' scripts/smoke-release-archive.sh

@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release-assets.sh"
+
 release_install_current_asset_name() {
-  local tag="$1"
-  local system machine
-  system="$(uname -s)"
-  machine="$(uname -m)"
-  case "${system}-${machine}" in
-    Linux-x86_64) printf 'operon-%s-linux-x86_64.tar.gz\n' "$tag" ;;
-    Linux-aarch64|Linux-arm64) printf 'operon-%s-linux-arm64.tar.gz\n' "$tag" ;;
-    Linux-armv7l|Linux-armv7*) printf 'operon-%s-linux-armv7.tar.gz\n' "$tag" ;;
-    Darwin-x86_64) printf 'operon-%s-macos-x86_64.tar.gz\n' "$tag" ;;
-    Darwin-arm64) printf 'operon-%s-macos-aarch64.tar.gz\n' "$tag" ;;
-    MINGW64_NT-*|MSYS_NT-*|CYGWIN_NT-*|Windows_NT-*) printf 'operon-%s-windows-x86_64.zip\n' "$tag" ;;
-    *) echo "unsupported release install platform: ${system}-${machine}" >&2; return 1 ;;
-  esac
+  release_current_asset_name "$1"
+}
+
+release_install_download() {
+  local url="$1" output="$2"
+  curl -fsSL --connect-timeout "${OPERON_RELEASE_CONNECT_TIMEOUT_SECS:-30}" \
+    --max-time "${OPERON_RELEASE_DOWNLOAD_TIMEOUT_SECS:-0}" "$url" -o "$output"
 }
 
 release_install_repo_from_remote() {
@@ -49,7 +45,12 @@ release_install_setup() {
   }
 
   RELEASE_INSTALL_ASSET="$(release_install_current_asset_name "$tag")"
-  RELEASE_INSTALL_WORKDIR="${OPERON_RELEASE_INSTALL_WORKDIR:-$(mktemp -d)}"
+  if [[ -n "${OPERON_RELEASE_INSTALL_WORKDIR:-}" ]]; then
+    mkdir -p "$OPERON_RELEASE_INSTALL_WORKDIR"
+    RELEASE_INSTALL_WORKDIR="$(mktemp -d "$OPERON_RELEASE_INSTALL_WORKDIR/operon-install.XXXXXX")"
+  else
+    RELEASE_INSTALL_WORKDIR="$(mktemp -d)"
+  fi
   RELEASE_INSTALL_ASSETS_DIR="$RELEASE_INSTALL_WORKDIR/assets"
   RELEASE_INSTALL_EXTRACT_DIR="$RELEASE_INSTALL_WORKDIR/extracted"
   RELEASE_INSTALL_PREFIX="${OPERON_RELEASE_INSTALL_PREFIX:-$RELEASE_INSTALL_WORKDIR/prefix}"
@@ -61,8 +62,8 @@ release_install_setup() {
     "$RELEASE_INSTALL_HOME"
 
   local release_url="https://github.com/${repo}/releases/download/${tag}"
-  curl -fsSL "$release_url/SHA256SUMS" -o "$RELEASE_INSTALL_ASSETS_DIR/SHA256SUMS"
-  curl -fsSL "$release_url/$RELEASE_INSTALL_ASSET" -o "$RELEASE_INSTALL_ASSETS_DIR/$RELEASE_INSTALL_ASSET"
+  release_install_download "$release_url/SHA256SUMS" "$RELEASE_INSTALL_ASSETS_DIR/SHA256SUMS"
+  release_install_download "$release_url/$RELEASE_INSTALL_ASSET" "$RELEASE_INSTALL_ASSETS_DIR/$RELEASE_INSTALL_ASSET"
 
   grep -E "[ *]${RELEASE_INSTALL_ASSET}$" \
     "$RELEASE_INSTALL_ASSETS_DIR/SHA256SUMS" \

@@ -67,6 +67,31 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 
+if [[ "$ARCH" == linux-* ]]; then
+  LIBC="${OPERON_RELEASE_LIBC:-auto}"
+  if [[ "$LIBC" == auto ]]; then
+    GNU=false; MUSL=false
+    GNU_VERSION="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
+    LDD_VERSION="$(LC_ALL=C ldd --version 2>&1 || true)"
+    [[ "$GNU_VERSION" == glibc\ * ]] && GNU=true
+    [[ "$LDD_VERSION" == *GLIBC* || "$LDD_VERSION" == *'GNU libc'* || "$LDD_VERSION" == *'GNU C Library'* ]] && GNU=true
+    [[ "$LDD_VERSION" == *musl* || -f /etc/alpine-release ]] && MUSL=true
+    case "$GNU-$MUSL" in
+      true-false) LIBC=gnu ;;
+      false-true) LIBC=musl ;;
+      *) echo 'unknown/ambiguous libc; set OPERON_RELEASE_LIBC=gnu or musl' >&2; exit 1 ;;
+    esac
+  fi
+  case "$LIBC" in
+    gnu) ;;
+    musl)
+      [[ "$ARCH" != linux-armv7 ]] || { echo 'ARMv7 musl is unsupported' >&2; exit 1; }
+      ARCH="linux-musl-${ARCH#linux-}"
+      ;;
+    *) echo 'OPERON_RELEASE_LIBC must be auto, gnu or musl' >&2; exit 1 ;;
+  esac
+fi
+
 curl -fsSL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/operon-${VERSION}-${ARCH}.tar.gz" -o /tmp/operon.tar.gz
 tar -xzf /tmp/operon.tar.gz -C /tmp
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon

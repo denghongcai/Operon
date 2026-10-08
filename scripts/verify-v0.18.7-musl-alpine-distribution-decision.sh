@@ -14,11 +14,13 @@ require_pattern 'No v0.18.7 musl / Alpine distribution decision work remains' do
 
 require_file docs/decisions/musl-alpine-distribution.md
 require_file scripts/assess-musl-alpine-distribution.sh
-require_pattern 'Decision: keep glibc-only public Linux archives for now' docs/decisions/musl-alpine-distribution.md
-require_pattern 'Alpine and musl-based distributions are unsupported by the prebuilt Linux archives' README.md docs/quality/release-install-usability.md
+require_pattern 'policy: keep glibc-only public Linux archives for now' docs/plan/v0.18.7-musl-alpine-distribution-decision.md
+require_pattern 'Decision: add fully static musl archives alongside existing GNU/glibc archives' docs/decisions/musl-alpine-distribution.md
+require_pattern 'archives remain unsupported on Alpine' README.md docs/quality/release-install-usability.md
 require_pattern 'scripts/assess-musl-alpine-distribution.sh' docs/quality/release-install-usability.md DEVELOPMENT.md AGENTS.md scripts/ci/run-validations.sh
 require_pattern 'v0.18.7 musl / Alpine Distribution Decision Validation' scripts/ci/run-validations.sh
-require_pattern 'alpine:' scripts/assess-musl-alpine-distribution.sh docs/decisions/musl-alpine-distribution.md
+require_pattern 'alpine:' scripts/assess-musl-alpine-distribution.sh
+require_pattern 'Alpine 3.22 and 3.23' docs/decisions/musl-alpine-distribution.md
 require_pattern 'x86_64-unknown-linux-musl' docs/decisions/musl-alpine-distribution.md
 
 bash -n scripts/assess-musl-alpine-distribution.sh

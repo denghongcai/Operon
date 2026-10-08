@@ -7260,11 +7260,20 @@ root replacement rejection on Alpine 3.22. Non-root live acceptance also passed
 on Alpine 3.22 and 3.23 (UID 1000). Composite create/read/delete measured 115.97
 and 120.92 ops/s respectively; these are fixture metrics, not comparative claims.
 Native arm64 live mounts and broader failure/comparative performance evidence
-remain required. Required live FUSE acceptance is now wired into the native CI.
+were still required at that initial checkpoint. Required live FUSE acceptance is now wired into the native CI.
 Both native architectures subsequently passed root/non-root real FUSE/runtime
 on both releases in run `37795073016` at
 `84a8e59cc6f54bea480fd2402dfb07bf603f3ffb`; CI `37795073023` and CodeQL
 `37795075639` passed. Broader failure/comparative performance acceptance remains.
+
+Local identical-environment native x86_64 GNU/musl comparison passed with three
+alternating-order trials and binary hashes retained in
+`/tmp/operon-libc-comparison.jsonl`. Median GNU/musl ops/s: fs stat 317.47/292.75,
+complete exec 201.99/198.30, FUSE create/read/delete 159.47/160.59; ~4 MiB
+integrity-checked stream write 93.65/76.36 and read 107.94/83.29 operations/s.
+CLI startup is included; these are not pure RPC throughput measurements.
+musl is not universally faster. Native arm64 comparative and final-release
+downloaded-binary comparison remain required and are wired into CI/public gates.
 
 Validate packaged binaries on both native architectures: config/auth/policy,
 foreground daemon, filesystem/exec/PTY/forwarding, deadlines, containment,
@@ -7298,6 +7307,10 @@ frozen before boot to avoid concurrent rebuild contamination. Five existing
 format-argument lint warnings were mechanically aligned for the pinned Rust
 1.88 clippy gate without changing error strings. Service usage/timeout/ownership documentation is in
 `docs/quality/alpine-openrc.md`; focused contracts are in the runtime group.
+At `82ea08506f78e7b6d7ac33f5cd7dd288c314fe71`, native Alpine acceptance
+`37800708634` passed both architectures and both Alpine releases, including real
+OpenRC boot/reboot and child cleanup. CI `37800708675` and CodeQL `37800708019`
+passed. Final release SHA regression and public downloaded acceptance remain.
 
 Implement OpenRC-backed install/start/stop/status/uninstall and boot enablement,
 with explicit backend/scope/privilege semantics, non-root daemon identity,
@@ -7308,7 +7321,19 @@ architectures; fake commands do not count as live acceptance.
 
 ## Phase 140: v0.18.25 CI, Install and Release Integration
 
-Status: Planned. Depends on Phases 137–139.
+Status: In progress. Final Phase 138/139 evidence remains required.
+
+Added a shared versioned asset contract (ten assets from v0.16.12, eight for
+historical tags), strict libc/architecture-aware selection with explicit
+`OPERON_RELEASE_LIBC` override, and configurable download timeouts. Install and
+artifact verifiers share that contract; verifier cleanup now removes only newly
+created owned temp children even when a custom work directory is provided.
+Draft Release reuses the pinned native Alpine build/full acceptance workflow,
+uploading archives only. Native Alpine runtime/FUSE/OpenRC steps are required
+by exact-SHA release gates. Added public `Verify Alpine Release` with native
+x86_64/arm64 downloaded archive/static/install/runtime/root/non-root live FUSE
+and actual rebooted OpenRC verification. Postrelease requires both native jobs.
+Docs, focused regression coverage and actual CI/public release gates remain.
 
 Extend CI/release/checksum/public verification with both musl archives, libc-aware
 download selection and Alpine FUSE/OpenRC gates while preserving platforms. New
