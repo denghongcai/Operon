@@ -470,6 +470,7 @@ unsafe extern "system" fn windows_service_main(_argc: u32, _argv: *mut windows_s
         Ok(runtime) => runtime.block_on(crate::start_with_shutdown(
             crate::StartArgs {
                 config: Some(config),
+                shutdown_timeout_secs: 30,
             },
             async {
                 let _ = stop_rx.await;

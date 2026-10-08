@@ -7233,16 +7233,15 @@ store compaction remain explicitly deferred, not unfinished release gates.
 
 ## Phase 137: v0.18.22 musl Build and Artifact Contract
 
-Status: In progress. Local musl toolchain setup and dependency audit started;
-Alpine 3.22/3.23 runtime images resolved to digests in the detailed roadmap.
-Static verification and repeatable build scripts are implemented; x86_64
-host musl workspace tests and pinned native Alpine build passed. Native arm64
-build/test and complete runtime/FUSE acceptance remain. The dedicated workflow
-uses native x86_64/arm64 runners rather than emulation.
-Pinned native Alpine workspace tests, x86_64 static archive packaging/smoke and
-Alpine 3.22 packaged-binary integration (including 40MiB streams) passed.
+Status: Completed. Pinned native x86_64 and arm64 locked builds, full workspace
+tests, static ELF verification, archive/layout/help smoke and Alpine 3.22/3.23
+packaged-binary integration passed in run `37793265644` on commit
+`bef76d2cf7283d5a4e7b101bfbd8f6dce469f684`; corresponding existing-platform CI
+`37793265540` and CodeQL `37793265647` passed. Toolchains/images/dependencies are
+pinned and recorded in the detailed roadmap; native runners are not emulation.
 Verifier positive/dynamic/wrong-architecture/missing-file tests are registered
-in the existing core group. Full FUSE/OpenRC and native arm64 remain required.
+in the existing core group. Full runtime/FUSE/OpenRC and final exact-SHA release
+acceptance remain required by the following phases; this is not public support.
 
 Add x86_64/arm64 musl targets alongside glibc. Audit dependencies, pin build
 toolchains/images and verify fully static ELF/archive contracts without disabling
@@ -7262,6 +7261,10 @@ on Alpine 3.22 and 3.23 (UID 1000). Composite create/read/delete measured 115.97
 and 120.92 ops/s respectively; these are fixture metrics, not comparative claims.
 Native arm64 live mounts and broader failure/comparative performance evidence
 remain required. Required live FUSE acceptance is now wired into the native CI.
+Both native architectures subsequently passed root/non-root real FUSE/runtime
+on both releases in run `37795073016` at
+`84a8e59cc6f54bea480fd2402dfb07bf603f3ffb`; CI `37795073023` and CodeQL
+`37795075639` passed. Broader failure/comparative performance acceptance remains.
 
 Validate packaged binaries on both native architectures: config/auth/policy,
 foreground daemon, filesystem/exec/PTY/forwarding, deadlines, containment,
@@ -7272,7 +7275,29 @@ apk packaging remains excluded.
 
 ## Phase 139: v0.18.24 OpenRC Service Management
 
-Status: Planned. Depends on Phases 137–138.
+Status: In progress. Final Phase 138 failure/performance evidence remains required.
+
+Added independent Linux init selection and explicit `--backend`, OpenRC service
+identity/restart/deadline options, system-scoped supervision rendering, private
+configuration and access checks, readiness/status, lifecycle and owned-resource
+checks. Initial Linux compilation and 16 service-related tests passed, including
+existing platform render contracts and adversarial two-layer shell quoting.
+Real x86_64 Alpine 3.22 lifecycle including actual container reboot, non-root
+daemon identity, crash respawn and upgrade/uninstall passed. An added detached
+exec/grandchild test exposed SIGTERM's immediate termination and orphaned
+children; daemon shutdown now handles SIGTERM, atomically rejects new exec/PTY
+registrations and cancels/waits for active tasks with configurable complete
+shutdown deadlines. All 88 daemon tests passed outside socket/ACL sandbox
+restrictions. Latest supervisory-identity hardening, second-release/arm64 live
+acceptance and native platform regression gates remain mandatory; this is not
+yet released support. Corrected native x86_64 runtime on Alpine 3.22 and 3.23
+passed full real reboot/service lifecycle, strict supervised identity checks,
+zero/custom deadlines, invalid config, permissions, conflict protection,
+detached exec descendant cleanup and repeatable uninstall. Fixture binaries are
+frozen before boot to avoid concurrent rebuild contamination. Five existing
+format-argument lint warnings were mechanically aligned for the pinned Rust
+1.88 clippy gate without changing error strings. Service usage/timeout/ownership documentation is in
+`docs/quality/alpine-openrc.md`; focused contracts are in the runtime group.
 
 Implement OpenRC-backed install/start/stop/status/uninstall and boot enablement,
 with explicit backend/scope/privilege semantics, non-root daemon identity,

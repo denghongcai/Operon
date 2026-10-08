@@ -96,16 +96,15 @@ pub(crate) fn start_exec(state: &AppState, request: ExecRunRequest) -> Result<Ex
     };
     let (event_tx, _) = broadcast::channel(32);
     let (log_tx, _) = broadcast::channel(1024);
-    state.exec.register(record.clone(), event_tx, log_tx)?;
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
+    state
+        .exec
+        .register_running(record.clone(), event_tx, log_tx, cancel_tx, Some(stdin_tx))?;
     record_audit_capability(state, "exec:default", "run", &exec_id, true, "allowed");
     for secret in &request.secrets {
         record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
     }
-
-    let (cancel_tx, cancel_rx) = oneshot::channel();
-    let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
-    state.exec.register_cancel(exec_id.clone(), cancel_tx)?;
-    state.exec.register_stdin(exec_id.clone(), stdin_tx)?;
 
     let audit = state.audit.clone();
     let execs = state.exec.records.clone();

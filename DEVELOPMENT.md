@@ -44,7 +44,11 @@ operond service stop
 operond service uninstall
 ```
 
-On Linux this writes a user-level systemd unit. On macOS this writes a launchd
+On systemd Linux this writes a user-level systemd unit. The in-progress Alpine
+implementation also supports explicitly selected OpenRC system services with an
+existing non-root account; see [Alpine/OpenRC acceptance](docs/quality/alpine-openrc.md)
+for privileges, configuration, deadlines and unreleased-versus-released status.
+On macOS this writes a launchd
 user-agent plist. Both generated definitions invoke the same foreground command,
 `operond start --config <path>`, and keep tokens or other secrets in the
 existing config file references instead of embedding secret values in the

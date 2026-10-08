@@ -23,8 +23,7 @@ static MUTATION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(())
 pub(crate) fn validate_write_chunk(data_len: usize) -> Result<(), Status> {
     if data_len > MAX_FS_WRITE_CHUNK_BYTES {
         return Err(Status::invalid_argument(format!(
-            "fs write chunk exceeds {} bytes",
-            MAX_FS_WRITE_CHUNK_BYTES
+            "fs write chunk exceeds {MAX_FS_WRITE_CHUNK_BYTES} bytes"
         )));
     }
     Ok(())
@@ -35,8 +34,7 @@ pub(crate) fn validate_read_range_size(size: u32) -> Result<(), Status> {
         .map_err(|_| Status::invalid_argument("read range size is too large"))?;
     if data_len > MAX_FS_WRITE_CHUNK_BYTES {
         return Err(Status::invalid_argument(format!(
-            "fs read range exceeds {} bytes",
-            MAX_FS_WRITE_CHUNK_BYTES
+            "fs read range exceeds {MAX_FS_WRITE_CHUNK_BYTES} bytes"
         )));
     }
     Ok(())
@@ -54,8 +52,7 @@ pub(crate) fn checked_file_end(
     })?;
     if end > MAX_FS_FILE_BYTES {
         return Err(Status::invalid_argument(format!(
-            "{operation} exceeds maximum fs object size of {} bytes",
-            MAX_FS_FILE_BYTES
+            "{operation} exceeds maximum fs object size of {MAX_FS_FILE_BYTES} bytes"
         )));
     }
     Ok(end)
@@ -832,8 +829,7 @@ pub(crate) async fn truncate(
 ) -> Result<FsStat, Status> {
     if size > MAX_FS_FILE_BYTES {
         return Err(Status::invalid_argument(format!(
-            "truncate size exceeds maximum fs object size of {} bytes",
-            MAX_FS_FILE_BYTES
+            "truncate size exceeds maximum fs object size of {MAX_FS_FILE_BYTES} bytes"
         )));
     }
     authorize_fs_action(state, "truncate", &path, "write", &path)?;

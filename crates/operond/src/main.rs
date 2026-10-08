@@ -41,7 +41,11 @@ mod pagination;
 mod runtime;
 mod service_datagram_forward;
 mod service_forward;
+#[cfg(target_os = "linux")]
+mod service_linux;
 mod service_manager;
+#[cfg(target_os = "linux")]
+mod service_openrc;
 mod service_tcp_forward;
 mod state;
 mod store_config;
@@ -82,7 +86,32 @@ async fn main() -> anyhow::Result<()> {
 
     match Args::parse().command {
         Command::Start(args) => start(args).await,
-        Command::Service { command } => {
+        Command::Service { command, options } => {
+            #[cfg(target_os = "linux")]
+            if service_linux::select_backend(options.backend)? == daemon_cli::ServiceBackend::Openrc
+            {
+                return service_openrc::dispatch(command, &options).await;
+            }
+            #[cfg(not(target_os = "linux"))]
+            if options.backend != daemon_cli::ServiceBackend::Auto {
+                anyhow::bail!("--backend is supported only on Linux");
+            }
+            if options.json {
+                anyhow::bail!("--json service results currently require the OpenRC backend");
+            }
+            if options.timeout_secs != 60 || options.stop_timeout_secs != 30 {
+                anyhow::bail!("service deadline overrides currently require the OpenRC backend");
+            }
+            if let ServiceCommand::Install(args) = &command {
+                if args.service_user.is_some()
+                    || args.respawn_delay_secs != 2
+                    || args.respawn_max != 5
+                    || args.respawn_period_secs != 60
+                    || args.shutdown_timeout_secs != 30
+                {
+                    anyhow::bail!("service identity/restart overrides require the OpenRC system-service backend");
+                }
+            }
             service(command)?;
             Ok(())
         }
@@ -111,6 +140,7 @@ async fn start_with_shutdown<F>(args: StartArgs, shutdown: F) -> anyhow::Result<
 where
     F: Future<Output = ()>,
 {
+    let shutdown_timeout_secs = args.shutdown_timeout_secs;
     let config_path = args.config.unwrap_or_else(OperonConfig::default_path);
     let loaded = daemon_state::load_daemon_runtime(&config_path)?;
     let mdns = if loaded.advertise_lan {
@@ -123,8 +153,15 @@ where
         None
     };
 
+    let exec_registry = loaded.state.exec.clone();
+    let shutdown_registry = exec_registry.clone();
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
+    let shutdown = async move {
+        shutdown.await;
+        let _ = shutdown_tx.send(shutdown_registry.begin_shutdown());
+    };
     tracing::info!("operond gRPC listening on {}", loaded.grpc_listen);
-    Server::builder()
+    let server = Server::builder()
         .http2_keepalive_interval(operon_config::TransportConfig::timeout(
             loaded.transport.keepalive_interval_secs,
         ))
@@ -138,9 +175,33 @@ where
             }
             .into_service(),
         )
-        .serve_with_shutdown(loaded.grpc_listen, shutdown)
-        .await
-        .map_err(|error| daemon_state::server_start_error(loaded.grpc_listen, error))?;
+        .serve_with_shutdown(loaded.grpc_listen, shutdown);
+    tokio::pin!(server);
+    tokio::select! {
+        result = &mut server => {
+            // The server may finish simultaneously with the shutdown notice.
+            if let Ok(ids) = shutdown_rx.try_recv() {
+                exec_registry.wait_shutdown(&ids?, shutdown_timeout_secs).await?;
+            }
+            result.map_err(|error| daemon_state::server_start_error(loaded.grpc_listen, error))?;
+        },
+        notice = &mut shutdown_rx => {
+            let ids = notice.map_err(|_| anyhow::anyhow!("shutdown notification was lost"))??;
+            let cleanup = async {
+                tokio::try_join!(
+                    async { server.as_mut().await.map_err(|error| daemon_state::server_start_error(loaded.grpc_listen, error)) },
+                    exec_registry.wait_shutdown(&ids, 0),
+                )?;
+                Ok::<(), anyhow::Error>(())
+            };
+            if shutdown_timeout_secs == 0 {
+                cleanup.await?;
+            } else {
+                tokio::time::timeout(std::time::Duration::from_secs(shutdown_timeout_secs), cleanup)
+                    .await.map_err(|_| anyhow::anyhow!("daemon shutdown timed out; adjust --shutdown-timeout-secs (0 disables)"))??;
+            }
+        },
+    }
 
     drop(mdns);
 
@@ -148,6 +209,19 @@ where
 }
 
 async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut terminate) => {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {},
+                    _ = terminate.recv() => {},
+                }
+                return;
+            }
+            Err(error) => tracing::error!("failed to register SIGTERM shutdown handler: {error}"),
+        }
+    }
     let _ = tokio::signal::ctrl_c().await;
 }
 

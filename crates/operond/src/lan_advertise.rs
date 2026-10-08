@@ -30,7 +30,7 @@ pub(crate) fn advertise_lan(
     let service = ServiceInfo::new(
         OPERON_MDNS_SERVICE,
         node_id,
-        &format!("{}.local.", node_id),
+        &format!("{node_id}.local."),
         "",
         listen.port(),
         &properties[..],

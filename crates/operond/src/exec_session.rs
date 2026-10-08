@@ -206,14 +206,15 @@ fn start_exec_session(state: &AppState, start: ExecSessionStart) -> Result<Sessi
     };
     let (exec_event_tx, _) = tokio::sync::broadcast::channel(32);
     let (log_tx, _) = tokio::sync::broadcast::channel(1024);
-    state.exec.register(record.clone(), exec_event_tx, log_tx)?;
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    state
+        .exec
+        .register_running(record.clone(), exec_event_tx, log_tx, cancel_tx, None)?;
     record_audit_capability(state, "exec:default", "session", &exec_id, true, "allowed");
     for secret in &start.secrets {
         record_audit_capability(state, "secret:default", "use", secret, true, "allowed");
     }
 
-    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    state.exec.register_cancel(exec_id.clone(), cancel_tx)?;
     let (control_tx, control_rx) = std_mpsc::channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let cancel_control_tx = control_tx.clone();

@@ -8,7 +8,7 @@ on:
       - 'vendor/**'
       - 'Cargo.*'
       - 'scripts/*musl*'
-      - 'scripts/alpine-*'
+      - 'scripts/*alpine*'
       - '.github/workflows/alpine-musl-acceptance.yml'
   push:
     branches: [main]
@@ -17,7 +17,7 @@ on:
       - 'vendor/**'
       - 'Cargo.*'
       - 'scripts/*musl*'
-      - 'scripts/alpine-*'
+      - 'scripts/*alpine*'
       - '.github/workflows/alpine-musl-acceptance.yml'
 
 permissions:
@@ -110,6 +110,14 @@ jobs:
                   fi
                 '
             done
+          done
+      - name: Native rebooted Alpine OpenRC service acceptance
+        run: |
+          for image in \
+            alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
+            alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0; do
+            bash scripts/run-alpine-openrc-acceptance.sh \
+              "target/alpine-native/${{ matrix.target }}/release" "$image"
           done
       - name: Upload native binaries
         uses: actions/upload-artifact@v7

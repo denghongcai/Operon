@@ -1,7 +1,10 @@
 use std::{
     collections::{BTreeMap, VecDeque},
     path::PathBuf,
-    sync::{atomic::AtomicU64, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use operon_core::{
@@ -37,6 +40,7 @@ pub(crate) struct ExecRegistry {
     pub(crate) cancels: Arc<Mutex<BTreeMap<String, oneshot::Sender<()>>>>,
     pub(crate) stdin: ExecStdinRegistry,
     next_id: Arc<AtomicU64>,
+    closing: Arc<AtomicBool>,
 }
 
 impl ExecRegistry {
@@ -53,6 +57,7 @@ impl ExecRegistry {
             cancels: Arc::new(Mutex::new(BTreeMap::new())),
             stdin: Arc::new(Mutex::new(BTreeMap::new())),
             next_id: Arc::new(AtomicU64::new(next_id)),
+            closing: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -79,13 +84,68 @@ impl ExecRegistry {
         Ok(())
     }
 
-    pub(crate) fn register_cancel(
+    /// Registration and shutdown are serialized under the cancel registry lock.
+    /// A rejected request must not leave a Running record with no owning task.
+    pub(crate) fn register_running(
         &self,
-        exec_id: String,
-        sender: oneshot::Sender<()>,
+        record: ExecRecord,
+        event_sender: ExecEventSender,
+        log_sender: ExecLogSender,
+        cancel: oneshot::Sender<()>,
+        stdin: Option<ExecStdinSender>,
     ) -> Result<(), tonic::Status> {
-        crate::locks::lock(&self.cancels, "exec cancel")?.insert(exec_id, sender);
+        let mut cancels = crate::locks::lock(&self.cancels, "exec cancel")?;
+        if self.closing.load(Ordering::Acquire) {
+            return Err(tonic::Status::unavailable("daemon is shutting down"));
+        }
+        let id = record.id.clone();
+        self.register(record, event_sender, log_sender)?;
+        if let Some(stdin) = stdin {
+            self.register_stdin(id.clone(), stdin)?;
+        }
+        cancels.insert(id, cancel);
         Ok(())
+    }
+
+    pub(crate) fn begin_shutdown(&self) -> Result<Vec<String>, tonic::Status> {
+        let mut cancels = crate::locks::lock(&self.cancels, "exec cancel")?;
+        self.closing.store(true, Ordering::Release);
+        let pending = std::mem::take(&mut *cancels);
+        let ids = pending.keys().cloned().collect();
+        drop(cancels);
+        for (_, cancel) in pending {
+            let _ = cancel.send(());
+        }
+        Ok(ids)
+    }
+
+    pub(crate) async fn wait_shutdown(&self, ids: &[String], seconds: u64) -> anyhow::Result<()> {
+        let wait = async {
+            loop {
+                let done = {
+                    let records = crate::locks::lock(&self.records, "exec map")?;
+                    ids.iter().all(|id| {
+                        records.get(id).is_none_or(|record| {
+                            !matches!(record.status, operon_core::ExecStatus::Running)
+                        })
+                    })
+                };
+                if done {
+                    return Ok::<(), anyhow::Error>(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        };
+        if seconds == 0 {
+            return wait.await;
+        }
+        tokio::time::timeout(std::time::Duration::from_secs(seconds), wait)
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "exec cleanup timed out; adjust --shutdown-timeout-secs (0 disables)"
+                )
+            })?
     }
 
     pub(crate) fn register_stdin(
@@ -197,5 +257,37 @@ mod tests {
         assert!(lock(&registry.log_events, "exec log events")
             .expect("log events")
             .contains_key(&exec_id));
+    }
+
+    #[tokio::test]
+    async fn shutdown_cancels_running_exec_and_refuses_new_registration() {
+        let registry = ExecRegistry::default();
+        let (events, _) = broadcast::channel(1);
+        let (logs, _) = broadcast::channel(1);
+        let (cancel, cancelled) = oneshot::channel();
+        registry
+            .register_running(record("running"), events, logs, cancel, None)
+            .unwrap();
+        let ids = registry.begin_shutdown().unwrap();
+        assert_eq!(ids, vec!["running"]);
+        cancelled.await.unwrap();
+        let (events, _) = broadcast::channel(1);
+        let (logs, _) = broadcast::channel(1);
+        let (cancel, _) = oneshot::channel();
+        let error = registry
+            .register_running(record("rejected"), events, logs, cancel, None)
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::Unavailable);
+        assert!(!registry.records.lock().unwrap().contains_key("rejected"));
+        registry
+            .records
+            .lock()
+            .unwrap()
+            .get_mut("running")
+            .unwrap()
+            .status = ExecStatus::Cancelled;
+        registry.wait_shutdown(&ids, 0).await.unwrap();
+        registry.wait_shutdown(&ids, 1).await.unwrap();
+        assert!(registry.begin_shutdown().unwrap().is_empty());
     }
 }
