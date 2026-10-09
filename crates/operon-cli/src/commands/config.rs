@@ -32,6 +32,7 @@ struct DaemonExplain {
 
 #[derive(Debug, serde::Serialize)]
 struct ClientExplain {
+    mount: operon_config::MountReadConfig,
     nodes: Vec<NodeExplain>,
 }
 
@@ -178,7 +179,10 @@ impl ConfigExplain {
             default_path: config_path == default_path,
             config_dir: display_path(&config_dir),
             daemon,
-            client: ClientExplain { nodes },
+            client: ClientExplain {
+                mount: config.client.mount.clone(),
+                nodes,
+            },
             policy,
             secrets,
         }

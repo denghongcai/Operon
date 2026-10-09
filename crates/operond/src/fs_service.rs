@@ -367,28 +367,36 @@ pub(crate) async fn read_range(
     checked_file_end(offset, size as usize, "read range")?;
     authorize_fs_action(state, "read-range", &path, "read", &path)?;
     let full_path = resolve_existing_path(state, "read-range", &path, &path)?;
-    let mut file = tokio::fs::File::open(&full_path)
-        .await
-        .map_err(status_from_io_error)?;
-    file.seek(std::io::SeekFrom::Start(offset))
-        .await
-        .map_err(status_from_io_error)?;
-    let mut data = vec![0_u8; size as usize];
-    let bytes_read = fill_range(&mut file, &mut data)
-        .await
-        .map_err(status_from_io_error)?;
-    data.truncate(bytes_read);
+    // One blocking task owns open/seek/fill/close. Tokio's file adapter otherwise
+    // schedules these separately and copies through its internal read buffer.
+    // Keep a fresh descriptor per RPC: no stale fd cache after path replacement.
+    let data =
+        tokio::task::spawn_blocking(move || read_file_range_blocking(&full_path, offset, size))
+            .await
+            .map_err(|error| Status::internal(format!("range read task failed: {error}")))?
+            .map_err(status_from_io_error)?;
     record_audit(state, "read-range", &path, true, "allowed");
     Ok(FileChunk { data })
 }
 
-async fn fill_range<R: tokio::io::AsyncRead + Unpin>(
-    reader: &mut R,
-    data: &mut [u8],
-) -> std::io::Result<usize> {
+fn read_file_range_blocking(
+    path: &std::path::Path,
+    offset: u64,
+    size: u32,
+) -> std::io::Result<Vec<u8>> {
+    use std::io::Seek;
+    let mut file = std::fs::File::open(path)?;
+    file.seek(std::io::SeekFrom::Start(offset))?;
+    let mut data = vec![0; size as usize];
+    let count = fill_range(&mut file, &mut data)?;
+    data.truncate(count);
+    Ok(data)
+}
+
+fn fill_range<R: std::io::Read>(reader: &mut R, data: &mut [u8]) -> std::io::Result<usize> {
     let mut filled = 0;
     while filled < data.len() {
-        match reader.read(&mut data[filled..]).await {
+        match reader.read(&mut data[filled..]) {
             Ok(0) => break,
             Ok(count) => filled += count,
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -1516,32 +1524,75 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn range_fill_handles_small_reads_eof_and_zero_size() {
-        let (mut writer, mut reader) = tokio::io::duplex(3);
-        let send = tokio::spawn(async move {
-            writer.write_all(b"0123456789").await.unwrap();
-        });
+    #[test]
+    fn range_fill_handles_small_reads_eof_and_zero_size() {
+        struct SmallReads(std::io::Cursor<&'static [u8]>);
+        impl std::io::Read for SmallReads {
+            fn read(&mut self, data: &mut [u8]) -> std::io::Result<usize> {
+                let count = data.len().min(3);
+                std::io::Read::read(&mut self.0, &mut data[..count])
+            }
+        }
+        let mut reader = SmallReads(std::io::Cursor::new(b"0123456789"));
         let mut data = [0; 16];
-        assert_eq!(fill_range(&mut reader, &mut data).await.unwrap(), 10);
+        assert_eq!(fill_range(&mut reader, &mut data).unwrap(), 10);
         assert_eq!(&data[..10], b"0123456789");
-        assert_eq!(fill_range(&mut reader, &mut []).await.unwrap(), 0);
-        send.await.unwrap();
+        assert_eq!(fill_range(&mut reader, &mut []).unwrap(), 0);
     }
 
-    #[tokio::test]
-    async fn range_fill_exceeds_tokio_file_buffer_limit() {
+    #[test]
+    fn range_fill_retries_interrupted_and_propagates_io_failure() {
+        struct InterruptedOnce {
+            interrupted: bool,
+            data: std::io::Cursor<Vec<u8>>,
+        }
+        impl std::io::Read for InterruptedOnce {
+            fn read(&mut self, data: &mut [u8]) -> std::io::Result<usize> {
+                if !self.interrupted {
+                    self.interrupted = true;
+                    return Err(std::io::ErrorKind::Interrupted.into());
+                }
+                std::io::Read::read(&mut self.data, data)
+            }
+        }
+        let mut reader = InterruptedOnce {
+            interrupted: false,
+            data: std::io::Cursor::new(b"abc".to_vec()),
+        };
+        let mut data = [0; 8];
+        assert_eq!(fill_range(&mut reader, &mut data).unwrap(), 3);
+        assert_eq!(&data[..3], b"abc");
+        struct Failed;
+        impl std::io::Read for Failed {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::ErrorKind::PermissionDenied.into())
+            }
+        }
+        assert_eq!(
+            fill_range(&mut Failed, &mut data).unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+    }
+
+    #[test]
+    fn range_fill_exceeds_tokio_file_buffer_limit() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("large");
         let source = (0..9 * 1024 * 1024)
             .map(|i| (i % 251) as u8)
             .collect::<Vec<_>>();
         std::fs::write(&path, &source).unwrap();
-        let mut file = tokio::fs::File::open(path).await.unwrap();
-        file.seek(std::io::SeekFrom::Start(37)).await.unwrap();
-        let mut data = vec![0; 8 * 1024 * 1024];
-        assert_eq!(fill_range(&mut file, &mut data).await.unwrap(), data.len());
+        let data = read_file_range_blocking(&path, 37, 8 * 1024 * 1024).unwrap();
+        assert_eq!(data.len(), 8 * 1024 * 1024);
         assert_eq!(data, source[37..37 + data.len()]);
+        assert_eq!(
+            read_file_range_blocking(&path, source.len() as u64 - 3, 8).unwrap(),
+            source[source.len() - 3..]
+        );
+        assert!(read_file_range_blocking(&path, source.len() as u64 + 1, 8)
+            .unwrap()
+            .is_empty());
+        assert!(read_file_range_blocking(&path, 37, 0).unwrap().is_empty());
     }
 
     fn temp_path(name: &str) -> PathBuf {

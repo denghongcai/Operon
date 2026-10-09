@@ -7398,6 +7398,69 @@ public ops/s exposes musl regressions rather than claiming a universal speedup.
 Cloudsmith, apk, ARMv7 musl
 and parallel-read tuning remain outside scope.
 
+## Phase 142: Parallel Read Baseline and Diagnostics
+
+Status: Completed. Built unchanged source `267897d` release binaries with Rust
+1.88 before edits. Added alternating three-trial same/distinct-file and random
+read matrices (1/2/4/8/16 readers), fresh client mounts, offset-sensitive payload
+verification, RPC/network counters and resource/binary-hash evidence. Local and
+20ms egress-delay comparisons are retained; actual host values are reference,
+matched completed-operation ops/s ratios are the primary result.
+
+## Phase 143: Configurable Bounded Mount Concurrency
+
+Status: Completed. Added validated `client.mount` worker/read-count/read-byte
+limits and CLI overrides, config explain/help and docs. Linux retains four
+workers by default; eight is opt-in because low-concurrency/random/cache results
+are not universal speedups. macOS/Windows reject worker overrides but support
+read budgets. Read-budget queue plus RPC obey configurable ordinary deadlines;
+cancellation releases permits. KiB-rounded budgets fit supported 32-bit ARMv7.
+
+## Phase 144: Measured Range Read Optimization
+
+Status: Completed. Range reads now perform fresh open/seek/fill/close in one
+blocking task instead of Tokio file adapter transitions/internal buffer copies.
+Authorization, resolver checks and audit remain per request. Tests retain
+8MiB/nonzero-offset/EOF/zero-size behavior and cover short/Interrupted/error
+reads. Default-four-worker matched trials improved distinct-file four-reader
+ops/s by 19%; final eight-worker trials improved it by 58%. No persistent cache,
+connection pool, async FUSE lifecycle or kernel tuning was added: these are
+not justified for this completed measured change.
+
+## Phase 145: Parallel Read Regression Acceptance
+
+Status: Completed (source/local acceptance). Full Rust workspace (277 tests;
+the opt-in resolver benchmark separately ran in both modes), strict clippy/format, 53 core,
+18 runtime, 13 SDK and four Linux system validations passed, including real
+Linux FUSE read/write and macOS/Windows source cross-compilation. SDK 23 tests,
+typecheck/build and production dependency audit passed. Final release-binary
+local/delayed three-trial matrices passed. With eight opt-in workers, distinct
+four/eight-reader local ops/s improved 58%/62%; 20ms egress-delay cases improved
+83%/90%. Local two-reader random ops/s fell about 5%, so defaults remain
+unchanged. Binary hashes, all trials and disclosed regressions are in
+`docs/quality/evidence/parallel-read-2026-10-09.json` and
+`docs/quality/parallel-read.md`. No local implementation/acceptance work remains.
+Native macOS/Windows/Alpine and public release gates were not run for this
+uncommitted source change; publication requires a separate exact-SHA gate.
+
+Contracts: `docs/plan/v0.18.23-parallel-read-roadmap.md`.
+
+## Phase 146: v0.16.13 Parallel Read Public Release
+
+Status: In Progress. User explicitly requested committing and publishing the
+completed parallel-read change. Align versions, preserve historical release
+assertions, update public Quickstart contracts and rerun local validation.
+Commit/push main; require exact-SHA CI/CodeQL, native Alpine and real platform
+gates before tagging. Verify draft archives, publish, then complete all public
+download/install/README/Alpine/Windows gates. No release completion is claimed
+until those gates pass. Evidence: `docs/plan/v0.16.13-release-publication.md`.
+
+Preparation checkpoint: versions aligned to 0.16.13 / v0.16.13, historical
+v0.16.12 release assertions preserved, new core release validator and public
+Quickstart mount-help checks registered. Local 277 Rust tests, strict clippy/
+format/diff, 54 core / 18 runtime / 13 SDK / four Linux system scripts and SDK
+23 tests/typecheck/build passed. Exact-SHA remote and publication gates remain.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

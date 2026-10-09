@@ -256,9 +256,21 @@ async fn dispatch_inner(args: Args) -> anyhow::Result<()> {
             TraceCommand::Show { path } => commands::trace::show(path, output),
             TraceCommand::List { dir } => commands::trace::list(dir, output),
         },
-        Command::Mount { target, to } => {
-            commands::mount::mount_fs(config_path, &target, to, output)
-        }
+        Command::Mount {
+            target,
+            to,
+            mount_workers,
+            read_concurrency,
+            read_budget_mib,
+        } => commands::mount::mount_fs(
+            config_path,
+            &target,
+            to,
+            output,
+            mount_workers,
+            read_concurrency,
+            read_budget_mib,
+        ),
         Command::Config { command } => match command {
             ConfigCommand::Explain => commands::config::explain(config_path, output),
         },

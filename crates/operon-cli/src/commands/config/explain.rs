@@ -43,6 +43,7 @@ fn print_config_explain(explain: &ConfigExplain) {
         None => println!("daemon: <none>"),
     }
 
+    println!("client mount: {:?}", explain.client.mount);
     println!("client nodes:");
     if explain.client.nodes.is_empty() {
         println!("  <none>");

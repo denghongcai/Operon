@@ -136,7 +136,10 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
         path,
         serde_yaml::to_string(&DiscoveredClientConfig {
             version: 1,
-            client: ClientConfig { nodes },
+            client: ClientConfig {
+                nodes,
+                ..Default::default()
+            },
         })?,
     )?;
     Ok(())

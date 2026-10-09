@@ -29,6 +29,7 @@ pub struct MountOptions {
     pub endpoint: NodeEndpoint,
     pub remote_path: String,
     pub mount_point: PathBuf,
+    pub reads: operon_core::runtime::MountReadConfig,
 }
 
 pub struct MountSession {
@@ -67,6 +68,15 @@ impl MountSession {
 }
 
 pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
+    options.reads.validate().map_err(anyhow::Error::msg)?;
+    #[cfg(not(target_os = "linux"))]
+    if options.reads.worker_threads.is_some() {
+        anyhow::bail!("mount worker_threads is supported only on Linux FUSE");
+    }
+    let workers = options
+        .reads
+        .worker_threads
+        .unwrap_or_else(default_mount_thread_count);
     let remote_root = normalize_remote_path(&options.remote_path)?;
     let mount_point = options.mount_point;
     trace_mount_event("start", mount_point.display().to_string());
@@ -74,7 +84,10 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     trace_mount_event("mount_point_ready", mount_point.display().to_string());
 
     trace_mount_event("remote_connect_start", remote_root.clone());
-    let remote_fs = Arc::new(GrpcRemoteFs::connect(options.endpoint)?);
+    let remote_fs = Arc::new(GrpcRemoteFs::connect_with_reads(
+        options.endpoint,
+        options.reads,
+    )?);
     trace_mount_event("remote_connect_ok", remote_root.clone());
     let root = remote_fs.stat(&remote_root)?;
     trace_mount_event("remote_root_stat", root.path.clone());
@@ -86,8 +99,8 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     let mut config = fuser::Config::default();
     config.mount_options = base_mount_options();
     add_platform_mount_options(&mut config.mount_options, &mount_point)?;
-    config.n_threads = Some(default_mount_thread_count());
-    trace_mount_event("n_threads", default_mount_thread_count().to_string());
+    config.n_threads = Some(workers);
+    trace_mount_event("n_threads", workers.to_string());
     trace_mount_event("spawn_mount2_start", mount_point.display().to_string());
     let session = fuser::spawn_mount2(fs, &mount_point, &config)
         .with_context(|| format!("failed to mount {}", mount_point.display()))?;

@@ -993,7 +993,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "operon-cli"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "operon-config"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "operon-core",
@@ -1034,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "operon-core"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "serde",
  "serde_json",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "operon-fs"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "libc",
  "operon-core",
@@ -1054,7 +1054,7 @@ dependencies = [
 
 [[package]]
 name = "operon-grpc-client"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "http-body",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "operon-mount"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "ctrlc",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "operon-network"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "mdns-sd",
@@ -1097,14 +1097,14 @@ dependencies = [
 
 [[package]]
 name = "operon-process"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "operon-core",
 ]
 
 [[package]]
 name = "operon-protocol"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "operon-core",
  "prost",
@@ -1115,7 +1115,7 @@ dependencies = [
 
 [[package]]
 name = "operon-store"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "libc",
@@ -1128,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "operond"
-version = "0.16.12"
+version = "0.16.13"
 dependencies = [
  "anyhow",
  "async-stream",

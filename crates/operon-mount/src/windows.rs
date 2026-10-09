@@ -37,6 +37,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct MountOptions {
+    pub reads: operon_core::runtime::MountReadConfig,
     pub endpoint: NodeEndpoint,
     pub remote_path: String,
     pub mount_point: PathBuf,
@@ -110,7 +111,14 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     winfsp_wrs::init().map_err(|error| anyhow::anyhow!("failed to initialize WinFsp: {error}"))?;
 
     let remote_root = normalize_remote_path(&options.remote_path)?;
-    let remote_fs = Arc::new(GrpcRemoteFs::connect(options.endpoint)?);
+    options.reads.validate().map_err(anyhow::Error::msg)?;
+    if options.reads.worker_threads.is_some() {
+        anyhow::bail!("mount worker_threads is supported only on Linux FUSE");
+    }
+    let remote_fs = Arc::new(GrpcRemoteFs::connect_with_reads(
+        options.endpoint,
+        options.reads,
+    )?);
     let root = remote_fs.stat(&remote_root)?;
     if !root.is_dir {
         anyhow::bail!("mount root `{remote_root}` is not a directory");

@@ -335,7 +335,10 @@ fn build_onboard_plan_inner(
         content: serde_yaml::to_string(&OperonConfig {
             version: 1,
             daemon,
-            client: ClientConfig { nodes },
+            client: ClientConfig {
+                nodes,
+                ..Default::default()
+            },
             policy,
             secrets: Some(SecretsConfig::default()),
         })?,

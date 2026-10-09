@@ -32,6 +32,12 @@ Filesystem command choice:
 - Remove: `operon fs rm <node:/path>`.
 - Linux local mount: `operon mount <node:/path> --to <mountpoint>`.
 
+For parallel mount reads, inspect `operon mount --help` for Linux worker count
+and cross-platform in-flight read/byte-budget overrides. Tune from matched ops/s
+measurements; same-file reads can share the kernel cache. On slow private links,
+configure the RPC deadline or use `--rpc-timeout-secs`; read queue waiting counts
+against that deadline. Do not disable audit or containment to improve throughput.
+
 Confirm before `write`, `copy` over an existing destination, `rename`, `truncate`, `rm`, or mounting over a non-empty directory. Then verify with `fs stat`, `fs list`, and `audit show`.
 
 Exec command choice:

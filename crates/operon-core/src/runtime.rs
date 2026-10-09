@@ -1,6 +1,45 @@
 pub type NodeId = String;
 pub type CapabilityId = String;
 
+/// Mount read scheduling limits, independent of transport deadlines.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct MountReadConfig {
+    /// Linux FUSE workers; None preserves the platform default.
+    pub worker_threads: Option<usize>,
+    pub max_inflight_reads: usize,
+    /// Budget for requested bytes of in-flight RPCs, not total process RSS.
+    pub max_inflight_read_mib: u32,
+}
+
+impl Default for MountReadConfig {
+    fn default() -> Self {
+        Self {
+            worker_threads: None,
+            max_inflight_reads: 8,
+            max_inflight_read_mib: 32,
+        }
+    }
+}
+
+impl MountReadConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self
+            .worker_threads
+            .is_some_and(|count| !(1..=64).contains(&count))
+        {
+            return Err("mount worker_threads must be between 1 and 64".into());
+        }
+        if !(1..=64).contains(&self.max_inflight_reads) {
+            return Err("mount max_inflight_reads must be between 1 and 64".into());
+        }
+        if !(8..=512).contains(&self.max_inflight_read_mib) {
+            return Err("mount max_inflight_read_mib must be between 8 and 512".into());
+        }
+        Ok(())
+    }
+}
+
 /// Transport timeouts in seconds. Zero disables the corresponding timeout or
 /// keepalive interval. Ping timeout must be positive when keepalive is enabled.
 /// Defaults are policy, not protocol limits.

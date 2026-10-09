@@ -513,6 +513,13 @@ remain the authoritative API and do not depend on mount support.
 `operon doctor --mount-runtime` reports mount runtime readiness and install
 hints without loading endpoint config, and `operon mount` runs the same
 preflight before contacting the daemon.
+Starting with v0.16.13, mount clients bound range-read RPC concurrency and requested bytes through
+`client.mount.max_inflight_reads` and `max_inflight_read_mib`, with CLI overrides
+`--read-concurrency` and `--read-budget-mib`. Linux FUSE additionally supports
+`client.mount.worker_threads` / `--mount-workers`; other adapters reject that
+setting. Client read-budget queue wait and range RPC together are bounded by the configurable
+ordinary RPC deadline (`--rpc-timeout-secs`, 0 disables). These are local
+scheduling controls, not new RPCs, caching guarantees or protocol limits.
 Windows token and config files are checked with ACL-aware private-file
 validation when Operon creates or overwrites sensitive files; the accepted ACL
 scope is the current user, Administrators, and SYSTEM.

@@ -5,6 +5,59 @@ use clap_complete::Shell;
 
 use crate::onboard;
 
+#[cfg(test)]
+mod mount_read_tests {
+    use super::*;
+
+    #[test]
+    fn mount_read_overrides_parse_and_reject_invalid_limits() {
+        let args = Args::try_parse_from([
+            "operon",
+            "mount",
+            "local:/",
+            "--to",
+            "/mnt/test",
+            "--mount-workers",
+            "16",
+            "--read-concurrency",
+            "4",
+            "--read-budget-mib",
+            "8",
+            "--rpc-timeout-secs",
+            "300",
+        ])
+        .unwrap();
+        assert_eq!(args.transport.rpc_timeout_secs, Some(300));
+        assert!(matches!(
+            args.command,
+            Command::Mount {
+                mount_workers: Some(16),
+                read_concurrency: Some(4),
+                read_budget_mib: Some(8),
+                ..
+            }
+        ));
+        for (flag, value) in [
+            ("--mount-workers", "0"),
+            ("--mount-workers", "65"),
+            ("--read-concurrency", "0"),
+            ("--read-budget-mib", "7"),
+            ("--read-budget-mib", "513"),
+        ] {
+            assert!(Args::try_parse_from([
+                "operon",
+                "mount",
+                "local:/",
+                "--to",
+                "/mnt/test",
+                flag,
+                value
+            ])
+            .is_err());
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(
     name = "operon",
@@ -116,6 +169,15 @@ pub(crate) enum Command {
         /// Local mount point.
         #[arg(long)]
         to: PathBuf,
+        /// Linux FUSE worker count (1–64); overrides client.mount.worker_threads.
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..=64))]
+        mount_workers: Option<u16>,
+        /// Maximum simultaneous range-read RPCs (1–64).
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..=64))]
+        read_concurrency: Option<u16>,
+        /// In-flight requested read bytes in MiB (8–512), not total RSS.
+        #[arg(long, value_parser = clap::value_parser!(u16).range(8..=512))]
+        read_budget_mib: Option<u16>,
     },
     #[command(about = "Explain the active Operon config.yaml without reading raw YAML")]
     Config {

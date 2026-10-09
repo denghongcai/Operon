@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Public musl-enabled release tag, for example v0.16.12
+        description: Public musl-enabled release tag, for example v0.16.13
         required: true
         type: string
 

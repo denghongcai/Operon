@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub use operon_core::runtime::MountReadConfig;
 pub use operon_core::runtime::NodeEndpoint;
 pub use operon_core::runtime::TransportConfig;
 
@@ -76,6 +77,8 @@ pub struct DaemonConfig {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ClientConfig {
     #[serde(default)]
+    pub mount: MountReadConfig,
+    #[serde(default)]
     pub nodes: BTreeMap<String, NodeConfig>,
 }
 
@@ -139,6 +142,7 @@ impl OperonConfig {
         if config.version != 1 {
             anyhow::bail!("unsupported config version `{}`", config.version);
         }
+        config.client.mount.validate().map_err(anyhow::Error::msg)?;
         if let Some(daemon) = &config.daemon {
             daemon.transport.validate().map_err(anyhow::Error::msg)?;
         }
@@ -548,6 +552,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn mount_read_configuration_defaults_overrides_and_validation() {
+        let defaults = OperonConfig::from_str_with_warnings("version: 1").unwrap();
+        assert_eq!(defaults.config.client.mount, MountReadConfig::default());
+        let configured = OperonConfig::from_str_with_warnings(
+            "version: 1\nclient:\n  mount:\n    worker_threads: 16\n    max_inflight_reads: 4\n    max_inflight_read_mib: 8\n    typo: true\n",
+        ).unwrap();
+        assert_eq!(configured.config.client.mount.worker_threads, Some(16));
+        assert_eq!(configured.config.client.mount.max_inflight_reads, 4);
+        assert_eq!(
+            configured.warnings,
+            vec![ConfigWarning {
+                path: "client.mount.typo".into()
+            }]
+        );
+        for field in [
+            "worker_threads: 0",
+            "worker_threads: 65",
+            "max_inflight_reads: 0",
+            "max_inflight_reads: 65",
+            "max_inflight_read_mib: 7",
+            "max_inflight_read_mib: 513",
+        ] {
+            assert!(
+                OperonConfig::from_str_with_warnings(&format!(
+                    "version: 1\nclient:\n  mount:\n    {field}\n"
+                ))
+                .is_err(),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
     fn transport_configuration_preserves_defaults_overrides_and_zero() {
         assert!(!TransportConfig::default().adaptive_window);
         let enabled: TransportConfig = serde_yaml::from_str("adaptive_window: true").unwrap();
@@ -797,7 +834,10 @@ client:
         let yaml = serde_yaml::to_string(&OperonConfig {
             version: 1,
             daemon: None,
-            client: ClientConfig { nodes },
+            client: ClientConfig {
+                nodes,
+                ..Default::default()
+            },
             policy: None,
             secrets: None,
         })

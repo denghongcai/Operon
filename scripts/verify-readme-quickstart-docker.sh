@@ -97,6 +97,15 @@ tar -xzf /tmp/operon.tar.gz -C /tmp
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
 sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
 
+# New scheduling controls are part of the v0.16.13+ public CLI contract;
+# historical releases remain usable by this generic Quickstart verifier.
+if [[ "$(printf '%s\n' v0.16.13 "$VERSION" | sort -V | head -n 1)" == v0.16.13 ]]; then
+  operon mount --help >/tmp/operon-mount-help.txt
+  for flag in --mount-workers --read-concurrency --read-budget-mib; do
+    grep -Fq -- "$flag" /tmp/operon-mount-help.txt
+  done
+fi
+
 operond service --help >/tmp/operond-service-help.txt
 operond service install --help >/tmp/operond-service-install-help.txt
 if operond start --help | grep -q -- '--background'; then

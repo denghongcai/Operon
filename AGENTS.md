@@ -34,6 +34,14 @@ Operon should not own:
 
 ## Key Design Documents
 
+- `docs/plan/v0.16.13-release-publication.md`
+  - Phase 146: exact-source and public release gates for parallel-read tuning.
+
+- `docs/plan/v0.18.23-parallel-read-roadmap.md`
+  - Phases 142–145: ops/s-first parallel-read measurements, configurable bounded
+    mount reads, evidence-led range-read scheduling and regression acceptance.
+    See `docs/quality/parallel-read.md` for source support and measured limits.
+
 - `docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`
   - Completed Phases 137–141 for static x86_64/arm64 musl builds, native Alpine
     runtime/FUSE/OpenRC service acceptance and verified release; excludes apk,
@@ -762,6 +770,13 @@ Defer:
 - VPN/device mesh IP assignment
 
 ## Working Notes
+
+- Latest phase status update: Phases 142–145 completed source/local parallel-read
+  acceptance: configurable bounded mount reads, single-task daemon range I/O,
+  matched ops/s evidence and full local validation. Linux still defaults to four
+  workers; eight is opt-in and low-concurrency regressions are disclosed.
+  `docs/quality/parallel-read.md` records evidence and source-only support.
+  No new public release or native platform execution is implied by these phases.
 
 - Preserve the distinction between network access and capability access.
 - Do not reintroduce Operon-owned transport/mesh/VPN responsibilities without updating the decision docs first.

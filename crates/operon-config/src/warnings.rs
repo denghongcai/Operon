@@ -44,7 +44,20 @@ pub(crate) fn collect_unknown_config_fields(value: &serde_yaml::Value) -> Vec<Co
     collect_object(
         value.get("client").unwrap_or(&serde_yaml::Value::Null),
         "client",
-        &["nodes"],
+        &["nodes", "mount"],
+        &mut warnings,
+    );
+    collect_object(
+        value
+            .get("client")
+            .and_then(|client| client.get("mount"))
+            .unwrap_or(&serde_yaml::Value::Null),
+        "client.mount",
+        &[
+            "worker_threads",
+            "max_inflight_reads",
+            "max_inflight_read_mib",
+        ],
         &mut warnings,
     );
     if let Some(nodes) = value.get("client").and_then(|client| client.get("nodes")) {

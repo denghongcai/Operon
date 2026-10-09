@@ -51,10 +51,10 @@ The decision is recorded in `docs/decisions/musl-alpine-distribution.md`.
 Use dry-run mode while editing workflow or documentation wiring:
 
 ```bash
-scripts/verify-release-install-usability.sh --dry-run v0.16.12 denghongcai/Operon
-scripts/verify-release-service-management-smoke.sh --dry-run v0.16.12 denghongcai/Operon
-scripts/verify-release-linux-install-containers.sh --dry-run v0.16.12 denghongcai/Operon
-scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.12 denghongcai/Operon
+scripts/verify-release-install-usability.sh --dry-run v0.16.13 denghongcai/Operon
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.13 denghongcai/Operon
+scripts/verify-release-linux-install-containers.sh --dry-run v0.16.13 denghongcai/Operon
+scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.13 denghongcai/Operon
 ```
 
 Dry-run mode does not download assets or start Docker. It validates argument
@@ -97,7 +97,7 @@ or `musl` for an explicit override; unknown/ambiguous detection errors instead
 of silently choosing. ARMv7 musl has no archive and is never mapped to GNU.
 
 ```sh
-OPERON_RELEASE_LIBC=musl scripts/verify-release-install-usability.sh --dry-run v0.16.12 denghongcai/Operon
+OPERON_RELEASE_LIBC=musl scripts/verify-release-install-usability.sh --dry-run v0.16.13 denghongcai/Operon
 bash scripts/verify-alpine-release.sh v0.16.12 denghongcai/Operon
 ```
 
