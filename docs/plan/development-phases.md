@@ -7250,7 +7250,12 @@ versions and avoid inferring runtime support from compilation alone.
 
 ## Phase 138: v0.18.23 Alpine Runtime and Live FUSE Acceptance
 
-Status: In progress. Native builds and packaged integration passed on both
+Status: Completed. Final native/source and public downloaded acceptance passed
+on both architectures/releases at `7e68facff3644257d44a8029e4cdedfc60f8b2f5`,
+in runs `37806144059` and `37809763749`, with ops/s-first comparisons and actual
+failure/errno paths. The following paragraphs retain historical checkpoints.
+
+Native builds and packaged integration passed on both
 architectures in run `37793265644`, commit `bef76d2cf7283d5a4e7b101bfbd8f6dce469f684`.
 
 Actual x86_64 Alpine 3.22/3.23 packaged-binary integration passed. The new real
@@ -7288,7 +7293,11 @@ apk packaging remains excluded.
 
 ## Phase 139: v0.18.24 OpenRC Service Management
 
-Status: In progress. Final Phase 138 failure/performance evidence remains required.
+Status: Completed. Both architectures and both Alpine releases passed actual
+OpenRC boot/reboot, supervision, private identity, failure/lifecycle/upgrade,
+zero/custom deadlines and exec-child cleanup using source and actual public
+binaries (`37806144059`, `37809763749`). Existing native platform gates passed.
+Historical checkpoints and the discovered shutdown defect are retained below.
 
 Added independent Linux init selection and explicit `--backend`, OpenRC service
 identity/restart/deadline options, system-scoped supervision rendering, private
@@ -7325,7 +7334,9 @@ architectures; fake commands do not count as live acceptance.
 
 ## Phase 140: v0.18.25 CI, Install and Release Integration
 
-Status: In progress. Final Phase 138/139 evidence remains required.
+Status: Completed. v0.16.12 has ten verified public assets, libc-aware install,
+static/archive/version/checksum checks and required native Alpine/OpenRC gates.
+Historical eight-asset contracts and all existing platform gates are preserved.
 
 Added a shared versioned asset contract (ten assets from v0.16.12, eight for
 historical tags), strict libc/architecture-aware selection with explicit
@@ -7347,7 +7358,10 @@ do not imply a protocol schema change; OpenRC has dedicated service acceptance.
 
 ## Phase 141: v0.16.12 Verified musl / Alpine Public Release
 
-Status: In progress. Depends on final Phases 137–140 acceptance.
+Status: Completed. Published v0.16.12 at `2026-10-08T16:33:03Z` from
+`7e68facff3644257d44a8029e4cdedfc60f8b2f5`. All exact-SHA pretag/postrelease
+gates and public downloaded native Alpine/FUSE/OpenRC acceptance passed.
+No work remains in Phases 137–141. The following text records preparation.
 
 Confirmed v0.16.12 is not yet published. Rust/SDK package versions, reported
 protocol version, binary tests and current workflow/examples are aligned to
@@ -7368,8 +7382,20 @@ and README gates (including real downloaded OpenRC lifecycle), then record
 evidence and mark phases complete.
 
 Detailed contracts and acceptance are in
-`docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`. This planning task
-adds no builds or public support claim. Cloudsmith, apk, ARMv7 musl
+`docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`; full release evidence,
+asset hashes and public downloaded ops/s tables are in
+`docs/plan/v0.16.12-release-publication.md`. Source CI `37806144071`, CodeQL
+`37806144206`, native Alpine `37806144059`, cross-platform real mount
+`37806165438`, Windows source/baseline `37806171626`, draft `37807941793`,
+public artifacts `37809749004`, install/service `37809754085`, README
+`37809758860`, native public Alpine `37809763749` and actual-new-release
+Windows runner `37809769226` passed. A duplicate tag CI macOS job lacked hosted
+runner capacity; its retry succeeded and the entire tag CI `37807941355` is
+now successful. The complete same-SHA main CI also passed.
+Local 53 core, 17 runtime, 13 SDK and four Linux system scripts, full Rust
+workspace/clippy/format and SDK typecheck/test/build/audit passed. Comparative
+public ops/s exposes musl regressions rather than claiming a universal speedup.
+Cloudsmith, apk, ARMv7 musl
 and parallel-read tuning remain outside scope.
 
 ## Planning Principle

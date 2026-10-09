@@ -1,7 +1,7 @@
 # musl / Alpine Distribution Decision
 
-Status: Additional musl artifacts implemented under release acceptance; current
-public v0.16.11 remains glibc-only until Phase 141 publishes verified v0.16.12.
+Status: Additional musl artifacts and OpenRC published and publicly verified in
+v0.16.12. Historical v0.16.11 and earlier Linux archives remain GNU/glibc-only.
 
 ## Approved Follow-up
 
@@ -9,9 +9,8 @@ The user approved Phases 137–141 in
 `docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`: add fully static
 x86_64/arm64 musl archives alongside GNU/glibc, with native Alpine runtime/FUSE/OpenRC
 and complete verified release coverage. This supersedes the earlier decision
-not to plan musl builds, not the current released support boundary. Existing
-glibc archives remain unsupported on Alpine until new artifacts are published
-and verified. Native x86_64/arm64 Alpine 3.22 and 3.23 runtime/FUSE/OpenRC
+not to plan musl builds. Existing glibc archives remain unsupported on Alpine;
+new musl archives provide the additional support boundary. Native x86_64/arm64 Alpine 3.22 and 3.23 runtime/FUSE/OpenRC
 acceptance passed on `82ea08506f78e7b6d7ac33f5cd7dd288c314fe71` in run
 `37800708634`; CI `37800708675` and CodeQL `37800708019` passed. Source
 acceptance does not substitute for public downloaded-package verification.
@@ -19,8 +18,8 @@ acceptance does not substitute for public downloaded-package verification.
 apk, ARMv7 musl and Cloudsmith are excluded. OpenRC service management is now
 approved as a dedicated phase, preserving current systemd behavior and requiring
 real supervision/lifecycle acceptance on both native Alpine architectures.
-Current released Linux `operond service` remains systemd-based until that phase
-is implemented and published; fake-systemd tests do not establish OpenRC support.
+Released Linux `operond service` supports systemd user services and OpenRC
+system services; fake-systemd tests do not establish OpenRC support.
 
 ## Decision
 
@@ -32,7 +31,10 @@ It is superseded for v0.16.12 and newer by the approved additional artifact line
 `operon-<tag>-linux-musl-arm64.tar.gz`. GNU names and their glibc 2.31 minimum
 remain unchanged; GNU archives themselves remain unsupported on Alpine.
 New releases must contain ten assets, while historical releases retain their
-eight-asset contract. This is not yet a claim of published Alpine support.
+eight-asset contract. Public downloaded native acceptance passed in run
+`37809763749`, including both Alpine releases, both architectures, root/non-root
+live FUSE and actual OpenRC reboot. Publication evidence is in
+`docs/plan/v0.16.12-release-publication.md`.
 
 ## Current Evidence
 
@@ -41,13 +43,12 @@ eight-asset contract. This is not yet a claim of published Alpine support.
   which represents a current stable glibc distribution.
 - `scripts/assess-musl-alpine-distribution.sh` records the expected
   unsupported behavior for the same public glibc archive on `alpine:3.20`.
-- Alpine uses musl libc by default. The current public Linux archives are
-  linked for GNU/glibc and should not be presented as Alpine-compatible
-  binaries.
+- Alpine uses musl libc by default. GNU/glibc Linux archives should not be
+  presented as Alpine-compatible binaries; select the additional musl archive.
 - `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` now have pinned
   native builds, fully static ELF checks and real runtime/FUSE/OpenRC acceptance.
   Draft release uses the same native acceptance workflow; the public release
-  still requires downloaded install/runtime/live mount and service evidence.
+  passed downloaded install/runtime/live mount and service acceptance in v0.16.12.
 
 ## Options Considered
 
@@ -78,11 +79,11 @@ eight-asset contract. This is not yet a claim of published Alpine support.
 - Supported prebuilt Linux archives: glibc-based distributions compatible with
   the documented glibc baseline, currently validated with `ubuntu:20.04` and
   `debian:12`.
-- Intended additional musl baseline: native x86_64/arm64 Alpine 3.22 and 3.23,
-  after v0.16.12 publication and downloaded verification. No blanket support
+- Supported additional musl baseline: native x86_64/arm64 Alpine 3.22 and 3.23,
+  from verified v0.16.12. No blanket support
   claim covers historical Alpine, ARMv7 musl or every other musl-based OS.
-- Supported workaround for Alpine users: build Operon from source in the
-  target environment or run the prebuilt binary in a glibc-based environment.
+- Other architectures/releases can build Operon from source in the target
+  environment or use an appropriate glibc-based environment.
 - Distribution selection: `scripts/lib/release-assets.sh` detects libc, not
   just architecture or installed development loaders. Unknown/ambiguous hosts
   require `OPERON_RELEASE_LIBC=gnu|musl`; unsupported architectures do not
@@ -104,7 +105,7 @@ the musl support gate. Use it when a container runtime is available:
 OPERON_CONTAINER_RUNTIME=podman scripts/assess-musl-alpine-distribution.sh v0.16.7 denghongcai/Operon
 ```
 
-Positive public verification is `scripts/verify-alpine-release.sh <tag> <repo>`
+Positive public verification is `bash scripts/verify-alpine-release.sh <tag> <repo>`
 through the native `Verify Alpine Release` workflow. APK packages and Cloudsmith
 remain outside scope. See `docs/quality/alpine-openrc.md` for service scope,
 private files, logs, configurable waits and foreground fallback.

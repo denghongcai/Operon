@@ -42,8 +42,8 @@ glibc-based archives. It uses Docker on GitHub runners and can use Docker or
 Podman locally. `ubuntu:20.04` represents the current glibc 2.31 minimum
 baseline, while `debian:12` catches a current stable distribution path. GNU/glibc
 archives remain unsupported on Alpine. Additional fully static musl archives
-from prospective v0.16.12 have separate native Alpine acceptance; the current
-published v0.16.11 remains GNU-only until the new release is verified.
+from v0.16.12 have separate native Alpine acceptance, including actual public
+downloads, root/non-root FUSE and rebooted OpenRC. v0.16.11 remains GNU-only.
 The decision is recorded in `docs/decisions/musl-alpine-distribution.md`.
 
 ## Local Dry Run
@@ -98,7 +98,7 @@ of silently choosing. ARMv7 musl has no archive and is never mapped to GNU.
 
 ```sh
 OPERON_RELEASE_LIBC=musl scripts/verify-release-install-usability.sh --dry-run v0.16.12 denghongcai/Operon
-scripts/verify-alpine-release.sh v0.16.12 denghongcai/Operon
+bash scripts/verify-alpine-release.sh v0.16.12 denghongcai/Operon
 ```
 
 Download connect/total waits are configurable with

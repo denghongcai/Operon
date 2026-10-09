@@ -1,8 +1,8 @@
 # Alpine and OpenRC service management
 
-Status: source implementation under acceptance; public musl assets and OpenRC
-support are not released until Phase 141 passes. The current published Linux
-glibc archives do not become Alpine-compatible through installing OpenRC.
+Status: released and publicly verified in v0.16.12 (Phases 137–141 completed).
+Public musl assets and OpenRC support passed native x86_64/arm64 downloaded
+acceptance. GNU/glibc archives do not become Alpine-compatible by installing OpenRC.
 
 The supported acceptance targets are native x86_64 and arm64 on pinned Alpine
 3.22 and 3.23. Use the corresponding fully static musl archive when released.

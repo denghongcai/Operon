@@ -118,8 +118,8 @@ corresponding platform runtime installed before `operon mount` can start a
 filesystem session.
 
 GNU/glibc Linux archives target glibc 2.31 or newer, such as Ubuntu 20.04+.
-These archives remain unsupported on Alpine. Additional static musl x86_64/arm64
-archives are under acceptance for v0.16.12, covering Alpine 3.22/3.23; v0.16.11
+These archives remain unsupported on Alpine. v0.16.12 adds static musl x86_64/arm64
+archives validated on Alpine 3.22/3.23, including real FUSE and OpenRC; v0.16.11
 and older releases remain GNU-only. No ARMv7 musl archive is provided.
 Use `OPERON_RELEASE_LIBC=gnu|musl` to override libc selection explicitly; unknown
 or ambiguous environments must not silently choose an incompatible archive.

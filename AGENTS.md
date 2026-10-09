@@ -2,6 +2,12 @@
 
 Guidance for agents working in this repository.
 
+Latest release: Phases 137–141 completed in verified public v0.16.12, source
+`7e68facff3644257d44a8029e4cdedfc60f8b2f5`. Adds native x86_64/arm64 static
+musl artifacts and real OpenRC system services alongside existing GNU/systemd,
+macOS and Windows. Full exact-SHA source/platform/public gates and ops/s evidence
+are in `docs/plan/v0.16.12-release-publication.md`.
+
 ## Project Direction
 
 Operon is an AI-native capability runtime for distributed computers connected by existing private networks.
@@ -29,9 +35,12 @@ Operon should not own:
 ## Key Design Documents
 
 - `docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`
-  - In-progress Phases 137–141 for static x86_64/arm64 musl builds, native Alpine
+  - Completed Phases 137–141 for static x86_64/arm64 musl builds, native Alpine
     runtime/FUSE/OpenRC service acceptance and verified release; excludes apk,
     Cloudsmith and ARMv7 musl.
+
+- `docs/plan/v0.16.12-release-publication.md`
+  - Completed public musl/Alpine/OpenRC release, exact-SHA gates and ops/s evidence.
 
 - `docs/plan/v0.16.11-release-publication.md`
   - Completed verified public release for Phases 132–136 and report P5/P8/P10.
