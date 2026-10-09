@@ -2,11 +2,12 @@
 
 Guidance for agents working in this repository.
 
-Latest release: Phases 137–141 completed in verified public v0.16.12, source
-`7e68facff3644257d44a8029e4cdedfc60f8b2f5`. Adds native x86_64/arm64 static
-musl artifacts and real OpenRC system services alongside existing GNU/systemd,
-macOS and Windows. Full exact-SHA source/platform/public gates and ops/s evidence
-are in `docs/plan/v0.16.12-release-publication.md`.
+Latest release: Phases 142–146 completed in verified public v0.16.13, source
+`7c2b2e05c98327f2b58251147cf2ddd46e4fd3fc`. Adds configurable bounded parallel
+mount reads and single-task daemon range I/O. Linux defaults to four workers;
+eight is opt-in. GNU/musl, Alpine/OpenRC, macOS and Windows remain supported.
+Full exact-SHA source/platform/public gates and disclosed ops/s evidence
+are in `docs/plan/v0.16.13-release-publication.md`.
 
 ## Project Direction
 
@@ -35,12 +36,12 @@ Operon should not own:
 ## Key Design Documents
 
 - `docs/plan/v0.16.13-release-publication.md`
-  - Phase 146: exact-source and public release gates for parallel-read tuning.
+  - Completed Phase 146: exact-source and public release gates for parallel-read tuning.
 
 - `docs/plan/v0.18.23-parallel-read-roadmap.md`
   - Phases 142–145: ops/s-first parallel-read measurements, configurable bounded
     mount reads, evidence-led range-read scheduling and regression acceptance.
-    See `docs/quality/parallel-read.md` for source support and measured limits.
+    See `docs/quality/parallel-read.md` for published support and measured limits.
 
 - `docs/plan/v0.18.22-musl-alpine-distribution-roadmap.md`
   - Completed Phases 137–141 for static x86_64/arm64 musl builds, native Alpine
@@ -771,12 +772,14 @@ Defer:
 
 ## Working Notes
 
-- Latest phase status update: Phases 142–145 completed source/local parallel-read
+- Latest phase status update: Phases 142–146 completed parallel-read
   acceptance: configurable bounded mount reads, single-task daemon range I/O,
   matched ops/s evidence and full local validation. Linux still defaults to four
   workers; eight is opt-in and low-concurrency regressions are disclosed.
-  `docs/quality/parallel-read.md` records evidence and source-only support.
-  No new public release or native platform execution is implied by these phases.
+  Phase 146 published v0.16.13 after exact-SHA CI/CodeQL/native platform gates
+  and completed all public artifact/install/README/Alpine/Windows acceptance.
+  `docs/quality/parallel-read.md` distinguishes source measurements from public
+  binary acceptance; publication evidence is in the v0.16.13 release record.
 
 - Preserve the distinction between network access and capability access.
 - Do not reintroduce Operon-owned transport/mesh/VPN responsibilities without updating the decision docs first.

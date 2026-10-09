@@ -1,6 +1,6 @@
 # Parallel read tuning and acceptance
 
-v0.16.13 release preparation: mount worker/read budgets and
+Published v0.16.13: mount worker/read budgets and
 single-task daemon range reads. Protocol and existing consistency remain unchanged.
 
 ```yaml
@@ -76,7 +76,9 @@ separate from local source tests.
 ## Measured acceptance — 2026-10-09
 
 Baseline source `267897ddf7424240a698fde310f47f7020741e1a` was built before
-edits, candidate is the uncommitted implementation (not a published version).
+edits, candidate was the implementation before version alignment/publication.
+These historical same-toolchain source measurements are not a fresh benchmark
+of downloaded v0.16.13 archives; pinned hashes and raw evidence remain unchanged.
 Both use Rust 1.88 release mode. Final candidate uses **8 FUSE workers, 8 active
 read RPCs, 32 MiB requested-byte budget**; baseline retains four workers.
 Numbers below are medians of three alternating trials, ratios of those medians.
@@ -127,6 +129,17 @@ Raw final evidence: `/tmp/operon-parallel-final-local` and
 `/tmp/operon-parallel-final-delay20`; each includes binary hashes, source dirty
 state, complete counters and verified payloads (recoverably gzip-compressed).
 Final candidate hashes are pinned in the machine-readable evidence.
+
+## Public release acceptance
+
+Published v0.16.13 source/tag is
+`7c2b2e05c98327f2b58251147cf2ddd46e4fd3fc`. Exact-source CI/CodeQL,
+native Alpine x86_64/arm64 and actual macOS FUSE-T/Windows WinFsp passed.
+Downloaded public archives, installation/service management, README Quickstart,
+native Alpine live FUSE/rebooted OpenRC and Windows Server 2025 passed.
+See [release publication evidence](../plan/v0.16.13-release-publication.md)
+for all workflow IDs, hashes and public native ops comparisons. Those GNU/musl
+comparisons include CLI startup and are not the parallel-read benchmark above.
 
 Full local Rust workspace, queue cancellation/config/CLI/range edge tests,
 strict clippy/format, docs/help/skills sync, 53 core / 18 runtime / 13 SDK / four

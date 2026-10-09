@@ -7440,26 +7440,32 @@ four/eight-reader local ops/s improved 58%/62%; 20ms egress-delay cases improved
 unchanged. Binary hashes, all trials and disclosed regressions are in
 `docs/quality/evidence/parallel-read-2026-10-09.json` and
 `docs/quality/parallel-read.md`. No local implementation/acceptance work remains.
-Native macOS/Windows/Alpine and public release gates were not run for this
-uncommitted source change; publication requires a separate exact-SHA gate.
+Native macOS/Windows/Alpine and public release gates were not run at that
+source/local checkpoint; the separate exact-SHA publication gate completed
+subsequently in Phase 146.
 
 Contracts: `docs/plan/v0.18.23-parallel-read-roadmap.md`.
 
 ## Phase 146: v0.16.13 Parallel Read Public Release
 
-Status: In Progress. User explicitly requested committing and publishing the
-completed parallel-read change. Align versions, preserve historical release
-assertions, update public Quickstart contracts and rerun local validation.
-Commit/push main; require exact-SHA CI/CodeQL, native Alpine and real platform
-gates before tagging. Verify draft archives, publish, then complete all public
-download/install/README/Alpine/Windows gates. No release completion is claimed
-until those gates pass. Evidence: `docs/plan/v0.16.13-release-publication.md`.
+Status: Completed. Published verified public Latest v0.16.13 at
+2026-10-09T13:43:12Z, source/tag
+`7c2b2e05c98327f2b58251147cf2ddd46e4fd3fc`. Aligned versions, preserved historical
+release assertions, added current release and public mount-help validators.
+Exact-SHA CI/CodeQL, native x86_64/arm64 Alpine workspace/FUSE/OpenRC, actual
+macOS FUSE-T/Windows WinFsp and Windows Server 2025 passed before tagging.
+Draft build and all ten assets passed; nine archive SHA256 checks matched.
+All public artifact/install/service/README/native Alpine/rebooted OpenRC and
+actual v0.16.13 Windows checks passed. Pretag and postrelease orchestration
+passed. No work remains in Phases 142–146.
+Evidence: `docs/plan/v0.16.13-release-publication.md`.
 
 Preparation checkpoint: versions aligned to 0.16.13 / v0.16.13, historical
 v0.16.12 release assertions preserved, new core release validator and public
 Quickstart mount-help checks registered. Local 277 Rust tests, strict clippy/
 format/diff, 54 core / 18 runtime / 13 SDK / four Linux system scripts and SDK
-23 tests/typecheck/build passed. Exact-SHA remote and publication gates remain.
+23 tests/typecheck/build passed. Remote and publication gates subsequently
+passed; this paragraph preserves the local preparation checkpoint.
 
 ## Planning Principle
 
