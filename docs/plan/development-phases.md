@@ -8199,6 +8199,12 @@ Full workspace/all-target tests passed at `79fdd8e`; the versioned candidate
 still requires fresh complete checks, all native/embedded gates, Security
 disposition, immutable tag and 17 public assets/install/Quickstart verification.
 See `docs/plan/v0.16.15-release-publication.md` for the release requirements.
+Final candidate `dee9615` passes fmt, strict workspace Clippy and all-target
+Rust tests. Consolidated checks expose two stale validator contracts: escaped
+protocol/SDK version patterns still referenced 0.16.14, and historical public
+artifact checks required floating runner labels after the five-platform
+matrix was pinned. Update both contracts and require fresh source gates;
+the failing checks are not waived or counted as passed.
 
 ## Planning Principle
 

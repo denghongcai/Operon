@@ -28,8 +28,10 @@ require_pattern 'exec --help' scripts/smoke-release-archive.sh
 require_file .github/workflows/verify-release-artifacts.yml
 require_file .github/workflows/verify-readme-quickstart.yml
 require_pattern 'workflow_dispatch' .github/workflows/verify-release-artifacts.yml
-require_pattern 'ubuntu-latest' .github/workflows/verify-release-artifacts.yml
-require_pattern 'macos-latest' .github/workflows/verify-release-artifacts.yml
+require_pattern 'ubuntu-24.04' .github/workflows/verify-release-artifacts.yml
+require_pattern 'ubuntu-24.04-arm' .github/workflows/verify-release-artifacts.yml
+require_pattern 'macos-15' .github/workflows/verify-release-artifacts.yml
+require_pattern 'macos-15-intel' .github/workflows/verify-release-artifacts.yml
 require_pattern 'windows-2025' .github/workflows/verify-release-artifacts.yml
 require_pattern 'scripts/verify-release-artifacts.sh' .github/workflows/verify-release-artifacts.yml
 require_pattern 'workflow_dispatch' .github/workflows/verify-readme-quickstart.yml
