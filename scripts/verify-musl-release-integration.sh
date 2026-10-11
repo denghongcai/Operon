@@ -16,8 +16,10 @@ require_pattern 'Native rebooted Alpine OpenRC service acceptance' scripts/verif
 require_pattern 'ubuntu-24.04-arm' .github/workflows/verify-alpine-release.yml
 [[ "$(release_expected_assets v0.16.11 | wc -l)" == 8 ]]
 [[ "$(release_expected_assets v0.16.12 | wc -l)" == 10 ]]
-[[ "$(release_expected_assets v0.17.0 | wc -l)" == 10 ]]
-[[ "$(release_expected_assets v1.0.0 | wc -l)" == 10 ]]
+[[ "$(release_expected_assets v0.16.14 | wc -l)" == 10 ]]
+[[ "$(release_expected_assets v0.16.15 | wc -l)" == 17 ]]
+[[ "$(release_expected_assets v0.17.0 | wc -l)" == 17 ]]
+[[ "$(release_expected_assets v1.0.0 | wc -l)" == 17 ]]
 [[ "$(release_expected_assets v0.13 | wc -l)" == 8 ]]
 release_expected_assets v0.16.12 | grep -Fxq operon-v0.16.12-linux-musl-arm64.tar.gz
 if release_validate_tag 'vgarbage'; then echo 'invalid tag accepted' >&2; exit 1; fi

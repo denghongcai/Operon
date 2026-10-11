@@ -23,8 +23,24 @@ release_expected_version() {
   printf '%s.%s.%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[4]:-0}" "${BASH_REMATCH[5]:-}"
 }
 
+release_has_sdk_native_assets() {
+  local tag="$1" major minor patch
+  release_validate_tag "$tag" || return 2
+  [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]
+  major=$((10#${BASH_REMATCH[1]}))
+  minor=$((10#${BASH_REMATCH[2]}))
+  patch=$((10#${BASH_REMATCH[4]:-0}))
+  (( major > 0 || minor > 16 || (minor == 16 && patch >= 15) ))
+}
+
+release_sdk_native_targets() {
+  printf '%s\n' x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
+    x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
+    x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc
+}
+
 release_expected_assets() {
-  local tag="$1"
+  local tag="$1" sdk_target
   release_validate_tag "$tag" || return 2
   cat <<ASSETS
 operon-${tag}-linux-x86_64.tar.gz
@@ -38,6 +54,11 @@ SHA256SUMS
 ASSETS
   if release_has_musl_assets "$tag"; then
     printf 'operon-%s-linux-musl-x86_64.tar.gz\noperon-%s-linux-musl-arm64.tar.gz\n' "$tag" "$tag"
+  fi
+  if release_has_sdk_native_assets "$tag"; then
+    while IFS= read -r sdk_target; do
+      printf 'operon-sdk-native-%s-%s.tar.gz\n' "$tag" "$sdk_target"
+    done < <(release_sdk_native_targets)
   fi
 }
 

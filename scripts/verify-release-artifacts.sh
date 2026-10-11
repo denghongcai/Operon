@@ -123,6 +123,20 @@ esac
 
 scripts/smoke-release-archive.sh "$WORKDIR/assets/$asset"
 
+if release_has_sdk_native_assets "$TAG"; then
+  command -v node >/dev/null || { echo 'Node is required to verify native SDK manifests' >&2; exit 1; }
+  while IFS= read -r sdk_target; do
+    sdk_archive="$WORKDIR/assets/operon-sdk-native-${TAG}-${sdk_target}.tar.gz"
+    entries=$(tar -tzf "$sdk_archive" | sort)
+    [[ "$entries" == $'binding.json\noperon-sdk-native.node' ]] || { echo 'invalid SDK archive entries' >&2; exit 1; }
+    tar -tvzf "$sdk_archive" | awk 'substr($1,1,1) != "-" { bad=1 } END { exit bad }'
+    sdk_extract="$WORKDIR/extracted/$sdk_target"
+    mkdir -p "$sdk_extract"
+    tar -xzf "$sdk_archive" -C "$sdk_extract"
+    node "$ROOT/scripts/verify-sdk-native-manifest.mjs" "$sdk_extract" "$(release_expected_version "$TAG")" "$sdk_target"
+  done < <(release_sdk_native_targets)
+fi
+
 tar -tzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" \
   | grep -E '(^|/)dist/' >/dev/null
 tar -tzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" \

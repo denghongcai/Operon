@@ -8078,6 +8078,13 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   Workflow YAML parses; online execution and public asset verifier changes are
   still pending. GNU binding libc baseline and any additional target support
   must be stated from actual artifact evidence before publication.
+  GitHub currently has public Latest v0.16.14 and no v0.16.15 tag. Added the
+  version-scoped seven-native-binding asset contract from v0.16.15, preserving
+  all previous 8/10-asset release contracts. Public verification checks exact
+  regular-file archive contents and each target/version/N-API/SHA-256 manifest.
+  Versioned asset/libc regressions and local extracted GNU manifest checks pass.
+  This establishes a candidate contract, not a tag/version bump or publication;
+  full source/platform/native/online gates remain required before that step.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,
