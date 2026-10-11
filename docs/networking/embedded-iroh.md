@@ -131,6 +131,34 @@ settings fail clearly, never silently falling back to TCP. The first real
 public SDK unary/upload/download/range/exec/log tests passed locally; online
 and native-platform/bidirectional/relay acceptance still remain required.
 
+Example source SDK selection (with the optional binding installed):
+
+```ts
+const client = new OperonClient([{
+  nodeId: "remote",
+  endpoint: "iroh://REPLACE_WITH_SERVER_PUBLIC_ENDPOINT_ID",
+  token: tokenFromTrustedPairing,
+  transport: {
+    connectTimeoutSecs: 120,
+    rpcTimeoutSecs: 300,
+    iroh: {
+      identityFile: "/private/iroh-client.key",
+      peerAddrs: ["192.168.1.20:7788"],
+    },
+  },
+}]);
+try {
+  await client.statFs("remote", "/");
+} finally {
+  client.close();
+}
+```
+
+Local public SDK acceptance now also passes TCP/UDP bidirectional echo, PTY
+output/exit and cancellation of an awaiting datagram. The same tests are wired
+to Linux/macOS/Windows CI; this is not proof of the pending platform runs or
+portable binding distribution. User timers remain configurable for slow links.
+
 NAT/direct upgrade, interrupted-stream recovery, additional capabilities,
 portable SDK binding distribution and complete platform/live-mount regression
 remain Phase 157–159 gates. Do not claim these scenarios passed from direct-path

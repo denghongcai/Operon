@@ -8005,6 +8005,21 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   updating that contract, with TypeScript checks/tests/build enabled.
   Bidirectional services/PTY, broader cancellation/native/relay
   acceptance and packaged binding distribution remain required.
+  Expanded real public SDK acceptance now passes TCP/UDP bidirectional echo,
+  PTY output/exit and cancellation while awaiting a datagram (no deadline
+  expiry required). Event mappers forward return to the underlying transport
+  before joining their generators, with idempotent source close and observable
+  cleanup errors; two new regressions bring SDK tests to 30. Typecheck/build
+  and existing tests pass. Linux and native macOS/Windows workflows now invoke
+  the same real public SDK gate and retain its log artifacts; platform results
+  and full SDK-group revalidation remain pending. Native-musl binding/runtime,
+  packaged distribution and relay/NAT/interrupted streaming remain open.
+  Initial full SDK revalidation caught a stale Phase 104 source-pattern check
+  expecting a bare async-generator mapper; updated it to require the named
+  mapper and cancellation wrapper, preserving its boundary assertions. Full
+  13-script SDK group is re-running rather than bypassing the failed gate.
+  Revalidation finished successfully: all 13 SDK scripts passed with the 30
+  tests, typecheck and build enabled after the source-pattern correction.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

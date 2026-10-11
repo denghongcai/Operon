@@ -14,7 +14,10 @@ require_pattern 'Status: Completed' docs/plan/v0.17.1-maintainability-cleanup.md
 require_file packages/sdk-js/src/grpc-mappers.ts
 require_pattern 'from "./grpc-mappers"' packages/sdk-js/src/index.ts
 require_pattern 'export function serviceTunnelReadableStream' packages/sdk-js/src/grpc-mappers.ts
-require_pattern 'export async function\* mapGrpcExecSessionEvents' packages/sdk-js/src/grpc-mappers.ts
+# The public async iterable is now wrapped to forward cancellation before a
+# pending generator next; keep the named mapper/module boundary check.
+require_pattern 'export function mapGrpcExecSessionEvents' packages/sdk-js/src/grpc-mappers.ts
+require_pattern 'return cancellableTransform\(events' packages/sdk-js/src/grpc-mappers.ts
 require_pattern 'export function fromGrpcExecRecord' packages/sdk-js/src/grpc-mappers.ts
 
 require_file crates/operon-mount/src/windows_path.rs

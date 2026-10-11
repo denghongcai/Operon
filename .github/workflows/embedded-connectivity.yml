@@ -90,7 +90,15 @@ jobs:
         env:
           OPERON_SDK_NATIVE_PATH: ${{ github.workspace }}/target/debug/liboperon_sdk_native.so
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
-        run: node scripts/verify-sdk-native.mjs
+        run: |
+          set -euo pipefail
+          node scripts/verify-sdk-native.mjs 2>&1 | tee sdk-native-acceptance.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: sdk-native-linux-${{ github.sha }}
+          path: sdk-native-acceptance.log
+          if-no-files-found: ignore
       - name: Native stream, authorization, fs, exec and cancellation tests
         env:
           OPERON_POC_DAEMON: ${{ github.workspace }}/target/debug/operond

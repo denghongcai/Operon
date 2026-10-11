@@ -1,4 +1,4 @@
-// Binding acceptance only; public SDK adaptation and streaming gates follow.
+// Actual public SDK + in-process binding acceptance against an owned daemon.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -19,9 +19,23 @@ const dir = await mkdtemp(path.join(os.tmpdir(), "operon-sdk-native-"));
 let daemon;
 let client;
 let sdk;
+let tcpEcho;
+let udpEcho;
+const echoSockets = new Set();
 const limit = setTimeout(() => { daemon?.kill("SIGKILL"); process.exitCode = 1; }, seconds * 1000);
 try {
   await mkdir(path.join(dir, "workspace"));
+  tcpEcho = net.createServer(socket => {
+    echoSockets.add(socket);
+    socket.on("close", () => echoSockets.delete(socket));
+    socket.on("data", data => socket.write(data));
+  });
+  tcpEcho.listen(0, "127.0.0.1");
+  await once(tcpEcho, "listening");
+  udpEcho = dgram.createSocket("udp4");
+  udpEcho.on("message", (data, peer) => udpEcho.send(data, peer.port, peer.address));
+  udpEcho.bind(0, "127.0.0.1");
+  await once(udpEcho, "listening");
   // Keep the TCP lease until immediately before daemon startup. QUIC uses
   // its own dynamically selected localhost UDP port below.
   const lease = net.createServer();
@@ -38,7 +52,11 @@ try {
     grpc_listen: `127.0.0.1:${tcpPort}`, auth: { token: "native-sdk-test-token" },
     iroh: { identity_file: "server.key", bind_addrs: [`127.0.0.1:${udpPort}`] },
   }, policy: { subject: "sdk-acceptance", fs: { mounts: [{ name: "workspace", path: "/", permissions: { read: true, write: true, delete: true } }] },
-    exec: { allowed_cwds: ["/"], default_timeout_secs: 30, max_timeout_secs: 300, allow_sessions: true, preserve_env: false, env_allowlist: [], allowed_secrets: [] } },
+    exec: { allowed_cwds: ["/"], default_timeout_secs: 30, max_timeout_secs: 300, allow_sessions: true, preserve_env: false, env_allowlist: [], allowed_secrets: [] },
+    service: { services: [
+      { id: "tcp-echo", name: "tcp echo", host: "127.0.0.1", port: tcpEcho.address().port, protocol: "tcp", description: "owned echo fixture", permissions: { check: true, forward: true } },
+      { id: "udp-echo", name: "udp echo", host: "127.0.0.1", port: udpEcho.address().port, protocol: "udp", description: "owned datagram fixture", permissions: { check: true, forward: true } },
+    ] } },
   }), { mode: 0o600 });
   await new Promise(resolve => lease.close(resolve));
   await new Promise(resolve => udpLease.close(resolve));
@@ -106,11 +124,50 @@ try {
   const range = await sdk.readFileRangeBytes("sdk-logical", "/large.bin", 123, 4 * 1024 * 1024);
   assert.deepEqual(new Uint8Array(range), payload.subarray(123, 123 + 4 * 1024 * 1024));
   await assert.rejects(sdk.statFs("sdk-logical", "/../escape"));
-  const exec = await sdk.runExec("sdk-logical", { command: "printf sdk-native-exec", cwd: "/" });
+  const exec = await sdk.runExec("sdk-logical", { command: process.platform === "win32" ? "echo sdk-native-exec" : "printf sdk-native-exec", cwd: "/" });
   for await (const event of await sdk.watchExec("sdk-logical", exec.id)) { /* drain terminal event stream */ }
   assert.equal((await sdk.getExec("sdk-logical", exec.id)).exit_code, 0);
   const logsStream = await sdk.streamExecLogs("sdk-logical", exec.id);
   assert((await new Response(logsStream).text()).includes("sdk-native-exec"));
+  const echoed = Buffer.from("native-sdk-tcp-echo");
+  let finishTcp;
+  const tcpInputDone = new Promise(resolve => { finishTcp = resolve; });
+  const tunnel = await sdk.openServiceTunnel("sdk-logical", "tcp-echo", (async function* () { yield echoed; await tcpInputDone; })());
+  const reader = tunnel.getReader();
+  const tcpResponse = await reader.read();
+  assert.deepEqual(Buffer.from(tcpResponse.value), echoed);
+  await reader.cancel();
+  finishTcp();
+  let finishUdp;
+  const udpInputDone = new Promise(resolve => { finishUdp = resolve; });
+  const datagrams = await sdk.openServiceDatagramTunnel("sdk-logical", "udp-echo", (async function* () {
+    yield { peer_id: "owned-peer", data: echoed };
+    await udpInputDone;
+  })());
+  const datagramIterator = datagrams[Symbol.asyncIterator]();
+  while (true) {
+    const next = await datagramIterator.next();
+    assert(!next.done, "datagram stream ended before echo");
+    const event = next.value;
+    if (event.type === "datagram") {
+      assert.equal(event.peer_id, "owned-peer");
+      assert.deepEqual(Buffer.from(event.data), echoed);
+      break;
+    }
+  }
+  const pendingDatagram = assert.rejects(datagramIterator.next(), error => error.code === 1);
+  await datagramIterator.return();
+  await pendingDatagram;
+  finishUdp();
+  const session = await sdk.openExecSession("sdk-logical", { command: process.platform === "win32" ? "echo native-sdk-pty" : "printf native-sdk-pty", cwd: "/" });
+  const output = [];
+  let sawExit = false;
+  for await (const event of session) {
+    if (event.type === "output") output.push(Buffer.from(event.data));
+    if (event.type === "exit") { assert.equal(event.exit_code, 0); sawExit = true; }
+  }
+  assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"));
+  console.log("PASS public SDK native TCP/UDP bidirectional echo, stream cancellation and PTY output/exit");
   console.log("PASS public SDK native unary, client/server streaming, >8MiB roundtrip, 4MiB range and traversal rejection");
   console.log("PASS in-process Node binding, native daemon health/node, bearer rejection, cancellation and joined call shutdown");
 } finally {
@@ -121,5 +178,8 @@ try {
     await once(daemon, "exit");
   }
   clearTimeout(limit);
+  for (const socket of echoSockets) socket.destroy();
+  if (tcpEcho?.listening) await new Promise(resolve => tcpEcho.close(resolve));
+  if (udpEcho) await new Promise(resolve => udpEcho.close(resolve));
   await rm(dir, { recursive: true, force: true });
 }

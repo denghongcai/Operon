@@ -63,6 +63,13 @@ jobs:
         os:
           - macos-latest
           - windows-2025
+        include:
+          - os: macos-latest
+            sdk-binding: liboperon_sdk_native.dylib
+            daemon-bin: operond
+          - os: windows-2025
+            sdk-binding: operon_sdk_native.dll
+            daemon-bin: operond.exe
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -111,6 +118,35 @@ jobs:
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
         run: cargo test -p operond --locked embedded_integration_tests -- --nocapture
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '10.33.2'
+      - name: Build public SDK and native binding
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @operon/sdk typecheck
+          pnpm --filter @operon/sdk test
+          pnpm --filter @operon/sdk build
+          cargo build -p operond -p operon-sdk-native --features operon-sdk-native/node --locked
+      - name: Actual public SDK native platform capability acceptance
+        shell: bash
+        env:
+          OPERON_SDK_NATIVE_PATH: ${{ github.workspace }}/target/debug/${{ matrix.sdk-binding }}
+          OPERON_NATIVE_TEST_DAEMON: ${{ github.workspace }}/target/debug/${{ matrix.daemon-bin }}
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+        run: |
+          set -euo pipefail
+          node scripts/verify-sdk-native.mjs 2>&1 | tee sdk-native-acceptance.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: sdk-native-${{ matrix.os }}-${{ github.sha }}
+          path: sdk-native-acceptance.log
+          if-no-files-found: ignore
 
       - name: Test filesystem core
         run: cargo test -p operon-fs --locked

@@ -40,6 +40,27 @@ import type {
   ServiceList,
 } from "./types";
 
+// A plain mapping async generator queues return() behind an awaited next().
+// Forward cancellation to the transport before joining the mapping generator.
+function cancellableTransform<T, U>(source: AsyncIterable<T>, map: (source: AsyncIterable<T>) => AsyncGenerator<U, void, undefined>): AsyncIterable<U> {
+  const input = source[Symbol.asyncIterator]();
+  let closing: Promise<IteratorResult<T>> | undefined;
+  const close = () => closing ??= input.return ? Promise.resolve(input.return()) : Promise.resolve({ done: true, value: undefined });
+  const mapped = map({ [Symbol.asyncIterator]: () => ({ next: (...args) => input.next(...args), return: close }) });
+  const finish = mapped.return.bind(mapped);
+  mapped.return = async value => {
+    let failed = false;
+    let failure: unknown;
+    try { await close(); } catch (error) { failed = true; failure = error; }
+    const result = await finish(value);
+    if (failed) throw failure;
+    return result;
+  };
+  const fail = mapped.throw.bind(mapped);
+  mapped.throw = async error => { try { await close(); } catch { /* preserve caller's thrown error */ } return await fail(error); };
+  return mapped;
+}
+
 export function serviceTunnelReadableStream(
   iterator: AsyncIterator<GrpcServiceTunnelResponse>,
 ): ReadableStream<Uint8Array> {
@@ -69,9 +90,10 @@ export function serviceTunnelReadableStream(
   });
 }
 
-export async function* mapGrpcServiceDatagramTunnelEvents(
+export function mapGrpcServiceDatagramTunnelEvents(
   events: AsyncIterable<GrpcServiceDatagramTunnelResponse>,
 ): AsyncIterable<ServiceDatagramTunnelEvent> {
+  return cancellableTransform(events, async function* (events) {
   for await (const event of events) {
     if (event.opened) {
       yield {
@@ -94,6 +116,7 @@ export async function* mapGrpcServiceDatagramTunnelEvents(
       };
     }
   }
+  });
 }
 
 export function fromGrpcFsStat(stat: GrpcFsStat) {
@@ -262,26 +285,31 @@ export function fromGrpcAuditEvent(event: GrpcAuditLog["events"][number]): Audit
   };
 }
 
-export async function* mapGrpcExecEvents(events: AsyncIterable<GrpcExecEvent>): AsyncIterable<ExecEvent> {
+export function mapGrpcExecEvents(events: AsyncIterable<GrpcExecEvent>): AsyncIterable<ExecEvent> {
+  return cancellableTransform(events, async function* (events) {
   for await (const event of events) {
     yield fromGrpcExecEvent(event);
   }
+  });
 }
 
-export async function* mapGrpcExecLogStreamEvents(
+export function mapGrpcExecLogStreamEvents(
   events: AsyncIterable<GrpcExecLogStreamEvent>,
 ): AsyncIterable<ExecLogStreamEvent> {
+  return cancellableTransform(events, async function* (events) {
   for await (const event of events) {
     const mapped = fromGrpcExecLogStreamEvent(event);
     if (mapped) {
       yield mapped;
     }
   }
+  });
 }
 
-export async function* mapGrpcExecSessionEvents(
+export function mapGrpcExecSessionEvents(
   events: AsyncIterable<GrpcExecSessionEvent>,
 ): AsyncIterable<ExecSessionEvent> {
+  return cancellableTransform(events, async function* (events) {
   for await (const event of events) {
     if (event.started) {
       yield { type: "started", exec_id: event.started.execId };
@@ -296,9 +324,11 @@ export async function* mapGrpcExecSessionEvents(
       };
     }
   }
+  });
 }
 
-export async function* streamEventLogs(events: AsyncIterable<ExecLogStreamEvent>): AsyncIterable<Uint8Array> {
+export function streamEventLogs(events: AsyncIterable<ExecLogStreamEvent>): AsyncIterable<Uint8Array> {
+  return cancellableTransform(events, async function* (events) {
   let nextSequence = 0;
   for await (const event of events) {
     if (event.type === "snapshot") {
@@ -314,6 +344,7 @@ export async function* streamEventLogs(events: AsyncIterable<ExecLogStreamEvent>
       yield event.log.data;
     }
   }
+  });
 }
 
 export function fromGrpcExecList(list: GrpcExecList) {
