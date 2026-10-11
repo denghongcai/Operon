@@ -13,6 +13,7 @@ on:
       - 'crates/**'
       - 'vendor/**'
       - 'Cargo.*'
+      - 'rust-toolchain.toml'
       - 'scripts/*musl*'
       - 'scripts/*alpine*'
       - 'scripts/*libc*'
@@ -25,6 +26,7 @@ on:
       - 'crates/**'
       - 'vendor/**'
       - 'Cargo.*'
+      - 'rust-toolchain.toml'
       - 'scripts/*musl*'
       - 'scripts/*alpine*'
       - 'scripts/*libc*'
@@ -50,7 +52,7 @@ jobs:
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
     env:
-      MUSL_BUILDER: rust@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d
+      MUSL_BUILDER: rust@sha256:a3e3d30122c08c0ed85dcd8867d956f066be23c32ed67a0453bc04ce478ad69b
     steps:
       - uses: actions/checkout@v6
       - name: Verify native architecture
@@ -61,8 +63,8 @@ jobs:
           path: |
             target/alpine-native
             .musl-cargo-cache
-          key: alpine-musl-rust188-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: alpine-musl-rust188-${{ matrix.arch }}-
+          key: alpine-musl-rust191-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: alpine-musl-rust191-${{ matrix.arch }}-
       - name: Build and test in pinned native Alpine environment
         run: |
           mkdir -p target/alpine-native .musl-cargo-cache
@@ -75,7 +77,7 @@ jobs:
               apk add --no-cache bash protobuf=29.4-r0 musl=1.2.5-r12 musl-dev=1.2.5-r12 acl >/dev/null
               cd /workspace
               bash scripts/build-musl-release.sh "${{ matrix.target }}"
-              cargo +1.88.0 test --workspace --release --locked --target "${{ matrix.target }}"
+              cargo +1.91.0 test --workspace --release --locked --target "${{ matrix.target }}"
               bash scripts/package-musl-release.sh "${{ matrix.target }}" \
                 /output/${{ matrix.target }}/release /output/dist
             '
@@ -134,7 +136,7 @@ jobs:
               "target/alpine-native/${{ matrix.target }}/release" "$image"
           done
       - name: Install pinned GNU comparison toolchain
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: dtolnay/rust-toolchain@1.91.0
       - name: Install GNU comparison protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -143,7 +145,7 @@ jobs:
       - name: Native identical-environment GNU and musl ops comparison
         run: |
           CARGO_TARGET_DIR=target/libc-gnu CARGO_INCREMENTAL=0 \
-            cargo +1.88.0 build --release --locked -p operon-cli -p operond
+            cargo +1.91.0 build --release --locked -p operon-cli -p operond
           bash scripts/run-libc-comparison.sh target/libc-gnu/release \
             "target/alpine-native/${{ matrix.target }}/release" | tee target/libc-comparison.jsonl
       - name: Upload ops comparison evidence

@@ -6,7 +6,8 @@ setup and product positioning live in [README.md](README.md).
 
 ## Development Prerequisites
 
-- Rust stable toolchain, 1.85 or newer.
+- Rust 1.91 or newer (MSRV). `rust-toolchain.toml` pins the reproducible
+  development/release baseline to 1.91.0; CI also tests latest stable.
 - Node.js and pnpm.
 - Docker with Docker Compose.
 - `/dev/fuse` and `fusermount3` for Linux mount validation.

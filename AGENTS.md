@@ -36,6 +36,12 @@ Operon should not own:
 - subnet routing
 - packet-level network policy
 
+Approved exception: an explicit opt-in embedded iroh connection backend is
+being implemented in Phases 154–159. Existing private-network addressing
+remains the default; no custom NAT/relay protocol or mesh/VPN is introduced.
+Follow `docs/decisions/optional-embedded-connectivity.md` for the updated
+boundary and `docs/plan/v0.18.26-optional-embedded-connectivity.md` for gates.
+
 ## Key Design Documents
 
 - `docs/plan/v0.18.26-optional-embedded-connectivity.md`

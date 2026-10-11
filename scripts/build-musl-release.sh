@@ -18,7 +18,7 @@ esac
 command -v cc >/dev/null || { echo 'C compiler is required' >&2; exit 1; }
 command -v protoc >/dev/null || { echo 'protoc is required' >&2; exit 1; }
 command -v readelf >/dev/null || { echo 'readelf is required' >&2; exit 1; }
-toolchain="${OPERON_MUSL_RUST_TOOLCHAIN:-1.88.0}"
+toolchain="${OPERON_MUSL_RUST_TOOLCHAIN:-1.91.0}"
 output="${CARGO_TARGET_DIR:-$ROOT/target}"
 echo "native architecture: $arch"
 rustc "+$toolchain" --version

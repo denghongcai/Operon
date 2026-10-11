@@ -10,6 +10,12 @@ service/port access.
 
 Operon should run on top of an existing secure private network instead of implementing its own network mesh. Supported network environments include Cloudflare Mesh, Tailscale, WireGuard, SSH tunnels, LAN, Kubernetes networking, and manually configured private endpoints.
 
+An explicit opt-in embedded iroh connection backend is approved for
+implementation; private-network addressing remains the default. The updated
+[connectivity decision](../decisions/optional-embedded-connectivity.md) defines
+the boundary, security requirements and full production/release gates. This
+does not authorize an Operon mesh/VPN or custom NAT/relay protocol.
+
 The daemon must be easy to distribute across multiple operating systems and CPU architectures, including:
 
 - x86_64
@@ -54,7 +60,7 @@ This is a change from the initial TypeScript-first prototype idea. TypeScript re
 Recommended Rust crates:
 
 ```text
-minimum Rust: 1.85
+minimum Rust: 1.91 (development/release baseline pinned to 1.91.0)
 async runtime: tokio
 gRPC: tonic
 protobuf: prost

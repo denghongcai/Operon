@@ -106,6 +106,50 @@ client:
 }
 
 #[test]
+fn config_explain_prints_allowed_secret_names_but_never_values() {
+    let base = tempfile::tempdir().expect("temp dir");
+    let config = base.path().join("config.yaml");
+    let init = operon()
+        .args(["--quiet", "init", "config"])
+        .arg(&config)
+        .output()
+        .expect("init config");
+    assert!(init.status.success(), "stderr={}", stderr(&init));
+    let yaml = fs::read_to_string(&config).expect("read config");
+    fs::write(
+        &config,
+        yaml.replace("allowed_secrets: []", "allowed_secrets: [TEST_API_KEY]"),
+    )
+    .expect("update allowed names");
+    let secret_value = "regression-secret-value-must-not-be-printed";
+    let token_value = "regression-token-value-must-not-be-printed";
+    fs::write(
+        base.path().join("secrets.yaml"),
+        format!("TEST_API_KEY: {secret_value}\n"),
+    )
+    .expect("write secrets");
+    fs::write(base.path().join("token"), token_value).expect("write token");
+    for json in [false, true] {
+        let mut command = operon();
+        command.arg("--config").arg(&config);
+        if json {
+            command.arg("--json");
+        }
+        let output = command
+            .args(["config", "explain"])
+            .output()
+            .expect("explain");
+        assert!(output.status.success(), "stderr={}", stderr(&output));
+        let stdout = std::str::from_utf8(&output.stdout).expect("utf8 output");
+        assert!(stdout.contains("TEST_API_KEY"));
+        for value in [secret_value, token_value] {
+            assert!(!stdout.contains(value));
+            assert!(!stderr(&output).contains(value));
+        }
+    }
+}
+
+#[test]
 fn onboard_summary_includes_completion_guidance() {
     let base = tempfile::tempdir().expect("temp dir");
 

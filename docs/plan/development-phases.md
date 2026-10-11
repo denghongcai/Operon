@@ -7862,18 +7862,37 @@ User approved implementation, full old/new-path regression, Docker self-hosted
 relay plus actual online CI, clear README and verified public release. The
 production backend remains opt-in; MSRV upgrade is explicitly authorized.
 
-- Phase 154 — In Progress: PoC cleanup/error ownership, fmt/Clippy, reproducible
+- Phase 154 — Completed: PoC cleanup/error ownership, fmt/Clippy, reproducible
   local and cross-container acceptance; do not commit generated build outputs.
   Local closeout passed all three real-network/daemon integration tests, strict
   all-target Clippy and format on Rust 1.91.0. Fresh locked bookworm release
   examples passed distinct-container payload/concurrency/duplex and normal
   SIGINT task-join checks. The new Embedded Connectivity workflow requires
-  these actual scenarios online; exact-commit CI results remain pending.
-- Phase 155 — Planned: deliberate MSRV/toolchain and owned transport boundary.
+  these actual scenarios online. Exact commit
+  `427631e28570f7a475d92839006f211401b6bffc` passed Embedded Connectivity
+  `38121300178`, CI `38121300180` and CodeQL `38121300163`.
+- Phase 155 — In Progress: deliberate MSRV/toolchain and owned transport boundary.
+  Workspace MSRV is now 1.91 with a pinned 1.91.0 development baseline;
+  Linux CI tests both MSRV and latest stable, with all-target test coverage.
+  Native Alpine builder uses the verified multiarch Rust 1.91.0/Alpine 3.22
+  image digest. Production workflow alignment and transport implementation
+  acceptance remain required before phase completion.
+  Local pinned 1.91.0 full workspace/all-target tests and all-target strict
+  Clippy passed; fmt and docs/help/skills synchronization passed. Production
+  CI/live-mount/release/Windows workflow toolchains are aligned to 1.91.0;
+  online MSRV/native acceptance is pending, as is the owned transport boundary.
 - Phase 156 — Planned: native daemon/client/config/identity integration.
 - Phase 157 — Planned: self-hosted relay/NAT and public SDK/native/online CI tests.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
+  User additionally requires final GitHub Security alert audit (CodeQL,
+  Dependabot, secret scanning); green jobs alone do not prove no open findings.
+  Initial audit found six CodeQL findings and no open Dependabot/secret alerts.
+  CI read-only permissions and checked WinFsp creation output are implemented;
+  Windows-native regression/online rescanning remain pending. A compiled CLI
+  human/JSON regression confirms allowed secret names are visible but actual
+  secret/token file values are not printed (passed locally); preserve the
+  intended policy diagnostics while documenting the cleartext false positive.
 
 ## Planning Principle
 

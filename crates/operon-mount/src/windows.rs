@@ -2,6 +2,7 @@
 
 use std::{
     path::PathBuf,
+    ptr::NonNull,
     sync::{
         mpsc::{self, RecvTimeoutError},
         Arc,
@@ -189,6 +190,47 @@ struct WinFspMountHandles {
     context: *mut OperonWinFspFs,
 }
 
+// FFI success does not make an unchecked out-pointer safe to dereference.
+// Validate it before allocating a context or handing ownership to WinFsp.
+fn checked_created_file_system<T>(
+    status: NTSTATUS,
+    pointer: *mut T,
+) -> Result<NonNull<T>, NTSTATUS> {
+    if status != STATUS_SUCCESS {
+        return Err(status);
+    }
+    NonNull::new(pointer).ok_or(STATUS_INVALID_PARAMETER)
+}
+
+#[cfg(test)]
+mod creation_result_tests {
+    use super::*;
+
+    #[test]
+    fn success_requires_non_null_output() {
+        assert_eq!(
+            checked_created_file_system::<u8>(STATUS_SUCCESS, std::ptr::null_mut()),
+            Err(STATUS_INVALID_PARAMETER)
+        );
+        let mut value = 0u8;
+        assert_eq!(
+            checked_created_file_system(STATUS_SUCCESS, &mut value)
+                .unwrap()
+                .as_ptr(),
+            &mut value as *mut u8
+        );
+    }
+
+    #[test]
+    fn failed_creation_preserves_status_even_with_non_null_output() {
+        let mut value = 0u8;
+        assert_eq!(
+            checked_created_file_system(STATUS_INVALID_PARAMETER, &mut value),
+            Err(STATUS_INVALID_PARAMETER)
+        );
+    }
+}
+
 fn start_winfsp_mount(
     mount_point: &U16CStr,
     context: OperonWinFspFs,
@@ -223,12 +265,15 @@ fn start_winfsp_mount(
         )
     };
     trace_mount_event("fs_create", format!("status={status:#x}"));
-    if status != STATUS_SUCCESS {
-        unsafe {
-            drop(Box::from_raw(interface));
+    let file_system = match checked_created_file_system(status, file_system) {
+        Ok(pointer) => pointer.as_ptr(),
+        Err(status) => {
+            unsafe {
+                drop(Box::from_raw(interface));
+            }
+            return Err(status);
         }
-        return Err(status);
-    }
+    };
 
     let context = Box::into_raw(Box::new(context));
     unsafe {

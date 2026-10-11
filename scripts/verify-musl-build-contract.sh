@@ -9,7 +9,9 @@ require_file scripts/verify-musl-static-binaries.sh
 require_pattern 'ubuntu-24.04-arm' .github/workflows/alpine-musl-acceptance.yml
 require_pattern 'aarch64-unknown-linux-musl' .github/workflows/alpine-musl-acceptance.yml
 require_pattern 'x86_64-unknown-linux-musl' .github/workflows/alpine-musl-acceptance.yml
-require_pattern 'rust@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d' .github/workflows/alpine-musl-acceptance.yml
+require_pattern 'rust@sha256:a3e3d30122c08c0ed85dcd8867d956f066be23c32ed67a0453bc04ce478ad69b' .github/workflows/alpine-musl-acceptance.yml
+require_pattern '1.91.0' rust-toolchain.toml
+require_pattern 'OPERON_MUSL_RUST_TOOLCHAIN:-1.91.0' scripts/build-musl-release.sh
 require_pattern 'musl-dev=1.2.5-r12' .github/workflows/alpine-musl-acceptance.yml
 bash -n scripts/build-musl-release.sh scripts/verify-musl-static-binaries.sh
 case "$(uname -m)" in
