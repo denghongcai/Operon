@@ -2479,10 +2479,13 @@ version = "0.16.14"
 dependencies = [
  "anyhow",
  "http-body",
+ "hyper-util",
  "operon-core",
  "operon-protocol",
+ "operon-transport",
  "tokio",
  "tonic",
+ "tower",
 ]
 
 [[package]]
@@ -2551,14 +2554,20 @@ dependencies = [
 name = "operon-transport"
 version = "0.16.14"
 dependencies = [
+ "getrandom 0.4.2",
  "hyper-util",
  "iroh",
+ "libc",
+ "operon-config",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tonic",
  "tonic-health",
  "tower",
  "tracing",
+ "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]
@@ -2579,12 +2588,14 @@ dependencies = [
  "operon-process",
  "operon-protocol",
  "operon-store",
+ "operon-transport",
  "portable-pty",
  "serde",
  "serde_json",
  "serde_yaml",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tracing",
  "tracing-subscriber",

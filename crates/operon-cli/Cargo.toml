@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["iroh"]
+iroh = ["operon-grpc-client/iroh", "operon-mount/iroh"]
+
 [[bin]]
 name = "operon"
 path = "src/main.rs"

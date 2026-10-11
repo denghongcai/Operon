@@ -5,3 +5,6 @@
 
 #[cfg(feature = "iroh")]
 pub mod embedded;
+
+#[cfg(feature = "iroh")]
+pub mod identity;

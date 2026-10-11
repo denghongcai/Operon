@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+iroh = ["dep:operon-transport", "dep:hyper-util", "dep:tower"]
+
 [dependencies]
 anyhow.workspace = true
 http-body = "1"
@@ -13,3 +17,6 @@ operon-core = { path = "../operon-core" }
 operon-protocol = { path = "../operon-protocol" }
 tokio.workspace = true
 tonic.workspace = true
+operon-transport = { path = "../operon-transport", features = ["iroh"], optional = true }
+hyper-util = { version = "0.1", features = ["tokio"], optional = true }
+tower = { version = "0.5", features = ["util"], optional = true }

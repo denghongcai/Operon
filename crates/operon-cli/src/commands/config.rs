@@ -21,6 +21,8 @@ struct ConfigExplain {
 
 #[derive(Debug, serde::Serialize)]
 struct DaemonExplain {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    iroh: Option<operon_config::IrohListenerConfig>,
     transport: operon_config::TransportConfig,
     node_id: String,
     grpc_listen: String,
@@ -103,6 +105,7 @@ impl ConfigExplain {
         let config_dir = OperonConfig::config_dir(config_path);
         let default_path = OperonConfig::default_path();
         let daemon = config.daemon.as_ref().map(|daemon| DaemonExplain {
+            iroh: daemon.iroh.clone(),
             transport: daemon.transport.clone(),
             node_id: daemon.node_id.clone(),
             grpc_listen: daemon.grpc_listen.to_string(),

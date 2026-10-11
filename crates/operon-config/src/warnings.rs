@@ -22,6 +22,7 @@ pub(crate) fn collect_unknown_config_fields(value: &serde_yaml::Value) -> Vec<Co
             "store",
             "auth",
             "transport",
+            "iroh",
         ],
         &mut warnings,
     );
@@ -39,6 +40,15 @@ pub(crate) fn collect_unknown_config_fields(value: &serde_yaml::Value) -> Vec<Co
             .and_then(|daemon| daemon.get("transport"))
             .unwrap_or(&serde_yaml::Value::Null),
         "daemon.transport",
+        &mut warnings,
+    );
+    collect_iroh(
+        value
+            .get("daemon")
+            .and_then(|daemon| daemon.get("iroh"))
+            .unwrap_or(&serde_yaml::Value::Null),
+        "daemon.iroh",
+        true,
         &mut warnings,
     );
     collect_object(
@@ -120,9 +130,42 @@ fn collect_transport(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<C
             "keepalive_timeout_secs",
             "keepalive_while_idle",
             "adaptive_window",
+            "iroh",
         ],
         warnings,
     );
+    collect_iroh(
+        value.get("iroh").unwrap_or(&serde_yaml::Value::Null),
+        &format!("{path}.iroh"),
+        false,
+        warnings,
+    );
+}
+
+fn collect_iroh(
+    value: &serde_yaml::Value,
+    path: &str,
+    listener: bool,
+    warnings: &mut Vec<ConfigWarning>,
+) {
+    let mut fields = vec![
+        "identity_file",
+        "bind_addrs",
+        "relay_urls",
+        "allow_insecure_relays",
+        "bind_timeout_secs",
+        "readiness_timeout_secs",
+        "idle_timeout_secs",
+        "keepalive_interval_secs",
+        "path_idle_timeout_secs",
+        "path_keepalive_interval_secs",
+    ];
+    if listener {
+        fields.extend(["max_connections", "handshake_timeout_secs"]);
+    } else {
+        fields.extend(["peer_addrs", "peer_relay_urls"]);
+    }
+    collect_object(value, path, &fields, warnings);
 }
 
 fn collect_policy(value: &serde_yaml::Value, path: &str, warnings: &mut Vec<ConfigWarning>) {

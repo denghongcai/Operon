@@ -47,6 +47,47 @@ pub struct EmbeddedEndpoint {
 }
 
 impl EmbeddedEndpoint {
+    /// Resolve the private key relative to the config directory. This does not
+    /// publish addresses or wait for public services; relay readiness is a
+    /// separate, explicitly cancellable operation.
+    pub async fn from_config(
+        config: &operon_config::IrohEndpointConfig,
+        config_dir: &std::path::Path,
+    ) -> io::Result<Self> {
+        config
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        let relay_urls = parse_relays(&config.relay_urls, config.allow_insecure_relays)?;
+        let path = operon_config::resolve_path(config_dir, &config.identity_file);
+        let identity = crate::identity::load_or_create_identity(&path)?;
+        let idle = if config.idle_timeout_secs == 0 {
+            None
+        } else {
+            Some(
+                Duration::from_secs(config.idle_timeout_secs)
+                    .try_into()
+                    .map_err(io::Error::other)?,
+            )
+        };
+        let quic = QuicTransportConfig::builder()
+            .max_concurrent_bidi_streams(1u32.into())
+            .max_concurrent_uni_streams(0u32.into())
+            .max_idle_timeout(idle)
+            .keep_alive_interval(Duration::from_secs(config.keepalive_interval_secs))
+            .default_path_max_idle_timeout(Duration::from_secs(config.path_idle_timeout_secs))
+            .default_path_keep_alive_interval(Duration::from_secs(
+                config.path_keepalive_interval_secs,
+            ))
+            .build();
+        Self::bind(BindOptions {
+            identity,
+            bind_addrs: config.bind_addrs.clone(),
+            relay_urls,
+            bind_timeout: Duration::from_secs(config.bind_timeout_secs),
+            quic,
+        })
+        .await
+    }
     pub async fn bind(options: BindOptions) -> io::Result<Self> {
         if options.bind_addrs.is_empty() && options.relay_urls.is_empty() {
             return Err(io::Error::new(
@@ -203,6 +244,55 @@ impl EmbeddedEndpoint {
             task: Some(task),
         })
     }
+}
+
+/// Target endpoint identity is independent of Operon's logical node_id.
+pub fn target_address(
+    endpoint: &str,
+    config: &operon_config::IrohConnectionConfig,
+) -> io::Result<EndpointAddr> {
+    config
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let id = endpoint
+        .strip_prefix("iroh://")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "expected iroh:// endpoint"))?
+        .parse::<EndpointId>()
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid iroh endpoint public key",
+            )
+        })?;
+    if !config.peer_relay_urls.is_empty() && config.local.relay_urls.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "peer relay addressing requires local relay_urls to enable relay transport",
+        ));
+    }
+    let addrs = config
+        .peer_addrs
+        .iter()
+        .copied()
+        .map(TransportAddr::Ip)
+        .chain(
+            parse_relays(&config.peer_relay_urls, config.local.allow_insecure_relays)?
+                .into_iter()
+                .map(TransportAddr::Relay),
+        );
+    Ok(EndpointAddr::from_parts(id, addrs))
+}
+
+fn parse_relays(urls: &[String], allow_insecure: bool) -> io::Result<Vec<RelayUrl>> {
+    urls.iter().map(|url| {
+        let url: RelayUrl = url.parse().map_err(io::Error::other)?;
+        if url.host_str().is_none() || !url.username().is_empty() || url.password().is_some()
+            || url.query().is_some() || url.fragment().is_some()
+            || !(url.scheme() == "https" || (allow_insecure && url.scheme() == "http")) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "iroh relay requires explicit HTTP(S) origin without credentials, query or fragment"));
+        }
+        Ok(url)
+    }).collect()
 }
 
 async fn deadline<T>(

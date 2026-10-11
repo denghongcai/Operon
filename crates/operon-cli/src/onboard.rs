@@ -273,6 +273,7 @@ fn build_onboard_plan_inner(
             service_port_from_listen_address(&listen),
         )?);
         daemon = Some(DaemonConfig {
+            iroh: None,
             transport: Default::default(),
             node_id: node_id.clone(),
             grpc_listen: listen.parse()?,

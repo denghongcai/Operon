@@ -56,6 +56,10 @@ jobs:
         run: |
           cargo test -p operon-transport --features iroh --locked -- --nocapture
           cargo clippy -p operon-transport --features iroh --all-targets --locked -- -D warnings
+      - name: Native production daemon and Rust client capability acceptance
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: cargo test -p operond --locked embedded_integration_tests -- --nocapture
       - name: Native stream, authorization, fs, exec and cancellation tests
         env:
           OPERON_POC_DAEMON: ${{ github.workspace }}/target/debug/operond

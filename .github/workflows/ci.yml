@@ -105,6 +105,11 @@ jobs:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
         run: cargo test -p operon-transport --features iroh --all-targets --locked
 
+      - name: Test native embedded daemon and client capabilities
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: cargo test -p operond --locked embedded_integration_tests -- --nocapture
+
       - name: Test filesystem core
         run: cargo test -p operon-fs --locked
 

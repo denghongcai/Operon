@@ -15,6 +15,8 @@ use operon_protocol::runtime::v1::{
 use tonic::{metadata::MetadataValue, transport::Channel, Request};
 
 mod deadline_channel;
+#[cfg(feature = "iroh")]
+mod embedded_channel;
 pub use deadline_channel::DeadlineChannel;
 
 pub const RUN_ID_METADATA: &str = "x-operon-run-id";
@@ -60,9 +62,21 @@ pub async fn connect_channel(
 ) -> anyhow::Result<Channel> {
     let config = &endpoint.transport;
     config.validate().map_err(anyhow::Error::msg)?;
-    let mut channel = Channel::from_shared(grpc_channel_uri(&endpoint.endpoint)?)?
+    let embedded = endpoint.endpoint.starts_with("iroh://");
+    if !embedded && config.iroh.is_some() {
+        anyhow::bail!("transport.iroh requires an iroh:// endpoint; no backend fallback");
+    }
+    let uri = if embedded {
+        "http://iroh.invalid".to_string()
+    } else {
+        grpc_channel_uri(&endpoint.endpoint)?
+    };
+    let mut channel = Channel::from_shared(uri)?
         .keep_alive_while_idle(config.keepalive_while_idle)
         .http2_adaptive_window(config.adaptive_window);
+    if !timeout.is_zero() {
+        channel = channel.connect_timeout(timeout);
+    }
     if let Some(interval) =
         operon_core::runtime::TransportConfig::timeout(config.keepalive_interval_secs)
     {
@@ -74,6 +88,12 @@ pub async fn connect_channel(
         channel = channel.keep_alive_timeout(timeout);
     }
     with_connect_timeout(&endpoint.endpoint, timeout, async {
+        if embedded {
+            #[cfg(feature = "iroh")]
+            return embedded_channel::connect(endpoint, channel, timeout).await;
+            #[cfg(not(feature = "iroh"))]
+            anyhow::bail!("iroh backend is not enabled in this build; enable the iroh feature");
+        }
         channel
             .connect()
             .await

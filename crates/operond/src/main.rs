@@ -28,6 +28,10 @@ mod capability_diagnostics;
 mod daemon_cli;
 mod daemon_state;
 mod defaults;
+#[cfg(all(test, feature = "iroh"))]
+mod embedded_integration_tests;
+#[cfg(feature = "iroh")]
+mod embedded_listener;
 mod exec_command;
 mod exec_process;
 mod exec_runtime;
@@ -174,8 +178,29 @@ where
                 state: loaded.state,
             }
             .into_service(),
-        )
-        .serve_with_shutdown(loaded.grpc_listen, shutdown);
+        );
+    let server = async {
+        if let Some(iroh) = &loaded.iroh {
+            #[cfg(feature = "iroh")]
+            return embedded_listener::serve(
+                server,
+                loaded.grpc_listen,
+                iroh,
+                &OperonConfig::config_dir(&config_path),
+                shutdown,
+            )
+            .await;
+            #[cfg(not(feature = "iroh"))]
+            {
+                let _ = iroh;
+                anyhow::bail!("iroh backend is not enabled in this daemon build");
+            }
+        }
+        server
+            .serve_with_shutdown(loaded.grpc_listen, shutdown)
+            .await
+            .map_err(anyhow::Error::from)
+    };
     tokio::pin!(server);
     tokio::select! {
         result = &mut server => {

@@ -8,6 +8,7 @@ use std::{
 pub use operon_core::runtime::MountReadConfig;
 pub use operon_core::runtime::NodeEndpoint;
 pub use operon_core::runtime::TransportConfig;
+pub use operon_core::runtime::{IrohConnectionConfig, IrohEndpointConfig, IrohListenerConfig};
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -61,6 +62,8 @@ pub struct OperonConfig {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DaemonConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iroh: Option<IrohListenerConfig>,
     #[serde(default)]
     pub transport: TransportConfig,
     pub node_id: String,
@@ -145,9 +148,17 @@ impl OperonConfig {
         config.client.mount.validate().map_err(anyhow::Error::msg)?;
         if let Some(daemon) = &config.daemon {
             daemon.transport.validate().map_err(anyhow::Error::msg)?;
+            anyhow::ensure!(
+                daemon.transport.iroh.is_none(),
+                "daemon.iroh configures the listener; daemon.transport.iroh is client-only"
+            );
+            if let Some(iroh) = &daemon.iroh {
+                iroh.validate().map_err(anyhow::Error::msg)?;
+            }
         }
         for node in config.client.nodes.values() {
             node.transport.validate().map_err(anyhow::Error::msg)?;
+            validate_node_backend(node)?;
         }
         Ok(LoadedOperonConfig { config, warnings })
     }
@@ -181,13 +192,27 @@ impl OperonConfig {
 impl NodeConfig {
     pub fn to_endpoint(&self, node_id: &str, config_dir: &Path) -> anyhow::Result<NodeEndpoint> {
         self.transport.validate().map_err(anyhow::Error::msg)?;
+        validate_node_backend(self)?;
+        let mut transport = self.transport.clone();
+        if let Some(iroh) = &mut transport.iroh {
+            if iroh.local.identity_file.is_relative() {
+                iroh.local.identity_file = config_dir.join(&iroh.local.identity_file);
+            }
+        }
         Ok(NodeEndpoint {
             node_id: node_id.to_string(),
             endpoint: self.endpoint.clone(),
             token: self.auth.resolve(config_dir)?,
-            transport: self.transport.clone(),
+            transport,
         })
     }
+}
+
+fn validate_node_backend(node: &NodeConfig) -> anyhow::Result<()> {
+    let embedded = node.endpoint.starts_with("iroh://");
+    anyhow::ensure!(embedded == node.transport.iroh.is_some(),
+        "iroh:// endpoints require transport.iroh; grpc/grpcs endpoints must not configure transport.iroh");
+    Ok(())
 }
 
 impl AuthConfig {
@@ -225,6 +250,113 @@ pub fn resolve_path(config_dir: &Path, path: &Path) -> PathBuf {
 
 pub fn validate_private_file_permissions(path: &Path) -> anyhow::Result<()> {
     validate_private_file_permissions_for_platform(path)
+}
+
+/// Protect a newly created, empty regular file before writing private data.
+/// Callers retain ownership of the file and publish it only after protection.
+/// Never use this to silently repair an existing secret file's permissions.
+pub fn protect_new_private_file(path: &Path) -> anyhow::Result<()> {
+    let metadata = fs::symlink_metadata(path)?;
+    anyhow::ensure!(
+        metadata.is_file() && !metadata.file_type().is_symlink() && metadata.len() == 0,
+        "new private file must be an empty regular file: {}",
+        path.display()
+    );
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Security::{
+            Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW,
+            PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+        };
+        let user_sid = current_user_sid()?;
+        let user_sid = unsafe { sid_to_string(user_sid.as_ptr() as PSID) }?;
+        let sddl = format!("D:P(A;;FA;;;{user_sid})(A;;FA;;;SY)(A;;FA;;;BA)");
+        let wide: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
+        let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+        let ok = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                wide.as_ptr(),
+                1,
+                &mut descriptor,
+                ptr::null_mut(),
+            )
+        };
+        anyhow::ensure!(
+            ok != 0,
+            "failed to build new private-file ACL: {}",
+            unsafe { GetLastError() }
+        );
+        anyhow::ensure!(
+            !descriptor.is_null(),
+            "new private-file ACL descriptor is null"
+        );
+        let _descriptor = LocalAllocGuard(descriptor as HLOCAL);
+        let wide = path_to_wide(path);
+        let ok = unsafe {
+            windows_sys::Win32::Security::SetFileSecurityW(
+                wide.as_ptr(),
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                descriptor,
+            )
+        };
+        anyhow::ensure!(
+            ok != 0,
+            "failed to protect new private-file ACL: {}",
+            unsafe { GetLastError() }
+        );
+    }
+    #[cfg(not(any(unix, windows)))]
+    anyhow::bail!("private identity files are unsupported on this platform");
+    validate_private_file_permissions(path)
+}
+
+/// Verify the actual opened file, not just an earlier path lookup.
+pub fn validate_private_file_handle_permissions(file: &fs::File) -> anyhow::Result<()> {
+    let metadata = file.metadata()?;
+    anyhow::ensure!(
+        metadata.is_file(),
+        "private file handle must refer to a regular file"
+    );
+    #[cfg(unix)]
+    anyhow::ensure!(
+        metadata.permissions().mode() & 0o077 == 0,
+        "private file handle permissions allow group or other access"
+    );
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Security::Authorization::GetSecurityInfo;
+        let current_user = current_user_sid()?;
+        let mut dacl = ptr::null_mut();
+        let mut descriptor = ptr::null_mut();
+        let status = unsafe {
+            GetSecurityInfo(
+                file.as_raw_handle(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                &mut dacl,
+                ptr::null_mut(),
+                &mut descriptor,
+            )
+        };
+        anyhow::ensure!(
+            status == 0,
+            "failed to inspect private file handle ACL: {status}"
+        );
+        let _descriptor = LocalAllocGuard(descriptor as HLOCAL);
+        let summary = summarize_windows_dacl(dacl, &current_user)?;
+        anyhow::ensure!(
+            summary.is_private_enough(),
+            "private file handle ACL grants access outside current user, Administrators or SYSTEM"
+        );
+    }
+    #[cfg(not(any(unix, windows)))]
+    anyhow::bail!("private identity files are unsupported on this platform");
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -376,6 +508,14 @@ fn inspect_windows_private_file_acl(path: &Path) -> anyhow::Result<WindowsAclSum
         status
     );
     let _descriptor = LocalAllocGuard(descriptor as HLOCAL);
+    summarize_windows_dacl(dacl, &current_user)
+}
+
+#[cfg(windows)]
+fn summarize_windows_dacl(
+    dacl: *mut windows_sys::Win32::Security::ACL,
+    current_user: &[u8],
+) -> anyhow::Result<WindowsAclSummary> {
     if dacl.is_null() {
         return Ok(WindowsAclSummary::missing_dacl());
     }
@@ -383,15 +523,18 @@ fn inspect_windows_private_file_acl(path: &Path) -> anyhow::Result<WindowsAclSum
     let mut entry_count = 0;
     let mut entries = ptr::null_mut();
     let status = unsafe { GetExplicitEntriesFromAclW(dacl, &mut entry_count, &mut entries) };
-    anyhow::ensure!(
-        status == 0,
-        "failed to enumerate Windows ACL for {}: {}",
-        path.display(),
-        status
-    );
+    anyhow::ensure!(status == 0, "failed to enumerate Windows ACL: {}", status);
     let _entries = LocalAllocGuard(entries as HLOCAL);
 
-    let entries_slice = unsafe { std::slice::from_raw_parts(entries, entry_count as usize) };
+    let entries_slice = if entry_count == 0 {
+        &[]
+    } else {
+        anyhow::ensure!(
+            !entries.is_null(),
+            "Windows ACL enumeration returned null entries"
+        );
+        unsafe { std::slice::from_raw_parts(entries, entry_count as usize) }
+    };
     let mut summary_entries = Vec::with_capacity(entries_slice.len());
     for entry in entries_slice {
         let grants_file_access = matches!(entry.grfAccessMode, GRANT_ACCESS | SET_ACCESS)
@@ -400,7 +543,7 @@ fn inspect_windows_private_file_acl(path: &Path) -> anyhow::Result<WindowsAclSum
             classify_trustee_sid(
                 entry.Trustee.TrusteeForm,
                 entry.Trustee.ptstrName,
-                &current_user,
+                current_user,
             )
         };
         summary_entries.push(WindowsAclEntry {

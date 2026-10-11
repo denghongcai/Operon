@@ -1,6 +1,9 @@
 pub type NodeId = String;
 pub type CapabilityId = String;
 
+mod embedded_config;
+pub use embedded_config::{IrohConnectionConfig, IrohEndpointConfig, IrohListenerConfig};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MountReadMode {
@@ -133,6 +136,8 @@ mod mount_read_tests {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct TransportConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iroh: Option<IrohConnectionConfig>,
     pub connect_timeout_secs: u64,
     pub rpc_timeout_secs: u64,
     pub transfer_timeout_secs: u64,
@@ -146,6 +151,7 @@ pub struct TransportConfig {
 impl Default for TransportConfig {
     fn default() -> Self {
         Self {
+            iroh: None,
             connect_timeout_secs: 10,
             rpc_timeout_secs: 30,
             transfer_timeout_secs: 600,
@@ -161,6 +167,9 @@ impl Default for TransportConfig {
 
 impl TransportConfig {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(iroh) = &self.iroh {
+            iroh.validate()?;
+        }
         for (name, seconds) in [
             ("connect_timeout_secs", self.connect_timeout_secs),
             ("rpc_timeout_secs", self.rpc_timeout_secs),

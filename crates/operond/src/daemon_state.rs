@@ -18,6 +18,7 @@ use crate::{
 };
 
 pub(crate) struct LoadedDaemonRuntime {
+    pub(crate) iroh: Option<operon_config::IrohListenerConfig>,
     pub(crate) transport: operon_config::TransportConfig,
     pub(crate) state: AppState,
     pub(crate) grpc_listen: SocketAddr,
@@ -126,6 +127,25 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
         )
     })?;
     require_auth_for_non_loopback(daemon.grpc_listen, auth_token.as_ref())?;
+    if daemon.iroh.is_some() {
+        #[cfg(not(feature = "iroh"))]
+        return Err(DaemonStartupError::new(
+            DaemonStartupErrorKind::DaemonSection,
+            "iroh backend is not enabled in this daemon build",
+        )
+        .into());
+        #[cfg(feature = "iroh")]
+        if auth_token
+            .as_ref()
+            .is_none_or(|token| token.trim().is_empty())
+        {
+            return Err(DaemonStartupError::new(
+                DaemonStartupErrorKind::AuthToken,
+                "a non-empty daemon auth token is required for an embedded iroh listener",
+            )
+            .into());
+        }
+    }
     let store = resolve_store_path(&config_dir, daemon.store.as_deref()).map_err(|error| {
         DaemonStartupError::with_source(
             DaemonStartupErrorKind::StoreConfig,
@@ -201,6 +221,7 @@ pub(crate) fn load_daemon_runtime(config_path: &Path) -> anyhow::Result<LoadedDa
     };
 
     Ok(LoadedDaemonRuntime {
+        iroh: daemon.iroh,
         transport: daemon.transport,
         state,
         grpc_listen: daemon.grpc_listen,

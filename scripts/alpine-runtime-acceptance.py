@@ -45,9 +45,24 @@ def wait_for(predicate, description):
 
 
 def port():
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        return sock.getsockname()[1]
+    # A bind(0)/close lease is not a reservation. Readiness clients or echo
+    # fixtures can immediately reclaim that outbound ephemeral port before
+    # the daemon binds it. Choose outside the actual kernel ephemeral range.
+    low, high = map(int, Path('/proc/sys/net/ipv4/ip_local_port_range').read_text().split())
+    candidates = list(range(1024, low)) + list(range(high + 1, 65536))
+    assert candidates, 'no unprivileged port outside kernel ephemeral range'
+    start = int.from_bytes(os.urandom(4), 'little') % len(candidates)
+    for offset in range(len(candidates)):
+        candidate = candidates[(start + offset) % len(candidates)]
+        with socket.socket() as sock:
+            try:
+                sock.bind(('127.0.0.1', candidate))
+            except OSError as error:
+                if error.errno == errno.EADDRINUSE:
+                    continue
+                raise
+            return candidate
+    raise AssertionError('no available daemon fixture port')
 
 
 def stop(process, signal=None):
@@ -95,13 +110,13 @@ with tempfile.TemporaryDirectory(prefix='operon-alpine-runtime-') as tmp:
     workspace.mkdir()
     mount.mkdir()
     config = root / 'config.yaml'
-    endpoint_port = port()
     token = os.urandom(24).hex()
     tcp = socket.socket()
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     tcp.bind(('127.0.0.1', 0))
     tcp.listen()
     udp.bind(('127.0.0.1', 0))
+    endpoint_port = port()
     policy_services = []
     for name, sock, protocol in [('tcp', tcp, 'tcp'), ('udp', udp, 'udp')]:
         policy_services.append(dict(id=name, name=name, host='127.0.0.1',
@@ -141,7 +156,11 @@ with tempfile.TemporaryDirectory(prefix='operon-alpine-runtime-') as tmp:
 
     def daemon():
         process = spawn([str(bins / 'operond'), 'start', '--config', str(config)], root / 'daemon.log')
-        wait_for(ready, 'daemon readiness')
+        def started():
+            if process.poll() is not None:
+                raise AssertionError(f'daemon exited during startup: {process.returncode}')
+            return ready()
+        wait_for(started, 'daemon readiness')
         return process
 
     mounted = False

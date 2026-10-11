@@ -7903,7 +7903,37 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   workspace/all-target tests and strict Clippy also passed after introducing
   the transport crate and updated lockfile. Feature-enabled transport tests
   and strict Clippy pass separately. Public binaries are not yet changed.
-- Phase 156 — Planned: native daemon/client/config/identity integration.
+- Phase 156 — In Progress: native daemon/client/config/identity integration.
+  Added protocol/framework-free core connection settings, optional
+  `daemon.iroh` and per-node `transport.iroh`, nested unknown-field warnings,
+  explicit private identity paths and configurable endpoint/handshake/QUIC
+  timers. Existing serialized direct config omits disabled options. Private
+  identity bootstrap is protected before bytes are written, create-only atomic,
+  restart-stable, race-safe across initializers, and validates the opened handle
+  (Unix permissions/no-follow; Windows ACL), with zeroized buffers.
+  Seven identity and four config tests pass locally. The daemon now natively
+  serves the same capability router over mixed TCP/iroh; Rust CLI/mount use the
+  shared native connector, with no production TCP bridge or bearer bypass.
+  Actual daemon/client acceptance passed bearer rejection, streamed >8MiB fs,
+  4MiB range, path denial, exec/completion/logs, simultaneous TCP and joined
+  zero-deadline shutdown. Missing bearer listener config is rejected before key
+  creation. Feature-disabled daemon/CLI builds compile. Additional onboarding,
+  discovery/doctor/help, restart/rotation/error and native-platform/CI acceptance
+  remain; do not mark this phase complete or publish yet.
+  Checkpoint `bcea2b0` passed CI `38122575737`, CodeQL `38122575167`, and
+  Embedded Connectivity `38122575733`. Native Alpine aarch64 passed all gates;
+  x86_64 run `38122575760` failed live FUSE fixture readiness with proven
+  `Address in use`, not a QUIC test failure. The fixture's bind(0)/close daemon
+  port window could be reclaimed by echo/readiness sockets; now select outside
+  the actual kernel ephemeral range, reserve echo fixtures first, and report
+  early daemon exits immediately. Corrected fixture passed local real Alpine
+  auth/policy/PTY/TCP/UDP/restart/root-identity/live-FUSE acceptance against the
+  existing released musl binaries; new-source online dual-architecture
+  acceptance remains pending. Local all-target workspace tests and strict
+  workspace Clippy passed for native daemon/client integration. Unexpected
+  embedded listener termination now signals mixed-router shutdown and returns
+  an error rather than silently retaining only TCP; normal shutdown prioritizes
+  the requested stop and closes/joins admissions.
 - Phase 157 — Planned: self-hosted relay/NAT and public SDK/native/online CI tests.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.

@@ -34,3 +34,12 @@ Never print secret-scanning credentials in evidence or logs. A green CodeQL
 workflow alone does not prove an alert was resolved. Before publication,
 inspect the current open alert list, affected locations, analysis SHA and
 justified not-affected findings, and record any permission gap explicitly.
+
+Latest API checkpoint on 2026-10-11: CodeQL has one open finding (#13,
+`rust/cleartext-logging`, severity high); Dependabot and secret scanning each
+have zero open findings. These are current repository alert counts, not
+security acceptance of the uncommitted native connectivity changes. The
+workspace all-target tests, including the compiled CLI secret-value regression,
+passed locally after those changes. Re-scan the final committed source and
+lockfile and review #13 again before publication; do not represent the
+repository as having zero open Security findings.

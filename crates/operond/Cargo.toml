@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["iroh"]
+iroh = ["dep:operon-transport"]
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
@@ -20,6 +24,7 @@ operon-network = { path = "../operon-network" }
 operon-process = { path = "../operon-process" }
 operon-protocol = { path = "../operon-protocol" }
 operon-store = { path = "../operon-store" }
+operon-transport = { path = "../operon-transport", features = ["iroh"], optional = true }
 portable-pty.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -35,4 +40,5 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Securit
 
 [dev-dependencies]
 tempfile.workspace = true
-operon-grpc-client = { path = "../operon-grpc-client" }
+tokio-stream = "0.1"
+operon-grpc-client = { path = "../operon-grpc-client", features = ["iroh"] }

@@ -39,6 +39,9 @@ fn print_config_explain(explain: &ConfigExplain) {
             println!("  store: {}", daemon.store.as_deref().unwrap_or("<none>"));
             println!("  auth: {}", daemon.auth);
             println!("  transport: {:?}", daemon.transport);
+            if let Some(iroh) = &daemon.iroh {
+                println!("  iroh: {:?}", iroh);
+            }
         }
         None => println!("daemon: <none>"),
     }
