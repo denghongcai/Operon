@@ -7972,6 +7972,21 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   now pass; default-feature native daemon tests and strict workspace Clippy
   pass after the dependency adjustment. Full core validation is running and
   committed-source online revalidation remains required.
+  Full core revalidation finished: all 55 scripts passed locally. Began the
+  public SDK in-process foundation as optional `operon-sdk-native` node feature
+  (ordinary workspace builds do not load Node). Fixed N-API versions compile
+  on Rust 1.91; real Node loaded the library and passed native daemon health/
+  node RPCs, bearer rejection, cancelled pending receive, joined call shutdown
+  and closed-client rejection. No external connectivity process or TCP bridge.
+  Bounded request/response queues carry unchanged protobuf via shared Rust gRPC
+  transport. Strict feature-enabled Clippy passed. Linux online binding gate is
+  added, but public SDK adapter, full streaming/metadata/error/cleanup/native
+  packaging and other platforms remain required; this is not SDK completion.
+  Native binding construction is side-effect-free; `ready` connects lazily and
+  can be cancelled through `close` even when connect timeout is zero. Real Node
+  regression passed closed-client rejection and zero-deadline readiness
+  cancellation after the lazy-owner change. Closing drops the cached channel
+  and cancels child call owners; normal call close joins its task.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

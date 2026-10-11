@@ -12,6 +12,7 @@ members = [
   "crates/operon-grpc-client",
   "crates/operon-transport",
   "crates/operon-mount",
+  "crates/operon-sdk-native",
 ]
 resolver = "2"
 

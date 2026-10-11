@@ -1,0 +1,103 @@
+// Binding acceptance only; public SDK adaptation and streaming gates follow.
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import net from "node:net";
+import dgram from "node:dgram";
+import { once } from "node:events";
+
+const seconds = Number(process.env.OPERON_EMBEDDED_TEST_TIMEOUT_SECS ?? 120);
+assert(Number.isFinite(seconds) && seconds > 0, "test timeout must be positive");
+const bindingPath = process.env.OPERON_SDK_NATIVE_PATH;
+assert(bindingPath && path.isAbsolute(bindingPath), "explicit absolute binding path required");
+const binding = { exports: {} };
+process.dlopen(binding, bindingPath);
+const { NativeClient } = binding.exports;
+const dir = await mkdtemp(path.join(os.tmpdir(), "operon-sdk-native-"));
+let daemon;
+let client;
+const limit = setTimeout(() => { daemon?.kill("SIGKILL"); process.exitCode = 1; }, seconds * 1000);
+try {
+  await mkdir(path.join(dir, "workspace"));
+  // Keep the TCP lease until immediately before daemon startup. QUIC uses
+  // its own dynamically selected localhost UDP port below.
+  const lease = net.createServer();
+  lease.listen(0, "127.0.0.1");
+  await once(lease, "listening");
+  const tcpPort = lease.address().port;
+  const udpLease = dgram.createSocket("udp4");
+  udpLease.bind(0, "127.0.0.1");
+  await once(udpLease, "listening");
+  const udpPort = udpLease.address().port;
+  const configPath = path.join(dir, "config.yaml");
+  await writeFile(configPath, JSON.stringify({ version: 1, daemon: {
+    node_id: "native-sdk-owned", workspace: path.join(dir, "workspace"),
+    grpc_listen: `127.0.0.1:${tcpPort}`, auth: { token: "native-sdk-test-token" },
+    iroh: { identity_file: "server.key", bind_addrs: [`127.0.0.1:${udpPort}`] },
+  } }), { mode: 0o600 });
+  await new Promise(resolve => lease.close(resolve));
+  await new Promise(resolve => udpLease.close(resolve));
+  daemon = spawn(process.env.OPERON_NATIVE_TEST_DAEMON ?? path.resolve("target/debug/operond"),
+    ["start", "--config", configPath], { stdio: ["ignore", "pipe", "pipe"] });
+  let logs = "";
+  const endpointId = await new Promise((resolve, reject) => {
+    const receive = chunk => {
+      logs += chunk.toString().replace(/\x1b\[[0-9;]*m/g, "");
+      const match = /endpoint_id=([a-f0-9]{64})/.exec(logs);
+      if (match) resolve(match[1]);
+    };
+    daemon.stdout.on("data", receive);
+    daemon.stderr.on("data", receive);
+    daemon.once("error", reject);
+    daemon.once("exit", code => reject(new Error(`native daemon exited (${code}): ${logs}`)));
+  });
+  const endpointConfig = { node_id: "logical-sdk-name",
+    endpoint: `iroh://${endpointId}`, token: null, transport: { iroh: {
+      identity_file: path.join(dir, "client.key"), bind_addrs: ["127.0.0.1:0"],
+      peer_addrs: [`127.0.0.1:${udpPort}`],
+    } } };
+  client = await NativeClient.connect(JSON.stringify(endpointConfig));
+  const rpc = async (name, token = "native-sdk-test-token") => {
+    const call = await client.openCall(`/operon.runtime.v1.OperonRuntime/${name}`,
+      JSON.stringify([["authorization", `Bearer ${token}`]]));
+    try {
+      await call.send(Buffer.alloc(0));
+      await call.finishSend();
+      const response = await call.receive();
+      assert(Buffer.isBuffer(response) && response.length > 0, "missing protobuf response");
+      assert.equal(await call.receive(), null, "unary RPC returned extra messages");
+      return response;
+    } finally { await call.close(); }
+  };
+  const health = await rpc("Health");
+  assert(health.includes(Buffer.from("v0.")), "health response has no protocol version");
+  const node = await rpc("GetNode");
+  assert(node.includes(Buffer.from("native-sdk-owned")), "node response has wrong logical ID");
+  await assert.rejects(rpc("Health", "invalid-test-token"), /grpc-status:16:/);
+  const stalled = await client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]");
+  const waiting = stalled.receive();
+  stalled.cancel();
+  await assert.rejects(waiting, /cancelled/);
+  await stalled.close();
+  const unreachable = structuredClone(endpointConfig);
+  unreachable.transport.connect_timeout_secs = 0;
+  unreachable.transport.iroh.identity_file = path.join(dir, "cancelled-client.key");
+  unreachable.transport.iroh.peer_addrs = ["127.0.0.1:1"];
+  const pendingClient = new NativeClient(JSON.stringify(unreachable));
+  const pendingReady = pendingClient.ready();
+  pendingClient.close();
+  await assert.rejects(pendingReady, /closed/);
+  client.close();
+  await assert.rejects(client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]"), /closed/);
+  console.log("PASS in-process Node binding, native daemon health/node, bearer rejection, cancellation and joined call shutdown");
+} finally {
+  client?.close();
+  if (daemon && daemon.exitCode === null && daemon.signalCode === null) {
+    daemon.kill("SIGTERM");
+    await once(daemon, "exit");
+  }
+  clearTimeout(limit);
+  await rm(dir, { recursive: true, force: true });
+}

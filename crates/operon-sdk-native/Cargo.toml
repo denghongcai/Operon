@@ -1,0 +1,27 @@
+[package]
+name = "operon-sdk-native"
+version = "0.16.14"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+node = ["dep:napi", "dep:napi-derive", "operon-grpc-client/iroh"]
+
+[dependencies]
+bytes = "1"
+http = "1"
+operon-core = { path = "../operon-core" }
+operon-grpc-client = { path = "../operon-grpc-client" }
+operon-protocol = { path = "../operon-protocol" }
+serde_json.workspace = true
+tokio.workspace = true
+tokio-stream = "0.1"
+tokio-util = { workspace = true, features = ["rt"] }
+tonic.workspace = true
+napi = { version = "=3.14.2", optional = true, default-features = false, features = ["napi8", "tokio_rt", "dyn-symbols"] }
+napi-derive = { version = "=3.6.12", optional = true }

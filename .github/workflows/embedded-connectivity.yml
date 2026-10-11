@@ -12,6 +12,7 @@ on:
       - 'docker/iroh-relay/**'
       - 'scripts/verify-embedded-relay.sh'
       - 'scripts/verify-embedded-relay-containers.py'
+      - 'scripts/verify-sdk-native.mjs'
       - 'docker/Dockerfile'
       - '.github/workflows/embedded-connectivity.yml'
   push:
@@ -25,6 +26,7 @@ on:
       - 'docker/iroh-relay/**'
       - 'scripts/verify-embedded-relay.sh'
       - 'scripts/verify-embedded-relay-containers.py'
+      - 'scripts/verify-sdk-native.mjs'
       - 'docker/Dockerfile'
       - '.github/workflows/embedded-connectivity.yml'
 
@@ -68,6 +70,18 @@ jobs:
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
         run: cargo test -p operond --locked embedded_integration_tests -- --nocapture
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Build optional in-process SDK binding
+        run: |
+          cargo build -p operon-sdk-native --features node --locked
+          cargo clippy -p operon-sdk-native --features node --all-targets --locked -- -D warnings
+      - name: Real Node binding and native daemon RPC acceptance
+        env:
+          OPERON_SDK_NATIVE_PATH: ${{ github.workspace }}/target/debug/liboperon_sdk_native.so
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: node scripts/verify-sdk-native.mjs
       - name: Native stream, authorization, fs, exec and cancellation tests
         env:
           OPERON_POC_DAEMON: ${{ github.workspace }}/target/debug/operond
