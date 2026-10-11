@@ -8070,6 +8070,14 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   direct and owned relay public SDK gates pass, the latter recording roughly
   30MiB relay traffic. No mutation replay/restart recovery claim is inferred
   from this pending-read interruption test; remaining scenarios stay open.
+  Draft Release now waits for reusable native SDK archive builds on GNU x86_64/
+  aarch64, macOS x86_64/aarch64 and Windows x86_64; each extracts its archive,
+  checks binding manifest hash/version and runs real public SDK capabilities.
+  Native Alpine release uploads additionally include both musl binding archives.
+  Local GNU extracted-archive manifest and full capability acceptance passed.
+  Workflow YAML parses; online execution and public asset verifier changes are
+  still pending. GNU binding libc baseline and any additional target support
+  must be stated from actual artifact evidence before publication.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

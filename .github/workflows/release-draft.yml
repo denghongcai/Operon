@@ -336,6 +336,10 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  build-sdk-native:
+    needs: release-gate
+    uses: ./.github/workflows/sdk-native-packages.yml
+
   draft-release:
     name: Draft GitHub Release
     runs-on: ubuntu-latest
@@ -344,6 +348,7 @@ jobs:
       - build-rust-musl
       - build-rust-native
       - build-sdk
+      - build-sdk-native
     steps:
       - name: Checkout
         uses: actions/checkout@v6

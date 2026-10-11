@@ -1,7 +1,8 @@
 // Actual public SDK + in-process binding acceptance against an owned daemon.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import net from "node:net";
@@ -15,6 +16,13 @@ assert(bindingPath && path.isAbsolute(bindingPath), "explicit absolute binding p
 const binding = { exports: {} };
 process.dlopen(binding, bindingPath);
 const { NativeClient, NativeCall } = binding.exports;
+if (process.env.OPERON_SDK_TEST_PACKAGED === "1") {
+  const manifest = JSON.parse(await readFile(path.join(path.dirname(bindingPath), "binding.json"), "utf8"));
+  assert.equal(manifest.file, path.basename(bindingPath));
+  assert.equal(manifest.version, binding.exports.bindingVersion());
+  assert.equal(manifest.napi, 8);
+  assert.equal(manifest.sha256, createHash("sha256").update(await readFile(bindingPath)).digest("hex"));
+}
 const relayUrl = process.env.OPERON_SDK_TEST_RELAY_URL;
 const localTransport = relayUrl ? {
   bind_addrs: [], relay_urls: [relayUrl], allow_insecure_relays: true,

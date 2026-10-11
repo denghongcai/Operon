@@ -213,5 +213,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: musl-native-${{ matrix.arch }}
-          path: target/alpine-native/dist/*.tar.gz
+          path: |
+            target/alpine-native/dist/*.tar.gz
+            target/alpine-native/sdk-dist/*.tar.gz
           if-no-files-found: error
