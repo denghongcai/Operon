@@ -25,6 +25,7 @@ task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
 mkdir -p "$task_dir/$name"
 cp "$binary_dir/operon" "$binary_dir/operond" README.md PROTOCOL.md LICENSE "$task_dir/$name/"
+cp vendor/portable-pty-0.9.0-operon/LICENSE "$task_dir/$name/portable-pty-LICENSE"
 tar -C "$task_dir" -czf "$output_dir/$name.tar.gz" "$name"
 bash scripts/smoke-release-archive.sh "$output_dir/$name.tar.gz"
 sha256sum "$output_dir/$name.tar.gz"

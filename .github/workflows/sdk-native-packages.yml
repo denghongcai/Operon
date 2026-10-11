@@ -117,6 +117,9 @@ jobs:
           bash scripts/build-sdk-native.sh '${{ matrix.target }}' target/sdk-native
           cargo build --release --locked -p operond
           bash scripts/package-sdk-native.sh '${{ matrix.target }}' target/sdk-native target/sdk-dist
+      - name: Windows empty environment block regression
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path vendor/portable-pty-0.9.0-operon/Cargo.toml --locked environment_block
       - name: Verify extracted archive capabilities
         shell: bash
         env:

@@ -8153,6 +8153,20 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   upgrade, embedded live-mount, native online or final public package gates.
   Full post-completion source, matched ops/s and support/README still required.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
+  Windows 3f67d77 SDK retest proves absolute shell lookup is fixed, then reveals
+  CreateProcessW error 87 for an empty environment. Upstream portable-pty 0.9.0
+  emits only one UTF-16 NUL for that case. Vendor the exact crate with one scoped
+  behavior fix to emit double NUL, preserving nonempty environments and upstream
+  MIT notice. Added empty/nonempty Windows unit regressions to native CI and
+  release-binding gates; six local daemon session tests pass. Actual Windows
+  empty-policy public SDK acceptance remains required; no ambient environment
+  inheritance was introduced as a workaround.
+  The vendored tests run through an isolated manifest/lockfile (not added to
+  the main workspace). Local command compiles, with zero Windows assertions
+  executed on Linux; strict daemon Clippy and Windows backend-disabled all-target
+  compile checks pass. Root Docker exclusions omit vendor target caches; GNU,
+  musl and native daemon/CLI archives retain the dependency's MIT notice.
+  Hosted native Windows tests still determine acceptance of the double-NUL fix.
   User additionally requires final GitHub Security alert audit (CodeQL,
   Dependabot, secret scanning); green jobs alone do not prove no open findings.
   Initial audit found six CodeQL findings and no open Dependabot/secret alerts.

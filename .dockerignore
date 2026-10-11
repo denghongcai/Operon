@@ -1,0 +1,12 @@
+.git
+target
+**/target
+node_modules
+**/node_modules
+.env
+.env.*
+.operon
+.aws
+.codex
+.agents
+.musl-cargo-cache

@@ -181,6 +181,9 @@ jobs:
 
       - name: Test daemon PTY smoke
         run: cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits
+      - name: Test Windows PTY environment block contract
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path vendor/portable-pty-0.9.0-operon/Cargo.toml --locked environment_block
 
       - name: Test daemon exec cancellation guarantee
         run: cargo test -p operond --locked exec_cancellation_guarantee_matches_platform

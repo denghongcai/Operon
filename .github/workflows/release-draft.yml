@@ -113,6 +113,7 @@ jobs:
           cp "target/$target/release/operon" "$binary_dir/operon"
           cp "target/$target/release/operond" "$binary_dir/operond"
           cp README.md PROTOCOL.md "$binary_dir/"
+          cp vendor/portable-pty-0.9.0-operon/LICENSE "$binary_dir/portable-pty-LICENSE"
           if [[ -f LICENSE ]]; then
             cp LICENSE "$binary_dir/"
           fi
@@ -231,6 +232,7 @@ jobs:
           cp "target/$target/release/operon$suffix" "$binary_dir/operon$suffix"
           cp "target/$target/release/operond$suffix" "$binary_dir/operond$suffix"
           cp README.md PROTOCOL.md "$binary_dir/"
+          cp vendor/portable-pty-0.9.0-operon/LICENSE "$binary_dir/portable-pty-LICENSE"
           if [[ -f LICENSE ]]; then
             cp LICENSE "$binary_dir/"
           fi
