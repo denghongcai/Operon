@@ -17,18 +17,71 @@ permissions:
   contents: read
 
 jobs:
-  package:
+  linux-package:
     runs-on: ${{ matrix.runner }}
+    container:
+      image: ubuntu:20.04
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            suffix: ''
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            suffix: ''
+    steps:
+      - name: Install baseline build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential ca-certificates curl git pkg-config unzip binutils
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.91.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: sdk-release-glibc231-${{ matrix.target }}
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: '29.3'
+          repo-token: ${{ github.token }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.2
+      - name: Build baseline native SDK and daemon
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @operon/sdk typecheck
+          pnpm --filter @operon/sdk test
+          pnpm --filter @operon/sdk build
+          bash scripts/build-sdk-native.sh '${{ matrix.target }}' target/sdk-native
+          bash scripts/verify-release-glibc-baseline.sh target/sdk-native/operon-sdk-native.node
+          cargo build --release --locked -p operond
+          bash scripts/package-sdk-native.sh '${{ matrix.target }}' target/sdk-native target/sdk-dist
+      - name: Verify extracted baseline archive capabilities
+        shell: bash
+        env:
+          OPERON_SDK_NATIVE_PATH: ${{ github.workspace }}/target/sdk-extracted/operon-sdk-native.node
+          OPERON_NATIVE_TEST_DAEMON: ${{ github.workspace }}/target/release/operond
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+          OPERON_SDK_TEST_PACKAGED: '1'
+        run: |
+          mkdir -p target/sdk-extracted
+          tar -xzf target/sdk-dist/*.tar.gz -C target/sdk-extracted
+          node --expose-gc scripts/verify-sdk-native.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdk-native-${{ matrix.target }}
+          path: target/sdk-dist/*.tar.gz
+          if-no-files-found: error
+  package:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             suffix: ''

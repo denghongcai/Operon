@@ -8110,6 +8110,15 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   transfer-liveness and secret-value non-disclosure checks. Initial four
   network failures were sandbox bind denial; permission-enabled full rerun
   passed all tests. Focused strict CLI Clippy also passes.
+  Post-onboarding local full Rust workspace/all-target regression with the
+  embedded transport feature passed. Native SDK GNU artifacts must preserve
+  the existing glibc 2.31 baseline: local host addon inspection finds 2.34, so
+  it is development-only evidence, not a portable release artifact. Separate
+  native GNU x86_64/aarch64 SDK release jobs now build and execute inside
+  Ubuntu 20.04 and require ELF symbol baseline checks before packaging.
+  Hardened the shared checker to compare symbol versions numerically rather
+  than a range regex; it correctly rejects the local 2.34 addon. Baseline
+  online builds and extracted actual capabilities remain pending.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

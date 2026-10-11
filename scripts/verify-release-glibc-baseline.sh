@@ -44,7 +44,9 @@ if [[ $# -gt 0 ]]; then
       echo "release binary is not executable: $binary" >&2
       exit 1
     }
-    if readelf --version-info "$binary" | grep -E 'GLIBC_2\.([3-9][2-9]|[4-9][0-9])' >&2; then
+    newest=$(readelf --version-info "$binary" | { grep -oE 'GLIBC_[0-9]+\.[0-9]+' || true; } | sort -Vu | tail -1)
+    if [[ -n "$newest" && "$(printf '%s\n' GLIBC_2.31 "$newest" | sort -V | tail -1)" != GLIBC_2.31 ]]; then
+      echo "required symbol version: $newest" >&2
       echo "release binary requires a GLIBC version newer than 2.31: $binary" >&2
       exit 1
     fi
