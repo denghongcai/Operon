@@ -8119,6 +8119,19 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   Hardened the shared checker to compare symbol versions numerically rather
   than a range regex; it correctly rejects the local 2.34 addon. Baseline
   online builds and extracted actual capabilities remain pending.
+  Latest Windows SDK evidence 72f76f7 identifies the PTY failure precisely:
+  isolated empty PATH leaves relative cmd.exe unresolved by CreateProcessW.
+  Resolve the shell from GetSystemDirectoryW instead of PATH/ComSpec without
+  restoring ambient environment. Unix shell behavior remains /bin/sh. Native
+  PTY smoke now explicitly clears environment; six local session tests pass.
+  Windows cross-check and native hosted revalidation remain required. Full
+  core/SDK/runtime grouped revalidation is running on this working source.
+  Windows daemon all-target cross-check with backend disabled passes, including
+  the new OS-directory shell API. Full-feature cross-check hit a local MinGW
+  compiler execution-permission failure, not a Rust error; native MSVC CI is
+  still mandatory. The concurrent grouped core run observed an intermediate
+  stale shell assertion before its fix; complete groups must be rerun on the
+  immutable fixed source, not treated as accepted from mixed-worktree output.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

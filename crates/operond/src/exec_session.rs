@@ -317,7 +317,7 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(task.size)?;
     let portable_pty::PtyPair { master, slave } = pair;
-    let mut command = session_command(task);
+    let mut command = session_command(task)?;
     command.cwd(&task.cwd);
     command.env_clear();
     for (key, value) in &task.env {
@@ -396,27 +396,45 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
     }
 }
 
-fn session_command(task: &SessionTask) -> CommandBuilder {
+fn session_command(task: &SessionTask) -> std::io::Result<CommandBuilder> {
     if task.argv.is_empty() {
-        let mut command = CommandBuilder::new(session_shell_program());
+        let mut command = CommandBuilder::new(session_shell_program()?);
         command.arg(session_shell_arg());
         command.arg(&task.command);
-        command
+        Ok(command)
     } else {
         let mut command = CommandBuilder::new(&task.argv[0]);
         command.args(&task.argv[1..]);
-        command
+        Ok(command)
     }
 }
 
 #[cfg(windows)]
-fn session_shell_program() -> &'static str {
-    "cmd.exe"
+fn session_shell_program() -> std::io::Result<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    let mut directory = vec![0u16; 32768];
+    // The OS supplies its trusted system directory, independent of PATH or
+    // caller-controlled ComSpec. The buffer stays valid for the entire call.
+    let length = unsafe {
+        windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW(
+            directory.as_mut_ptr(),
+            directory.len() as u32,
+        )
+    };
+    if length == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if length as usize >= directory.len() {
+        return Err(std::io::Error::other(
+            "Windows system directory exceeds buffer",
+        ));
+    }
+    Ok(PathBuf::from(std::ffi::OsString::from_wide(&directory[..length as usize])).join("cmd.exe"))
 }
 
 #[cfg(not(windows))]
-fn session_shell_program() -> &'static str {
-    "/bin/sh"
+fn session_shell_program() -> std::io::Result<PathBuf> {
+    Ok(PathBuf::from("/bin/sh"))
 }
 
 #[cfg(windows)]
@@ -550,13 +568,16 @@ mod tests {
     fn session_shell_invocation_matches_platform() {
         #[cfg(windows)]
         {
-            assert_eq!(session_shell_program(), "cmd.exe");
+            let shell = session_shell_program().unwrap();
+            assert!(shell.is_absolute());
+            assert!(shell.ends_with("cmd.exe"));
+            assert!(shell.is_file());
             assert_eq!(session_shell_arg(), "/C");
         }
 
         #[cfg(not(windows))]
         {
-            assert_eq!(session_shell_program(), "/bin/sh");
+            assert_eq!(session_shell_program().unwrap(), PathBuf::from("/bin/sh"));
             assert_eq!(session_shell_arg(), "-c");
         }
     }
@@ -613,7 +634,8 @@ mod tests {
             })
             .expect("resize pty");
 
-        let mut command = CommandBuilder::new(session_shell_program());
+        let mut command = CommandBuilder::new(session_shell_program().expect("system shell"));
+        command.env_clear();
         command.arg(session_shell_arg());
         command.arg("echo operon-pty-smoke");
 
