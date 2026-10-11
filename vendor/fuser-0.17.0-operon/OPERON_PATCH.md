@@ -48,6 +48,9 @@ Additional source-stage lifecycle changes (not yet published):
   owns the interrupted read's reply and cancellation registration.
 - Pure-Rust unmount-helper execution errors and unsuccessful exit status are
   propagated instead of silently reported as success.
+- macOS FUSE-T stream EOF between complete frames ends the event loop normally.
+  Partial-frame EOF is still EIO and nonempty malformed requests remain errors;
+  this does not suppress unmount-helper errors or arbitrary invalid frames.
 
 The productionization plan and live evidence are in
 `docs/plan/v0.18.24-async-fuse-read-roadmap.md` and

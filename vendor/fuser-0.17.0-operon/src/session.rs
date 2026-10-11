@@ -538,6 +538,10 @@ impl<FS: Filesystem> SessionEventLoop<FS> {
             // Read the next request from the given channel to kernel driver
             // The kernel driver makes sure that we get exactly one request per read
             match self.ch.receive_retrying(buf) {
+                // FUSE-T closes its stream after unmount. An EOF between
+                // frames is normal; partial-frame EOF remains EIO in Channel.
+                #[cfg(target_os = "macos")]
+                Ok(0) => return Ok(()),
                 Ok(size) => match RequestWithSender::new(self.ch.sender(), &buf[..size]) {
                     // Dispatch request
                     Some(req) => {

@@ -90,6 +90,9 @@ policy:
         $info.Arguments = '"grpc://127.0.0.1:{0}" "{1}" "{2}" auto' -f $port, $token, $drive
         $info.UseShellExecute = $false
         $info.RedirectStandardInput = $true
+        # .NET's default redirected writer can prepend a UTF-8 BOM. The
+        # helper's line protocol expects literal drop/unmount, without a BOM.
+        $info.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
         $info.RedirectStandardOutput = $true
         $info.RedirectStandardError = $true
         $owner = [Diagnostics.Process]::new()

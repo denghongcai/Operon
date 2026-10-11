@@ -7755,6 +7755,14 @@ The full core rerun completed successfully: all 55 scripts passed. Mount
 all-target Clippy also passed with warnings denied after the platform-binding
 cleanup. Local core/SDK/runtime groups are now green for the version-aligned
 source; exact committed-source CI and native/public gates remain open.
+Remote candidate `f2876ac` exposed strict native shutdown failures: Windows
+ordinary live mount passed, but the helper rejected its redirected stdin line;
+the PowerShell writer now uses explicitly BOM-free UTF-8. macOS read/mutation
+and zero-active-read cleanup passed but process exit failed because framed
+stream EOF (`Ok(0)`) reached request parsing. macOS now treats only inter-frame
+EOF as normal; partial EOF and nonempty malformed requests retain errors.
+These fixes require a new exact-source native run; neither failed gate is
+counted as passed.
 Commit/push main, align versions, exact-SHA source/platform
 gates, pretag, verified draft, public Latest and all downloaded artifact/install/
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
