@@ -8262,6 +8262,20 @@ keeps configuration, pairing, relay trust, timeout constraints and native SDK
 installation instructions. Release notes are reduced to highlights, usage
 limits and a security-review link; detailed gate evidence stays in this phase
 tracker and the publication record. Package publication is still pending.
+Draft run `38156351970` completed all platform builds and acceptance, but its
+final upload failed because reusable musl artifacts retain a nested `dist/`
+directory. The release workflow now stages exactly one file per required asset
+before generating checksums or uploading; directories and auxiliary evidence
+are not release assets. Recovery must reuse the exact-source build artifacts,
+verify the complete 17-asset contract and preserve the immutable tag. Phase 159
+is not complete, and this upload failure is not a source-test failure.
+Upload recovery is an explicit postrelease gate option, not a waived build
+check: `OPERON_RELEASE_RECOVERY_RUN_ID` requires the original tag/SHA, every
+named build and acceptance job successful, only the known directory-upload
+failure, and byte-for-byte equality of all 16 downloaded archives with that
+run's artifacts, plus the complete asset set and checksums. Normal releases
+still require a successful Draft Release workflow. Local staging verifies the
+complete archive set and all seven native SDK manifests before recovery.
 
 ## Planning Principle
 

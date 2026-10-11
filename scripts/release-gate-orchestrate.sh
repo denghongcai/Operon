@@ -181,7 +181,11 @@ verify_postrelease() {
   require_exact_sha
   require_gh
 
-  require_successful_workflow "Draft Release"
+  if [[ -n "${OPERON_RELEASE_RECOVERY_RUN_ID:-}" ]]; then
+    bash scripts/verify-recovered-release-artifacts.sh "$TAG" "$COMMIT_SHA" "$REPO" "$OPERON_RELEASE_RECOVERY_RUN_ID"
+  else
+    require_successful_workflow "Draft Release"
+  fi
   actual_sha="$(gh api "repos/$REPO/commits/$TAG" --jq '.sha')"
   [[ "$actual_sha" == "$COMMIT_SHA" ]] || {
     echo "published tag points at $actual_sha, not verified source $COMMIT_SHA" >&2; exit 1;

@@ -358,8 +358,24 @@ jobs:
       - name: Download archives
         uses: actions/download-artifact@v8
         with:
-          path: dist
+          path: incoming
           merge-multiple: true
+
+      - name: Stage complete release asset set
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/lib/release-assets.sh
+          mkdir dist
+          while IFS= read -r asset; do
+            [[ "$asset" != SHA256SUMS ]] || continue
+            mapfile -d '' matches < <(find incoming -type f -name "$asset" -print0)
+            if [[ ${#matches[@]} != 1 ]]; then
+              echo "Expected exactly one release asset: $asset (found ${#matches[@]})" >&2
+              exit 1
+            fi
+            cp -- "${matches[0]}" "dist/$asset"
+          done < <(release_expected_assets "$GITHUB_REF_NAME")
 
       - name: Generate checksums
         shell: bash
