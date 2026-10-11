@@ -1,0 +1,64 @@
+name: Embedded Connectivity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'experiments/iroh-grpc/**'
+      - 'crates/**'
+      - 'proto/**'
+      - 'Cargo.*'
+      - '.github/workflows/embedded-connectivity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/iroh-grpc/**'
+      - 'crates/**'
+      - 'proto/**'
+      - 'Cargo.*'
+      - '.github/workflows/embedded-connectivity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    name: Embedded gRPC PoC and real daemon regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      OPERON_POC_TEST_TIMEOUT_SECS: '120'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.91.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            experiments/iroh-grpc -> target
+          shared-key: embedded-iroh-poc-msrv191
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: '25.3'
+          repo-token: ${{ github.token }}
+      - name: Build unchanged real daemon
+        run: cargo build --locked -p operond
+      - name: Native stream, authorization, fs, exec and cancellation tests
+        env:
+          OPERON_POC_DAEMON: ${{ github.workspace }}/target/debug/operond
+        run: cargo test --manifest-path experiments/iroh-grpc/Cargo.toml --locked -- --nocapture
+      - name: Check isolated PoC format and all-target Clippy
+        run: |
+          cargo fmt --manifest-path experiments/iroh-grpc/Cargo.toml -- --check
+          cargo clippy --manifest-path experiments/iroh-grpc/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Build locked cross-container examples
+        run: docker build --build-context proto="$PWD/proto" -t operon-iroh-grpc-poc experiments/iroh-grpc
+      - name: Actual distinct-container direct path and owned shutdown
+        run: bash experiments/iroh-grpc/docker-run-cross-container.sh
+      # Phase 157 must add self-hosted relay/denied-direct path evidence here;
+      # this PoC job does not claim NAT traversal or relay acceptance.

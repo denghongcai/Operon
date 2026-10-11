@@ -7813,6 +7813,68 @@ gates, pretag, verified draft, public Latest and all downloaded artifact/install
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
 closeout are required; an experimental build does not complete this phase.
 
+## Phase 153: Optional Embedded Connectivity PoC
+
+Status: Completed as a PoC only. User approved an optional iroh PoC, not default
+activation, production migration or release. Existing direct grpc/grpcs
+addressing remains compatible with LAN, DNS and VPN-provided connectivity.
+Future embedded backends are a design extension point, not a commitment to ship
+tailscale-rs.
+
+The isolated `experiments/iroh-grpc` workspace uses iroh 1.3.0/Rust 1.91 without
+changing the production workspace MSRV, lockfile, configuration or release.
+Validate native tonic HTTP/2 over an authenticated QUIC stream, exact unary
+payloads, concurrent calls, interactive bidirectional streaming, deadlines,
+caller cancellation and owned endpoint/task shutdown. Separately exercise the
+unchanged real Operon daemon through an explicitly experimental in-process
+loopback bridge; do not confuse that bridge with production native incoming.
+No public relay/discovery publication by default. Local direct tests are not
+evidence of cross-NAT traversal, relay failover, SDK or native platform support.
+Record actual results and remaining production gates before closing the PoC.
+
+Results (2026-10-11, recorded in `experiments/iroh-grpc/README.md`): all PoC
+gates pass on Rust 1.91.1 / iroh 1.3.0 / tonic 0.14.5. Native tonic over an
+authenticated iroh stream passes wrong-ALPN rejection, exact >8MiB unary
+round-trip with the peer `EndpointId` extension, 64 concurrent verified calls,
+interactive bidirectional streaming with half-close, RPC-deadline and
+caller-abort handler cancellation, endpoint-shutdown termination of deadline-zero
+RPCs, and owned task shutdown. The unchanged release `operond` passes health with
+bearer auth, >8MiB streamed fs write/read, >2MiB range read, path-escape denial,
+exec with completion stream and binary logs, and direct-TCP/iroh coexistence
+through the experimental in-process TCP loopback bridge. Two PoC fixes were
+needed: `operond start --config` argument order and expected connection-loss
+handling in the bridge teardown loop. A follow-up Docker cross-container check
+(`experiments/iroh-grpc/docker-run-cross-container.sh`) placed server and client
+in separate containers on an isolated bridge network and passed exact >8MiB
+unary, 64 concurrent verified calls, and interactive bidirectional streaming by
+dialing the server's node id plus an explicit direct IP address with no relay
+and no discovery; this remains non-loopback evidence only, not cross-NAT
+traversal evidence. Remaining production gates are recorded in
+the PoC README: cross-NAT/relay evidence, production native incoming,
+release-build ops/s acceptance, macOS/Windows verification, MSRV/lockfile
+policy, and production authorization mapping for embedded peer identity.
+Nothing remains in the PoC phase itself.
+
+## Phases 154–159: Optional Embedded Connectivity Implementation and Release
+
+Authoritative scoped roadmap: `docs/plan/v0.18.26-optional-embedded-connectivity.md`.
+User approved implementation, full old/new-path regression, Docker self-hosted
+relay plus actual online CI, clear README and verified public release. The
+production backend remains opt-in; MSRV upgrade is explicitly authorized.
+
+- Phase 154 — In Progress: PoC cleanup/error ownership, fmt/Clippy, reproducible
+  local and cross-container acceptance; do not commit generated build outputs.
+  Local closeout passed all three real-network/daemon integration tests, strict
+  all-target Clippy and format on Rust 1.91.0. Fresh locked bookworm release
+  examples passed distinct-container payload/concurrency/duplex and normal
+  SIGINT task-join checks. The new Embedded Connectivity workflow requires
+  these actual scenarios online; exact-commit CI results remain pending.
+- Phase 155 — Planned: deliberate MSRV/toolchain and owned transport boundary.
+- Phase 156 — Planned: native daemon/client/config/identity integration.
+- Phase 157 — Planned: self-hosted relay/NAT and public SDK/native/online CI tests.
+- Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
+- Phase 159 — Planned: immutable exact-source/public package release gates.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

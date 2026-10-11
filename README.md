@@ -14,6 +14,12 @@ Operon is an AI-native capability runtime for machines already connected by
 Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
 private network.
 
+Optional embedded connectivity is under development, not enabled in the current
+release. Existing `grpc://`/`grpcs://` addressing remains unchanged. The isolated
+[iroh PoC](experiments/iroh-grpc/README.md) validates gRPC stream compatibility;
+it does not yet establish production cross-NAT, relay or SDK support. See the
+[implementation and acceptance phases](docs/plan/v0.18.26-optional-embedded-connectivity.md).
+
 Operon focuses on what happens after machines can reach each other: capability
 discovery, policy, execution graphs, audit, and agent-friendly tooling.
 

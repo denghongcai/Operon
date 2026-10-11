@@ -38,6 +38,12 @@ Operon should not own:
 
 ## Key Design Documents
 
+- `docs/plan/v0.18.26-optional-embedded-connectivity.md`
+  - Active Phases 154–159: optional embedded iroh, deliberate MSRV upgrade,
+    Docker self-hosted relay/actual online CI, full regression and public release.
+    Production connectivity remains direct grpc/grpcs until implementation and
+    acceptance; the isolated PoC is not production support.
+
 - `docs/plan/v0.16.14-release-publication.md`
   - Completed Phase 152: immutable exact-source and public package verification.
 - `docs/plan/v0.18.24-async-fuse-read-roadmap.md`

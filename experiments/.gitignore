@@ -1,0 +1,2 @@
+# Downloaded local protobuf tools are not source artifacts.
+/.tools/

@@ -1,0 +1,8 @@
+syntax = "proto3";
+package operon.poc;
+service Probe {
+  rpc Echo(Frame) returns (Frame);
+  rpc Duplex(stream Frame) returns (stream Frame);
+  rpc Hang(Frame) returns (Frame);
+}
+message Frame { bytes data = 1; }
