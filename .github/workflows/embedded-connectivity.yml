@@ -116,6 +116,8 @@ jobs:
       - name: Actual owned relay-only streams and relay traffic counters
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+          OPERON_SDK_NATIVE_PATH: ${{ github.workspace }}/target/debug/liboperon_sdk_native.so
+          OPERON_NATIVE_TEST_DAEMON: ${{ github.workspace }}/target/debug/operond
         run: bash scripts/verify-embedded-relay.sh
       - name: Build production native daemon and CLI for isolated networks
         run: docker build -f docker/Dockerfile -t operon-native-iroh-acceptance .

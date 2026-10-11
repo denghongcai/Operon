@@ -8048,6 +8048,13 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   forced GC. Fixed binding-version test-target dead-code via its public Rust
   export; strict node-feature all-target Clippy passes locally. Exact-source
   online and final Security review are still required.
+  Real public TypeScript SDK capability acceptance now also passes through
+  an owned Docker relay with both endpoint IP transports disabled: >8MiB
+  file roundtrip/range/authorization, exec streams, TCP/UDP service echo,
+  PTY and forced-GC cancellation. Relay counters record 30,196,075 bytes sent
+  and 30,196,112 received for the combined Rust/SDK gate. Online embedded CI
+  now requires this public SDK relay gate. This same-host relay-only proof is
+  not NAT traversal or direct-upgrade evidence; those scenarios remain open.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

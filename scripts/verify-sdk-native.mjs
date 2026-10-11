@@ -15,6 +15,11 @@ assert(bindingPath && path.isAbsolute(bindingPath), "explicit absolute binding p
 const binding = { exports: {} };
 process.dlopen(binding, bindingPath);
 const { NativeClient, NativeCall } = binding.exports;
+const relayUrl = process.env.OPERON_SDK_TEST_RELAY_URL;
+const localTransport = relayUrl ? {
+  bind_addrs: [], relay_urls: [relayUrl], allow_insecure_relays: true,
+  readiness_timeout_secs: seconds,
+} : {};
 const dir = await mkdtemp(path.join(os.tmpdir(), "operon-sdk-native-"));
 let daemon;
 let client;
@@ -57,7 +62,7 @@ try {
   await writeFile(configPath, JSON.stringify({ version: 1, daemon: {
     node_id: "native-sdk-owned", workspace: path.join(dir, "workspace"),
     grpc_listen: `127.0.0.1:${tcpPort}`, auth: { token: "native-sdk-test-token" },
-    iroh: { identity_file: "server.key", bind_addrs: [`127.0.0.1:${udpPort}`] },
+    iroh: { identity_file: "server.key", bind_addrs: [`127.0.0.1:${udpPort}`], ...localTransport },
   }, policy: { subject: "sdk-acceptance", fs: { mounts: [{ name: "workspace", path: "/", permissions: { read: true, write: true, delete: true } }] },
     exec: { allowed_cwds: ["/"], default_timeout_secs: 30, max_timeout_secs: 300, allow_sessions: true, preserve_env: false, env_allowlist: [], allowed_secrets: [] },
     service: { services: [
@@ -85,6 +90,8 @@ try {
     endpoint: `iroh://${endpointId}`, token: null, transport: { iroh: {
       identity_file: path.join(dir, "client.key"), bind_addrs: ["127.0.0.1:0"],
       peer_addrs: [`127.0.0.1:${udpPort}`],
+      ...localTransport,
+      ...(relayUrl ? { peer_addrs: [], peer_relay_urls: [relayUrl] } : {}),
     } } };
   client = await NativeClient.connect(JSON.stringify(endpointConfig));
   const rpc = async (name, token = "native-sdk-test-token") => {
@@ -142,7 +149,8 @@ try {
   await assert.rejects(client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]"), /closed/);
   const { OperonClient } = await import("../packages/sdk-js/dist/index.js");
   sdk = new OperonClient([{ nodeId: "sdk-logical", endpoint: `iroh://${endpointId}`, token: "native-sdk-test-token",
-    transport: { iroh: { identityFile: path.join(dir, "public-sdk.key"), bindAddrs: ["127.0.0.1:0"], peerAddrs: [`127.0.0.1:${udpPort}`] } } }]);
+    transport: { iroh: { identityFile: path.join(dir, "public-sdk.key"), bindAddrs: relayUrl ? [] : ["127.0.0.1:0"], peerAddrs: relayUrl ? [] : [`127.0.0.1:${udpPort}`],
+      ...(relayUrl ? { relayUrls: [relayUrl], peerRelayUrls: [relayUrl], allowInsecureRelays: true, readinessTimeoutSecs: seconds } : {}) } } }]);
   const capabilities = await sdk.listCapabilities("sdk-logical");
   assert(capabilities.capabilities.length > 0);
   const payload = Uint8Array.from({ length: 8 * 1024 * 1024 + 117 }, (_, i) => i % 251);
