@@ -27,11 +27,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Verify tagged validation source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)
+          test "$(git rev-parse HEAD)" = "$source_sha"
+          echo "PUBLIC_ARTIFACT_SOURCE=$source_sha TAG=$RELEASE_TAG"
 
       - name: Install Node for downloaded public SDK acceptance
         uses: actions/setup-node@v6
         with:
           node-version: '22'
+
+      - name: Install pinned npm for release SDK dependencies
+        shell: bash
+        run: npm install --global npm@11.6.1 --ignore-scripts --no-audit --no-fund
 
       - name: Verify release artifacts
         shell: bash

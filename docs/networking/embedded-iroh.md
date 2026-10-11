@@ -2,8 +2,9 @@
 
 Optional iroh connectivity runs inside Operon, without an external connectivity
 process. It requires matching v0.16.15 daemon, client and SDK packages or source
-builds. The v0.16.15 packages are currently being prepared; published v0.16.14
-packages do not support this option.
+builds. Download matching packages from the
+[v0.16.15 release](https://github.com/denghongcai/Operon/releases/tag/v0.16.15).
+Older packages do not support this option.
 
 ## Configuration contract
 
@@ -150,6 +151,10 @@ set `transport.iroh` with `identityFile`, explicit `peerAddrs` or `peerRelayUrls
 and the matching local relay settings. SDK settings use camelCase. Identity
 paths resolve from the current working directory; use absolute paths for SDK
 applications. Default grpc/grpcs clients do not load the binding.
+
+Install the extracted JS SDK's runtime dependencies with npm 11.6.1 or newer:
+`npm install --omit=dev --ignore-scripts`. npm 10 can fail while resolving this
+package's dependency graph; Node 22 remains supported with the newer installer.
 
 Extract the matching native SDK archive and set `OPERON_SDK_NATIVE_PATH` to the
 absolute path of `operon-sdk-native.node`, or place that file in the SDK's

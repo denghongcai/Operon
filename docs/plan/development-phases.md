@@ -8276,6 +8276,21 @@ failure, and byte-for-byte equality of all 16 downloaded archives with that
 run's artifacts, plus the complete asset set and checksums. Normal releases
 still require a successful Draft Release workflow. Local staging verifies the
 complete archive set and all seven native SDK manifests before recovery.
+Recovery comparison passes for every published archive against run
+`38156351970`; all 17 assets are public in Latest `v0.16.15`. Publication does
+not complete Phase 159: exact-source public artifact `38158589570`, install
+`38158588062`, README `38158588600`, Alpine `38158589828` and Windows runner
+`38158589767` are running, followed by formal postrelease verification.
+Published installation/service `38158588062`, README `38158588600` and both
+native Alpine jobs `38158589828` pass. Artifact run `38158589570` fails during
+npm 10 dependency resolution before SDK execution on all five platforms;
+checksum, binary smoke and native manifest checks pass. A clean Node 22
+container reproduces `edgesOut` with npm 10.9.7; npm 11.6.1 installs the same
+unchanged public JS archive and imports it successfully. The artifact workflow
+now pins npm 11.6.1 while retaining Node 22, checks out the immutable input tag
+and emits a checked source-SHA marker. Its verifier orchestration revision can
+differ from the runtime tag; validation scripts and public binaries remain
+exact-source. All five public SDK business/relay gates must still pass.
 
 ## Planning Principle
 
