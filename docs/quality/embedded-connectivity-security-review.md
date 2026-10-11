@@ -2,6 +2,15 @@
 
 Status: In progress; not a release-completion claim.
 
+Latest source checkpoint `dab0e8ecbc8ddf330603b07754dbd84e5f27a180`
+introduces two additional open CodeQL findings: #14 and #15,
+`rust/access-invalid-pointer`, on the `#[napi]` NativeClient and NativeCall
+class declarations. The reported dereferences originate in generated binding
+code; source locations alone do not establish a false positive. Inspect the
+expanded wrapper and object lifetime/null/type validation before disposition.
+The current API read returns three open code-scanning alerts (#13–15), zero
+Dependabot and zero secret-scanning alerts. No findings were dismissed.
+
 On 2026-10-11, a paginated GitHub API read of `denghongcai/Operon` returned six
 open CodeQL alerts, no open Dependabot alerts and no open secret-scanning
 alerts. All three APIs were accessible. Re-query against the final release

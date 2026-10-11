@@ -4,6 +4,7 @@
     "ignoreDeprecations": "6.0",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
     "strict": true,
     "target": "ES2022"
   },

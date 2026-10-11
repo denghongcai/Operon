@@ -22,12 +22,19 @@ let sdk;
 let tcpEcho;
 let udpEcho;
 const echoSockets = new Set();
+const echoErrors = [];
+let cancellingTcp = false;
 const limit = setTimeout(() => { daemon?.kill("SIGKILL"); process.exitCode = 1; }, seconds * 1000);
 try {
   await mkdir(path.join(dir, "workspace"));
   tcpEcho = net.createServer(socket => {
     echoSockets.add(socket);
     socket.on("close", () => echoSockets.delete(socket));
+    socket.on("error", error => {
+      // Cancelling the forwarding RPC can reset its peer socket on Windows.
+      // Only accept that specific error after the payload was verified.
+      if (!(cancellingTcp && error.code === "ECONNRESET")) echoErrors.push(error);
+    });
     socket.on("data", data => socket.write(data));
   });
   tcpEcho.listen(0, "127.0.0.1");
@@ -136,6 +143,7 @@ try {
   const reader = tunnel.getReader();
   const tcpResponse = await reader.read();
   assert.deepEqual(Buffer.from(tcpResponse.value), echoed);
+  cancellingTcp = true;
   await reader.cancel();
   finishTcp();
   let finishUdp;
@@ -167,6 +175,7 @@ try {
     if (event.type === "exit") { assert.equal(event.exit_code, 0); sawExit = true; }
   }
   assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"));
+  assert.deepEqual(echoErrors, [], "unexpected TCP echo fixture errors");
   console.log("PASS public SDK native TCP/UDP bidirectional echo, stream cancellation and PTY output/exit");
   console.log("PASS public SDK native unary, client/server streaming, >8MiB roundtrip, 4MiB range and traversal rejection");
   console.log("PASS in-process Node binding, native daemon health/node, bearer rejection, cancellation and joined call shutdown");

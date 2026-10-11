@@ -3,6 +3,7 @@ import { Metadata, Status } from "nice-grpc";
 import { embeddedClient } from "./embedded-client";
 import { GrpcClientPool } from "./client-transport";
 import { HealthStatus } from "./generated/operon/runtime";
+import sdkPackage from "../package.json";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -14,7 +15,7 @@ function fakeBinding(status?: Error) {
   const configs: unknown[] = [];
   const messages: Buffer[] = [];
   vi.spyOn(process, "dlopen").mockImplementation(module => {
-    module.exports = { NativeClient: class {
+    module.exports = { bindingVersion: () => sdkPackage.version, NativeClient: class {
       constructor(config: string) { configs.push(JSON.parse(config)); }
       async ready() {}
       close = close;
@@ -71,12 +72,16 @@ describe("optional embedded SDK adapter", () => {
     await expect(entry.client.health({})).rejects.toMatchObject({ code: Status.UNAUTHENTICATED });
     entry.close();
   });
+  it("rejects mismatched or legacy bindings rather than falling back", () => {
+    vi.spyOn(process, "dlopen").mockImplementation(module => { module.exports = { NativeClient: class {}, bindingVersion: () => "0.0.0" }; });
+    expect(() => embeddedClient(endpoint)).toThrow("must match SDK version");
+  });
   it("iterator return interrupts a pending native read before joining teardown", async () => {
     const closed = vi.fn();
     let rejectRead: ((error: Error) => void) | undefined;
     const reading = new Promise<void>(resolve => {
       vi.spyOn(process, "dlopen").mockImplementation(module => {
-        module.exports = { NativeClient: class {
+        module.exports = { bindingVersion: () => sdkPackage.version, NativeClient: class {
           async ready() {}
           close() {}
           async openCall() { return {

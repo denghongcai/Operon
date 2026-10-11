@@ -4,6 +4,7 @@ import { ClientError, Metadata, Status, type CallOptions, type ClientMiddlewareC
 import { OperonRuntimeDefinition, type OperonRuntimeClient } from "./generated/operon/runtime";
 import { deadlineMiddleware, transportConfig } from "./transport-deadlines";
 import type { NodeEndpoint } from "./types";
+import sdkPackage from "../package.json";
 
 interface NativeCall {
   send(data: Buffer): Promise<void>;
@@ -19,7 +20,7 @@ interface NativeClient {
   openCall(path: string, metadata: string): Promise<NativeCall>;
   close(): void;
 }
-type Binding = { NativeClient: new (config: string) => NativeClient };
+type Binding = { NativeClient: new (config: string) => NativeClient; bindingVersion(): string };
 type Method = {
   name: string;
   requestStream: boolean;
@@ -37,6 +38,9 @@ function loadBinding(): Binding {
   catch (cause) { throw new Error("iroh requires the optional in-process Operon SDK native binding; no fallback was attempted", { cause }); }
   const result = binding.exports as Partial<Binding>;
   if (typeof result.NativeClient !== "function") throw new Error("invalid Operon SDK native binding");
+  if (typeof result.bindingVersion !== "function" || result.bindingVersion() !== sdkPackage.version) {
+    throw new Error(`native binding must match SDK version ${sdkPackage.version}; no fallback was attempted`);
+  }
   return result as Binding;
 }
 

@@ -12,6 +12,10 @@ on:
     paths:
       - 'crates/**'
       - 'vendor/**'
+      - 'packages/sdk-js/**'
+      - 'pnpm-lock.yaml'
+      - 'scripts/build-sdk-native.sh'
+      - 'scripts/verify-sdk-native.mjs'
       - 'Cargo.*'
       - 'rust-toolchain.toml'
       - 'scripts/*musl*'
@@ -25,6 +29,10 @@ on:
     paths:
       - 'crates/**'
       - 'vendor/**'
+      - 'packages/sdk-js/**'
+      - 'pnpm-lock.yaml'
+      - 'scripts/build-sdk-native.sh'
+      - 'scripts/verify-sdk-native.mjs'
       - 'Cargo.*'
       - 'rust-toolchain.toml'
       - 'scripts/*musl*'
@@ -57,6 +65,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Verify native architecture
         run: test "$(uname -m)" = '${{ matrix.arch }}'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - name: Build and test public SDK
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @operon/sdk typecheck
+          pnpm --filter @operon/sdk test
+          pnpm --filter @operon/sdk build
       - name: Cache native build
         uses: actions/cache@v4
         with:
@@ -80,7 +100,26 @@ jobs:
               cargo +1.91.0 test --workspace --release --locked --target "${{ matrix.target }}" --features operon-transport/iroh
               bash scripts/package-musl-release.sh "${{ matrix.target }}" \
                 /output/${{ matrix.target }}/release /output/dist
+              CARGO_TARGET_DIR=/output/sdk bash scripts/build-sdk-native.sh \
+                "${{ matrix.target }}" /output/sdk-native
             '
+      - name: Native musl public SDK acceptance
+        run: |
+          for image in \
+            alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
+            alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0; do
+            docker run --rm \
+              --mount type=bind,src="$PWD/target/alpine-native",dst=/output,readonly \
+              --mount type=bind,src="$PWD",dst=/workspace,readonly \
+              -e OPERON_SDK_NATIVE_PATH=/output/sdk-native/operon-sdk-native.node \
+              -e OPERON_NATIVE_TEST_DAEMON=/output/${{ matrix.target }}/release/operond \
+              -e OPERON_EMBEDDED_TEST_TIMEOUT_SECS=180 \
+              "$image" /bin/sh -ec '
+                apk add --no-cache nodejs >/dev/null
+                cd /workspace
+                node scripts/verify-sdk-native.mjs
+              '
+          done
       - name: Baseline and secondary Alpine runtime integration
         run: |
           for image in \

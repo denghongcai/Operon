@@ -15,6 +15,11 @@ use tonic::{
     Request, Status,
 };
 
+#[napi]
+pub fn binding_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 #[derive(Clone, Default)]
 struct RawCodec;
 impl Codec for RawCodec {

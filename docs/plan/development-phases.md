@@ -8020,6 +8020,22 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   13-script SDK group is re-running rather than bypassing the failed gate.
   Revalidation finished successfully: all 13 SDK scripts passed with the 30
   tests, typecheck and build enabled after the source-pattern correction.
+  Native Alpine musl public SDK acceptance now passes against a current static
+  daemon and dynamic musl Node binding: capabilities, bearer rejection, >8MiB
+  roundtrip, 4MiB ranges, traversal denial, exec, TCP/UDP streams, PTY and joined
+  cancellation. Added exact SDK/binding version matching (31 SDK tests pass)
+  and a target-aware binding build helper; dynamic musl flags are scoped to
+  the addon, never daemon builds. Alpine CI now builds/tests the public SDK
+  and runs the real binding gate on both native architectures and both pinned
+  runtime images. Online results, distribution and remaining networking gates
+  are still required; Phase 157 remains in progress.
+  Online checkpoint dab0e8e passed embedded connectivity and CodeQL workflows,
+  but Windows SDK acceptance failed on an unhandled echo-fixture ECONNRESET
+  during deliberate tunnel cancellation. Handle only that expected reset after
+  verified payload receipt; collect and assert all other fixture errors. Alpine
+  real SDK acceptance passes again after the fix; Windows revalidation remains
+  required. Security API now reports three open alerts: existing #13 plus N-API
+  macro pointer findings #14/#15, requiring expanded-wrapper lifetime review.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,
