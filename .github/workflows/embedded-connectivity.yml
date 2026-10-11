@@ -9,6 +9,8 @@ on:
       - 'proto/**'
       - 'Cargo.*'
       - 'rust-toolchain.toml'
+      - 'docker/iroh-relay/**'
+      - 'scripts/verify-embedded-relay.sh'
       - '.github/workflows/embedded-connectivity.yml'
   push:
     branches: [main]
@@ -18,6 +20,8 @@ on:
       - 'proto/**'
       - 'Cargo.*'
       - 'rust-toolchain.toml'
+      - 'docker/iroh-relay/**'
+      - 'scripts/verify-embedded-relay.sh'
       - '.github/workflows/embedded-connectivity.yml'
 
 permissions:
@@ -72,5 +76,11 @@ jobs:
         run: docker build --build-context proto="$PWD/proto" -t operon-iroh-grpc-poc experiments/iroh-grpc
       - name: Actual distinct-container direct path and owned shutdown
         run: bash experiments/iroh-grpc/docker-run-cross-container.sh
-      # Phase 157 must add self-hosted relay/denied-direct path evidence here;
-      # this PoC job does not claim NAT traversal or relay acceptance.
+      - name: Build version-pinned self-hosted relay acceptance image
+        run: docker build -t operon-iroh-relay-acceptance docker/iroh-relay
+      - name: Actual owned relay-only streams and relay traffic counters
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: bash scripts/verify-embedded-relay.sh
+      # Phase 157 still requires distinct-container/NAT/recovery and native
+      # daemon capability acceptance; relay-only streams alone do not prove it.

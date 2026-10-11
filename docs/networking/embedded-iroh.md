@@ -96,7 +96,15 @@ targets configure both, and omit `peer_addrs`. HTTPS is required by default;
 HTTP needs explicit `allow_insecure_relays: true` and is intended only for
 isolated tests. URLs must not embed credentials, a query or fragment.
 
-Actual self-hosted Docker relay traffic/path counters, denied-direct/UDP,
+The first self-hosted Docker relay gate passed locally with both endpoints'
+IP transports disabled: pinned identities and >8MiB data matched, QUIC paths
+reported relay, and the relay's sent/received counters exceeded 8MiB. Run
+`docker build -t operon-iroh-relay-acceptance docker/iroh-relay` followed by
+`bash scripts/verify-embedded-relay.sh`; the script publishes random loopback-only
+ports and removes only its own container. HTTP is test-only, not a production
+relay recommendation. Online execution is required for the committed source.
+
+Distinct-container relay/NAT topology, denied-direct/UDP,
 direct upgrade, relay loss/recovery, public SDK in-process connectivity and
 complete platform/live-mount regression remain Phase 157–159 gates. Do not
 claim those scenarios passed from the current direct-path tests. The current

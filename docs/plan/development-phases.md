@@ -7934,7 +7934,21 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   embedded listener termination now signals mixed-router shutdown and returns
   an error rather than silently retaining only TCP; normal shutdown prioritizes
   the requested stop and closes/joins admissions.
-- Phase 157 — Planned: self-hosted relay/NAT and public SDK/native/online CI tests.
+  Native implementation checkpoint `055f89aa036196d354466ea188a0fd573cc3ce5e`
+  is pushed: CI `38124880745`, Embedded Connectivity `38124880836`,
+  Alpine musl Acceptance `38124880798` and CodeQL `38124880565` are running,
+  not yet accepted. Doctor now separately diagnoses mandatory bearer auth for
+  embedded listeners, including loopback TCP configurations; regression covers
+  missing auth and configured token-file references.
+- Phase 157 — In progress: self-hosted relay/NAT and public SDK/native/online CI
+  tests. Added version-pinned upstream iroh-relay 1.3.0 Docker build and an
+  owned-loopback relay gate, wired into Embedded Connectivity CI. Real local
+  execution passed: both endpoints have zero IP transports, pinned identities
+  match, >8MiB bytes match, QUIC paths report relay, shutdown joins admissions,
+  and relay sent/received counters each exceeded 8MiB (8,610,680 bytes).
+  `scripts/verify-embedded-relay.sh` cleans up only its created container.
+  This is stream-level evidence, not distinct-container/NAT/recovery/native
+  daemon or public SDK acceptance; all those requirements remain open.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

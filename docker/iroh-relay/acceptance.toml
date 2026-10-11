@@ -1,0 +1,7 @@
+# Plain HTTP is allowed only inside isolated Docker acceptance networks.
+# No published host ports; this is not a production deployment configuration.
+enable_relay = true
+http_bind_addr = "0.0.0.0:3340"
+enable_quic_addr_discovery = false
+enable_metrics = true
+metrics_bind_addr = "0.0.0.0:9090"

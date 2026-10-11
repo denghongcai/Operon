@@ -171,6 +171,15 @@ fn security_diagnostics(
     if let Some(daemon) = &config.daemon {
         let has_auth = !daemon.auth.is_empty();
         let non_loopback = !daemon.grpc_listen.ip().is_loopback();
+        if daemon.iroh.is_some() {
+            diagnostics.push(DoctorSecurityDiagnostic {
+                id: "daemon-iroh-auth".to_string(),
+                ok: has_auth,
+                severity: if has_auth { "info" } else { "error" }.to_string(),
+                message: "embedded iroh peers require bearer-token authorization, even with a loopback IP bind".to_string(),
+                hint: "configure daemon.auth.token_file or token_env; a peer public key does not grant capabilities".to_string(),
+            });
+        }
         diagnostics.push(DoctorSecurityDiagnostic {
             id: "daemon-non-loopback-auth".to_string(),
             ok: has_auth || !non_loopback,
@@ -674,5 +683,21 @@ daemon:
             .any(|diagnostic| diagnostic.id == "daemon-non-loopback-auth"
                 && !diagnostic.ok
                 && diagnostic.severity == "error"));
+    }
+
+    #[test]
+    fn embedded_listener_requires_auth_even_with_loopback_tcp() {
+        let mut config: OperonConfig = serde_yaml::from_str(
+            "version: 1\ndaemon:\n  node_id: local\n  grpc_listen: 127.0.0.1:7789\n  workspace: /workspace\n  iroh:\n    identity_file: server.key\n",
+        ).expect("config");
+        let diagnostics = security_diagnostics(&config, Path::new("."), Path::new("config.yaml"));
+        assert!(diagnostics
+            .iter()
+            .any(|item| item.id == "daemon-iroh-auth" && !item.ok && item.severity == "error"));
+        config.daemon.as_mut().expect("daemon").auth.token_file = Some("auth.token".into());
+        let diagnostics = security_diagnostics(&config, Path::new("."), Path::new("config.yaml"));
+        assert!(diagnostics
+            .iter()
+            .any(|item| item.id == "daemon-iroh-auth" && item.ok));
     }
 }
