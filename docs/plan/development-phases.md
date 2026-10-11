@@ -8226,6 +8226,14 @@ The formerly failing owned-relay SDK fixture passes with eight short-lived
 PTYs, full output before Exit and >30 MiB observed relay traffic in each
 direction. No local full-workspace rerun; complete regression is delegated to
 the new exact-source CI/native gates.
+Final packaging/documentation review makes the downloaded Alpine JS archive
+read-only and installs npm dependencies solely inside the disposable container,
+preventing root-owned caches from remaining in host temporary directories.
+README now states the minimum embedded version, explicit opt-in/default LAN/VPN
+behavior, no external process/public relay enrollment, native SDK matching and
+measured performance limits; it links to actual publication status rather than
+describing the production implementation as only a PoC. Runtime sources are
+unchanged from the focused-tested PTY fix; final exact-SHA CI remains required.
 
 ## Planning Principle
 

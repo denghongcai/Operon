@@ -14,22 +14,25 @@ Operon is an AI-native capability runtime for machines already connected by
 Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
 private network.
 
-Optional embedded connectivity is under development, not enabled in the current
-release. Existing `grpc://`/`grpcs://` addressing remains unchanged. The isolated
-[iroh PoC](experiments/iroh-grpc/README.md) validates gRPC stream compatibility;
-it does not yet establish production cross-NAT, relay or SDK support. See the
-[implementation and acceptance phases](docs/plan/v0.18.26-optional-embedded-connectivity.md).
-Source builds now contain opt-in native daemon/Rust clients and an optional
-in-process Node SDK binding, without an external connectivity process or TCP
-bridge. Select `iroh://<public-endpoint-id>` explicitly; normal LAN/VPN endpoints
+Embedded connectivity is an explicit option in **v0.16.15 builds**, never enabled
+automatically. Existing `grpc://`/`grpcs://` LAN, DNS and VPN addressing remains
+the default. Embedded connections require v0.16.15 or newer daemon/client/SDK
+packages, or matching source builds; older packages do not support this option.
+Native daemon/Rust clients and the optional in-process Node SDK binding do not
+require an external connectivity process or production TCP bridge.
+Select `iroh://<public-endpoint-id>` explicitly; normal LAN/VPN endpoints
 remain the default and there is no silent fallback. Client and daemon onboarding
 have separate private identity options; existing bearer auth and policy still
-apply. The [experimental setup guide](docs/networking/embedded-iroh.md) covers
+apply. The [setup guide](docs/networking/embedded-iroh.md) covers
 pairing, explicit addresses/self-hosted relays, additive private-CA relay trust,
-configurable timeouts and exact
-OS/CPU/libc/version matching for the SDK binding. Linux direct/relay FUSE and
-SDK source acceptance are not a published support claim; NAT and final native
-platform/release gates remain in progress.
+configurable timeouts and exact OS/CPU/libc/version matching for the SDK binding.
+Use your own explicitly configured relays; no implicit public relay enrollment
+or VPN mesh is provided. Embedded small sequential requests measured slower
+than ordinary gRPC; see the [ops/s evidence and limits](docs/quality/embedded-connectivity-performance.md).
+The [v0.16.15 release acceptance record](docs/plan/v0.16.15-release-publication.md)
+distinguishes source validation from verified published packages. The isolated
+[PoC](experiments/iroh-grpc/README.md) is historical feasibility evidence, not
+the production transport or a substitute for those release gates.
 
 Operon focuses on what happens after machines can reach each other: capability
 discovery, policy, execution graphs, audit, and agent-friendly tooling.

@@ -54,17 +54,19 @@ for image in \
       --mount "type=bind,src=$ROOT,dst=/workspace,readonly" \
       --mount "type=bind,src=$binary_directory,dst=/operon,readonly" \
       --mount "type=bind,src=$workdir/sdk-native,dst=/sdk-native,readonly" \
-      --mount "type=bind,src=$workdir/extracted/operon-sdk-js-${tag},dst=/sdk" \
+      --mount "type=bind,src=$workdir/extracted/operon-sdk-js-${tag},dst=/sdk,readonly" \
       -e OPERON_NATIVE_TEST_DAEMON=/operon/operond \
       -e OPERON_SDK_NATIVE_PATH=/sdk-native/operon-sdk-native.node \
-      -e OPERON_SDK_TEST_JS_PATH=/sdk/dist/index.js \
+      -e OPERON_SDK_TEST_JS_PATH=/sdk-runtime/dist/index.js \
       -e OPERON_SDK_TEST_PACKAGED=1 \
       -e OPERON_SDK_EXPECTED_VERSION="$(release_expected_version "$tag")" \
       -e OPERON_SDK_EXPECTED_TARGET="$target" \
       -e OPERON_EMBEDDED_TEST_TIMEOUT_SECS="${OPERON_EMBEDDED_TEST_TIMEOUT_SECS:-180}" \
       "$image" /bin/sh -ec '
         apk add --no-cache nodejs npm >/dev/null
-        npm --prefix /sdk install --omit=dev --ignore-scripts --no-audit --no-fund
+        mkdir /sdk-runtime
+        cp -a /sdk/. /sdk-runtime/
+        npm --prefix /sdk-runtime install --omit=dev --ignore-scripts --no-audit --no-fund
         node /workspace/scripts/verify-sdk-native-manifest.mjs /sdk-native "$OPERON_SDK_EXPECTED_VERSION" "$OPERON_SDK_EXPECTED_TARGET"
         cd /workspace
         node --expose-gc scripts/verify-sdk-native.mjs
