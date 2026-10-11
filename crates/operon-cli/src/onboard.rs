@@ -45,6 +45,18 @@ pub(crate) struct OnboardArgs {
     #[arg(long)]
     endpoint: Option<String>,
 
+    /// Private client identity for an explicitly paired iroh:// endpoint.
+    #[arg(long)]
+    iroh_identity_file: Option<PathBuf>,
+
+    /// Explicit peer UDP address (repeatable); no global lookup is enabled.
+    #[arg(long, requires = "iroh_identity_file")]
+    iroh_peer_addr: Vec<std::net::SocketAddr>,
+
+    /// Explicit HTTPS relay used by both client and paired peer (repeatable).
+    #[arg(long, requires = "iroh_identity_file")]
+    iroh_relay_url: Vec<String>,
+
     #[arg(long)]
     token: Option<String>,
 
@@ -185,6 +197,42 @@ fn build_onboard_plan_inner(
     prompt: &mut impl Prompt,
 ) -> anyhow::Result<OnboardPlan> {
     let role = args.role;
+    let client_iroh = if let Some(identity_file) = &args.iroh_identity_file {
+        anyhow::ensure!(
+            cfg!(feature = "iroh"),
+            "this CLI build does not include iroh support"
+        );
+        anyhow::ensure!(
+            !matches!(role, OnboardRole::Daemon),
+            "client iroh options require role client or both"
+        );
+        anyhow::ensure!(
+            args.endpoint
+                .as_deref()
+                .is_some_and(|value| value.starts_with("iroh://")),
+            "client iroh options require an explicit paired iroh:// endpoint"
+        );
+        let config = operon_config::IrohConnectionConfig {
+            local: operon_config::IrohEndpointConfig {
+                identity_file: identity_file.clone(),
+                relay_urls: args.iroh_relay_url.clone(),
+                ..Default::default()
+            },
+            peer_addrs: args.iroh_peer_addr.clone(),
+            peer_relay_urls: args.iroh_relay_url.clone(),
+        };
+        config.validate().map_err(anyhow::Error::msg)?;
+        Some(config)
+    } else {
+        anyhow::ensure!(
+            !args
+                .endpoint
+                .as_deref()
+                .is_some_and(|value| value.starts_with("iroh://")),
+            "iroh onboarding requires --iroh-identity-file and explicit peer addressing"
+        );
+        None
+    };
     let interactive = !args.yes;
     let output_dir = if interactive {
         PathBuf::from(prompt.input("Output directory", &args.output_dir.display().to_string())?)
@@ -299,7 +347,10 @@ fn build_onboard_plan_inner(
         nodes.insert(
             node_id.clone(),
             NodeConfig {
-                transport: Default::default(),
+                transport: operon_config::TransportConfig {
+                    iroh: client_iroh,
+                    ..Default::default()
+                },
                 endpoint: endpoint.clone(),
                 auth: client_token_auth(client_token.clone(), matches!(role, OnboardRole::Both)),
             },
@@ -516,6 +567,9 @@ mod tests {
             workspace: "/workspace".to_string(),
             listen: "127.0.0.1:17789".to_string(),
             endpoint: None,
+            iroh_identity_file: None,
+            iroh_peer_addr: Vec::new(),
+            iroh_relay_url: Vec::new(),
             token: None,
             discover_lan: false,
             timeout_secs: 1,
@@ -530,6 +584,51 @@ mod tests {
             endpoint_from_listen_address("0.0.0.0:7789"),
             "grpc://127.0.0.1:7789"
         );
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn onboard_embedded_client_requires_explicit_identity_and_routes() {
+        let mut args = test_args(OnboardRole::Client);
+        args.endpoint =
+            Some("iroh://d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".into());
+        assert!(plan::build_onboard_plan(args, &mut NoopPrompt).is_err());
+        let mut args = test_args(OnboardRole::Client);
+        args.endpoint =
+            Some("iroh://d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".into());
+        args.iroh_identity_file = Some(PathBuf::from("client.key"));
+        assert!(plan::build_onboard_plan(args, &mut NoopPrompt).is_err());
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn onboard_embedded_client_renders_transport_without_creating_identity() {
+        let mut args = test_args(OnboardRole::Client);
+        args.endpoint =
+            Some("iroh://d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a".into());
+        args.iroh_identity_file = Some(PathBuf::from("client.key"));
+        args.iroh_peer_addr = vec!["127.0.0.1:7788".parse().unwrap()];
+        let plan = plan::build_onboard_plan(args, &mut NoopPrompt).expect("embedded plan");
+        let generated = plan
+            .files
+            .iter()
+            .find(|file| file.path.ends_with("config.yaml"))
+            .unwrap();
+        let config: OperonConfig = serde_yaml::from_str(&generated.content).unwrap();
+        let embedded = config.client.nodes["node-a"]
+            .transport
+            .iroh
+            .clone()
+            .unwrap();
+        assert_eq!(embedded.local.identity_file, PathBuf::from("client.key"));
+        assert_eq!(
+            embedded.peer_addrs,
+            vec!["127.0.0.1:7788".parse::<std::net::SocketAddr>().unwrap()]
+        );
+        assert!(!plan
+            .files
+            .iter()
+            .any(|file| file.path.ends_with("client.key")));
     }
 
     #[test]

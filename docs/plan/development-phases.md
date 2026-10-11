@@ -8091,6 +8091,13 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   reports missing exit code. Preserve its strict success assertion and capture
   session stderr logs on failure for root-cause diagnosis; Windows is not
   accepted from the successful compile or earlier TCP-fixture repair.
+  Phase 156 client onboarding now supports explicit paired iroh endpoints with
+  client identity, repeatable peer addresses and HTTPS relay URLs. Rejects
+  incomplete pairing, wrong role, missing backend and backend mismatch; it
+  renders typed validated transport config without creating identity files or
+  starting endpoints. Default grpc onboarding stays unchanged. Added unit
+  regressions for missing identity/routes and exact rendered transport; daemon
+  listener/discovery UX and full compiled CLI acceptance remain required.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

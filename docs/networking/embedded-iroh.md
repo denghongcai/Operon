@@ -62,6 +62,22 @@ or enrollment in public relays. Existing LAN discovery continues to locate
 ordinary private-network endpoints; additional embedded discovery/onboarding
 UX remains in Phase 156.
 
+Source CLI onboarding can now render an explicitly paired embedded client:
+
+```sh
+operon onboard --role client --yes --output-dir .operon \
+  --node-id remote --endpoint iroh://SERVER_PUBLIC_ENDPOINT_ID \
+  --iroh-identity-file client.key --iroh-peer-addr 192.168.1.20:7788
+```
+
+Supply auth through the normal trusted token/config workflow. Repeat
+`--iroh-peer-addr` for explicit addresses, or use repeatable
+`--iroh-relay-url https://your-relay.example` for both local and peer relay
+selection. HTTPS remains required; onboarding does not enable insecure relays,
+public lookup or generate private identities. Identity initialization happens
+only when the selected transport starts. These are client options: the daemon
+listener is configured separately as above. Default onboarding stays grpc.
+
 ## Identity and timeouts
 
 `identity_file` is explicit and relative to the config directory unless absolute.
