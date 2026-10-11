@@ -8,6 +8,7 @@ import path from "node:path";
 import net from "node:net";
 import dgram from "node:dgram";
 import { once } from "node:events";
+import { pathToFileURL } from "node:url";
 
 const seconds = Number(process.env.OPERON_EMBEDDED_TEST_TIMEOUT_SECS ?? 120);
 assert(Number.isFinite(seconds) && seconds > 0, "test timeout must be positive");
@@ -165,7 +166,10 @@ try {
   await assert.rejects(pendingReady, /closed/);
   client.close();
   await assert.rejects(client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]"), /closed/);
-  const { OperonClient } = await import("../packages/sdk-js/dist/index.js");
+  const sdkModule = process.env.OPERON_SDK_TEST_JS_PATH
+    ? pathToFileURL(process.env.OPERON_SDK_TEST_JS_PATH).href
+    : new URL("../packages/sdk-js/dist/index.js", import.meta.url).href;
+  const { OperonClient } = await import(sdkModule);
   const wrongSdk = new OperonClient([{ nodeId: "wrong-pin", endpoint: wrongPin.endpoint, token: "native-sdk-test-token",
     transport: { connectTimeoutSecs: Math.min(seconds, 5), iroh: {
       identityFile: path.join(dir, "wrong-sdk-pin.key"),

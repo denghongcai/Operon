@@ -135,6 +135,50 @@ if release_has_sdk_native_assets "$TAG"; then
     tar -xzf "$sdk_archive" -C "$sdk_extract"
     node "$ROOT/scripts/verify-sdk-native-manifest.mjs" "$sdk_extract" "$(release_expected_version "$TAG")" "$sdk_target"
   done < <(release_sdk_native_targets)
+  if [[ "$asset" == *-linux-armv7.tar.gz ]]; then
+    echo 'ARMv7 daemon archive verified; native SDK is not supported on ARMv7'
+  else
+  case "$asset" in
+    *-linux-x86_64.tar.gz) runtime_sdk_target=x86_64-unknown-linux-gnu ;;
+    *-linux-arm64.tar.gz) runtime_sdk_target=aarch64-unknown-linux-gnu ;;
+    *-linux-musl-x86_64.tar.gz) runtime_sdk_target=x86_64-unknown-linux-musl ;;
+    *-linux-musl-arm64.tar.gz) runtime_sdk_target=aarch64-unknown-linux-musl ;;
+    *-macos-x86_64.tar.gz) runtime_sdk_target=x86_64-apple-darwin ;;
+    *-macos-aarch64.tar.gz) runtime_sdk_target=aarch64-apple-darwin ;;
+    *-windows-x86_64.zip) runtime_sdk_target=x86_64-pc-windows-msvc ;;
+    *) echo 'no native SDK runtime gate for this platform' >&2; exit 1 ;;
+  esac
+  mkdir -p "$WORKDIR/runtime"
+  suffix=""
+  if [[ "$asset" == *.zip ]]; then
+    unzip -q "$WORKDIR/assets/$asset" -d "$WORKDIR/runtime"
+    archive_root="${asset%.zip}"
+    suffix=".exe"
+  else
+    tar -xzf "$WORKDIR/assets/$asset" -C "$WORKDIR/runtime"
+    archive_root="${asset%.tar.gz}"
+  fi
+  tar -xzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" -C "$WORKDIR/runtime"
+  sdk_root="$WORKDIR/runtime/operon-sdk-js-${TAG}"
+  command -v npm >/dev/null || { echo 'npm is required for downloaded SDK acceptance' >&2; exit 1; }
+  npm --prefix "$sdk_root" install --omit=dev --ignore-scripts --no-audit --no-fund
+  runtime_daemon="$WORKDIR/runtime/$archive_root/operond$suffix"
+  runtime_binding="$WORKDIR/extracted/$runtime_sdk_target/operon-sdk-native.node"
+  runtime_js="$sdk_root/dist/index.js"
+  if [[ "$suffix" == .exe ]]; then
+    runtime_daemon="$(cygpath -w "$runtime_daemon")"
+    runtime_binding="$(cygpath -w "$runtime_binding")"
+    runtime_js="$(cygpath -w "$runtime_js")"
+  fi
+  OPERON_NATIVE_TEST_DAEMON="$runtime_daemon" OPERON_SDK_NATIVE_PATH="$runtime_binding" \
+    OPERON_SDK_TEST_JS_PATH="$runtime_js" OPERON_SDK_TEST_PACKAGED=1 \
+    node --expose-gc "$ROOT/scripts/verify-sdk-native.mjs"
+  if [[ "$runtime_sdk_target" == *-unknown-linux-gnu ]]; then
+    OPERON_NATIVE_TEST_DAEMON="$runtime_daemon" OPERON_SDK_NATIVE_PATH="$runtime_binding" \
+      OPERON_SDK_TEST_JS_PATH="$runtime_js" OPERON_SDK_TEST_PACKAGED=1 \
+      python3 "$ROOT/scripts/verify-packaged-sdk-relay.py"
+  fi
+  fi
 fi
 
 tar -tzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" \

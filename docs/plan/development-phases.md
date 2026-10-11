@@ -8296,6 +8296,26 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   contention between independently running fixtures selecting TCP 20000;
   reserve independent OS-assigned TCP/UDP ports for native daemon acceptance.
   SDK/full regression reruns and publication remain pending.
+- Extend public artifact acceptance beyond native binding manifests: download
+  the matching platform's daemon, JS SDK and binding, install only SDK runtime
+  dependencies, then run the public filesystem/exec/PTY/service/auth/cancel
+  fixture against those extracted artifacts. Source SDK import remains the
+  default; an explicit fixture module path selects the downloaded JS package.
+  Hosted public verification now covers GNU x86_64/arm64, macOS Intel/ARM and
+  Windows with Node 22. Actual published-package execution remains pending;
+  structural validation alone cannot satisfy this gate.
+  GNU public verification additionally runs the extracted SDK/daemon with
+  both endpoint IP transports disabled over an owned Docker relay, requires
+  real byte counters and cleans only its own container/image. The runtime
+  fixture was validated locally; final public download evidence remains pending.
+- `a69a020` local grouped validation completes all 55 core, 13 SDK, 18 runtime
+  and four Linux system checks with no Linux system skips. Preserved evidence:
+  `/tmp/operon-a69a020-{core,sdk,runtime,linux-system}.log`.
+  A separately extracted JS SDK with only runtime dependencies passes the
+  full RPC fixture via the new explicit module path; log:
+  `/tmp/operon-sdk-extracted-acceptance.log`. This validates fixture selection,
+  not unpublished public artifacts. Native SDK checkpoint `bd16bee` passes
+  all five online package jobs, including Windows PTY output/exit.
 
 Every phase should preserve the core boundary:
 
