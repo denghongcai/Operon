@@ -37,9 +37,7 @@ fn main() -> anyhow::Result<()> {
     match action.trim() {
         "drop" => drop(session),
         "unmount" => session.unmount()?,
-        _ => anyhow::bail!(
-            "expected drop or unmount; received {action_bytes} bytes: {action:?}"
-        ),
+        _ => anyhow::bail!("expected drop or unmount; received {action_bytes} bytes: {action:?}"),
     }
     #[cfg(target_os = "linux")]
     for thread in std::fs::read_dir("/proc/self/task")? {
