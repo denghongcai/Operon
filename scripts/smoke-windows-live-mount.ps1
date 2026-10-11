@@ -131,12 +131,24 @@ policy:
     services: []
 "@ | Set-Content -Path $Config -NoNewline
 
+    if ($env:OPERON_SMOKE_TRANSPORT -eq "iroh") {
+        & python scripts/configure-embedded-mount.py setup $Config
+        if ($LASTEXITCODE -ne 0) { throw "embedded fixture setup failed" }
+    } elseif ($env:OPERON_SMOKE_TRANSPORT -and $env:OPERON_SMOKE_TRANSPORT -ne "grpc") {
+        throw "OPERON_SMOKE_TRANSPORT must be grpc or iroh"
+    }
+
     & cargo build -q -p operond -p operon-cli --locked --features operon-mount/winfsp-debug
     if ($LASTEXITCODE -ne 0) {
         throw "cargo build failed"
     }
 
     $Daemon = Start-Process -FilePath $OperondExe -ArgumentList @("start", "--config", $Config) -RedirectStandardOutput $DaemonLog -RedirectStandardError $DaemonErr -PassThru -NoNewWindow
+
+    if ($env:OPERON_SMOKE_TRANSPORT -eq "iroh") {
+        & python scripts/configure-embedded-mount.py pair $Config $DaemonLog $DaemonErr
+        if ($LASTEXITCODE -ne 0) { throw "embedded fixture pairing failed" }
+    }
 
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {

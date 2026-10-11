@@ -8191,6 +8191,25 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
 
 ### Additional Phase 157/158 acceptance follow-up (2026-10-11)
 
+- Checkpoint `b8bba50ffc3e458872e87739c3a195cc5b6a056d` passes full CI
+  `38133616043`, Embedded Connectivity `38133616105`, CodeQL `38133615716`
+  and all five GNU/macOS/Windows native SDK package jobs in `38133616090`.
+  Windows real public SDK PTY acceptance now succeeds with the half-close fix.
+  Alpine and final release-source verification remain separate requirements.
+- Add opt-in `OPERON_SMOKE_TRANSPORT=iroh` to existing macOS/Windows live
+  mount acceptance, preserving default gRPC scenarios. Pair the actual daemon
+  public ID and ephemeral UDP address from styled logs; never use TCP fallback.
+  Native hosted live-mount workflow now requires both original and embedded
+  acceptance. Local fixture contract passes; actual native mount runs pending.
+- Phase 156 discovery UX rejects exporting unpaired embedded peers without
+  modifying config or creating keys, preserves an already configured matching
+  identity/routes/auth, and reports explicit pairing requirements for discovered
+  health checks. Existing direct discovery export/health behavior is retained.
+- User-requested temporary-file cleanup removes 46 old benchmark workspace
+  payload trees (including nobody-owned data) after mount/process checks,
+  freeing about 10 GiB. Measurement JSON/logs and existing container bind mounts
+  are preserved; payloads can be regenerated but were not backed up.
+
 - Real UDP-denied Docker acceptance now enables endpoint IP transports and
   installs INPUT/OUTPUT UDP DROP rules only in owned endpoint namespaces.
   A scoped NET_ADMIN fixture verifies nonzero drop counters; no host/user
@@ -8208,6 +8227,12 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   Windows SDK acceptance is still required. No status assertion is weakened.
 - Phases 156–158 remain in progress; real NAT, final platform/regression,
   measurements and exact-source publication gates are not complete.
+- Add explicit PEM `relay_ca_file` / SDK `relayCaFile` trust for private-CA
+  self-hosted TLS relays; default public roots and peer pinning remain unchanged.
+  Config-relative resolution, empty/malformed/missing/oversized rejection and
+  public SDK field mapping are covered locally. No TLS verification bypass.
+  A test-only gRPC observer and two-router SNAT/TLS fixture are being validated
+  locally and added to mandatory embedded CI; do not count NAT as passed yet.
 
 Every phase should preserve the core boundary:
 

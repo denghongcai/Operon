@@ -108,6 +108,25 @@ jobs:
           path: ${{ runner.temp }}/macos-live-mount-async.log
           if-no-files-found: warn
 
+      - name: Run native iroh macOS live mount smoke
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
+          OPERON_SMOKE_TRANSPORT: iroh
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+        run: |
+          set -o pipefail
+          python3 scripts/configure-embedded-mount.py self-test
+          scripts/smoke-macos-live-mount.sh 2>&1 | tee "$RUNNER_TEMP/macos-live-mount-iroh.log"
+
+      - name: Upload native iroh macOS live mount smoke log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-live-mount-iroh-${{ github.run_id }}
+          path: ${{ runner.temp }}/macos-live-mount-iroh.log
+          if-no-files-found: warn
+
       - name: Upload macOS live mount smoke log
         if: always()
         uses: actions/upload-artifact@v7
@@ -201,6 +220,16 @@ jobs:
       - name: Run Windows live mount smoke
         shell: powershell
         run: scripts/smoke-windows-live-mount.ps1
+
+      - name: Run native iroh Windows live mount smoke
+        shell: powershell
+        env:
+          OPERON_SMOKE_TRANSPORT: iroh
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+        run: |
+          python scripts/configure-embedded-mount.py self-test
+          if ($LASTEXITCODE -ne 0) { throw "embedded fixture contract failed" }
+          scripts/smoke-windows-live-mount.ps1
 
       - name: Run Windows deadline-zero read lifecycle smoke
         shell: powershell

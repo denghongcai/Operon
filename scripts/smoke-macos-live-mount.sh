@@ -242,6 +242,11 @@ sudo mkdir -p "$MOUNT_DIR"
 sudo chown "$(id -u):$(id -g)" "$MOUNT_DIR"
 printf "seed" >"$WORKSPACE/seed.txt"
 write_config
+case "${OPERON_SMOKE_TRANSPORT:-grpc}" in
+  grpc) ;;
+  iroh) python3 scripts/configure-embedded-mount.py setup "$CONFIG" ;;
+  *) echo "OPERON_SMOKE_TRANSPORT must be grpc or iroh" >&2; exit 2 ;;
+esac
 start_watchdog
 ensure_fuse_t_runtime
 
@@ -249,6 +254,9 @@ cargo build -q -p operond -p operon-cli --locked
 
 "$OPEROND_BIN" start --config "$CONFIG" >"$DAEMON_LOG" 2>&1 &
 DAEMON_PID="$!"
+if [[ "${OPERON_SMOKE_TRANSPORT:-grpc}" == iroh ]]; then
+  python3 scripts/configure-embedded-mount.py pair "$CONFIG" "$DAEMON_LOG"
+fi
 wait_for_node
 
 OPERON_MOUNT_TRACE=1 "$OPERON_BIN" --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" --read-mode "$READ_MODE" >"$MOUNT_LOG" 2>&1 &

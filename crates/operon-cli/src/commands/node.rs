@@ -116,6 +116,7 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
                     existing.endpoint
                 ),
                 None => {
+                    require_direct_discovery_import(&node.endpoint)?;
                     config.client.nodes.insert(node_id, node);
                 }
             }
@@ -125,6 +126,9 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
     }
 
     let nodes = discovered;
+    for node in nodes.values() {
+        require_direct_discovery_import(&node.endpoint)?;
+    }
 
     #[derive(serde::Serialize)]
     struct DiscoveredClientConfig {
@@ -142,6 +146,12 @@ fn write_discovered_config(path: &Path, list: &DiscoveryList) -> anyhow::Result<
             },
         })?,
     )?;
+    Ok(())
+}
+
+fn require_direct_discovery_import(endpoint: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!endpoint.starts_with("iroh://"),
+        "discovered iroh endpoint requires explicit pairing: configure transport.iroh identity, peer routes and bearer authorization with operon onboard; discovery does not create keys or trust peers");
     Ok(())
 }
 
@@ -184,6 +194,13 @@ struct DiscoveryNodeView {
 async fn check_discovered_health(list: &DiscoveryList) -> BTreeMap<String, DiscoveryHealth> {
     let mut health = BTreeMap::new();
     for node in &list.nodes {
+        if node.endpoint.starts_with("iroh://") {
+            health.insert(node.node_id.clone(), DiscoveryHealth {
+                ok: false,
+                reason: Some("iroh discovery health requires explicit identity/route/auth pairing; use operon node ping with the configured node".into()),
+            });
+            continue;
+        }
         let endpoint = operon_core::runtime::NodeEndpoint {
             transport: Default::default(),
             node_id: node.node_id.clone(),
@@ -250,6 +267,61 @@ fn discovery_rows(list: &DiscoveryList, health: &BTreeMap<String, DiscoveryHealt
 mod tests {
     use super::*;
     use operon_core::DiscoveryRecord;
+
+    #[tokio::test]
+    async fn embedded_discovery_never_creates_unpaired_config_or_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.yaml");
+        let list = DiscoveryList {
+            nodes: vec![DiscoveryRecord {
+                node_id: "peer".into(),
+                endpoint: format!("iroh://{}", "ab".repeat(32)),
+                capabilities: vec![],
+            }],
+        };
+        assert!(write_discovered_config(&path, &list)
+            .unwrap_err()
+            .to_string()
+            .contains("explicit pairing"));
+        assert!(!path.exists());
+        let original = "version: 1\nclient:\n  nodes: {}\n";
+        fs::write(&path, original).unwrap();
+        assert!(write_discovered_config(&path, &list).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+        let health = check_discovered_health(&list).await;
+        assert!(!health["peer"].ok);
+        assert!(health["peer"]
+            .reason
+            .as_ref()
+            .unwrap()
+            .contains("explicit identity/route/auth pairing"));
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn embedded_discovery_preserves_existing_explicit_pairing() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.yaml");
+        let endpoint = format!("iroh://{}", "ab".repeat(32));
+        let original = format!("version: 1\nclient:\n  nodes:\n    peer:\n      endpoint: {endpoint}\n      auth:\n        token: test-token\n      transport:\n        iroh:\n          identity_file: paired.key\n          peer_addrs: [127.0.0.1:9000]\n");
+        fs::write(&path, original).unwrap();
+        let list = DiscoveryList {
+            nodes: vec![DiscoveryRecord {
+                node_id: "peer".into(),
+                endpoint,
+                capabilities: vec![],
+            }],
+        };
+        write_discovered_config(&path, &list).unwrap();
+        let config = OperonConfig::load(&path).unwrap();
+        let paired = &config.client.nodes["peer"];
+        assert_eq!(paired.auth.token.as_deref(), Some("test-token"));
+        assert_eq!(
+            paired.transport.iroh.as_ref().unwrap().local.identity_file,
+            Path::new("paired.key")
+        );
+        assert!(!temp.path().join("paired.key").exists());
+    }
 
     #[test]
     fn write_discovered_config_exports_endpoint_only_nodes_without_policy() {
