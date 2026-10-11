@@ -131,6 +131,24 @@ settings fail clearly, never silently falling back to TCP. The first real
 public SDK unary/upload/download/range/exec/log tests passed locally; online
 and native-platform/bidirectional/relay acceptance still remain required.
 
+The source binding build helper is `bash scripts/build-sdk-native.sh
+<rust-target> <output-directory>`. It emits `operon-sdk-native.node`; musl addon
+builds are dynamic (with addon-only flags), while daemon/CLI remain static.
+Run `bash scripts/package-sdk-native.sh <rust-target> <binding-directory>
+<archive-directory>` on the corresponding native platform to create a
+versioned archive containing the binding and a target/version/N-API/SHA-256
+manifest. Packaging loads the binding and rejects a stale SDK version.
+Extract it privately and point `OPERON_SDK_NATIVE_PATH` to the absolute `.node`
+file, or place it in the SDK's `native/operon-sdk-native.node` directory. Match
+the exact SDK version and OS/CPU/libc target; GNU and musl are not interchangeable.
+These source packaging helpers do not mean those assets have been published.
+
+Actual public SDK acceptance now also passes with both endpoint IP transports
+disabled over an owned self-hosted Docker relay, including TCP/UDP services,
+PTY, >8MiB files and cancellation. Supplying `OPERON_SDK_NATIVE_PATH` and
+`OPERON_NATIVE_TEST_DAEMON` to `verify-embedded-relay.sh` includes that gate;
+embedded CI requires it. This is relay-only evidence, not NAT/direct upgrade.
+
 Example source SDK selection (with the optional binding installed):
 
 ```ts

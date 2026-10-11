@@ -15,6 +15,7 @@ on:
       - 'packages/sdk-js/**'
       - 'pnpm-lock.yaml'
       - 'scripts/build-sdk-native.sh'
+      - 'scripts/package-sdk-native.sh'
       - 'scripts/verify-sdk-native.mjs'
       - 'Cargo.*'
       - 'rust-toolchain.toml'
@@ -32,6 +33,7 @@ on:
       - 'packages/sdk-js/**'
       - 'pnpm-lock.yaml'
       - 'scripts/build-sdk-native.sh'
+      - 'scripts/package-sdk-native.sh'
       - 'scripts/verify-sdk-native.mjs'
       - 'Cargo.*'
       - 'rust-toolchain.toml'
@@ -94,7 +96,7 @@ jobs:
             --mount type=bind,src="$PWD/.musl-cargo-cache",dst=/usr/local/cargo/registry \
             -e CARGO_TARGET_DIR=/output -e CARGO_INCREMENTAL=0 \
             "$MUSL_BUILDER" /bin/sh -ec '
-              apk add --no-cache bash protobuf=29.4-r0 musl=1.2.5-r12 musl-dev=1.2.5-r12 acl >/dev/null
+              apk add --no-cache bash nodejs protobuf=29.4-r0 musl=1.2.5-r12 musl-dev=1.2.5-r12 acl >/dev/null
               cd /workspace
               bash scripts/build-musl-release.sh "${{ matrix.target }}"
               cargo +1.91.0 test --workspace --release --locked --target "${{ matrix.target }}" --features operon-transport/iroh
@@ -102,6 +104,8 @@ jobs:
                 /output/${{ matrix.target }}/release /output/dist
               CARGO_TARGET_DIR=/output/sdk bash scripts/build-sdk-native.sh \
                 "${{ matrix.target }}" /output/sdk-native
+              bash scripts/package-sdk-native.sh "${{ matrix.target }}" \
+                /output/sdk-native /output/sdk-dist
             '
       - name: Native musl public SDK acceptance
         run: |

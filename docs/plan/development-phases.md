@@ -8055,6 +8055,14 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   and 30,196,112 received for the combined Rust/SDK gate. Online embedded CI
   now requires this public SDK relay gate. This same-host relay-only proof is
   not NAT traversal or direct-upgrade evidence; those scenarios remain open.
+  Added native binding archive packaging with target/version/N-API/hash
+  manifest and actual module loading to reject stale versions. Native GNU
+  target-aware build and packaging passed locally; Alpine CI packages within
+  its native musl builder, avoiding host GNU module loading. Documented exact
+  version/CPU/libc selection and installation. Public archive upload/download
+  acceptance and remaining supported targets are still required.
+  The same helper build and module-validating archive package also passed
+  locally inside native Alpine x86_64 musl, with a distinct static daemon.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,
