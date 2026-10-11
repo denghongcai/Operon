@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     std::io::stdout().flush()?;
     let mut action = String::new();
     let action_bytes = std::io::stdin().read_line(&mut action)?;
-    match action.trim() {
+    match command_line(&action) {
         "drop" => drop(session),
         "unmount" => session.unmount()?,
         _ => anyhow::bail!("expected drop or unmount; received {action_bytes} bytes: {action:?}"),
@@ -58,6 +58,29 @@ fn main() -> anyhow::Result<()> {
     }
     println!("joined");
     Ok(())
+}
+
+#[cfg(any(target_os = "linux", windows))]
+fn command_line(line: &str) -> &str {
+    // Windows .NET redirected stdin may prepend its UTF-8 encoding preamble.
+    let line = line.strip_prefix('\u{feff}').unwrap_or(line);
+    line.trim()
+}
+
+#[cfg(all(test, any(target_os = "linux", windows)))]
+mod tests {
+    #[test]
+    fn lifecycle_line_accepts_one_encoding_preamble_not_arbitrary_commands() {
+        assert_eq!(super::command_line("drop\n"), "drop");
+        assert_eq!(super::command_line("\u{feff}drop\r\n"), "drop");
+        assert_eq!(super::command_line("\u{feff}unmount\n"), "unmount");
+        assert_eq!(super::command_line("unknown\n"), "unknown");
+        assert_eq!(super::command_line(""), "");
+        assert_eq!(
+            super::command_line("\u{feff}\u{feff}drop\n"),
+            "\u{feff}drop"
+        );
+    }
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]

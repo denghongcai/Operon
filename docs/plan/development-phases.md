@@ -7771,6 +7771,12 @@ The BaseStream rerun still rejected the command. The helper now reports the
 received byte count and escaped line on protocol failure, distinguishing EOF,
 unexpected encoding and wrong command instead of assuming another BOM cause.
 This diagnostic does not relax read-pending or cleanup assertions.
+Windows diagnostic run 38106028547 proved the line was eight UTF-8 bytes:
+`\u{feff}drop\n`, even via BaseStream. The helper now removes exactly one
+leading encoding preamble before matching drop/unmount; unknown commands and
+repeated BOMs remain rejected. Example unit coverage checks ordinary/BOM/CRLF,
+unknown, empty and repeated-BOM lines. Actual native cancellation still needs
+verification after this protocol fix.
 Commit/push main, align versions, exact-SHA source/platform
 gates, pretag, verified draft, public Latest and all downloaded artifact/install/
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
