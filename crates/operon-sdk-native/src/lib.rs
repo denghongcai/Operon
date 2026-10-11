@@ -3,3 +3,6 @@
 
 #[cfg(feature = "node")]
 mod node;
+
+#[cfg(feature = "node")]
+pub use node::binding_version;

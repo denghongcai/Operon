@@ -117,6 +117,19 @@ try {
   stalled.cancel();
   await assert.rejects(waiting, /cancelled/);
   await stalled.close();
+  if (globalThis.gc) {
+    // Keep only the returned promise: the async wrapper must root its receiver
+    // until its native future settles even when JS drops the last call handle.
+    let gcCall = await client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]");
+    const gcPending = gcCall.receive();
+    gcCall.cancel();
+    const gcClosed = gcCall.close();
+    gcCall = null;
+    for (let index = 0; index < 8; index++) globalThis.gc();
+    await assert.rejects(gcPending, /cancelled/);
+    await gcClosed;
+    console.log("PASS native async receiver rooting under forced garbage collection");
+  }
   const unreachable = structuredClone(endpointConfig);
   unreachable.transport.connect_timeout_secs = 0;
   unreachable.transport.iroh.identity_file = path.join(dir, "cancelled-client.key");

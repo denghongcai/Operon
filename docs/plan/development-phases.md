@@ -8041,6 +8041,13 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   receivers for both client and call before full capability acceptance. All
   pass locally; asynchronous lifetime and online Security disposition remain
   open, with no alert dismissal or suppression.
+  Async wrapper review confirms rooted receiver scopes release only in the
+  native future finalizer. A real Alpine forced-GC regression drops the last
+  JS call handle while receive/close promises remain pending and verifies
+  cancellation and joined cleanup; it passes. All platform SDK gates enable
+  forced GC. Fixed binding-version test-target dead-code via its public Rust
+  export; strict node-feature all-target Clippy passes locally. Exact-source
+  online and final Security review are still required.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

@@ -140,7 +140,7 @@ jobs:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
         run: |
           set -euo pipefail
-          node scripts/verify-sdk-native.mjs 2>&1 | tee sdk-native-acceptance.log
+          node --expose-gc scripts/verify-sdk-native.mjs 2>&1 | tee sdk-native-acceptance.log
       - uses: actions/upload-artifact@v6
         if: always()
         with:

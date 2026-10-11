@@ -117,7 +117,7 @@ jobs:
               "$image" /bin/sh -ec '
                 apk add --no-cache nodejs >/dev/null
                 cd /workspace
-                node scripts/verify-sdk-native.mjs
+                node --expose-gc scripts/verify-sdk-native.mjs
               '
           done
       - name: Baseline and secondary Alpine runtime integration

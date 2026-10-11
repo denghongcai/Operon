@@ -23,6 +23,14 @@ before rerunning all capability checks. Those checks passed locally. This is
 not a blanket disposition: asynchronous reference lifetime review, exact-source
 online regressions and final alert review remain required.
 
+Async generation uses `NativeBorrowScope::new_async`, roots receiver values,
+and transfers the scope into the `execute_tokio_future_with_finalize_callback`
+finalizer, releasing it after the future settles on the Node owner thread.
+Actual Alpine acceptance with `--expose-gc` drops the last call object reference
+while receive/close promises are pending, forces collection and verifies both
+cancellation and joined cleanup. This passed; native hosted gates now run the
+same regression. Final exact-source online evidence is still outstanding.
+
 On 2026-10-11, a paginated GitHub API read of `denghongcai/Operon` returned six
 open CodeQL alerts, no open Dependabot alerts and no open secret-scanning
 alerts. All three APIs were accessible. Re-query against the final release
