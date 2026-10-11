@@ -90,9 +90,6 @@ policy:
         $info.Arguments = '"grpc://127.0.0.1:{0}" "{1}" "{2}" auto' -f $port, $token, $drive
         $info.UseShellExecute = $false
         $info.RedirectStandardInput = $true
-        # .NET's default redirected writer can prepend a UTF-8 BOM. The
-        # helper's line protocol expects literal drop/unmount, without a BOM.
-        $info.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
         $info.RedirectStandardOutput = $true
         $info.RedirectStandardError = $true
         $owner = [Diagnostics.Process]::new()
@@ -110,8 +107,11 @@ policy:
         $read = $stream.ReadAsync($buffer, 0, $buffer.Length)
         Start-Sleep -Milliseconds 750
         if ($read.IsCompleted) { throw "Read did not remain in flight against suspended daemon" }
-        $owner.StandardInput.WriteLine($action)
-        $owner.StandardInput.Flush()
+        # Windows PowerShell 5.1 lacks ProcessStartInfo.StandardInputEncoding.
+        # Bypass its default StreamWriter so no encoding preamble is emitted.
+        $commandBytes = [Text.Encoding]::UTF8.GetBytes($action + "`n")
+        $owner.StandardInput.BaseStream.Write($commandBytes, 0, $commandBytes.Length)
+        $owner.StandardInput.BaseStream.Flush()
         if (-not $owner.WaitForExit($waitMs)) { throw "$action did not cancel deadline-zero callback" }
         if ($owner.ExitCode -ne 0 -or -not $output.Result.Contains("joined")) { throw "Helper cleanup failed: $($errors.Result)" }
         try { $null = $read.Wait($waitMs) } catch {

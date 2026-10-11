@@ -7763,6 +7763,10 @@ stream EOF (`Ok(0)`) reached request parsing. macOS now treats only inter-frame
 EOF as normal; partial EOF and nonempty malformed requests retain errors.
 These fixes require a new exact-source native run; neither failed gate is
 counted as passed.
+Native Windows rerun on `59d17ee` exposed that PowerShell 5.1 lacks
+`ProcessStartInfo.StandardInputEncoding`. The test now writes explicit UTF-8
+command bytes through stdin BaseStream, avoiding BOMs without requiring newer
+.NET. Native cancellation assertions remain unchanged and need a new rerun.
 Commit/push main, align versions, exact-SHA source/platform
 gates, pretag, verified draft, public Latest and all downloaded artifact/install/
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
