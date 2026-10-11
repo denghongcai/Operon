@@ -59,7 +59,7 @@ jobs:
           version: '25.3'
           repo-token: ${{ github.token }}
       - name: Build unchanged real daemon
-        run: cargo build --locked -p operond
+        run: cargo build --locked -p operond -p operon-cli
       - name: Owned production transport stream and native HTTP2 tests
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
@@ -113,11 +113,19 @@ jobs:
         run: bash experiments/iroh-grpc/docker-run-cross-container.sh
       - name: Build version-pinned self-hosted relay acceptance image
         run: docker build -t operon-iroh-relay-acceptance docker/iroh-relay
+      - name: Prepare and verify native embedded Linux FUSE
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fuse3
+          if ! test -c /dev/fuse; then sudo modprobe fuse; fi
+          sudo chmod a+rw /dev/fuse
+          python3 scripts/verify-embedded-mount.py
       - name: Actual owned relay-only streams and relay traffic counters
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
           OPERON_SDK_NATIVE_PATH: ${{ github.workspace }}/target/debug/liboperon_sdk_native.so
           OPERON_NATIVE_TEST_DAEMON: ${{ github.workspace }}/target/debug/operond
+          OPERON_TEST_EMBEDDED_MOUNT: '1'
         run: bash scripts/verify-embedded-relay.sh
       - name: Build production native daemon and CLI for isolated networks
         run: docker build -f docker/Dockerfile -t operon-native-iroh-acceptance .

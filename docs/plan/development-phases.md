@@ -8132,7 +8132,26 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   still mandatory. The concurrent grouped core run observed an intermediate
   stale shell assertion before its fix; complete groups must be rerun on the
   immutable fixed source, not treated as accepted from mixed-worktree output.
-- Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
+- Phase 158 — In progress: complete regressions, matched ops/s and README/support docs.
+  Phase 157 Linux embedded live FUSE gate now passes locally over both explicit
+  direct iroh and owned relay-only paths: >8MiB writes/reads, 4MiB range,
+  rename/truncate/delete with underlying workspace checks, external lazy
+  unmount and normal client exit. Added scoped-process/temp-directory cleanup
+  and configurable acceptance/RPC bounds. Combined Rust/public SDK/FUSE relay
+  gate reports 52,037,936 bytes sent and 52,054,751 received. Mandatory embedded
+  CI installs/preflights FUSE, builds the real CLI and runs both mount paths.
+  Native macOS/Windows embedded mounts, NAT/upgrade and final online evidence
+  remain required; ordinary workspace builds can overwrite a non-feature
+  development .so, so local SDK testing uses its separate target-specific .node.
+  Fixed source 3f67d77d1e6edb7c83805a69a3f33ee1c9ffc7e5 passes all
+  local groups: core 55, SDK 13 (31 tests/typecheck/build), runtime 18,
+  linux-system 4. Linux system acceptance ran in the previously empty dedicated
+  Compose project operon-acceptance-3f67d77-20261011; Docker gRPC and real FUSE
+  read/write tests passed without skipping, with existing user containers kept
+  untouched. Logs are /tmp/operon-3f67d77-{core,sdk,runtime,linux-system}.log.
+  This is original-path regression evidence, not proof of remaining NAT/direct
+  upgrade, embedded live-mount, native online or final public package gates.
+  Full post-completion source, matched ops/s and support/README still required.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,
   Dependabot, secret scanning); green jobs alone do not prove no open findings.

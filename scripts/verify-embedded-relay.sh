@@ -32,6 +32,10 @@ if [[ -n "${OPERON_SDK_NATIVE_PATH:-}" ]]; then
   OPERON_SDK_TEST_RELAY_URL="http://127.0.0.1:$relay_port" \
     node --expose-gc scripts/verify-sdk-native.mjs
 fi
+if [[ "${OPERON_TEST_EMBEDDED_MOUNT:-0}" == 1 ]]; then
+  OPERON_MOUNT_TEST_RELAY_URL="http://127.0.0.1:$relay_port" \
+    python3 scripts/verify-embedded-mount.py
+fi
 metrics=$(curl --fail --silent --max-time 10 "http://127.0.0.1:$metrics_port/metrics")
 for counter in relayserver_bytes_sent_total relayserver_bytes_recv_total; do
   value=$(awk -v key="$counter" '$1 == key { print $2 }' <<<"$metrics")
