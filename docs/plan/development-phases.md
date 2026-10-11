@@ -8205,6 +8205,12 @@ protocol/SDK version patterns still referenced 0.16.14, and historical public
 artifact checks required floating runner labels after the five-platform
 matrix was pinned. Update both contracts and require fresh source gates;
 the failing checks are not waived or counted as passed.
+The versioned local real TLS/SNAT fixture and complete cross-platform mount
+contract check pass after those corrections. Extend post-publication Alpine
+acceptance to checksum and load downloaded musl SDK bindings and exercise the
+downloaded JS SDK/daemon business fixture on both native architectures and both
+pinned Alpine images. This supplements, not replaces, FUSE/OpenRC gates;
+published-artifact execution remains pending until the release exists.
 
 ## Planning Principle
 
