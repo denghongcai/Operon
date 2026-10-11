@@ -8133,6 +8133,13 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   stale shell assertion before its fix; complete groups must be rerun on the
   immutable fixed source, not treated as accepted from mixed-worktree output.
 - Phase 158 — In progress: complete regressions, matched ops/s and README/support docs.
+  Added owned-relay bootstrap/direct-upgrade acceptance using only the peer's
+  relay address at connect time. Observe the connection path stream until an
+  IP path is actually selected for application data, then verify payload echo
+  on the same authenticated connection and joined shutdown. Both relay tests
+  pass locally; the existing self-hosted CI relay command runs the new test.
+  This loopback path-upgrade evidence does not complete Docker NAT traversal
+  or explicitly denied UDP scenarios, which remain required.
   Phase 157 Linux embedded live FUSE gate now passes locally over both explicit
   direct iroh and owned relay-only paths: >8MiB writes/reads, 4MiB range,
   rename/truncate/delete with underlying workspace checks, external lazy

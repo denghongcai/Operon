@@ -19,9 +19,16 @@ release. Existing `grpc://`/`grpcs://` addressing remains unchanged. The isolate
 [iroh PoC](experiments/iroh-grpc/README.md) validates gRPC stream compatibility;
 it does not yet establish production cross-NAT, relay or SDK support. See the
 [implementation and acceptance phases](docs/plan/v0.18.26-optional-embedded-connectivity.md).
-Source builds now contain the initial native daemon/Rust client implementation;
-the [experimental setup guide](docs/networking/embedded-iroh.md) states its
-current validation boundaries. This is not yet a published relay/SDK support claim.
+Source builds now contain opt-in native daemon/Rust clients and an optional
+in-process Node SDK binding, without an external connectivity process or TCP
+bridge. Select `iroh://<public-endpoint-id>` explicitly; normal LAN/VPN endpoints
+remain the default and there is no silent fallback. Client and daemon onboarding
+have separate private identity options; existing bearer auth and policy still
+apply. The [experimental setup guide](docs/networking/embedded-iroh.md) covers
+pairing, explicit addresses/self-hosted relays, configurable timeouts and exact
+OS/CPU/libc/version matching for the SDK binding. Linux direct/relay FUSE and
+SDK source acceptance are not a published support claim; NAT and final native
+platform/release gates remain in progress.
 
 Operon focuses on what happens after machines can reach each other: capability
 discovery, policy, execution graphs, audit, and agent-friendly tooling.
