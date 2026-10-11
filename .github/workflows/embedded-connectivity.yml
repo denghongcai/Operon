@@ -50,6 +50,12 @@ jobs:
           repo-token: ${{ github.token }}
       - name: Build unchanged real daemon
         run: cargo build --locked -p operond
+      - name: Owned production transport stream and native HTTP2 tests
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: |
+          cargo test -p operon-transport --features iroh --locked -- --nocapture
+          cargo clippy -p operon-transport --features iroh --all-targets --locked -- -D warnings
       - name: Native stream, authorization, fs, exec and cancellation tests
         env:
           OPERON_POC_DAEMON: ${{ github.workspace }}/target/debug/operond

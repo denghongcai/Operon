@@ -7881,6 +7881,28 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   Clippy passed; fmt and docs/help/skills synchronization passed. Production
   CI/live-mount/release/Windows workflow toolchains are aligned to 1.91.0;
   online MSRV/native acceptance is pending, as is the owned transport boundary.
+  Added `operon-transport` with a build-optional pinned iroh 1.3.0 backend;
+  default builds do not enable networking. It owns native QUIC I/O, explicit
+  bind/relay/identity/QUIC configuration, configurable connection/readiness
+  waits, bounded incoming admission/active connection permits and joined
+  shutdown. Seven actual-network foundation tests pass locally (large payload,
+  half-close, peer identity, native tonic HTTP2, saturation/recovery, bad pinned
+  key and zero-deadline shutdown/readiness cancellation). Strict all-target
+  Clippy passed. MSRV/stable, macOS, Windows and native Alpine CI now run these
+  tests; online evidence and final daemon/client integration are still pending.
+  Checkpoint `283602d` passed both MSRV/stable Rust, SDK and macOS/Windows
+  platform jobs, plus Embedded Connectivity `38121899205` and CodeQL
+  `38121899141`. CI `38121899226` exposed an old Rust 1.85 Docker builder in
+  linux-system tests; it is now pinned to the verified Rust 1.91.0 bookworm
+  digest with locked builds. Re-run complete online CI; do not treat the
+  checkpoint as full acceptance. Historical Rust 1.88 measurement records
+  remain unchanged.
+  The corrected Docker builder passed a fresh local locked release build and
+  isolated-container onboarding/real-daemon health/fs read-write/exec smoke;
+  existing user containers were not replaced or stopped. Original full
+  workspace/all-target tests and strict Clippy also passed after introducing
+  the transport crate and updated lockfile. Feature-enabled transport tests
+  and strict Clippy pass separately. Public binaries are not yet changed.
 - Phase 156 — Planned: native daemon/client/config/identity integration.
 - Phase 157 — Planned: self-hosted relay/NAT and public SDK/native/online CI tests.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
@@ -7893,6 +7915,10 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   human/JSON regression confirms allowed secret names are visible but actual
   secret/token file values are not printed (passed locally); preserve the
   intended policy diagnostics while documenting the cleartext false positive.
+  After checkpoint CodeQL `38121899141`, a fresh API read confirms five fixed
+  alerts are no longer open; only #13 remains. Windows platform smoke passed
+  the creation-output pointer regressions. Final-source rescanning/alert audit
+  and live platform release acceptance still remain required.
 
 ## Planning Principle
 

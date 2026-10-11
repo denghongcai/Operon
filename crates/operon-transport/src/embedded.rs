@@ -1,0 +1,327 @@
+//! Embedded iroh streams for native HTTP/2 gRPC incoming/connectors.
+//!
+//! One bidirectional stream carries one HTTP/2 connection. No TCP bridge,
+//! public infrastructure defaults, address publication or RPC replay.
+
+use std::{
+    future::Future,
+    io,
+    net::SocketAddr,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
+
+pub use iroh::endpoint::QuicTransportConfig;
+use iroh::{
+    endpoint::{presets, Connection, RecvStream, SendStream},
+    Endpoint, RelayMap, RelayMode,
+};
+pub use iroh::{EndpointAddr, EndpointId, RelayUrl, SecretKey, TransportAddr};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    sync::{mpsc, OwnedSemaphorePermit, Semaphore},
+    task::{JoinHandle, JoinSet},
+};
+use tokio_stream::{wrappers::ReceiverStream, Stream};
+use tonic::transport::server::Connected;
+
+pub const ALPN: &[u8] = b"operon/grpc-h2/1";
+
+/// All connection infrastructure is explicit. Empty relays never select
+/// public relays; an empty bind list disables direct IP transports.
+pub struct BindOptions {
+    pub identity: SecretKey,
+    pub bind_addrs: Vec<SocketAddr>,
+    pub relay_urls: Vec<RelayUrl>,
+    pub bind_timeout: Duration,
+    /// Caller-selected idle, keepalive, path and stream/window limits.
+    pub quic: QuicTransportConfig,
+}
+
+/// An application-owned endpoint. Call `close` during normal shutdown.
+pub struct EmbeddedEndpoint {
+    endpoint: Endpoint,
+    has_relays: bool,
+}
+
+impl EmbeddedEndpoint {
+    pub async fn bind(options: BindOptions) -> io::Result<Self> {
+        if options.bind_addrs.is_empty() && options.relay_urls.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "iroh needs an explicit IP bind or relay",
+            ));
+        }
+        let mut builder = Endpoint::builder(presets::Minimal)
+            .clear_ip_transports()
+            .clear_relay_transports()
+            .secret_key(options.identity)
+            .transport_config(options.quic)
+            .alpns(vec![ALPN.to_vec()]);
+        for addr in options.bind_addrs {
+            builder = builder.bind_addr(addr).map_err(io::Error::other)?;
+        }
+        let has_relays = !options.relay_urls.is_empty();
+        if has_relays {
+            builder =
+                builder.relay_mode(RelayMode::Custom(RelayMap::from_iter(options.relay_urls)));
+        }
+        let endpoint = deadline(options.bind_timeout, async {
+            builder.bind().await.map_err(io::Error::other)
+        })
+        .await?;
+        Ok(Self {
+            endpoint,
+            has_relays,
+        })
+    }
+
+    pub fn id(&self) -> EndpointId {
+        self.endpoint.id()
+    }
+
+    pub fn addr(&self) -> EndpointAddr {
+        self.endpoint.addr()
+    }
+
+    pub async fn close(&self) {
+        self.endpoint.close().await;
+    }
+
+    /// Wait for explicitly configured relay connectivity. No implicit lookup
+    /// service is enrolled; caller selects the readiness deadline.
+    pub async fn wait_online(&self, timeout: Duration) -> io::Result<()> {
+        if !self.has_relays {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "no relay configured",
+            ));
+        }
+        self.cancellable(timeout, async {
+            self.endpoint.online().await;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Authenticate the pinned endpoint ID and open a single HTTP/2 stream.
+    /// The returned I/O retains the endpoint/connection for its full lifetime.
+    pub async fn connect(&self, target: EndpointAddr, timeout: Duration) -> io::Result<QuicIo> {
+        self.cancellable(timeout, async {
+            let connection = self
+                .endpoint
+                .connect(target, ALPN)
+                .await
+                .map_err(io::Error::other)?;
+            let (send, recv) = connection.open_bi().await.map_err(io::Error::other)?;
+            Ok(QuicIo::new(
+                self.endpoint.clone(),
+                connection,
+                send,
+                recv,
+                None,
+            ))
+        })
+        .await
+    }
+
+    async fn cancellable<T>(
+        &self,
+        timeout: Duration,
+        future: impl Future<Output = io::Result<T>>,
+    ) -> io::Result<T> {
+        tokio::select! {
+            biased;
+            _ = self.endpoint.closed() => Err(io::Error::new(io::ErrorKind::NotConnected, "iroh endpoint closed")),
+            result = deadline(timeout, future) => result,
+        }
+    }
+
+    /// Bound pending handshakes, queued and active HTTP/2 connections together.
+    /// Untrusted stalled peers cannot grow the task or incoming queue count.
+    pub fn incoming(
+        &self,
+        max_connections: usize,
+        handshake_timeout: Duration,
+    ) -> io::Result<Incoming> {
+        if !(1..=4096).contains(&max_connections) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "iroh max_connections must be 1..=4096",
+            ));
+        }
+        let (tx, rx) = mpsc::channel(max_connections);
+        let endpoint = self.endpoint.clone();
+        let accept_endpoint = endpoint.clone();
+        let task = tokio::spawn(async move {
+            let slots = Arc::new(Semaphore::new(max_connections));
+            let mut tasks = JoinSet::new();
+            let mut result = loop {
+                tokio::select! {
+                    _ = tx.closed() => break Ok(()),
+                    incoming = accept_endpoint.accept() => {
+                        let Some(incoming) = incoming else { break Ok(()); };
+                        let Ok(slot) = slots.clone().try_acquire_owned() else {
+                            incoming.refuse();
+                            continue;
+                        };
+                        let tx = tx.clone();
+                        let endpoint = accept_endpoint.clone();
+                        tasks.spawn(async move {
+                            let io = deadline(handshake_timeout, async {
+                                let connection = incoming.await.map_err(io::Error::other)?;
+                                let (send, recv) = connection.accept_bi().await.map_err(io::Error::other)?;
+                                Ok(QuicIo::new(endpoint, connection, send, recv, Some(slot)))
+                            }).await?;
+                            tx.send(Ok(io)).await.map_err(io::Error::other)
+                        });
+                    }
+                    Some(result) = tasks.join_next(), if !tasks.is_empty() => {
+                        match result {
+                            Ok(Ok(())) => {},
+                            Ok(Err(error)) => tracing::debug!(%error, "iroh admission rejected"),
+                            Err(error) => break Err(io::Error::other(error)),
+                        }
+                    }
+                }
+            };
+            tasks.abort_all();
+            while let Some(joined) = tasks.join_next().await {
+                if let Err(error) = joined {
+                    if !error.is_cancelled() {
+                        result = Err(io::Error::other(error));
+                    }
+                }
+            }
+            result
+        });
+        Ok(Incoming {
+            endpoint,
+            receiver: ReceiverStream::new(rx),
+            task: Some(task),
+        })
+    }
+}
+
+async fn deadline<T>(
+    timeout: Duration,
+    future: impl Future<Output = io::Result<T>>,
+) -> io::Result<T> {
+    if timeout.is_zero() {
+        return future.await;
+    }
+    tokio::time::timeout(timeout, future)
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "iroh connection deadline exceeded"))?
+}
+
+/// A listener owns its admission task, with explicit close/abort/join shutdown.
+/// Drop is a cancellation fallback; applications must call `shutdown` to
+/// observe failures and establish that admission tasks have been joined.
+pub struct Incoming {
+    endpoint: Endpoint,
+    receiver: ReceiverStream<io::Result<QuicIo>>,
+    task: Option<JoinHandle<io::Result<()>>>,
+}
+
+impl Incoming {
+    pub async fn shutdown(&mut self) -> io::Result<()> {
+        self.receiver.close();
+        self.endpoint.close().await;
+        if let Some(task) = self.task.take() {
+            task.await.map_err(io::Error::other)??;
+        }
+        Ok(())
+    }
+}
+
+impl Stream for Incoming {
+    type Item = io::Result<QuicIo>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.receiver).poll_next(cx)
+    }
+}
+
+impl Drop for Incoming {
+    fn drop(&mut self) {
+        if let Some(task) = &self.task {
+            task.abort();
+        }
+    }
+}
+
+pub struct QuicIo {
+    _endpoint: Endpoint,
+    connection: Connection,
+    send: SendStream,
+    recv: RecvStream,
+    _slot: Option<OwnedSemaphorePermit>,
+}
+
+impl QuicIo {
+    fn new(
+        endpoint: Endpoint,
+        connection: Connection,
+        send: SendStream,
+        recv: RecvStream,
+        slot: Option<OwnedSemaphorePermit>,
+    ) -> Self {
+        Self {
+            _endpoint: endpoint,
+            connection,
+            send,
+            recv,
+            _slot: slot,
+        }
+    }
+
+    pub fn peer_id(&self) -> EndpointId {
+        self.connection.remote_id()
+    }
+
+    pub fn connection(&self) -> &Connection {
+        &self.connection
+    }
+}
+
+impl Connected for QuicIo {
+    type ConnectInfo = EndpointId;
+    fn connect_info(&self) -> Self::ConnectInfo {
+        self.peer_id()
+    }
+}
+
+impl AsyncRead for QuicIo {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.recv).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for QuicIo {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        AsyncWrite::poll_write(Pin::new(&mut self.send), cx, buf)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.send).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.send).poll_shutdown(cx)
+    }
+}
+
+impl Drop for QuicIo {
+    fn drop(&mut self) {
+        self.connection
+            .close(0u32.into(), b"HTTP/2 transport dropped");
+    }
+}

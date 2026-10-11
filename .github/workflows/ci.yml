@@ -41,6 +41,11 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-targets --locked
 
+      - name: Test opt-in embedded transport on MSRV and stable
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: cargo test -p operon-transport --features iroh --all-targets --locked
+
       - name: Format
         run: cargo fmt --check
 
@@ -94,6 +99,11 @@ jobs:
 
       - name: Test config
         run: cargo test -p operon-config --locked
+
+      - name: Test native embedded transport
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
+        run: cargo test -p operon-transport --features iroh --all-targets --locked
 
       - name: Test filesystem core
         run: cargo test -p operon-fs --locked

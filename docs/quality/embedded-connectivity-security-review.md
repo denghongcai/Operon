@@ -21,6 +21,15 @@ The regression is
 `cli_static_integration::config_explain_prints_allowed_secret_names_but_never_values`.
 The Windows output-pointer regressions are in `creation_result_tests`.
 
+Checkpoint `283602d76334a92b17e95dda9c6382222b9c98f0` passed CodeQL
+`38121899141`; a fresh API read returned only #13 open. All five remediated
+findings are no longer open. Windows platform smoke in CI `38121899226`
+passed the mount-adapter test step, including the checked-creation regressions.
+This checkpoint's overall CI failed because the legacy Docker builder still
+used Rust 1.85; it is not final release evidence. Upgrade that builder and
+require a new exact-commit CI run. Native live mount and final-source Security
+review remain release requirements.
+
 Never print secret-scanning credentials in evidence or logs. A green CodeQL
 workflow alone does not prove an alert was resolved. Before publication,
 inspect the current open alert list, affected locations, analysis SHA and

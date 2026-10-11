@@ -1,7 +1,7 @@
 # PoC-only image: builds the container-mode examples against pinned toolchain.
 # Build with the production proto injected as a named context:
 #   docker build --build-context proto=<repo>/proto -t operon-iroh-grpc-poc .
-FROM rust:1.91.0-slim-bookworm AS build
+FROM rust:1.91.0-slim-bookworm@sha256:81c97592d519ba7397e8adccb0345fb5a91965c0a44b82af83bd1ef06c36cef5 AS build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*

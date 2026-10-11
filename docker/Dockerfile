@@ -1,4 +1,4 @@
-FROM rust:1.85-slim AS builder
+FROM rust:1.91.0-slim-bookworm@sha256:81c97592d519ba7397e8adccb0345fb5a91965c0a44b82af83bd1ef06c36cef5 AS builder
 
 WORKDIR /workspace
 
@@ -11,7 +11,7 @@ COPY crates ./crates
 COPY proto ./proto
 COPY vendor ./vendor
 
-RUN cargo build --release -p operond -p operon-cli
+RUN cargo build --release --locked -p operond -p operon-cli
 
 FROM debian:bookworm-slim
 

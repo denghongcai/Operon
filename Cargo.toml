@@ -10,6 +10,7 @@ members = [
   "crates/operon-store",
   "crates/operon-network",
   "crates/operon-grpc-client",
+  "crates/operon-transport",
   "crates/operon-mount",
 ]
 resolver = "2"
