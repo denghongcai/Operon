@@ -95,6 +95,10 @@ Runtime schema constraints:
 - `OpenExecSession` uses the existing `portable-pty` backend on Unix-like
   platforms and Windows. Windows interactive exec sessions use `portable-pty`
   with the same request and event envelopes as Unix-like platforms.
+  Request-stream half-close ends caller input, not the response stream or
+  session. Unix closes the PTY writer; Windows retains ConPTY's internal
+  terminal-response pipe until teardown because physically closing it aborts
+  the console process. Use session cancellation to terminate a running process.
 - Exec cancellation guarantees are platform-specific: Unix-like platforms use
   process-group termination, while Windows uses Job Object process-tree
   termination with a direct-child kill fallback if Job Object setup fails for a

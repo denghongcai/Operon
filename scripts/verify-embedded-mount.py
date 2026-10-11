@@ -45,7 +45,8 @@ def main():
                 daemon = subprocess.Popen([str(binaries / "operond"), "start", "--config", str(config_path)], stdout=log, stderr=log)
             deadline = time.monotonic() + timeout
             while True:
-                match = re.search(r"endpoint_id=([a-f0-9]{64})", daemon_log.read_text())
+                logs = re.sub(r"\x1b\[[0-9;]*m", "", daemon_log.read_text())
+                match = re.search(r"endpoint_id=([a-f0-9]{64})", logs)
                 if match:
                     break
                 if daemon.poll() is not None or time.monotonic() >= deadline:

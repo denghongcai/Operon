@@ -8189,6 +8189,26 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
 
 ## Planning Principle
 
+### Additional Phase 157/158 acceptance follow-up (2026-10-11)
+
+- Real UDP-denied Docker acceptance now enables endpoint IP transports and
+  installs INPUT/OUTPUT UDP DROP rules only in owned endpoint namespaces.
+  A scoped NET_ADMIN fixture verifies nonzero drop counters; no host/user
+  container firewall is changed. Mandatory hosted coverage is added alongside
+  the original no-IP-transport relay gate. Test relay addresses use owned IPs
+  so DNS is not an accidental UDP dependency.
+- Hosted Linux FUSE readiness exposed ANSI-formatted endpoint logging; strip
+  styling before parsing identity. The corrected actual direct FUSE lifecycle
+  passes locally, including external lazy unmount.
+- Windows SDK PTY acceptance progressed from spawn failure to CTRL_C_EXIT
+  after immediate gRPC input half-close. ConPTY's pipe also carries terminal
+  responses: retain that internal writer until PTY teardown on Windows while
+  preserving Unix close behavior and rejecting any further caller input via
+  the completed stream. Add a platform-contract unit regression; actual native
+  Windows SDK acceptance is still required. No status assertion is weakened.
+- Phases 156–158 remain in progress; real NAT, final platform/regression,
+  measurements and exact-source publication gates are not complete.
+
 Every phase should preserve the core boundary:
 
 ```text

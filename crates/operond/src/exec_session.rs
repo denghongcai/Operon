@@ -381,9 +381,7 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
                 let _ = master.resize(size);
             }
             Ok(SessionControl::CloseInput) => {
-                if let Ok(mut writer) = writer.lock() {
-                    writer.take();
-                }
+                close_session_input(&writer);
             }
             Ok(SessionControl::Terminate) | Err(std_mpsc::RecvTimeoutError::Disconnected) => {
                 if forced_status.is_none() {
@@ -393,6 +391,19 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
             }
             Err(std_mpsc::RecvTimeoutError::Timeout) => {}
         }
+    }
+}
+
+fn close_session_input(writer: &SharedPtyWriter) {
+    // ConPTY's input pipe is also the terminal control-response channel.
+    // Closing it at gRPC half-close aborts the attached process (CTRL_C_EXIT)
+    // before startup/query negotiation finishes. Retain it until PTY teardown;
+    // the completed request stream already prevents further caller input.
+    #[cfg(windows)]
+    let _ = writer;
+    #[cfg(not(windows))]
+    if let Ok(mut writer) = writer.lock() {
+        writer.take();
     }
 }
 
@@ -563,6 +574,13 @@ fn pty_size(rows: u32, cols: u32) -> Result<PtySize, Status> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_input_half_close_preserves_platform_terminal_contract() {
+        let writer: SharedPtyWriter = Arc::new(Mutex::new(Some(Box::new(Vec::<u8>::new()))));
+        close_session_input(&writer);
+        assert_eq!(writer.lock().unwrap().is_some(), cfg!(windows));
+    }
 
     #[test]
     fn session_shell_invocation_matches_platform() {

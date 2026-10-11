@@ -2,6 +2,11 @@
 
 Status: In progress; not a release-completion claim.
 
+Refreshed API checkpoint against analysis source
+`97abd7e75cbc36497c9691baacd70d98a95fdb69`: three open CodeQL alerts
+(#13–15). The older one-alert snapshot below is historical and superseded.
+No alert was dismissed. Final release-source review remains pending.
+
 Latest source checkpoint `dab0e8ecbc8ddf330603b07754dbd84e5f27a180`
 introduces two additional open CodeQL findings: #14 and #15,
 `rust/access-invalid-pointer`, on the `#[napi]` NativeClient and NativeCall

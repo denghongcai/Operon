@@ -133,5 +133,12 @@ jobs:
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
         run: python3 scripts/verify-embedded-relay-containers.py
+      - name: Build owned namespace UDP firewall fixture
+        run: docker build -f docker/iroh-relay/udp-filter.Dockerfile -t operon-iroh-udp-filter docker/iroh-relay
+      - name: Actual UDP-denied relay capability and restart acceptance
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+          OPERON_TEST_DENY_UDP: '1'
+        run: python3 scripts/verify-embedded-relay-containers.py
       # Phase 157 still requires NAT/direct upgrade, interrupted streaming,
       # additional capability/native mount scenarios and public SDK acceptance.

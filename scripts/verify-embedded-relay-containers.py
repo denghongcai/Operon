@@ -18,6 +18,8 @@ def main():
         raise ValueError("acceptance timeout must be positive")
     image = os.environ.get("OPERON_NATIVE_TEST_IMAGE", "operon-native-iroh-acceptance")
     relay_image = os.environ.get("OPERON_RELAY_TEST_IMAGE", "operon-iroh-relay-acceptance")
+    deny_udp = os.environ.get("OPERON_TEST_DENY_UDP", "0") == "1"
+    filter_image = os.environ.get("OPERON_UDP_FILTER_IMAGE", "operon-iroh-udp-filter")
     prefix = "operon-relay-" + uuid.uuid4().hex[:12]
     networks, containers = [], []
 
@@ -57,8 +59,13 @@ def main():
             relay = start(prefix + "-relay", "--network", networks[0], "--network-alias", "relay",
                           relay_image)
             docker("network", "connect", "--alias", "relay", networks[1], relay)
-            endpoint_config = {"identity_file": "/state/server.key", "bind_addrs": [],
-                               "relay_urls": ["http://relay:3340"], "allow_insecure_relays": True,
+            relay_addresses = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", relay))
+            # Literal owned relay IPs avoid requiring DNS/UDP when the test
+            # intentionally blocks every endpoint UDP packet.
+            relay_urls = ["http://" + relay_addresses[prefix + "-" + suffix]["IPAddress"] + ":3340"
+                          for suffix in ("server", "client")]
+            endpoint_config = {"identity_file": "/state/server.key", "bind_addrs": ["0.0.0.0:0"] if deny_udp else [],
+                               "relay_urls": [relay_urls[0]], "allow_insecure_relays": True,
                                "readiness_timeout_secs": timeout}
             server_config = {"version": 1, "daemon": {"node_id": "relay-server", "grpc_listen": "127.0.0.1:7789",
                              "workspace": "/workspace", "auth": {"token": "isolated-test-token"}, "iroh": endpoint_config},
@@ -73,7 +80,7 @@ def main():
                            "--mount", f"type=bind,src={server_path},dst=/config.yaml,readonly",
                            "--entrypoint", "operond", image, "start", "--config", "/config.yaml")
             identity = wait_public_id(server)
-            client_local = dict(endpoint_config, identity_file="/state/client.key", peer_relay_urls=["http://relay:3340"])
+            client_local = dict(endpoint_config, identity_file="/state/client.key", relay_urls=[relay_urls[1]], peer_relay_urls=[relay_urls[1]])
             client_config = {"version": 1, "client": {"nodes": {"remote": {"endpoint": "iroh://" + identity,
                              "auth": {"token": "isolated-test-token"}, "transport": {"connect_timeout_secs": timeout,
                              "rpc_timeout_secs": timeout, "iroh": client_local}}}}}
@@ -85,12 +92,25 @@ def main():
             client = start(prefix + "-client", "--network", networks[1], "--user", "0:0", "--tmpfs", "/state",
                            "--mount", f"type=bind,src={fixtures},dst=/fixtures,readonly",
                            "--entrypoint", "sleep", image, "infinity")
+            if deny_udp:
+                for owned in (server, client):
+                    # NET_ADMIN is scoped to the owned endpoint namespace,
+                    # never the host or any pre-existing container.
+                    evidence = docker("run", "--rm", "--network", "container:" + owned,
+                        "--cap-drop", "ALL", "--cap-add", "NET_ADMIN", filter_image,
+                        "iptables -I OUTPUT 1 -p udp -j DROP; iptables -I INPUT 1 -p udp -j DROP; "
+                        "python3 -c 'import socket, errno; s=socket.socket(type=socket.SOCK_DGRAM); "
+                        "exec(\"try:\\n s.sendto(b\\\"blocked-probe\\\", (\\\"127.0.0.1\\\", 9))\\n"
+                        "except OSError as e:\\n assert e.errno == errno.EPERM, e\")'; "
+                        "iptables -nvx -L OUTPUT")
+                    assert re.search(r"\n\s*[1-9][0-9]*\s+[0-9]+\s+DROP\s+udp\b", evidence), "UDP drop counter did not record probe"
+                    print("PASS owned UDP deny rule and nonzero drop counter:", evidence, flush=True)
 
             def cli(*args):
                 return docker("exec", client, "operon", "--config", "/fixtures/client.yaml", *args)
 
-            # Topology is the proof: no common network, no IP transports, and TCP
-            # daemon listener is loopback-only inside the server container.
+            # No common network; IP transport is either disabled or explicitly
+            # UDP-filtered. TCP daemon listener remains server-loopback-only.
             cli("node", "ping", "remote")
             denied_config = json.loads(json.dumps(client_config))
             denied_config["client"]["nodes"]["remote"]["auth"]["token"] = "wrong-test-token"
