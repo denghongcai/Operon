@@ -1,7 +1,7 @@
 # Operon fuser patch
 
-This directory vendors `fuser` 0.17.0 with the smallest macOS handshake patch
-needed for the v0.14 FUSE-T live-mount investigation.
+This directory vendors `fuser` 0.17.0 with macOS FUSE-T compatibility and
+the source-stage asynchronous-read lifecycle changes described below.
 
 Changes from upstream 0.17.0:
 
@@ -29,4 +29,28 @@ Changes from upstream 0.17.0:
   `FUSE_RENAME` request payload; the MacFUSE 4 layout would skip the old name
   and decode normal renames as an empty source filename.
 
-The Linux path is intentionally unchanged.
+Additional source-stage lifecycle changes (not yet published):
+
+- Linux background receivers use nonblocking `/dev/fuse` reads and a shared
+  level-triggered stop socket, so shutdown can wake and join every receiver.
+  Cloned FUSE descriptors share the stop signal.
+- Linux mount identity is captured with a temporary O_PATH descriptor before
+  handshake. It is not retained during normal operation, allowing ordinary
+  external unmount. Detached-session teardown disarms path-based unmount and
+  joins the background session; unmount errors still trigger receiver shutdown
+  and join before being returned.
+- Owned Linux native shutdown uses lazy detach, matching the existing helper,
+  to support user-held open descriptors. An identity check is not an atomic
+  unmount: the user accepted disclosing the concurrent privileged overmount
+  check-to-syscall limitation. Ordinary detached replacement remains tested.
+- Filesystem INTERRUPT dispatch accepts known requests without a separate
+  acknowledgement and returns EAGAIN for unknown requests. Operon's scheduler
+  owns the interrupted read's reply and cancellation registration.
+- Pure-Rust unmount-helper execution errors and unsuccessful exit status are
+  propagated instead of silently reported as success.
+
+The productionization plan and live evidence are in
+`docs/plan/v0.18.24-async-fuse-read-roadmap.md` and
+`docs/quality/async-read-lifecycle.md` at the workspace root. macOS compatibility
+above remains preserved; Linux evidence does not substitute for native macOS
+or Windows acceptance.

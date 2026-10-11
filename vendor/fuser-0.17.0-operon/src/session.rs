@@ -224,16 +224,24 @@ impl<FS: Filesystem> Session<FS> {
     /// Run the session loop in a background thread. If the returned handle is dropped,
     /// the filesystem is unmounted and the given session ends.
     pub fn spawn(self) -> io::Result<BackgroundSession> {
-        let sender = self.ch.sender();
+        #[cfg(target_os = "linux")]
+        let mut session = self;
+        #[cfg(not(target_os = "linux"))]
+        let session = self;
+        #[cfg(target_os = "linux")]
+        let stop = session.ch.enable_stop()?;
+        let sender = session.ch.sender();
         // Take the fuse_session, so that we can unmount it
-        let mount = std::mem::take(&mut *self.mount.mount.lock());
+        let mount = std::mem::take(&mut *session.mount.mount.lock());
         let guard = thread::Builder::new()
             .name("fuser-bg".to_string())
-            .spawn(move || self.run())?;
+            .spawn(move || session.run())?;
         Ok(BackgroundSession {
             guard,
             sender,
             mount,
+            #[cfg(target_os = "linux")]
+            stop,
         })
     }
 
@@ -564,15 +572,45 @@ pub struct BackgroundSession {
     sender: ChannelSender,
     /// Ensures the filesystem is unmounted when the session ends
     mount: Option<Mount>,
+    #[cfg(target_os = "linux")]
+    stop: Arc<crate::channel::ChannelStop>,
 }
 
 impl BackgroundSession {
+    /// Identity captured before the filesystem handshake, not from a later
+    /// path lookup that could already refer to a replacement filesystem.
+    #[cfg(target_os = "linux")]
+    pub fn mount_id(&self) -> Option<u64> {
+        self.mount.as_ref().map(Mount::mount_id)
+    }
+
+    /// Stops receivers and joins after the caller has verified that this mount
+    /// was externally detached. Pending filesystem work must be cancelled first.
+    #[cfg(target_os = "linux")]
+    pub fn detached_and_join(mut self) -> io::Result<()> {
+        if let Some(mount) = self.mount.take() {
+            mount.disarm();
+        }
+        self.stop.stop()?;
+        self.join()
+    }
+
     /// Unmount the filesystem and join the background thread.
     pub fn umount_and_join(mut self) -> io::Result<()> {
-        if let Some(mount) = self.mount.take() {
-            mount.umount()?;
+        let unmount = self.mount.take().map_or(Ok(()), Mount::umount);
+        // Always join on Linux, including an unmount error. Otherwise dropping
+        // the JoinHandle detaches live receivers and leaks the session lifetime.
+        #[cfg(target_os = "linux")]
+        {
+            self.stop.stop()?;
+            let joined = self.join();
+            unmount.and(joined)
         }
-        self.join()
+        #[cfg(not(target_os = "linux"))]
+        {
+            unmount?;
+            self.join()
+        }
     }
 
     /// Returns an object that can be used to send notifications to the kernel

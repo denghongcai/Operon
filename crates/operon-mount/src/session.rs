@@ -33,11 +33,20 @@ pub struct MountOptions {
 }
 
 pub struct MountSession {
-    session: fuser::BackgroundSession,
+    session: Option<fuser::BackgroundSession>,
+    remote: Arc<GrpcRemoteFs>,
+    #[cfg(target_os = "linux")]
+    identity: (PathBuf, u64),
+    #[cfg(target_os = "linux")]
+    unmount_poll: Duration,
 }
 
 impl MountSession {
     pub fn wait_for_shutdown(self) -> anyhow::Result<()> {
+        #[cfg(target_os = "linux")]
+        let mut self_session = self;
+        #[cfg(not(target_os = "linux"))]
+        let self_session = self;
         let (tx, rx) = mpsc::channel();
         let handler_tx = tx.clone();
         let _tx_guard = match ctrlc::set_handler(move || {
@@ -53,22 +62,86 @@ impl MountSession {
         };
 
         loop {
-            match rx.recv_timeout(Duration::from_secs(3600)) {
-                Ok(()) => return self.unmount(),
+            #[cfg(target_os = "linux")]
+            if self_session
+                .session
+                .as_ref()
+                .is_some_and(|session| session.guard.is_finished())
+            {
+                return self_session.finish(true);
+            }
+            #[cfg(target_os = "linux")]
+            if linux_mount_id(&self_session.identity.0)? != Some(self_session.identity.1) {
+                return self_session.unmount();
+            }
+            #[cfg(target_os = "linux")]
+            let interval = self_session.unmount_poll;
+            #[cfg(not(target_os = "linux"))]
+            let interval = Duration::from_secs(3600);
+            match rx.recv_timeout(interval) {
+                Ok(()) => return self_session.unmount(),
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => continue,
             }
         }
     }
 
-    pub fn unmount(self) -> anyhow::Result<()> {
-        self.session.umount_and_join()?;
+    pub fn unmount(mut self) -> anyhow::Result<()> {
+        self.finish(false)
+    }
+
+    fn finish(&mut self, detached: bool) -> anyhow::Result<()> {
+        self.remote.shutdown_reads();
+        let Some(session) = self.session.take() else {
+            return Ok(());
+        };
+        #[cfg(target_os = "linux")]
+        {
+            if detached {
+                session.detached_and_join()?;
+                return Ok(());
+            }
+            match linux_mount_id(&self.identity.0) {
+                Ok(identity) if identity != Some(self.identity.1) => {
+                    session.detached_and_join()?;
+                    return Ok(());
+                }
+                Err(error) => {
+                    // Unknown ownership must not cause a path-based unmount.
+                    // Still disconnect and join, and report the verification error.
+                    session.detached_and_join()?;
+                    return Err(error.into());
+                }
+                Ok(_) => {}
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = detached;
+        session.umount_and_join()?;
         Ok(())
+    }
+}
+
+impl Drop for MountSession {
+    fn drop(&mut self) {
+        if self.session.is_some() {
+            if let Err(error) = self.finish(false) {
+                eprintln!("warning: mount session cleanup failed: {error:#}");
+            }
+        }
     }
 }
 
 pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     options.reads.validate().map_err(anyhow::Error::msg)?;
+    #[cfg(target_os = "linux")]
+    let unmount_poll = Duration::from_millis(options.reads.unmount_poll_ms);
+    let async_reads = match options.reads.mode {
+        operon_core::runtime::MountReadMode::Auto => cfg!(target_os = "linux"),
+        operon_core::runtime::MountReadMode::Sync => false,
+        operon_core::runtime::MountReadMode::Async => true,
+    };
+    let pending_reads = options.reads.max_pending_reads;
     #[cfg(not(target_os = "linux"))]
     if options.reads.worker_threads.is_some() {
         anyhow::bail!("mount worker_threads is supported only on Linux FUSE");
@@ -81,6 +154,8 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
     let mount_point = options.mount_point;
     trace_mount_event("start", mount_point.display().to_string());
     ensure_mount_point(&mount_point)?;
+    #[cfg(target_os = "linux")]
+    let mount_point = mount_point.canonicalize()?;
     trace_mount_event("mount_point_ready", mount_point.display().to_string());
 
     trace_mount_event("remote_connect_start", remote_root.clone());
@@ -95,7 +170,12 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         anyhow::bail!("mount root `{remote_root}` is not a directory");
     }
 
-    let fs = OperonFuseFs::new(remote_fs, root);
+    let mut fs = OperonFuseFs::new(remote_fs.clone(), root);
+    fs.reads = Some(crate::read_scheduler::ReadScheduler::new(
+        remote_fs.clone(),
+        pending_reads,
+        async_reads,
+    ));
     let mut config = fuser::Config::default();
     config.mount_options = base_mount_options();
     add_platform_mount_options(&mut config.mount_options, &mount_point)?;
@@ -106,7 +186,78 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
         .with_context(|| format!("failed to mount {}", mount_point.display()))?;
     trace_mount_event("spawn_mount2_ok", mount_point.display().to_string());
 
-    Ok(MountSession { session })
+    #[cfg(target_os = "linux")]
+    let identity = match session.mount_id() {
+        Some(id) => (mount_point, id),
+        None => {
+            remote_fs.shutdown_reads();
+            session.detached_and_join()?;
+            anyhow::bail!("mount was externally detached during startup");
+        }
+    };
+    Ok(MountSession {
+        session: Some(session),
+        remote: remote_fs,
+        #[cfg(target_os = "linux")]
+        identity,
+        #[cfg(target_os = "linux")]
+        unmount_poll,
+    })
+}
+
+/// Read kernel mount bookkeeping, never metadata from the possibly hung FUSE
+/// filesystem. Mount IDs distinguish the original mount from a replacement.
+#[cfg(target_os = "linux")]
+fn linux_mount_id(path: &Path) -> std::io::Result<Option<u64>> {
+    Ok(mount_id_from_info(
+        &std::fs::read("/proc/self/mountinfo")?,
+        path,
+    ))
+}
+
+#[cfg(target_os = "linux")]
+fn mount_id_from_info(info: &[u8], path: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    info.split(|byte| *byte == b'\n')
+        .rev()
+        .find_map(|line| {
+            let fields: Vec<_> = line.split(|byte| *byte == b' ').collect();
+            if fields.len() < 6 {
+                return None;
+            }
+            let encoded = fields[4];
+            let mut decoded = Vec::with_capacity(encoded.len());
+            let mut index = 0;
+            while index < encoded.len() {
+                if encoded[index] == b'\\'
+                    && index + 3 < encoded.len()
+                    && encoded[index + 1..index + 4]
+                        .iter()
+                        .all(|byte| (b'0'..=b'7').contains(byte))
+                {
+                    let octal = &encoded[index + 1..index + 4];
+                    let value = u16::from(octal[0] - b'0') * 64
+                        + u16::from(octal[1] - b'0') * 8
+                        + u16::from(octal[2] - b'0');
+                    decoded.push(u8::try_from(value).ok()?);
+                    index += 4;
+                } else {
+                    decoded.push(encoded[index]);
+                    index += 1;
+                }
+            }
+            (decoded == path.as_os_str().as_bytes())
+                .then(|| {
+                    let id: u64 = std::str::from_utf8(fields[0]).ok()?.parse().ok()?;
+                    let separator = fields.iter().position(|field| *field == b"-")?;
+                    let fs_type = fields.get(separator + 1).copied()?;
+                    let owned = (fs_type == b"fuse.operon" || fs_type == b"fuse")
+                        && fields.get(separator + 2).copied() == Some(b"operon".as_slice());
+                    Some((id, owned))
+                })
+                .flatten()
+        })
+        .and_then(|(id, owned)| owned.then_some(id))
 }
 
 #[cfg(target_os = "macos")]
@@ -241,6 +392,44 @@ fn parse_macos_extra_mount_options(value: &str) -> anyhow::Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn mount_identity_handles_detachment_replacement_and_escaped_paths() {
+        use super::mount_id_from_info;
+        use std::path::Path;
+        let original = b"7 1 0:7 / /mnt/remote rw - fuse.operon operon rw\n";
+        assert_eq!(
+            mount_id_from_info(original, Path::new("/mnt/remote")),
+            Some(7)
+        );
+        assert_eq!(
+            mount_id_from_info(
+                b"7 1 0:7 / /mnt/remote rw - fuse operon rw\n",
+                Path::new("/mnt/remote")
+            ),
+            Some(7)
+        );
+        assert_eq!(
+            mount_id_from_info(b"1 0 0:1 / / rw - ext4 root rw\n", Path::new("/mnt/remote")),
+            None
+        );
+        let replacement = b"7 1 0:7 / /mnt/remote rw - fuse.operon operon rw\n9 1 0:9 / /mnt/remote rw - tmpfs tmpfs rw\n";
+        assert_eq!(
+            mount_id_from_info(replacement, Path::new("/mnt/remote")),
+            None
+        );
+        assert_eq!(
+            mount_id_from_info(
+                b"12 1 0:12 / /mnt/a\\040b\\134c rw - fuse.operon operon rw\n",
+                Path::new("/mnt/a b\\c")
+            ),
+            Some(12)
+        );
+        assert_eq!(
+            mount_id_from_info(b"malformed\n", Path::new("/mnt/remote")),
+            None
+        );
+    }
     use super::*;
 
     #[test]

@@ -8,26 +8,26 @@ use crate::{
     target::{endpoint_with_overrides, parse_node_path},
 };
 
+#[derive(Default)]
+pub(crate) struct MountOverrides {
+    pub workers: Option<u16>,
+    pub concurrency: Option<u16>,
+    pub budget_mib: Option<u16>,
+    pub unmount_poll_ms: Option<u32>,
+    pub mode: Option<String>,
+    pub pending: Option<u16>,
+}
+
 pub(crate) fn mount_fs(
     config_path: PathBuf,
     target: &str,
     destination: PathBuf,
     output: OutputMode,
-    workers: Option<u16>,
-    concurrency: Option<u16>,
-    budget_mib: Option<u16>,
+    overrides: MountOverrides,
 ) -> anyhow::Result<()> {
     #[cfg(all(not(windows), not(any(target_os = "linux", target_os = "macos"))))]
     {
-        let _ = (
-            config_path,
-            target,
-            destination,
-            output,
-            workers,
-            concurrency,
-            budget_mib,
-        );
+        let _ = (config_path, target, destination, output, overrides);
         anyhow::bail!("operon mount is not supported on this platform");
     }
 
@@ -35,14 +35,23 @@ pub(crate) fn mount_fs(
     {
         let config = operon_config::OperonConfig::load(&config_path)?;
         let mut reads = config.client.mount.clone();
-        if let Some(count) = workers {
+        if let Some(count) = overrides.workers {
             reads.worker_threads = Some(count.into());
         }
-        if let Some(count) = concurrency {
+        if let Some(count) = overrides.concurrency {
             reads.max_inflight_reads = count.into();
         }
-        if let Some(mib) = budget_mib {
+        if let Some(mib) = overrides.budget_mib {
             reads.max_inflight_read_mib = mib.into();
+        }
+        if let Some(milliseconds) = overrides.unmount_poll_ms {
+            reads.unmount_poll_ms = milliseconds.into();
+        }
+        if let Some(mode) = overrides.mode {
+            reads.mode = mode.parse().map_err(anyhow::Error::msg)?;
+        }
+        if let Some(pending) = overrides.pending {
+            reads.max_pending_reads = pending.into();
         }
         reads.validate().map_err(anyhow::Error::msg)?;
         #[cfg(not(target_os = "linux"))]

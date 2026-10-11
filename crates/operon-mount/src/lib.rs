@@ -11,6 +11,8 @@ mod inode_table;
 pub mod mount_core;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod path;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod read_scheduler;
 pub mod remote_client;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod session;

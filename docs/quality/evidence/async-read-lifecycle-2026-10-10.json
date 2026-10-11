@@ -1,0 +1,276 @@
+{
+  "schema": 1,
+  "date": "2026-10-10",
+  "status": "development checkpoints; not public or exact release acceptance",
+  "scope": "formal config/read scheduler and foreground interrupt/lifecycle",
+  "binary_hashes": [
+    "5e50cbb176ac24d0039dfb3e5aedd8f6060952707ded150ec55f5554af8fc1e7  /tmp/operon-formal-read-checkpoint.ePpbOE/operon",
+    "c5204ee0fb5f223cb12ff2b1c934b029a8a0b8c3985f002995f191c533c78fc5  /tmp/operon-formal-read-checkpoint.ePpbOE/operond",
+    "43a32719fbf47b70b5aa6c41a7c18ce11b8f546cf51be3b42e2c883b08823505  /tmp/operon-read-interrupt-checkpoint.elR5SV/operon",
+    "c5204ee0fb5f223cb12ff2b1c934b029a8a0b8c3985f002995f191c533c78fc5  /tmp/operon-read-interrupt-checkpoint.elR5SV/operond"
+  ],
+  "cases": [
+    {
+      "name": "formal_async",
+      "evidence_directory": "/tmp/operon-formal-read-async-probes",
+      "results": {
+        "offset_eof_zero_write_rename_truncate_delete": "passed",
+        "deadline_seconds": [
+          2.0017694809939712,
+          2.001819518976845,
+          2.0019875889993273,
+          2.0038036570185795
+        ],
+        "read_after_timeout_releases_budget": "passed",
+        "normal_unmount": "passed",
+        "external_lazy_helper_seconds": 0.0008906690054573119,
+        "external_lazy_method": "helper",
+        "inflight_unmount_seconds": 0.06466769700637087,
+        "inflight_unmount_errno": [
+          103,
+          103,
+          103,
+          103
+        ],
+        "zero_active_after_both_joins": "passed",
+        "external_normal_unmount_without_signal": "passed",
+        "replacement_mount_preserved": "passed",
+        "status": "passed"
+      },
+      "environment": {
+        "head": "9196519052e1292247040cf1ddbf74404899ff60",
+        "dirty": " M crates/operon-cli/src/cli_args.rs\n M crates/operon-cli/src/cli_dispatch.rs\n M crates/operon-cli/src/commands/mount.rs\n M crates/operon-config/src/lib.rs\n M crates/operon-config/src/warnings.rs\n M crates/operon-core/src/runtime.rs\n M crates/operon-mount/src/fuse_fs.rs\n M crates/operon-mount/src/lib.rs\n M crates/operon-mount/src/remote_client.rs\n M crates/operon-mount/src/session.rs\n M crates/operon-mount/src/windows.rs\n M docs/plan/development-phases.md\n M scripts/performance/parallel-read.py\n M vendor/fuser-0.17.0-operon/src/channel.rs\n M vendor/fuser-0.17.0-operon/src/mnt/mod.rs\n M vendor/fuser-0.17.0-operon/src/session.rs\n?? crates/operon-mount/src/read_scheduler.rs\n?? docs/plan/v0.18.24-async-fuse-read-roadmap.md\n?? docs/quality/async-read-experiment.md\n?? docs/quality/async-read-lifecycle.md\n?? docs/quality/evidence/async-read-2026-10-10.json\n?? scripts/performance/async-read-probes.py\n",
+        "image": "operon-review-tools:latest",
+        "mib": 1,
+        "delay_ms": 0,
+        "operations": 1,
+        "readers": [
+          1
+        ],
+        "repeats": 1,
+        "baseline_mount_args": [],
+        "candidate_mount_args": [],
+        "image_id": "sha256:7cecd794e436e3f8b88061e4b0595dfc3522165b253b20aa6ddc034d5ec8d41b"
+      }
+    },
+    {
+      "name": "formal_sync",
+      "evidence_directory": "/tmp/operon-formal-read-sync-probes",
+      "results": {
+        "offset_eof_zero_write_rename_truncate_delete": "passed",
+        "deadline_seconds": [
+          2.0018234790186398,
+          2.0026891449815594,
+          2.0024734329781495,
+          2.002319955965504
+        ],
+        "read_after_timeout_releases_budget": "passed",
+        "normal_unmount": "passed",
+        "external_lazy_helper_seconds": 0.030472584010567516,
+        "external_lazy_method": "helper",
+        "inflight_unmount_seconds": 0.0338199189864099,
+        "inflight_unmount_errno": [
+          103,
+          103,
+          103,
+          103
+        ],
+        "synchronous_callbacks_joined": "passed",
+        "external_normal_unmount_without_signal": "passed",
+        "replacement_mount_preserved": "passed",
+        "status": "passed"
+      },
+      "environment": {
+        "head": "9196519052e1292247040cf1ddbf74404899ff60",
+        "dirty": " M crates/operon-cli/src/cli_args.rs\n M crates/operon-cli/src/cli_dispatch.rs\n M crates/operon-cli/src/commands/mount.rs\n M crates/operon-config/src/lib.rs\n M crates/operon-config/src/warnings.rs\n M crates/operon-core/src/runtime.rs\n M crates/operon-mount/src/fuse_fs.rs\n M crates/operon-mount/src/lib.rs\n M crates/operon-mount/src/remote_client.rs\n M crates/operon-mount/src/session.rs\n M crates/operon-mount/src/windows.rs\n M docs/plan/development-phases.md\n M scripts/performance/parallel-read.py\n M vendor/fuser-0.17.0-operon/src/channel.rs\n M vendor/fuser-0.17.0-operon/src/mnt/mod.rs\n M vendor/fuser-0.17.0-operon/src/session.rs\n?? crates/operon-mount/src/read_scheduler.rs\n?? docs/plan/v0.18.24-async-fuse-read-roadmap.md\n?? docs/quality/async-read-experiment.md\n?? docs/quality/async-read-lifecycle.md\n?? docs/quality/evidence/async-read-2026-10-10.json\n?? scripts/performance/async-read-probes.py\n",
+        "image": "operon-review-tools:latest",
+        "mib": 1,
+        "delay_ms": 0,
+        "operations": 1,
+        "readers": [
+          1
+        ],
+        "repeats": 1,
+        "baseline_mount_args": [],
+        "candidate_mount_args": [
+          "--read-mode",
+          "sync"
+        ],
+        "image_id": "sha256:7cecd794e436e3f8b88061e4b0595dfc3522165b253b20aa6ddc034d5ec8d41b"
+      }
+    },
+    {
+      "name": "interrupt_async",
+      "evidence_directory": "/tmp/operon-read-interrupt-direct-async-probes",
+      "results": {
+        "offset_eof_zero_write_rename_truncate_delete": "passed",
+        "deadline_seconds": [
+          2.0034842920140363,
+          2.0033354299957864,
+          2.0020735270227306,
+          2.001929756021127
+        ],
+        "read_after_timeout_releases_budget": "passed",
+        "normal_unmount": "passed",
+        "fuse_interrupt_seconds": 0.002724727033637464,
+        "fuse_interrupt_errno": 4,
+        "read_after_interrupt_releases_budget": "passed",
+        "external_lazy_helper_seconds": 0.0008900550310499966,
+        "external_lazy_method": "helper",
+        "inflight_unmount_seconds": 0.03250916802790016,
+        "inflight_unmount_errno": [
+          103,
+          103,
+          103,
+          103
+        ],
+        "zero_active_after_both_joins": "passed",
+        "external_normal_unmount_without_signal": "passed",
+        "replacement_mount_preserved": "passed",
+        "status": "passed"
+      },
+      "environment": {
+        "head": "9196519052e1292247040cf1ddbf74404899ff60",
+        "dirty": " M crates/operon-cli/src/cli_args.rs\n M crates/operon-cli/src/cli_dispatch.rs\n M crates/operon-cli/src/commands/mount.rs\n M crates/operon-config/src/lib.rs\n M crates/operon-config/src/warnings.rs\n M crates/operon-core/src/runtime.rs\n M crates/operon-mount/src/errors.rs\n M crates/operon-mount/src/fuse_fs.rs\n M crates/operon-mount/src/lib.rs\n M crates/operon-mount/src/remote_client.rs\n M crates/operon-mount/src/session.rs\n M crates/operon-mount/src/windows.rs\n M docs/plan/development-phases.md\n M scripts/performance/parallel-read.py\n M vendor/fuser-0.17.0-operon/src/channel.rs\n M vendor/fuser-0.17.0-operon/src/lib.rs\n M vendor/fuser-0.17.0-operon/src/mnt/mod.rs\n M vendor/fuser-0.17.0-operon/src/request.rs\n M vendor/fuser-0.17.0-operon/src/session.rs\n?? crates/operon-mount/src/read_scheduler.rs\n?? docs/plan/v0.18.24-async-fuse-read-roadmap.md\n?? docs/quality/async-read-experiment.md\n?? docs/quality/async-read-lifecycle.md\n?? docs/quality/evidence/async-read-2026-10-10.json\n?? scripts/performance/async-read-probes.py\n",
+        "image": "operon-review-tools:latest",
+        "mib": 1,
+        "delay_ms": 0,
+        "operations": 1,
+        "readers": [
+          1
+        ],
+        "repeats": 1,
+        "baseline_mount_args": [],
+        "candidate_mount_args": [],
+        "image_id": "sha256:7cecd794e436e3f8b88061e4b0595dfc3522165b253b20aa6ddc034d5ec8d41b"
+      }
+    },
+    {
+      "name": "interrupt_sync",
+      "evidence_directory": "/tmp/operon-read-interrupt-direct-sync-probes",
+      "results": {
+        "offset_eof_zero_write_rename_truncate_delete": "passed",
+        "deadline_seconds": [
+          2.0021127220243216,
+          2.0020379640045576,
+          2.0017409580177628,
+          2.002731538959779
+        ],
+        "read_after_timeout_releases_budget": "passed",
+        "normal_unmount": "passed",
+        "fuse_interrupt_seconds": 0.0026387370307929814,
+        "fuse_interrupt_errno": 4,
+        "read_after_interrupt_releases_budget": "passed",
+        "external_lazy_helper_seconds": 0.030914613977074623,
+        "external_lazy_method": "helper",
+        "inflight_unmount_seconds": 0.034217961016111076,
+        "inflight_unmount_errno": [
+          103,
+          103,
+          103,
+          103
+        ],
+        "zero_active_after_initial_joins": "passed",
+        "synchronous_callbacks_joined": "passed",
+        "external_normal_unmount_without_signal": "passed",
+        "replacement_mount_preserved": "passed",
+        "zero_active_after_all_joins": "passed",
+        "status": "passed"
+      },
+      "environment": {
+        "head": "9196519052e1292247040cf1ddbf74404899ff60",
+        "dirty": " M crates/operon-cli/src/cli_args.rs\n M crates/operon-cli/src/cli_dispatch.rs\n M crates/operon-cli/src/commands/mount.rs\n M crates/operon-config/src/lib.rs\n M crates/operon-config/src/warnings.rs\n M crates/operon-core/src/runtime.rs\n M crates/operon-mount/src/errors.rs\n M crates/operon-mount/src/fuse_fs.rs\n M crates/operon-mount/src/lib.rs\n M crates/operon-mount/src/remote_client.rs\n M crates/operon-mount/src/session.rs\n M crates/operon-mount/src/windows.rs\n M docs/plan/development-phases.md\n M scripts/performance/parallel-read.py\n M vendor/fuser-0.17.0-operon/src/channel.rs\n M vendor/fuser-0.17.0-operon/src/lib.rs\n M vendor/fuser-0.17.0-operon/src/mnt/mod.rs\n M vendor/fuser-0.17.0-operon/src/request.rs\n M vendor/fuser-0.17.0-operon/src/session.rs\n?? crates/operon-mount/src/read_scheduler.rs\n?? docs/plan/v0.18.24-async-fuse-read-roadmap.md\n?? docs/quality/async-read-configuration.md\n?? docs/quality/async-read-experiment.md\n?? docs/quality/async-read-lifecycle.md\n?? docs/quality/evidence/async-read-2026-10-10.json\n?? scripts/performance/async-read-probes.py\n",
+        "image": "operon-review-tools:latest",
+        "mib": 1,
+        "delay_ms": 0,
+        "operations": 1,
+        "readers": [
+          1
+        ],
+        "repeats": 1,
+        "baseline_mount_args": [],
+        "candidate_mount_args": [
+          "--read-mode",
+          "sync"
+        ],
+        "image_id": "sha256:7cecd794e436e3f8b88061e4b0595dfc3522165b253b20aa6ddc034d5ec8d41b"
+      }
+    },
+    {
+      "name": "buffered_interrupt_async_failed",
+      "evidence_directory": "/tmp/operon-read-interrupt-async-probes",
+      "results": {
+        "offset_eof_zero_write_rename_truncate_delete": "passed",
+        "deadline_seconds": [
+          2.0025727809988894,
+          2.0022700120462105,
+          2.002270283002872,
+          2.002065679000225
+        ],
+        "read_after_timeout_releases_budget": "passed",
+        "normal_unmount": "passed",
+        "status": "failed",
+        "failure": "TimeoutExpired(['python3', '-c', \"\\nimport ctypes, errno, json, os, signal, sys\\nsignal.signal(signal.SIGUSR1, lambda *_: None)\\nsignal.siginterrupt(signal.SIGUSR1, True)\\nfd = os.open('/mnt/remote/probe-interrupt', os.O_RDONLY)\\nprint('ready', flush=True)\\nassert sys.stdin.readline().strip() == 'read'\\nlib = ctypes.CDLL(None, use_errno=True)\\nread = getattr(lib, 'pread64', lib.pread)\\nread.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_longlong]\\nread.restype = ctypes.c_ssize_t\\nbuffer = ctypes.create_string_buffer(4096)\\nresult = read(fd, buffer, 4096, 0)\\ncode = ctypes.get_errno()\\nprint(json.dumps({'bytes': result, 'errno': code}), flush=True)\\nos.close(fd)\\nassert result == -1 and code == errno.EINTR, (result, code)\\n\"], 3)"
+      },
+      "environment": {
+        "head": "9196519052e1292247040cf1ddbf74404899ff60",
+        "dirty": " M crates/operon-cli/src/cli_args.rs\n M crates/operon-cli/src/cli_dispatch.rs\n M crates/operon-cli/src/commands/mount.rs\n M crates/operon-config/src/lib.rs\n M crates/operon-config/src/warnings.rs\n M crates/operon-core/src/runtime.rs\n M crates/operon-mount/src/errors.rs\n M crates/operon-mount/src/fuse_fs.rs\n M crates/operon-mount/src/lib.rs\n M crates/operon-mount/src/remote_client.rs\n M crates/operon-mount/src/session.rs\n M crates/operon-mount/src/windows.rs\n M docs/plan/development-phases.md\n M scripts/performance/parallel-read.py\n M vendor/fuser-0.17.0-operon/src/channel.rs\n M vendor/fuser-0.17.0-operon/src/lib.rs\n M vendor/fuser-0.17.0-operon/src/mnt/mod.rs\n M vendor/fuser-0.17.0-operon/src/request.rs\n M vendor/fuser-0.17.0-operon/src/session.rs\n?? crates/operon-mount/src/read_scheduler.rs\n?? docs/plan/v0.18.24-async-fuse-read-roadmap.md\n?? docs/quality/async-read-experiment.md\n?? docs/quality/async-read-lifecycle.md\n?? docs/quality/evidence/async-read-2026-10-10.json\n?? scripts/performance/async-read-probes.py\n",
+        "image": "operon-review-tools:latest",
+        "mib": 1,
+        "delay_ms": 0,
+        "operations": 1,
+        "readers": [
+          1
+        ],
+        "repeats": 1,
+        "baseline_mount_args": [],
+        "candidate_mount_args": [],
+        "image_id": "sha256:7cecd794e436e3f8b88061e4b0595dfc3522165b253b20aa6ddc034d5ec8d41b"
+      }
+    },
+    {
+      "name": "buffered_interrupt_sync_failed",
+      "evidence_directory": "/tmp/operon-read-interrupt-sync-probes",
+      "results": {
+        "offset_eof_zero_write_rename_truncate_delete": "passed",
+        "deadline_seconds": [
+          2.0024875360541046,
+          2.002426433027722,
+          2.0021374599891715,
+          2.002142695011571
+        ],
+        "read_after_timeout_releases_budget": "passed",
+        "normal_unmount": "passed",
+        "status": "failed",
+        "failure": "TimeoutExpired(['python3', '-c', \"\\nimport ctypes, errno, json, os, signal, sys\\nsignal.signal(signal.SIGUSR1, lambda *_: None)\\nsignal.siginterrupt(signal.SIGUSR1, True)\\nfd = os.open('/mnt/remote/probe-interrupt', os.O_RDONLY)\\nprint('ready', flush=True)\\nassert sys.stdin.readline().strip() == 'read'\\nlib = ctypes.CDLL(None, use_errno=True)\\nread = getattr(lib, 'pread64', lib.pread)\\nread.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_longlong]\\nread.restype = ctypes.c_ssize_t\\nbuffer = ctypes.create_string_buffer(4096)\\nresult = read(fd, buffer, 4096, 0)\\ncode = ctypes.get_errno()\\nprint(json.dumps({'bytes': result, 'errno': code}), flush=True)\\nos.close(fd)\\nassert result == -1 and code == errno.EINTR, (result, code)\\n\"], 3)"
+      },
+      "environment": {
+        "head": "9196519052e1292247040cf1ddbf74404899ff60",
+        "dirty": " M crates/operon-cli/src/cli_args.rs\n M crates/operon-cli/src/cli_dispatch.rs\n M crates/operon-cli/src/commands/mount.rs\n M crates/operon-config/src/lib.rs\n M crates/operon-config/src/warnings.rs\n M crates/operon-core/src/runtime.rs\n M crates/operon-mount/src/errors.rs\n M crates/operon-mount/src/fuse_fs.rs\n M crates/operon-mount/src/lib.rs\n M crates/operon-mount/src/remote_client.rs\n M crates/operon-mount/src/session.rs\n M crates/operon-mount/src/windows.rs\n M docs/plan/development-phases.md\n M scripts/performance/parallel-read.py\n M vendor/fuser-0.17.0-operon/src/channel.rs\n M vendor/fuser-0.17.0-operon/src/lib.rs\n M vendor/fuser-0.17.0-operon/src/mnt/mod.rs\n M vendor/fuser-0.17.0-operon/src/request.rs\n M vendor/fuser-0.17.0-operon/src/session.rs\n?? crates/operon-mount/src/read_scheduler.rs\n?? docs/plan/v0.18.24-async-fuse-read-roadmap.md\n?? docs/quality/async-read-experiment.md\n?? docs/quality/async-read-lifecycle.md\n?? docs/quality/evidence/async-read-2026-10-10.json\n?? scripts/performance/async-read-probes.py\n",
+        "image": "operon-review-tools:latest",
+        "mib": 1,
+        "delay_ms": 0,
+        "operations": 1,
+        "readers": [
+          1
+        ],
+        "repeats": 1,
+        "baseline_mount_args": [],
+        "candidate_mount_args": [
+          "--read-mode",
+          "sync"
+        ],
+        "image_id": "sha256:7cecd794e436e3f8b88061e4b0595dfc3522165b253b20aa6ddc034d5ec8d41b"
+      }
+    }
+  ],
+  "remaining": [
+    "Drop/error cleanup",
+    "busy open-handle normal shutdown",
+    "same-path replacement race hardening",
+    "saturation and disconnection",
+    "native Linux Alpine/macOS/Windows gates",
+    "final same-toolchain ops matrices",
+    "full suites and exact SHA public release"
+  ]
+}

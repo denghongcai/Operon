@@ -23,6 +23,12 @@ mod mount_read_tests {
             "4",
             "--read-budget-mib",
             "8",
+            "--unmount-poll-ms",
+            "100",
+            "--read-mode",
+            "async",
+            "--read-pending",
+            "128",
             "--rpc-timeout-secs",
             "300",
         ])
@@ -34,8 +40,11 @@ mod mount_read_tests {
                 mount_workers: Some(16),
                 read_concurrency: Some(4),
                 read_budget_mib: Some(8),
+                unmount_poll_ms: Some(100),
+                read_pending: Some(128),
+                read_mode: Some(mode),
                 ..
-            }
+            } if mode == "async"
         ));
         for (flag, value) in [
             ("--mount-workers", "0"),
@@ -43,6 +52,11 @@ mod mount_read_tests {
             ("--read-concurrency", "0"),
             ("--read-budget-mib", "7"),
             ("--read-budget-mib", "513"),
+            ("--unmount-poll-ms", "9"),
+            ("--unmount-poll-ms", "60001"),
+            ("--read-mode", "invalid"),
+            ("--read-pending", "0"),
+            ("--read-pending", "4097"),
         ] {
             assert!(Args::try_parse_from([
                 "operon",
@@ -178,6 +192,15 @@ pub(crate) enum Command {
         /// In-flight requested read bytes in MiB (8–512), not total RSS.
         #[arg(long, value_parser = clap::value_parser!(u16).range(8..=512))]
         read_budget_mib: Option<u16>,
+        /// Read dispatch mode: auto uses async Linux FUSE, sync elsewhere.
+        #[arg(long, value_parser = ["auto", "sync", "async"])]
+        read_mode: Option<String>,
+        /// Maximum queued plus active FUSE read tasks (1–4096).
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..=4096))]
+        read_pending: Option<u16>,
+        /// Linux external-unmount polling interval in milliseconds (10–60000).
+        #[arg(long, value_parser = clap::value_parser!(u32).range(10..=60_000))]
+        unmount_poll_ms: Option<u32>,
     },
     #[command(about = "Explain the active Operon config.yaml without reading raw YAML")]
     Config {

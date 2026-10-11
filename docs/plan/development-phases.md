@@ -7467,6 +7467,299 @@ format/diff, 54 core / 18 runtime / 13 SDK / four Linux system scripts and SDK
 23 tests/typecheck/build passed. Remote and publication gates subsequently
 passed; this paragraph preserves the local preparation checkpoint.
 
+## Phase 147: Bounded Asynchronous FUSE Read Experiment
+
+Status: Completed (measurement experiment, not production async acceptance).
+User requested measuring delayed FUSE replies rather than
+binding remote reads to synchronous callback workers. Keep public v0.16.13 and
+all defaults unchanged. A Linux-only `experimental-async-read` build feature
+reuses the existing two-thread transport runtime, RPC/byte budgets and ordinary
+deadlines. Bound asynchronous queued/active tasks to 64, use synchronous
+backpressure at capacity, cancel and join tasks at destruction. Measure fixed
+four-worker synchronous/async variants with 8/16/32 RPC limits in three
+alternating local and delayed trials; retain verified operations, hashes,
+peak RPC counts, resources, regressions and lifecycle evidence. This is an
+experiment, not a supported cross-platform async feature or release request.
+
+Seven three-trial alternating paired matrices / 504 real Docker/FUSE cases
+completed with verified data. Fixed four workers / 16 async RPCs improved
+distinct-file eight/sixteen-reader ops/s 1.90x/2.21x locally and 2.57x/3.46x
+under 20 ms client egress delay. At the same 16 RPC budget, four async workers
+were about 6% faster than 16 synchronous workers for those local workloads;
+most of the gain comes from removing blocked-worker concurrency limits.
+Actual RPC peaks were 8/16/19, not always the configured limit; 32 showed no
+consistent extra benefit. Cache-sharing regressions and resource costs are
+retained. Default/experimental workspace 277/279 tests, strict feature clippy,
+format/diff/Python syntax and normal live teardown passed.
+
+Independent probes passed offset/EOF/zero/write-through/rename/truncate/delete,
+timeout recovery and normal unmount. External lazy-unmount with open handles
+and disabled deadlines FAILED EINVAL in both original sync and prototype;
+this existing session-lifecycle limitation was not suppressed or counted as
+successful in-flight cancellation. Saturation, per-request interrupts and
+native async adapter acceptance remain prerequisites for productization, not
+unfinished work claimed complete by this experiment. Defaults/version/release
+were not changed. No measurement work remains. Evidence:
+`docs/quality/async-read-experiment.md` and
+`docs/quality/evidence/async-read-2026-10-10.json`.
+
+## Phase 148: Formal Bounded Asynchronous Read Scheduler
+
+Status: Completed (source implementation checkpoint; publication is Phase 152).
+User approved productionizing the measured FUSE async
+read path and final publication. Replace the experimental feature with formal
+mode/config/CLI controls, bounded cancellable admission/tasks and preserved
+path/policy/audit/deadline/EOF/write semantics. Four Linux workers remain;
+concurrency defaults require final measured acceptance. Contract:
+`docs/plan/v0.18.24-async-fuse-read-roadmap.md`.
+
+Removed the experimental feature and moved reads into a formal Unix scheduler.
+Added validated config/CLI auto/sync/async modes and 1–4096 pending task limits;
+CLI overrides are grouped rather than expanding positional handler arguments.
+Both modes normalize paths; async task admission is bounded/cancellable with
+one deadline shared through RPC completion, without synchronous-RPC fallback.
+Windows explicitly rejects Unix async mode. Full workspace all-targets check,
+124 related tests (network permission rerun), and real sync/async FUSE lifecycle
+probes on a no-feature checkpoint passed. Subsequent interrupt refinements
+remain under acceptance; native/default/performance gates are not complete.
+Source-only contract: `docs/quality/async-read-configuration.md`.
+Request-ID cancellation and per-client activity refinements are tracked under
+Phase 149. Passing final native/performance/public gates is still required;
+this completed implementation phase does not assert release readiness.
+
+## Phase 149: External Unmount and Read Cancellation Repair
+
+Status: Completed (Linux source/lifecycle checkpoint; native/public gates remain
+in Phases 150/152). Explicit user requirement: repair external lazy-unmount EINVAL
+with open handles and in-flight reads in synchronous and async modes. Detect
+detachment/replacement safely, cancel reads and join owned tasks/session; do not
+merely swallow errors. Validate request interrupts and configurable timer scope.
+
+Implemented shared shutdown cancellation for range-read admission/RPCs and
+other mount RPC waits (including deadline zero), Linux level-triggered FUSE
+receiver wakeup/join, kernel mount-ID capture before handshake, and configurable
+external-detach polling (`client.mount.unmount_poll_ms`, `--unmount-poll-ms`,
+default 250ms, validated 10–60000ms). The initial explicit-stop async lazy
+unmount probe passed with four pending reads and zero post-join RPCs. Broader
+probes exposed a startup identity race and a sync pending-read assertion;
+retain both failures, revalidate the pre-handshake identity fix and automatic
+abort path, and do not mark lifecycle/platform/release acceptance complete.
+The automatic no-signal async probe subsequently passed (four deadline-zero
+reads, 0.03269s cancellation/exit, zero post-join RPCs and preserved replacement
+tmpfs); synchronous and expanded ordinary external-unmount gates remain
+independent. Checkpoint evidence: `docs/quality/async-read-lifecycle.md`.
+Expanded async ordinary external-unmount/four-join tests also passed. A strict
+direct-kernel lazy-detach control now passes four saturated synchronous reads,
+automatic cancellation, ordinary external unmount and replacement preservation.
+Original helper case remains failed; isolate helper pre-detach latency without
+weakening its assertion or substituting the kernel control for that gate.
+Follow-up helper probe with explicit inherited descriptor lifetime now passes
+the unchanged four-read synchronous cancellation assertion, automatic normal
+and lazy external unmount, and replacement preservation. The launch fix avoids
+closing inherited FUSE files before helper exec; optional strace remains
+intrusive. Retain all earlier failures and rerun on final production binaries.
+Interrupt routing and broader race/Drop/platform gates remain incomplete.
+Implemented per-request interrupt registration/cancellation/EINTR reply routing
+for both read modes, generation-safe numeric ID reuse and per-mount RPC
+activity accounting. Mount unit tests and strict workspace clippy passed at
+the initial interrupt checkpoint. Buffered-read nonfatal-signal live probes
+timed out; retain failures and validate foreground aligned O_DIRECT requests
+before claiming kernel interrupt acceptance. Broader Drop/replacement/native
+gates remain required.
+Both foreground aligned O_DIRECT sync/async probes subsequently passed EINTR,
+read-after-interrupt recovery and full normal/lazy/ordinary/replacement lifecycle
+checks; sync asserted zero RPCs after all five joins. Current mount tests passed
+48 and strict workspace/all-targets clippy passed. Buffered-read failures remain
+retained and are not generalized into an arbitrary kernel/disk cancellation
+guarantee. Final production SHA/native/saturation/Drop/race gates are still open.
+
+Session ownership now uses a take-once finish path: explicit unmount, automatic
+shutdown and Rust Drop cancel mount RPC waits before disconnecting/joining.
+Mount-identity read failures never authorize path-based unmount; cleanup still
+joins and reports the error. A new busy/open-descriptor test first reproduced
+EBUSY (exit 1), retained as failed evidence. Linux native unmount now matches
+the existing helper's lazy detach, allowing user-held descriptors during owned
+shutdown. Expanded sync/async probes passed ordinary busy shutdown and direct
+session Drop/unmount with four deadline-zero reads. A compiled Linux helper
+asserted no surviving fuser threads or /dev/fuse descriptors after both returns.
+Current mount tests (48) and strict workspace/all-targets clippy passed. Evidence:
+`docs/quality/evidence/async-read-drop-2026-10-10.json`. Replacement race hardening,
+saturation/disconnection, native and exact-release gates remain open.
+
+Unmount error checkpoint: the vendored pure-Rust helper now returns spawning
+errors and nonzero exit status/stderr instead of silently reporting success.
+Both helper-result unit tests passed in the isolated vendor test copy, and all
+48 mount tests passed against the workspace vendor implementation. This closes
+an error-reporting gap, not the path-check-to-unmount replacement race.
+
+Replacement-race diagnostic: isolated tmpfs experiments rejected both a pinned
+`/proc/self/fd/N` target and pinned-root cwd with `umount2(.)`. Both preserved a
+detached-and-replaced mount (EINVAL on the detached original), but both unmounted
+an overlaid replacement above an attached original. Neither unsafe strategy was
+added to production. Evidence and failing assertions are retained in
+`docs/quality/evidence/async-read-unmount-identity-2026-10-10.json`; mount identity
+checks alone are still not treated as atomic replacement-race protection.
+
+The user explicitly accepted disclosing the concurrent privileged overmount
+check-to-syscall limitation on 2026-10-10. Ordinary external detach followed by
+replacement, sync/async cancellation and join, busy descriptors, Drop/unmount,
+request interrupts and low-capacity/blackhole shutdown passed. The accepted
+boundary is documented in `docs/quality/async-read-lifecycle.md` and formal
+configuration docs. This completes the Linux lifecycle checkpoint only; native,
+ops/default and exact-source public gates remain mandatory in Phases 150–152.
+
+## Phase 150: Async Read Correctness and Native Platform Acceptance
+
+Status: In Progress. Low-capacity Linux sync/async live probes passed with
+pending=1, RPC concurrency=1 and an 8MiB budget. Four concurrent reads tested
+deadline-zero Drop/unmount, automatic external lazy/ordinary detach, foreground
+interrupt, deadline recovery and replacement preservation. Evidence:
+`docs/quality/evidence/async-read-saturation-2026-10-10.json`. These are development
+checkpoints, not final performance or exact-source release gates.
+Source-suite checkpoint: Rust 1.88.0 `cargo test --workspace --all-targets
+--locked` passed; SDK typecheck, 23 tests and build passed; all 54 core validators
+passed. The initial SDK group identified an outdated v0.8.3 validator expecting
+a direct RPC call inside the sync bridge. It now verifies the sync-to-async-to-
+deadline range call chain and still rejects full-file fallback; its complete
+protocol/daemon/mount/SDK rerun passed. The parallel-read runtime validator now
+also exercises all scheduler, interrupt, zero-deadline shutdown and identity
+unit tests and passed. Whole SDK-group rerun passed all 13 validators; all 18
+runtime validators passed, including real-daemon/CLI integration and workspace
+doc tests. Linux-system and native platform gates are still required before
+publication. GitHub Latest was checked live and remains public v0.16.13;
+no new tag or release has been created at this checkpoint.
+
+Disconnection checkpoint: both sync/async low-capacity live suites passed with
+100% packet loss, finite configured RPC deadline and successful read recovery
+without remount. Separate four-read, deadline-zero blackhole probes passed
+automatic external lazy detach, cancellation and zero-active join. Evidence:
+`docs/quality/evidence/async-read-blackhole-2026-10-10.json`, including the initial
+failed expectation that keepalive alone bounds reconnection waits. Configuration
+docs now explicitly distinguish stale-connection detection from request deadlines;
+no hidden deadline was added when the operator selects zero.
+
+Native-gate preparation: macOS live smoke accepts validated
+`OPERON_MOUNT_READ_MODE=auto|sync|async` and verifies eight concurrent distinct
+1MiB reads against backing-file bytes. The required hosted live-mount job now
+runs both default and explicit async modes, with separate retained logs and no
+diagnostic-only async failure escape. The smoke additionally requires graceful
+SIGINT exit status zero, detached mount and zero active read tasks; best-effort
+cleanup can no longer hide a teardown failure. Its grace limit is configurable
+through `OPERON_SMOKE_SHUTDOWN_TIMEOUT_SECS` (default 30s).
+Shell syntax, generic naming and existing
+mount-probe workflow contracts passed. Actual macOS execution is still pending;
+Linux or workflow-text checks are not counted as native acceptance.
+
+Alpine native source/public gate preparation: live probes now support explicit
+read mode, verify eight parallel distinct 1MiB reads and require new binaries to
+exit zero automatically after external ordinary unmount with zero post-join
+reads. Historical public binaries lacking the read-mode surface retain their
+legacy stop path. Native source runs both default and explicit sync modes for
+root/nonroot; downloaded release runs also test sync when advertised. OpenRC
+service/shutdown tests and distribution contracts passed; actual native FUSE
+and rebooted service execution remain required.
+
+Windows lifecycle preparation: WinFsp owned shutdown now broadcasts remote
+cancellation before dispatcher stop, preventing deadline-zero remote waits from
+blocking dispatcher teardown. The source helper now supports Windows as well
+as Linux. A strict native workflow step suspends only its newly spawned daemon,
+asserts a real read remains in flight with deadline zero, invokes both session
+Drop/unmount, and requires failed read, clean owner exit and detached drive.
+The daemon is resumed and owned test resources are cleaned on failure. This
+Rust 1.88.0 locked Windows GNU all-target compilation with `winfsp-debug`
+passed on 2026-10-11, including the Windows lifecycle helper. This is compile
+coverage only: the strict workflow step and native WinFsp execution are not
+yet counted as passed.
+Full suites, bounded saturation/cancellation, live formerly
+failing unmount probes, mutation/path/permission integrity and native
+Alpine/FUSE/OpenRC/macOS/Windows gates. No unit-only lifecycle substitution.
+On 2026-10-11, `verify-v0.5-docker.sh` passed against the current dirty source
+in the isolated `operon-async-release-validation` Compose project, including
+Rust 1.85 release-image builds, two-node auth/denial, capabilities, service
+checks, streaming filesystem transfers, exec secrets/stdin, audit and graph
+execution. Its owned containers/network were removed; existing user containers
+were not targeted. GLIBC baseline contract validation passed. Host v0.6/v0.6.1
+mount scripts explicitly skipped because `/dev/fuse` is absent: these are not
+live-FUSE passes and container/native mount coverage remains required.
+
+## Phase 151: Final Async Read Ops Acceptance and Defaults
+
+Status: In Progress. Rust 1.88.0 current production CLI/daemon/helper were rebuilt
+and pinned at `/tmp/operon-production-read-checkpoint.O5OsjT`. The first matched
+local 8-RPC matrix passed all 72 cases (three alternating trials, 1/4/8/16 readers,
+same/distinct/random). Both sides use identical binary hashes and explicit
+sync/async mode, not historical experimental builds. Remaining RPC/delay/control
+matrices, resources/regressions and final defaults are still required.
+Local 16/32-RPC and delayed 8-RPC matrices also passed. The delayed 16-RPC
+matrix's initial pair overlapped a 19.58s local contract-test compilation;
+retain that dataset but repeat the whole matched matrix without this build
+overlap before selecting final performance evidence.
+The clean delayed 16-RPC repeat completed on 2026-10-11. The new
+`scripts/performance/summarize-production-reads.py` checks all eight retained
+matrices (576 cases), identical binary hashes, trial membership, median and
+ops/s arithmetic against individual case records. Seven matrices (504 cases)
+are the primary set; the contaminated delayed 16-RPC run remains separately
+retained. For 16 distinct readers, async/sync ops/s ratios were 1.572 at local
+8 RPCs and 3.375 for clean delayed 16 RPCs. The equal-16-RPC control with 16
+sync workers versus four async workers was only 1.049 locally: do not attribute
+the entire gain to asynchronous dispatch alone. Same-file clean delayed
+16-reader throughput regressed 2.58%; retain it rather than claiming universal
+improvement. Final resource/default documentation and release gates remain
+open.
+Final checkpoint evidence is now retained in
+`docs/quality/evidence/async-read-production-2026-10-11.json`, including all
+576 cases, resources, hashes and the excluded contaminated matrix.
+`docs/quality/async-read-production.md` records the primary comparisons,
+regressions and conservative default decision: four Linux workers, eight RPC
+slots, 32 MiB budget, 64 pending reads; sixteen RPCs remain opt-in. Native and
+exact-release acceptance still remain required before this phase closes.
+Same-toolchain production binaries, matched three-trial
+local/delayed matrices and equal-RPC increased-sync-worker control. Retain
+regressions/resources and choose configurable defaults from final evidence.
+
+## Phase 152: Verified Async Read Public Release
+
+Status: In Progress. On 2026-10-11, GitHub reported v0.16.13 as Latest and
+no v0.16.14 tag. Selected v0.16.14; aligned eleven crate manifests and the
+lockfile, SDK package version, protocol version and version assertions. Current
+protocol/CLI/SDK contract validators are being aligned without rewriting
+historical release evidence. Rust 1.88.0 offline whole-workspace all-target
+check passed after alignment; the initial online check failed on sandbox DNS,
+not a compiler failure. Release publication validation, README alignment and
+full tests/native gates remain open.
+The v0.16.14 publication validator is registered in the core group and passed,
+including current version assertions, release/install/README dry-runs and
+orchestration planning. v0.16.13 validation now checks its immutable historical
+publication rather than demanding old versions in current manifests, and also
+passed. README documents source async/pending/poll controls and accepted
+unmount boundaries with an explicit pending-publication notice. Current install
+dry-runs and Windows runner workflow default target v0.16.14; actual public
+download verification must wait for publication.
+The version-aligned Rust 1.88.0 locked/offline whole-workspace all-target test
+run passed with local socket permissions on 2026-10-11, including CLI 58 units
+and ten compiled-binary integration cases, mount/config/transport tests and
+90 daemon tests. This does not count as native Windows/macOS/Alpine acceptance.
+Version-aligned SDK (13 scripts) and runtime (18 scripts) groups passed in
+full, including SDK typecheck/build/23 tests and real-daemon large transfer,
+exec/service/policy/transport integration. Strict whole-workspace/all-target
+Clippy passed with warnings denied. The first core run had one failure:
+the v0.14 live-mount validator still asserted the escaped v0.16.13 protocol
+and SDK versions. Those current-version assertions were aligned to v0.16.14
+without removing other contracts; the full core rerun is in progress.
+Cross-platform checking exposed two macOS-only unnecessary-mutability warnings
+in the shared session methods. Bindings are now mutable only on Linux, where
+stop notification and detached-session finish need mutation. macOS all-target
+cross-check (`macos-no-mount`) and all 48 mount tests passed after this cleanup;
+cross-check is not native FUSE-T runtime acceptance.
+The full core rerun completed successfully: all 55 scripts passed. Mount
+all-target Clippy also passed with warnings denied after the platform-binding
+cleanup. Local core/SDK/runtime groups are now green for the version-aligned
+source; exact committed-source CI and native/public gates remain open.
+Commit/push main, align versions, exact-SHA source/platform
+gates, pretag, verified draft, public Latest and all downloaded artifact/install/
+README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
+closeout are required; an experimental build does not complete this phase.
+
 ## Planning Principle
 
 Every phase should preserve the core boundary:

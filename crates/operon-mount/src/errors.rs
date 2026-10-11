@@ -3,6 +3,12 @@
 use crate::mount_core::{classify_mount_error, MountErrorKind};
 
 pub(crate) fn errno_for_error(error: &anyhow::Error) -> fuser::Errno {
+    if error
+        .downcast_ref::<crate::read_scheduler::ReadInterrupted>()
+        .is_some()
+    {
+        return fuser::Errno::EINTR;
+    }
     match classify_mount_error(error) {
         MountErrorKind::NotFound => fuser::Errno::ENOENT,
         MountErrorKind::AlreadyExists => fuser::Errno::EEXIST,

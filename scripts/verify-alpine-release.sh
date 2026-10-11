@@ -63,8 +63,14 @@ for image in \
         if [ "$OPERON_ALPINE_IDENTITY" = nonroot ]; then
           adduser -D -u 1000 operon-test
           su operon-test -s /bin/sh -c "python3 /workspace/scripts/alpine-runtime-acceptance.py --bin-dir /operon --live-mount"
+          if /operon/operon mount --help | grep -q -- --read-mode; then
+            su operon-test -s /bin/sh -c "python3 /workspace/scripts/alpine-runtime-acceptance.py --bin-dir /operon --live-mount --read-mode sync"
+          fi
         else
           python3 /workspace/scripts/alpine-runtime-acceptance.py --bin-dir /operon --live-mount
+          if /operon/operon mount --help | grep -q -- --read-mode; then
+            python3 /workspace/scripts/alpine-runtime-acceptance.py --bin-dir /operon --live-mount --read-mode sync
+          fi
         fi
       '
   done

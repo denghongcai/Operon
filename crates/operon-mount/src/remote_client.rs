@@ -18,6 +18,9 @@ pub struct GrpcRemoteFs {
     runtime: Option<tokio::runtime::Runtime>,
     read_requests: tokio::sync::Semaphore,
     read_bytes: tokio::sync::Semaphore,
+    shutdown: tokio::sync::watch::Sender<bool>,
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub(crate) read_activity: crate::read_scheduler::ReadActivity,
 }
 
 impl GrpcRemoteFs {
@@ -56,20 +59,112 @@ impl GrpcRemoteFs {
             runtime: Some(runtime),
             read_requests: tokio::sync::Semaphore::new(reads.max_inflight_reads),
             read_bytes: tokio::sync::Semaphore::new(reads.max_inflight_read_mib as usize * 1024),
+            shutdown: tokio::sync::watch::channel(false).0,
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            read_activity: Default::default(),
         })
     }
 
-    fn runtime(&self) -> anyhow::Result<&tokio::runtime::Runtime> {
+    pub(crate) fn runtime(&self) -> anyhow::Result<&tokio::runtime::Runtime> {
         self.runtime
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("remote fs runtime is unavailable"))
+    }
+
+    /// Stops admission and cancels reads, even when the RPC deadline is disabled.
+    /// Call before joining FUSE workers, which may be blocked in synchronous reads.
+    pub(crate) fn shutdown_reads(&self) {
+        self.shutdown.send_replace(true);
+        self.read_requests.close();
+        self.read_bytes.close();
+    }
+
+    pub(crate) async fn until_shutdown<T>(
+        &self,
+        work: impl Future<Output = anyhow::Result<T>>,
+    ) -> anyhow::Result<T> {
+        let mut shutdown = self.shutdown.subscribe();
+        tokio::select! {
+            biased;
+            _ = shutdown.wait_for(|stopped| *stopped) => {
+                Err(tonic::Status::cancelled("mount session is shutting down").into())
+            }
+            result = work => result,
+        }
+    }
+
+    fn call<T: Send>(
+        &self,
+        work: impl Future<Output = anyhow::Result<T>> + Send,
+    ) -> anyhow::Result<T> {
+        block_on_runtime(self.runtime()?, self.until_shutdown(work))
+    }
+
+    pub(crate) async fn read_range_async(
+        &self,
+        path: &str,
+        offset: u64,
+        size: u32,
+    ) -> anyhow::Result<Vec<u8>> {
+        self.read_range_with_deadline(path, offset, size, self.read_deadline())
+            .await
+    }
+
+    pub(crate) fn read_deadline(&self) -> Option<tokio::time::Instant> {
+        operon_core::runtime::TransportConfig::timeout(self.endpoint.transport.rpc_timeout_secs)
+            .map(|timeout| tokio::time::Instant::now() + timeout)
+    }
+
+    pub(crate) async fn read_range_with_deadline(
+        &self,
+        path: &str,
+        offset: u64,
+        size: u32,
+        deadline: Option<tokio::time::Instant>,
+    ) -> anyhow::Result<Vec<u8>> {
+        anyhow::ensure!(size <= 8 * 1024 * 1024, "read range exceeds 8 MiB");
+        let request = FsReadRangeRequest {
+            path: path.to_string(),
+            offset,
+            size,
+        };
+        let read = async {
+            let _request = self
+                .read_requests
+                .acquire()
+                .await
+                .map_err(|_| tonic::Status::cancelled("mount read admission closed"))?;
+            // Conservative KiB units also fit the 32-bit ARMv7 semaphore limit.
+            let _bytes = self
+                .read_bytes
+                .acquire_many(size.div_ceil(1024))
+                .await
+                .map_err(|_| tonic::Status::cancelled("mount read byte admission closed"))?;
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            let _activity = self.read_activity.start();
+            let mut client = operon_grpc_client::runtime_client(self.channel.clone());
+            Ok(client
+                .read_file_range(operon_grpc_client::request(&self.endpoint, request)?)
+                .await?
+                .into_inner()
+                .data)
+        };
+        self.until_shutdown(async {
+            match deadline {
+                Some(deadline) => tokio::time::timeout_at(deadline, read).await.map_err(|_| {
+                    tonic::Status::deadline_exceeded("mount read queue/RPC deadline exceeded")
+                })?,
+                None => read.await,
+            }
+        })
+        .await
     }
 }
 
 impl RemoteFs for GrpcRemoteFs {
     fn stat(&self, path: &str) -> anyhow::Result<FsStat> {
         let path = path.to_string();
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .stat_fs(operon_grpc_client::request(
@@ -87,7 +182,7 @@ impl RemoteFs for GrpcRemoteFs {
 
     fn list(&self, path: &str) -> anyhow::Result<FsList> {
         let path = path.to_string();
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             let mut entries = Vec::new();
             let mut page_token = String::new();
@@ -118,34 +213,7 @@ impl RemoteFs for GrpcRemoteFs {
     }
 
     fn read_range(&self, path: &str, offset: u64, size: u32) -> anyhow::Result<Vec<u8>> {
-        anyhow::ensure!(size <= 8 * 1024 * 1024, "read range exceeds 8 MiB");
-        let request = FsReadRangeRequest {
-            path: path.to_string(),
-            offset,
-            size,
-        };
-        block_on_runtime(self.runtime()?, async {
-            let read = async {
-                let _request = self.read_requests.acquire().await?;
-                // Conservative KiB accounting also fits Semaphore::MAX_PERMITS
-                // on supported 32-bit ARMv7, including the 512 MiB setting.
-                let _bytes = self.read_bytes.acquire_many(size.div_ceil(1024)).await?;
-                let mut client = operon_grpc_client::runtime_client(self.channel.clone());
-                Ok(client
-                    .read_file_range(operon_grpc_client::request(&self.endpoint, request)?)
-                    .await?
-                    .into_inner()
-                    .data)
-            };
-            match operon_core::runtime::TransportConfig::timeout(
-                self.endpoint.transport.rpc_timeout_secs,
-            ) {
-                Some(timeout) => tokio::time::timeout(timeout, read).await.map_err(|_| {
-                    tonic::Status::deadline_exceeded("mount read queue/RPC deadline exceeded")
-                })?,
-                None => read.await,
-            }
-        })
+        block_on_runtime(self.runtime()?, self.read_range_async(path, offset, size))
     }
 
     fn write_range(&self, path: &str, offset: u64, data: &[u8]) -> anyhow::Result<u64> {
@@ -168,7 +236,7 @@ impl RemoteFs for GrpcRemoteFs {
             expected_version: None,
             require_absent: false,
         };
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .write_file_range(operon_grpc_client::request(&self.endpoint, request)?)
@@ -186,7 +254,7 @@ impl RemoteFs for GrpcRemoteFs {
             expected_version: None,
             require_absent: false,
         };
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .truncate_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -201,7 +269,7 @@ impl RemoteFs for GrpcRemoteFs {
             path: path.to_string(),
             precondition: None,
         };
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             Ok(client
                 .mkdir_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -216,7 +284,7 @@ impl RemoteFs for GrpcRemoteFs {
             path: path.to_string(),
             precondition: None,
         };
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             client
                 .delete_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -235,7 +303,7 @@ impl RemoteFs for GrpcRemoteFs {
             to_expected_version: None,
             to_require_absent: false,
         };
-        block_on_runtime(self.runtime()?, async {
+        self.call(async {
             let mut client = operon_grpc_client::runtime_client(self.channel.clone());
             client
                 .rename_fs(operon_grpc_client::request(&self.endpoint, request)?)
@@ -263,7 +331,7 @@ impl Drop for GrpcRemoteFs {
     }
 }
 
-fn block_on_runtime<F, T>(runtime: &tokio::runtime::Runtime, future: F) -> T
+pub(crate) fn block_on_runtime<F, T>(runtime: &tokio::runtime::Runtime, future: F) -> T
 where
     F: Future<Output = T> + Send,
     T: Send,
@@ -302,6 +370,68 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shutdown_cancels_deadline_disabled_reads_and_future_admission() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let channel = runtime.block_on(async {
+            tonic::transport::Endpoint::from_static("http://127.0.0.1:1").connect_lazy()
+        });
+        let remote = GrpcRemoteFs {
+            endpoint: NodeEndpoint {
+                node_id: "test".into(),
+                endpoint: "grpc://127.0.0.1:1".into(),
+                token: None,
+                transport: operon_core::runtime::TransportConfig {
+                    rpc_timeout_secs: 0,
+                    ..Default::default()
+                },
+            },
+            channel,
+            runtime: Some(runtime),
+            read_requests: tokio::sync::Semaphore::new(1),
+            read_bytes: tokio::sync::Semaphore::new(8192),
+            shutdown: tokio::sync::watch::channel(false).0,
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            read_activity: Default::default(),
+        };
+        let permit = remote.read_requests.try_acquire().unwrap();
+        std::thread::scope(|scope| {
+            let (started, ready) = std::sync::mpsc::channel();
+            let (done, result) = std::sync::mpsc::channel();
+            let remote = &remote;
+            let worker = scope.spawn(move || {
+                let error = block_on_runtime(remote.runtime().unwrap(), async {
+                    started.send(()).unwrap();
+                    remote.read_range_async("/file", 0, 4096).await
+                })
+                .unwrap_err();
+                done.send(error.downcast_ref::<tonic::Status>().unwrap().code())
+                    .unwrap();
+            });
+            ready.recv().unwrap();
+            remote.shutdown_reads();
+            assert_eq!(
+                result
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                    .unwrap(),
+                tonic::Code::Cancelled
+            );
+            worker.join().unwrap();
+        });
+        drop(permit);
+        assert_eq!(remote.read_requests.available_permits(), 1);
+        assert_eq!(remote.read_bytes.available_permits(), 8192);
+        assert_eq!(
+            remote
+                .read_range("/file", 0, 4096)
+                .unwrap_err()
+                .downcast_ref::<tonic::Status>()
+                .unwrap()
+                .code(),
+            tonic::Code::Cancelled
+        );
+    }
+
+    #[test]
     fn largest_read_budget_fits_32bit_semaphore_limit() {
         let largest = 512_usize * 1024;
         assert!(largest <= (u32::MAX >> 3) as usize);
@@ -336,6 +466,9 @@ mod tests {
             runtime: Some(runtime),
             read_requests: tokio::sync::Semaphore::new(1),
             read_bytes: tokio::sync::Semaphore::new(8 * 1024),
+            shutdown: tokio::sync::watch::channel(false).0,
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            read_activity: Default::default(),
         };
         {
             let _bytes = remote.read_bytes.try_acquire_many(8 * 1024).unwrap();

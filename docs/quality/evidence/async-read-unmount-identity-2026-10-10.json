@@ -1,0 +1,23 @@
+{
+  "scope": "Development diagnostic, not a passed release gate",
+  "environment": "Disposable operon-review-tools:latest Docker container with its own mount namespace and SYS_ADMIN; only new tmpfs mounts inside /tmp/owned-mount",
+  "candidate_strategies": ["umount2(/proc/self/fd/N, MNT_DETACH)", "fchdir(pinned_root); umount2(., MNT_DETACH)"],
+  "results_for_both_strategies": {
+    "owned": {"errno": 0, "mounted_after": false},
+    "detached_replaced": {"errno": 22, "mounted_after": true, "replacement_preserved": true},
+    "overmounted": {"errno": 0, "mounted_after": true, "replacement_preserved": false, "visible_file_after": "original"}
+  },
+  "exit_status_for_both_trials": 1,
+  "failed_assertion": "Replacement sentinel must remain visible after attempting to unmount the pinned original",
+  "decision": "Reject both strategies as a universal replacement-race fix. A pinned descriptor prevents detached mount-ID reuse but does not prevent pathname resolution from following an overmount.",
+  "implementation_status": "Neither unsafe candidate was added to production. Existing replacement identity checks remain, with TOCTOU hardening explicitly incomplete.",
+  "move_mount_followup": {
+    "operation": "move_mount(pinned_original_fd, empty_path, private_staging, MOVE_MOUNT_F_EMPTY_PATH)",
+    "owned": "Moves original successfully; private staging detach succeeds",
+    "detached_replaced": "EINVAL; replacement remains unchanged",
+    "overmounted": "Moves original subtree including the overlaid replacement; original sentinel is not visible in staging",
+    "exit_status": 1,
+    "decision": "Rejected: moving the attached original subtree also moves its overmounts. No production change adopted."
+  },
+  "cleanup": "All --rm diagnostic containers exited and were removed; host mounts and existing Operon containers were untouched"
+}

@@ -12,7 +12,30 @@ use crate::passthrough::BackingId;
 
 /// A raw communication channel to the FUSE kernel driver
 #[derive(Debug, Clone)]
-pub(crate) struct Channel(Arc<DevFuse>);
+pub(crate) struct Channel(
+    Arc<DevFuse>,
+    #[cfg(target_os = "linux")] Option<Arc<ChannelStop>>,
+);
+
+/// Level-triggered wakeup: never drain the socket, so every receiver wakes.
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+pub(crate) struct ChannelStop {
+    reader: std::os::unix::net::UnixStream,
+    writer: std::os::unix::net::UnixStream,
+}
+
+#[cfg(target_os = "linux")]
+impl ChannelStop {
+    pub(crate) fn stop(&self) -> io::Result<()> {
+        use std::io::Write;
+        match (&self.writer).write(&[1]) {
+            Ok(_) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+}
 
 impl AsFd for Channel {
     fn as_fd(&self) -> BorrowedFd<'_> {
@@ -25,12 +48,58 @@ impl Channel {
     /// given path. The kernel driver will delegate filesystem operations of
     /// the given path to the channel.
     pub(crate) fn new(device: Arc<DevFuse>) -> Self {
-        Self(device)
+        Self(
+            device,
+            #[cfg(target_os = "linux")]
+            None,
+        )
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn enable_stop(&mut self) -> io::Result<Arc<ChannelStop>> {
+        use std::os::fd::AsRawFd;
+        let (reader, writer) = std::os::unix::net::UnixStream::pair()?;
+        writer.set_nonblocking(true)?;
+        // SAFETY: the owned device remains alive throughout both fcntl calls.
+        let flags = unsafe { libc::fcntl(self.0.as_raw_fd(), libc::F_GETFL) };
+        if flags < 0
+            || unsafe { libc::fcntl(self.0.as_raw_fd(), libc::F_SETFL, flags | libc::O_NONBLOCK) }
+                < 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        let stop = Arc::new(ChannelStop { reader, writer });
+        self.1 = Some(stop.clone());
+        Ok(stop)
     }
 
     /// Receives data up to the capacity of the given buffer (can block).
     #[cfg(not(target_os = "macos"))]
     fn receive(&self, buffer: &mut [u8]) -> nix::Result<usize> {
+        #[cfg(target_os = "linux")]
+        if let Some(stop) = &self.1 {
+            use std::os::fd::AsRawFd;
+            let mut fds = [
+                libc::pollfd {
+                    fd: self.0.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                },
+                libc::pollfd {
+                    fd: stop.reader.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                },
+            ];
+            // SAFETY: both descriptors and the two-element array remain live.
+            let result = unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) };
+            if result < 0 {
+                return Err(Errno::last());
+            }
+            if fds[1].revents != 0 {
+                return Err(Errno::ENODEV);
+            }
+        }
         nix::unistd::read(&self.0, buffer)
     }
 
@@ -47,8 +116,8 @@ impl Channel {
             return Ok(0);
         }
 
-        let packet_len = u32::from_ne_bytes(buffer[..4].try_into().expect("header length bytes"))
-            as usize;
+        let packet_len =
+            u32::from_ne_bytes(buffer[..4].try_into().expect("header length bytes")) as usize;
         if packet_len < header_len || packet_len > buffer.len() {
             return Err(Errno::EIO);
         }
@@ -120,7 +189,25 @@ impl Channel {
             crate::ll::ioctl::fuse_dev_ioc_clone(new_dev.as_raw_fd(), &mut source_fd)?;
         }
 
-        Ok(Channel::new(Arc::new(new_dev)))
+        let mut channel = Channel::new(Arc::new(new_dev));
+        if let Some(stop) = &self.1 {
+            // Cloned FUSE descriptors have independent status flags.
+            // SAFETY: channel owns this live device descriptor.
+            let flags = unsafe { libc::fcntl(channel.0.as_raw_fd(), libc::F_GETFL) };
+            if flags < 0
+                || unsafe {
+                    libc::fcntl(
+                        channel.0.as_raw_fd(),
+                        libc::F_SETFL,
+                        flags | libc::O_NONBLOCK,
+                    )
+                } < 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            channel.1 = Some(stop.clone());
+        }
+        Ok(channel)
     }
 }
 
@@ -139,5 +226,43 @@ impl ChannelSender {
 
     pub(crate) fn open_backing(&self, fd: BorrowedFd<'_>) -> std::io::Result<BackingId> {
         BackingId::create(&self.0, fd)
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod stop_tests {
+    use super::*;
+
+    #[test]
+    fn stopping_wakes_all_receivers_and_is_idempotent() {
+        use std::os::fd::OwnedFd;
+        let (device, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        let file = std::fs::File::from(OwnedFd::from(device));
+        let mut channel = Channel::new(Arc::new(DevFuse(file)));
+        let stop = channel.enable_stop().unwrap();
+        let (done, completion) = std::sync::mpsc::channel();
+        let threads: Vec<_> = (0..4)
+            .map(|_| {
+                let channel = channel.clone();
+                let done = done.clone();
+                std::thread::spawn(move || {
+                    done.send(channel.receive_retrying(&mut [0; 32])).unwrap();
+                })
+            })
+            .collect();
+        stop.stop().unwrap();
+        stop.stop().unwrap();
+        for _ in 0..4 {
+            assert_eq!(
+                completion
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                    .unwrap(),
+                Err(Errno::ENODEV)
+            );
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(channel.receive_retrying(&mut [0; 32]), Err(Errno::ENODEV));
     }
 }

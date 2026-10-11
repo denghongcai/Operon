@@ -91,6 +91,23 @@ jobs:
           echo "macOS live mount smoke exit code: ${status}"
           exit "$status"
 
+      - name: Run macOS explicit async live mount smoke
+        env:
+          OPERON_MOUNT_MACOS_BACKEND: ${{ inputs.macos_backend }}
+          OPERON_MOUNT_MACOS_OPTIONS: ${{ inputs.macos_options }}
+          OPERON_MOUNT_READ_MODE: async
+        run: |
+          set -o pipefail
+          scripts/smoke-macos-live-mount.sh 2>&1 | tee "$RUNNER_TEMP/macos-live-mount-async.log"
+
+      - name: Upload macOS async live mount smoke log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-live-mount-async-${{ github.run_id }}
+          path: ${{ runner.temp }}/macos-live-mount-async.log
+          if-no-files-found: warn
+
       - name: Upload macOS live mount smoke log
         if: always()
         uses: actions/upload-artifact@v7
@@ -184,6 +201,10 @@ jobs:
       - name: Run Windows live mount smoke
         shell: powershell
         run: scripts/smoke-windows-live-mount.ps1
+
+      - name: Run Windows deadline-zero read lifecycle smoke
+        shell: powershell
+        run: scripts/smoke-windows-read-lifecycle.ps1
 
   macos-fuse-zip-probe:
     name: macOS FUSE-T fuse-zip Probe (hosted)

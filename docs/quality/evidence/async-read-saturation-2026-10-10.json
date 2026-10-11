@@ -1,0 +1,110 @@
+{
+  "scope": "Linux development checkpoint, not exact-release or performance acceptance",
+  "candidate_directory": "/tmp/operon-read-busy-fixed-checkpoint.8mq2Ig",
+  "helper": "target/release/examples/session-lifecycle built with Rust 1.88.0 after configurable test limits",
+  "cases": {
+    "async": {
+      "read_limits": {
+        "pending": 1,
+        "concurrency": 1,
+        "budget_mib": 8
+      },
+      "offset_eof_zero_write_rename_truncate_delete": "passed",
+      "deadline_seconds": [
+        2.0037246880237944,
+        2.003423632006161,
+        2.003153502009809,
+        2.003067286044825
+      ],
+      "read_after_timeout_releases_budget": "passed",
+      "normal_unmount": "passed",
+      "normal_unmount_with_open_descriptor": "passed",
+      "session_drop_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_drop_with_open_descriptor": "passed",
+      "session_unmount_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_unmount_with_open_descriptor": "passed",
+      "fuse_interrupt_seconds": 0.0027269110432825983,
+      "fuse_interrupt_errno": 4,
+      "read_after_interrupt_releases_budget": "passed",
+      "external_lazy_helper_seconds": 0.0011160509893670678,
+      "external_lazy_method": "helper",
+      "inflight_unmount_seconds": 0.03282976901391521,
+      "inflight_unmount_errno": [
+        103,
+        103,
+        103,
+        103
+      ],
+      "zero_active_after_initial_joins": "passed",
+      "external_normal_unmount_without_signal": "passed",
+      "replacement_mount_preserved": "passed",
+      "zero_active_after_all_joins": "passed",
+      "status": "passed"
+    },
+    "sync": {
+      "read_limits": {
+        "pending": 1,
+        "concurrency": 1,
+        "budget_mib": 8
+      },
+      "offset_eof_zero_write_rename_truncate_delete": "passed",
+      "deadline_seconds": [
+        2.0027254979941063,
+        2.0026674949913286,
+        2.002633632044308,
+        2.001716650032904
+      ],
+      "read_after_timeout_releases_budget": "passed",
+      "normal_unmount": "passed",
+      "normal_unmount_with_open_descriptor": "passed",
+      "session_drop_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_drop_with_open_descriptor": "passed",
+      "session_unmount_inflight_errno": [
+        5,
+        103,
+        5,
+        5
+      ],
+      "session_unmount_with_open_descriptor": "passed",
+      "fuse_interrupt_seconds": 0.0026889430009759963,
+      "fuse_interrupt_errno": 4,
+      "read_after_interrupt_releases_budget": "passed",
+      "external_lazy_helper_seconds": 0.030489028024021536,
+      "external_lazy_method": "helper",
+      "inflight_unmount_seconds": 0.03382750297896564,
+      "inflight_unmount_errno": [
+        103,
+        103,
+        103,
+        103
+      ],
+      "zero_active_after_initial_joins": "passed",
+      "synchronous_callbacks_joined": "passed",
+      "external_normal_unmount_without_signal": "passed",
+      "replacement_mount_preserved": "passed",
+      "zero_active_after_all_joins": "passed",
+      "status": "passed"
+    }
+  },
+  "remaining": [
+    "Replacement unmount TOCTOU hardening",
+    "Disconnection and full source/native suites",
+    "Final production ops matrices",
+    "Exact-SHA public release verification"
+  ]
+}

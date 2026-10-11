@@ -21,6 +21,16 @@ DAEMON_PID=""
 MOUNT_PID=""
 WATCHDOG_PID=""
 SMOKE_TIMEOUT_SECS="${OPERON_SMOKE_TIMEOUT_SECS:-600}"
+SHUTDOWN_TIMEOUT_SECS="${OPERON_SMOKE_SHUTDOWN_TIMEOUT_SECS:-30}"
+if [[ ! "$SHUTDOWN_TIMEOUT_SECS" =~ ^[1-9][0-9]*$ ]] || (( SHUTDOWN_TIMEOUT_SECS > 3600 )); then
+  echo "OPERON_SMOKE_SHUTDOWN_TIMEOUT_SECS must be an integer from 1 to 3600" >&2
+  exit 2
+fi
+READ_MODE="${OPERON_MOUNT_READ_MODE:-auto}"
+case "$READ_MODE" in
+  auto|sync|async) ;;
+  *) echo "OPERON_MOUNT_READ_MODE must be auto, sync or async" >&2; exit 2 ;;
+esac
 OPEROND_BIN="$ROOT_DIR/target/debug/operond"
 OPERON_BIN="$ROOT_DIR/target/debug/operon"
 export DYLD_LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:${DYLD_LIBRARY_PATH:-}"
@@ -241,11 +251,26 @@ cargo build -q -p operond -p operon-cli --locked
 DAEMON_PID="$!"
 wait_for_node
 
-OPERON_MOUNT_TRACE=1 "$OPERON_BIN" --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" >"$MOUNT_LOG" 2>&1 &
+OPERON_MOUNT_TRACE=1 "$OPERON_BIN" --config "$CONFIG" mount macos-live:/ --to "$MOUNT_DIR" --read-mode "$READ_MODE" >"$MOUNT_LOG" 2>&1 &
 MOUNT_PID="$!"
 wait_for_mount
 
 grep -q "^seed$" "$MOUNT_DIR/seed.txt"
+
+# Exercise concurrent distinct reads, not only a tiny single cached file.
+python3 - "$WORKSPACE" "$MOUNT_DIR" <<'PY'
+import concurrent.futures
+from pathlib import Path
+import sys
+workspace, mount = map(Path, sys.argv[1:])
+payload = (bytes(range(251)) * 5000)[:1024 * 1024]
+for index in range(8):
+    (workspace / f'parallel-{index}').write_bytes(payload)
+def read(index):
+    assert (mount / f'parallel-{index}').read_bytes() == payload
+with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+    list(pool.map(read, range(8)))
+PY
 
 printf "created through macos mount" >"$MOUNT_DIR/new.txt"
 "$OPERON_BIN" --config "$CONFIG" fs read macos-live:/new.txt >"$TMP_DIR/new-read.txt"
@@ -261,4 +286,25 @@ grep -q "^abc$" "$TMP_DIR/renamed-read.txt"
 rm "$MOUNT_DIR/dir/renamed.txt"
 rmdir "$MOUNT_DIR/dir"
 
-echo "macOS live mount smoke passed"
+# Cleanup's best-effort fallback must not hide failed graceful teardown.
+kill -INT "$MOUNT_PID"
+for _ in $(seq 1 "$SHUTDOWN_TIMEOUT_SECS"); do
+  if ! kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+if kill -0 "$MOUNT_PID" >/dev/null 2>&1; then
+  echo "mount did not exit within configured graceful shutdown limit" >&2
+  dump_diagnostics
+  exit 1
+fi
+wait "$MOUNT_PID"
+MOUNT_PID=""
+if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then
+  echo "mount remained attached after successful process exit" >&2
+  exit 1
+fi
+grep -q 'active_after_join=0' "$MOUNT_LOG"
+
+echo "macOS live mount smoke passed (read mode: $READ_MODE)"

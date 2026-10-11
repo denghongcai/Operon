@@ -55,8 +55,11 @@ pub(crate) fn collect_unknown_config_fields(value: &serde_yaml::Value) -> Vec<Co
         "client.mount",
         &[
             "worker_threads",
+            "mode",
+            "max_pending_reads",
             "max_inflight_reads",
             "max_inflight_read_mib",
+            "unmount_poll_ms",
         ],
         &mut warnings,
     );

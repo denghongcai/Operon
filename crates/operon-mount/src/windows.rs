@@ -45,6 +45,7 @@ pub struct MountOptions {
 
 pub struct MountSession {
     handles: Option<WinFspMountHandles>,
+    remote: Arc<GrpcRemoteFs>,
 }
 
 impl MountSession {
@@ -78,6 +79,9 @@ impl MountSession {
     }
 
     fn shutdown(&mut self) {
+        // Dispatcher stop waits for callbacks. Cancel their remote waits first,
+        // including reads queued for reconnect with an explicitly zero deadline.
+        self.remote.shutdown_reads();
         let Some(handles) = self.handles.take() else {
             return;
         };
@@ -112,6 +116,9 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
 
     let remote_root = normalize_remote_path(&options.remote_path)?;
     options.reads.validate().map_err(anyhow::Error::msg)?;
+    if options.reads.mode == operon_core::runtime::MountReadMode::Async {
+        anyhow::bail!("async read mode is a Unix FUSE option; Windows uses native WinFsp dispatch");
+    }
     if options.reads.worker_threads.is_some() {
         anyhow::bail!("mount worker_threads is supported only on Linux FUSE");
     }
@@ -131,7 +138,7 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
             options.mount_point.display()
         )
     })?;
-    let context = OperonWinFspFs::new(MountAdapterCore::new(remote_fs), remote_root)?;
+    let context = OperonWinFspFs::new(MountAdapterCore::new(remote_fs.clone()), remote_root)?;
     trace_mount_event("start", options.mount_point.display().to_string());
     trace_mount_event("callback_flags", "direct_sys_interface=true create_ex=true");
     let handles = start_winfsp_mount(mount_point.as_ucstr(), context)
@@ -139,6 +146,7 @@ pub fn spawn_mount(options: MountOptions) -> anyhow::Result<MountSession> {
 
     Ok(MountSession {
         handles: Some(handles),
+        remote: remote_fs,
     })
 }
 

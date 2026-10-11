@@ -89,6 +89,7 @@ impl<'a> RequestWithSender<'a> {
                     | ll::Operation::FSyncDir(_)
                     | ll::Operation::Release(_)
                     | ll::Operation::ReleaseDir(_) => {}
+                    ll::Operation::Interrupt(_) => {}
                     ll::Operation::ReadDirPlus(_) => {}
                     _ => {
                         return Err(Errno::EACCES);
@@ -114,9 +115,12 @@ impl<'a> RequestWithSender<'a> {
                 return Err(Errno::EIO);
             }
 
-            ll::Operation::Interrupt(_) => {
-                // TODO: handle FUSE_INTERRUPT
-                return Err(Errno::ENOSYS);
+            ll::Operation::Interrupt(interrupt) => {
+                return if filesystem.interrupt(self.request_header(), interrupt.unique()) {
+                    Ok(None)
+                } else {
+                    Err(Errno::EAGAIN)
+                };
             }
 
             ll::Operation::Lookup(x) => {

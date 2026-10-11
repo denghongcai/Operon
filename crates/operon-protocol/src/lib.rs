@@ -3,7 +3,7 @@
 //! Conversion implementations live outside the crate entrypoint so protocol
 //! generation, versioning, and mapping code can evolve independently.
 
-pub const PROTOCOL_VERSION: &str = "v0.16.13";
+pub const PROTOCOL_VERSION: &str = "v0.16.14";
 /// Machine-readable filesystem failure metadata, independent of OS errno/text.
 pub const FS_ERROR_KIND_METADATA: &str = "operon-fs-error-kind";
 pub const FS_ERROR_DIRECTORY_NOT_EMPTY: &str = "directory-not-empty";

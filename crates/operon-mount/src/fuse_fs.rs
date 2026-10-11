@@ -27,6 +27,7 @@ fn trace_fuse_event(event: impl AsRef<str>, detail: impl AsRef<str>) {
 }
 
 pub(crate) struct OperonFuseFs {
+    pub(crate) reads: Option<crate::read_scheduler::ReadScheduler>,
     core: MountAdapterCore,
     inodes: RwLock<InodeTable>,
 }
@@ -34,6 +35,7 @@ pub(crate) struct OperonFuseFs {
 impl OperonFuseFs {
     pub(crate) fn new(remote_fs: Arc<dyn RemoteFs>, root: FsStat) -> Self {
         Self {
+            reads: None,
             core: MountAdapterCore::new(remote_fs),
             inodes: RwLock::new(InodeTable::new(root)),
         }
@@ -104,7 +106,17 @@ impl fuser::Filesystem for OperonFuseFs {
     }
 
     fn destroy(&mut self) {
+        drop(self.reads.take());
         trace_fuse_event("destroy", "ok");
+    }
+
+    fn interrupt(&self, _req: &fuser::Request, unique: fuser::RequestId) -> bool {
+        let found = self
+            .reads
+            .as_ref()
+            .is_some_and(|reads| reads.interrupt(unique));
+        trace_fuse_event("interrupt", format!("unique={unique:?} found={found}"));
+        found
     }
 
     fn lookup(
@@ -377,7 +389,7 @@ impl fuser::Filesystem for OperonFuseFs {
 
     fn read(
         &self,
-        _req: &fuser::Request,
+        req: &fuser::Request,
         ino: fuser::INodeNo,
         _fh: fuser::FileHandle,
         offset: u64,
@@ -393,6 +405,10 @@ impl fuser::Filesystem for OperonFuseFs {
         };
         if entry.is_dir {
             reply.error(fuser::Errno::EISDIR);
+            return;
+        }
+        if let Some(reads) = &self.reads {
+            reads.dispatch(req.unique(), entry.path, offset, size, reply);
             return;
         }
         match self.core.read_file(&entry.path, offset, size) {

@@ -409,6 +409,13 @@ pub trait Filesystem: Send + Sync + 'static {
     /// Called on filesystem exit.
     fn destroy(&mut self) {}
 
+    /// Cancel an outstanding request. Return true if found; the original request
+    /// must eventually reply EINTR. False causes EAGAIN so the kernel can retry
+    /// an interrupt which arrived before dispatch or ignore an already-finished ID.
+    fn interrupt(&self, _req: &Request, _unique: RequestId) -> bool {
+        false
+    }
+
     /// Look up a directory entry by name and get its attributes.
     fn lookup(&self, _req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
         warn!("[Not Implemented] lookup(parent: {parent:#x?}, name {name:?})");

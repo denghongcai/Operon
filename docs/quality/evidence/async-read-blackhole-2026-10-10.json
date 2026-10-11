@@ -1,0 +1,202 @@
+{
+  "scope": "Linux development checkpoint; not final performance or exact-release acceptance",
+  "limits": {
+    "pending": 1,
+    "rpc": 1,
+    "mib": 8
+  },
+  "transport": {
+    "connect_timeout_secs": 1,
+    "keepalive_interval_secs": 1,
+    "keepalive_timeout_secs": 1
+  },
+  "cases": {
+    "blackhole-async": {
+      "read_limits": {
+        "pending": 1,
+        "concurrency": 1,
+        "budget_mib": 8
+      },
+      "offset_eof_zero_write_rename_truncate_delete": "passed",
+      "deadline_seconds": [
+        2.002280279994011,
+        2.0022417650325224,
+        2.002076051023323,
+        2.0018569840467535
+      ],
+      "read_after_timeout_releases_budget": "passed",
+      "normal_unmount": "passed",
+      "status": "failed",
+      "failure": "TimeoutExpired(['python3', '-c', 'import os,sys,json,time; t=time.monotonic(); \\ntry: os.pread(int(sys.argv[1]),4096,0); result={\"unexpected_success\":True}\\nexcept OSError as e: result={\"errno\":e.errno,\"seconds\":time.monotonic()-t}\\nprint(json.dumps(result),flush=True)', '3'], 8)"
+    },
+    "blackhole-bounded-async": {
+      "read_limits": {
+        "pending": 1,
+        "concurrency": 1,
+        "budget_mib": 8
+      },
+      "offset_eof_zero_write_rename_truncate_delete": "passed",
+      "deadline_seconds": [
+        2.0031683489796706,
+        2.003336288034916,
+        2.0031992780277506,
+        2.003038206952624
+      ],
+      "read_after_timeout_releases_budget": "passed",
+      "normal_unmount": "passed",
+      "blackhole_configured_deadline": {
+        "errno": 5,
+        "seconds": 1.9915773579850793
+      },
+      "read_after_blackhole_recovery": "passed",
+      "normal_unmount_with_open_descriptor": "passed",
+      "session_drop_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_drop_with_open_descriptor": "passed",
+      "session_unmount_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_unmount_with_open_descriptor": "passed",
+      "fuse_interrupt_seconds": 0.0031098579638637602,
+      "fuse_interrupt_errno": 4,
+      "read_after_interrupt_releases_budget": "passed",
+      "external_lazy_helper_seconds": 0.001207981025800109,
+      "external_lazy_method": "helper",
+      "inflight_unmount_seconds": 0.06514763599261642,
+      "inflight_unmount_errno": [
+        103,
+        103,
+        103,
+        103
+      ],
+      "zero_active_after_initial_joins": "passed",
+      "external_normal_unmount_without_signal": "passed",
+      "replacement_mount_preserved": "passed",
+      "zero_active_after_all_joins": "passed",
+      "status": "passed"
+    },
+    "blackhole-unmount-async": {
+      "read_limits": {
+        "pending": 1,
+        "concurrency": 1,
+        "budget_mib": 8
+      },
+      "offset_eof_zero_write_rename_truncate_delete": "passed",
+      "deadline_seconds": [
+        2.0031141479848884,
+        2.003081833012402,
+        2.002931217022706,
+        2.002668031025678
+      ],
+      "read_after_timeout_releases_budget": "passed",
+      "normal_unmount": "passed",
+      "blackhole_configured_deadline": {
+        "errno": 5,
+        "seconds": 1.992865999985952
+      },
+      "read_after_blackhole_recovery": "passed",
+      "normal_unmount_with_open_descriptor": "passed",
+      "session_drop_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_drop_with_open_descriptor": "passed",
+      "session_unmount_inflight_errno": [
+        103,
+        5,
+        103,
+        103
+      ],
+      "session_unmount_with_open_descriptor": "passed",
+      "fuse_interrupt_seconds": 0.003458622028119862,
+      "fuse_interrupt_errno": 4,
+      "read_after_interrupt_releases_budget": "passed",
+      "inflight_unmount_fault": "loss_100_percent",
+      "external_lazy_helper_seconds": 0.0010694179800339043,
+      "external_lazy_method": "helper",
+      "inflight_unmount_seconds": 0.06487381999613717,
+      "inflight_unmount_errno": [
+        103,
+        103,
+        103,
+        103
+      ],
+      "zero_active_after_initial_joins": "passed",
+      "external_normal_unmount_without_signal": "passed",
+      "replacement_mount_preserved": "passed",
+      "zero_active_after_all_joins": "passed",
+      "status": "passed"
+    },
+    "blackhole-unmount-sync": {
+      "read_limits": {
+        "pending": 1,
+        "concurrency": 1,
+        "budget_mib": 8
+      },
+      "offset_eof_zero_write_rename_truncate_delete": "passed",
+      "deadline_seconds": [
+        2.00336467201123,
+        2.0032918080105446,
+        2.002941708022263,
+        2.0028770960052498
+      ],
+      "read_after_timeout_releases_budget": "passed",
+      "normal_unmount": "passed",
+      "blackhole_configured_deadline": {
+        "errno": 5,
+        "seconds": 1.9940460660145618
+      },
+      "read_after_blackhole_recovery": "passed",
+      "normal_unmount_with_open_descriptor": "passed",
+      "session_drop_inflight_errno": [
+        103,
+        103,
+        5,
+        5
+      ],
+      "session_drop_with_open_descriptor": "passed",
+      "session_unmount_inflight_errno": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "session_unmount_with_open_descriptor": "passed",
+      "fuse_interrupt_seconds": 0.002692322013899684,
+      "fuse_interrupt_errno": 4,
+      "read_after_interrupt_releases_budget": "passed",
+      "inflight_unmount_fault": "loss_100_percent",
+      "external_lazy_helper_seconds": 0.030238449980970472,
+      "external_lazy_method": "helper",
+      "inflight_unmount_seconds": 0.03362989198649302,
+      "inflight_unmount_errno": [
+        103,
+        103,
+        103,
+        103
+      ],
+      "zero_active_after_initial_joins": "passed",
+      "synchronous_callbacks_joined": "passed",
+      "external_normal_unmount_without_signal": "passed",
+      "replacement_mount_preserved": "passed",
+      "zero_active_after_all_joins": "passed",
+      "status": "passed"
+    }
+  },
+  "interpretation": "The initial expectation that keepalive bounds zero-deadline reads was disproven: channel reconnection waits are not an RPC deadline. Finite configured deadlines bound blackholed reads and network recovery succeeds without remount. Zero-deadline reads under complete packet loss are cancelled by automatically detected external lazy unmount in both modes.",
+  "remaining": [
+    "Replacement race support decision",
+    "Full native platform gates",
+    "Final production ops acceptance",
+    "Exact-source public release"
+  ]
+}

@@ -12,7 +12,7 @@ rg -n 'fs_service::read_range' crates/operond/src/runtime.rs
 rg -n 'read_file_range\(operon_grpc_client::request' crates/operon-mount/src/remote_client.rs
 rg -n 'readFileRangeBytes' packages/sdk-js/src/index.ts
 rg -n 'ReadFileRange' PROTOCOL.md docs/architecture/runtime-api.md docs/architecture/technology-and-protocol-decisions.md
-rg -n 'PROTOCOL_VERSION: &str = "v0.16.13"' crates/operon-protocol/src/lib.rs
+rg -n 'PROTOCOL_VERSION: &str = "v0.16.14"' crates/operon-protocol/src/lib.rs
 
 python - <<'PY'
 from pathlib import Path
@@ -21,10 +21,18 @@ text = Path("crates/operon-mount/src/remote_client.rs").read_text()
 impl_start = text.index("impl RemoteFs for GrpcRemoteFs")
 start = text.index("    fn read_range(&self, path: &str, offset: u64, size: u32)", impl_start)
 end = text.index("    fn write_range(&self, path: &str, offset: u64, data: &[u8])", start)
-body = text[start:end]
-if ".read_file_range(" not in body:
-    raise SystemExit("GrpcRemoteFs::read_range does not call read_file_range")
-if ".read_file(" in body:
+sync_body = text[start:end]
+async_start = text.index("    pub(crate) async fn read_range_async(")
+deadline_start = text.index("    pub(crate) async fn read_range_with_deadline(", async_start)
+async_body = text[async_start:deadline_start]
+deadline_body = text[deadline_start:impl_start]
+if "self.read_range_async(path, offset, size)" not in sync_body:
+    raise SystemExit("sync read_range does not delegate its exact range to shared async reads")
+if "self.read_range_with_deadline(path, offset, size, self.read_deadline())" not in async_body:
+    raise SystemExit("async read_range does not preserve its exact range and configured deadline")
+if ".read_file_range(" not in deadline_body or "FsReadRangeRequest" not in deadline_body:
+    raise SystemExit("shared range implementation does not call typed read_file_range RPC")
+if ".read_file(" in sync_body + async_body + deadline_body:
     raise SystemExit("GrpcRemoteFs::read_range still calls full read_file stream")
 
 development = Path("DEVELOPMENT.md").read_text()

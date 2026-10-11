@@ -113,7 +113,8 @@ def main(args):
     environment = dict(head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
                        dirty=subprocess.check_output(['git', 'status', '--short'], text=True),
                        image=args.image, mib=args.mib, delay_ms=args.delay_ms,
-                       operations=args.operations, readers=args.readers, repeats=args.repeats)
+                       operations=args.operations, readers=args.readers, repeats=args.repeats,
+                       baseline_mount_args=args.baseline_mount_args, candidate_mount_args=args.mount_args)
     environment['image_id'] = docker('image', 'inspect', '--format', '{{.Id}}', args.image).strip()
     (output / 'environment.json').write_text(json.dumps(environment, indent=2))
     try:
@@ -132,6 +133,9 @@ def main(args):
                 for name in ['operon', 'operond']:
                     shutil.copy2(binaries / name, case / 'bin' / name)
                     hashes[name] = hashlib.sha256((case / 'bin' / name).read_bytes()).hexdigest()
+                if args.lifecycle_helper:
+                    shutil.copy2(args.lifecycle_helper, case / 'bin' / 'mount-session-lifecycle')
+                    hashes['mount-session-lifecycle'] = hashlib.sha256((case / 'bin' / 'mount-session-lifecycle').read_bytes()).hexdigest()
                 size = args.mib * 1024 * 1024
                 payload = (bytes(range(251)) * ((size + 250) // 251))[:size]
                 digest = hashlib.sha256(payload).hexdigest()
@@ -198,7 +202,18 @@ policy:
                            '--operations', str(args.operations), '--readers', *map(str, args.readers)]
                 if label == 'candidate' and args.mount_args:
                     command += ['--mount-args', *args.mount_args]
+                elif label == 'baseline' and args.baseline_mount_args:
+                    command += ['--mount-args', *args.baseline_mount_args]
                 (case / 'stdout.jsonl').write_text(docker(*command))
+                if label == 'candidate' and args.acceptance_probes:
+                    docker('exec', client, 'sh', '-c',
+                           'command -v tc >/dev/null || (apt-get update -qq && apt-get install -y -qq iproute2)')
+                    (case / 'async-probes-stdout.json').write_text(docker(
+                        'exec', client, 'python3', '/repo/scripts/performance/async-read-probes.py', '--mode', args.probe_mode, '--lazy-method', args.probe_lazy_method,
+                        '--pending', str(args.probe_pending), '--concurrency', str(args.probe_concurrency),
+                        '--budget-mib', str(args.probe_budget_mib),
+                        *(['--blackhole-unmount'] if args.probe_blackhole_unmount else []),
+                        *(['--trace'] if args.probe_trace else [])))
                 resources = {name: docker('exec', daemon, 'cat', '/sys/fs/cgroup/' + name)
                              for name in ['cpu.stat', 'memory.peak']}
                 # Copy private audit evidence without changing its permissions.
@@ -250,8 +265,24 @@ if __name__ == '__main__':
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--delay-ms', type=int, default=0)
     parser.add_argument('--digest')
+    parser.add_argument('--acceptance-probes', action='store_true',
+                        help='Run production read lifecycle checks outside timed cases')
+    parser.add_argument('--probe-mode', choices=['sync', 'async'], default='async')
+    parser.add_argument('--probe-trace', action='store_true')
+    parser.add_argument('--probe-pending', type=int, default=64)
+    parser.add_argument('--probe-concurrency', type=int, default=16)
+    parser.add_argument('--probe-budget-mib', type=int, default=32)
+    parser.add_argument('--probe-blackhole-unmount', action='store_true')
+    parser.add_argument('--lifecycle-helper', type=Path,
+                        help='Optional compiled mount session Drop/unmount live-test helper')
+    parser.add_argument('--probe-lazy-method', choices=['helper', 'kernel'], default='helper')
+    parser.add_argument('--baseline-mount-args', type=json.loads, default=[],
+                        help='JSON array of baseline mount arguments')
     parser.add_argument('--mount-args', nargs=argparse.REMAINDER, default=[])
     args = parser.parse_args()
+    if not isinstance(args.baseline_mount_args, list) or not all(
+            isinstance(value, str) for value in args.baseline_mount_args):
+        parser.error('--baseline-mount-args must be a JSON array of strings')
     if min(args.mib, args.operations, args.repeats, *args.readers) <= 0 or args.delay_ms < 0:
         parser.error('Sizes, operations, repeats and readers must be positive; delay nonnegative')
     if args.worker:

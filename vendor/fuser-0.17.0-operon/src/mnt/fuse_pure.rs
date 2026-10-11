@@ -90,8 +90,7 @@ impl MountImpl {
             if err == nix::errno::Errno::EPERM {
                 // Linux always returns EPERM for non-root users.  We have to let the
                 // library go through the setuid-root "fusermount -u" to unmount.
-                fuse_unmount_pure(&self.mountpoint);
-                return Ok(());
+                return fuse_unmount_pure(&self.mountpoint);
             } else {
                 return Err(err.into());
             }
@@ -126,17 +125,17 @@ fn fuse_mount_pure(
     fuse_mount_fusermount(mountpoint, options, acl)
 }
 
-fn fuse_unmount_pure(mountpoint: &CStr) {
+fn fuse_unmount_pure(mountpoint: &CStr) -> io::Result<()> {
     #[cfg(target_os = "linux")]
     {
         if nix::mount::umount2(mountpoint, nix::mount::MntFlags::MNT_DETACH).is_ok() {
-            return;
+            return Ok(());
         }
     }
     #[cfg(target_os = "macos")]
     {
         if nix::mount::unmount(mountpoint, nix::mount::MntFlags::MNT_FORCE).is_ok() {
-            return;
+            return Ok(());
         }
     }
 
@@ -149,9 +148,48 @@ fn fuse_unmount_pure(mountpoint: &CStr) {
         .arg("--")
         .arg(OsStr::new(&mountpoint.to_string_lossy().into_owned()));
 
-    if let Ok(output) = builder.output() {
-        debug!("fusermount: {}", String::from_utf8_lossy(&output.stdout));
-        debug!("fusermount: {}", String::from_utf8_lossy(&output.stderr));
+    let output = builder.output()?;
+    debug!("fusermount: {}", String::from_utf8_lossy(&output.stdout));
+    debug!("fusermount: {}", String::from_utf8_lossy(&output.stderr));
+    check_unmount_helper_output(output)
+}
+
+fn check_unmount_helper_output(output: std::process::Output) -> io::Result<()> {
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "FUSE unmount helper failed ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )))
+    }
+}
+
+#[cfg(test)]
+mod unmount_helper_tests {
+    use super::check_unmount_helper_output;
+    use std::os::unix::process::ExitStatusExt;
+
+    #[test]
+    fn unsuccessful_helper_is_not_reported_as_unmounted() {
+        let output = std::process::Output {
+            status: std::process::ExitStatus::from_raw(256),
+            stdout: Vec::new(),
+            stderr: b"permission denied".to_vec(),
+        };
+        let error = check_unmount_helper_output(output).unwrap_err();
+        assert!(error.to_string().contains("permission denied"));
+    }
+
+    #[test]
+    fn successful_helper_is_accepted() {
+        let output = std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        };
+        assert!(check_unmount_helper_output(output).is_ok());
     }
 }
 

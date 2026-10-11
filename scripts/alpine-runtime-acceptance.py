@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual packaged-binary Alpine runtime/live-FUSE acceptance (no skip gates)."""
 import argparse
+import concurrent.futures
 import errno
 import hashlib
 import json
@@ -16,6 +17,7 @@ import time
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--bin-dir', type=Path, required=True)
 parser.add_argument('--live-mount', action='store_true')
+parser.add_argument('--read-mode', choices=['auto', 'sync', 'async'], default='auto')
 parser.add_argument('--operations', type=int, default=500)
 args = parser.parse_args()
 assert args.operations > 0
@@ -188,11 +190,20 @@ with tempfile.TemporaryDirectory(prefix='operon-alpine-runtime-') as tmp:
             helper = shutil.which('fusermount3') or shutil.which('fusermount')
             assert helper, 'required non-root mount helper is missing (not a skip)'
             cli('doctor', '--mount-runtime')
+            supports_read_mode = b'--read-mode' in cli('mount', '--help').stdout
+            mount_args = [] if args.read_mode == 'auto' else ['--read-mode', args.read_mode]
             process = spawn([str(bins / 'operon'), '--config', str(config), 'mount',
-                             'local:/', '--to', str(mount)], root / 'mount.log')
+                             'local:/', '--to', str(mount), *mount_args], root / 'mount.log')
             wait_for(lambda: os.path.ismount(mount), 'real FUSE mount')
             mounted = True
             assert (mount / 'survivor').read_bytes() == b'ORIGINAL'
+            parallel_payload = (bytes(range(251)) * 5000)[:1024 * 1024]
+            for index in range(8):
+                (workspace / f'parallel-{index}').write_bytes(parallel_payload)
+            def parallel_read(index):
+                assert (mount / f'parallel-{index}').read_bytes() == parallel_payload
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(parallel_read, range(8)))
             def expect_errno(expected, operation):
                 try:
                     operation()
@@ -235,11 +246,19 @@ with tempfile.TemporaryDirectory(prefix='operon-alpine-runtime-') as tmp:
             wait_for(lambda: (mount / 'renamed').read_bytes() == expected, 'mount recovery after daemon restart')
             subprocess.run([helper, '-u', str(mount)], check=True, timeout=timeout or None)
             mounted = False
-            stop(process)
+            if supports_read_mode:
+                # New source/public binaries must automatically detect detach;
+                # do not mask a hung owner by sending SIGTERM in stop().
+                assert process.wait(timeout=stop_timeout or None) == 0
+                assert 'active_after_join=0' in (root / 'mount.log').read_text()
+            else:
+                # Historical public bundles predate automatic detach detection.
+                stop(process)
             assert not os.path.ismount(mount)
             print(json.dumps(dict(test='fuse-create-read-delete', operations=args.operations,
                                   ops_per_second=args.operations / seconds, seconds=seconds,
-                                  uid=os.getuid(), architecture=os.uname().machine)))
+                                  uid=os.getuid(), architecture=os.uname().machine,
+                                  read_mode=args.read_mode)))
 
         events = json.loads(cli('--json', 'audit', 'show', 'local', '--limit', '10').stdout)['events']
         assert events

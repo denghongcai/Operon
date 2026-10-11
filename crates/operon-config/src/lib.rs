@@ -556,10 +556,16 @@ mod tests {
         let defaults = OperonConfig::from_str_with_warnings("version: 1").unwrap();
         assert_eq!(defaults.config.client.mount, MountReadConfig::default());
         let configured = OperonConfig::from_str_with_warnings(
-            "version: 1\nclient:\n  mount:\n    worker_threads: 16\n    max_inflight_reads: 4\n    max_inflight_read_mib: 8\n    typo: true\n",
+            "version: 1\nclient:\n  mount:\n    mode: async\n    max_pending_reads: 128\n    worker_threads: 16\n    max_inflight_reads: 4\n    max_inflight_read_mib: 8\n    unmount_poll_ms: 500\n    typo: true\n",
         ).unwrap();
         assert_eq!(configured.config.client.mount.worker_threads, Some(16));
         assert_eq!(configured.config.client.mount.max_inflight_reads, 4);
+        assert_eq!(configured.config.client.mount.unmount_poll_ms, 500);
+        assert_eq!(
+            configured.config.client.mount.mode,
+            operon_core::runtime::MountReadMode::Async
+        );
+        assert_eq!(configured.config.client.mount.max_pending_reads, 128);
         assert_eq!(
             configured.warnings,
             vec![ConfigWarning {
@@ -573,6 +579,12 @@ mod tests {
             "max_inflight_reads: 65",
             "max_inflight_read_mib: 7",
             "max_inflight_read_mib: 513",
+            "unmount_poll_ms: 0",
+            "unmount_poll_ms: 9",
+            "unmount_poll_ms: 60001",
+            "mode: invalid",
+            "max_pending_reads: 0",
+            "max_pending_reads: 4097",
         ] {
             assert!(
                 OperonConfig::from_str_with_warnings(&format!(

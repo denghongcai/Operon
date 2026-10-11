@@ -93,6 +93,34 @@ impl MountImpl {
 pub(crate) struct Mount {
     mount_impl: Option<MountImpl>,
     mount_point: PathBuf,
+    #[cfg(target_os = "linux")]
+    identity: CapturedMount,
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+struct CapturedMount {
+    id: u64,
+}
+
+#[cfg(target_os = "linux")]
+fn capture_mount_id(path: &Path) -> io::Result<CapturedMount> {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::OpenOptionsExt;
+    // O_PATH does not invoke filesystem open/getattr callbacks before handshake.
+    let root = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_PATH)
+        .open(path)?;
+    let info = std::fs::read_to_string(format!("/proc/self/fdinfo/{}", root.as_raw_fd()))?;
+    let id = info
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("mnt_id:")
+                .and_then(|id| id.trim().parse().ok())
+        })
+        .ok_or_else(|| io::Error::other("kernel did not report FUSE mount identity"))?;
+    Ok(CapturedMount { id })
 }
 
 impl Mount {
@@ -109,6 +137,8 @@ impl Mount {
                 Mount {
                     mount_impl: Some(MountImpl::Pure(mount)),
                     mount_point: mountpoint.to_path_buf(),
+                    #[cfg(target_os = "linux")]
+                    identity: capture_mount_id(mountpoint)?,
                 },
             ))
         }
@@ -120,6 +150,8 @@ impl Mount {
                 Mount {
                     mount_impl: Some(MountImpl::Fuse2(mount)),
                     mount_point: mountpoint.to_path_buf(),
+                    #[cfg(target_os = "linux")]
+                    identity: capture_mount_id(mountpoint)?,
                 },
             ))
         }
@@ -131,6 +163,8 @@ impl Mount {
                 Mount {
                     mount_impl: Some(MountImpl::Fuse3(mount)),
                     mount_point: mountpoint.to_path_buf(),
+                    #[cfg(target_os = "linux")]
+                    identity: capture_mount_id(mountpoint)?,
                 },
             ))
         }
@@ -151,6 +185,18 @@ impl Mount {
             }
             None => Ok(()),
         }
+    }
+
+    /// Release mount ownership after independently confirming external detachment.
+    /// No path-based unmount is issued, so a replacement mount is not touched.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn disarm(mut self) {
+        self.mount_impl.take();
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn mount_id(&self) -> u64 {
+        self.identity.id
     }
 }
 
@@ -186,7 +232,13 @@ fn libc_umount(mnt: &CStr) -> nix::Result<()> {
         target_os = "netbsd"
     )))]
     {
-        nix::mount::umount(mnt)
+        // Match the Linux helper's existing lazy-unmount behavior: mounted
+        // user descriptors must not turn owned session shutdown into EBUSY.
+        // Session owners cancel callbacks before joining/closing /dev/fuse.
+        nix::mount::umount2(
+            mnt,
+            nix::mount::MntFlags::MNT_DETACH | nix::mount::MntFlags::UMOUNT_NOFOLLOW,
+        )
     }
 }
 

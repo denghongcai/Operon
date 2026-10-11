@@ -1,29 +1,65 @@
 pub type NodeId = String;
 pub type CapabilityId = String;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MountReadMode {
+    #[default]
+    Auto,
+    Sync,
+    Async,
+}
+
+impl std::str::FromStr for MountReadMode {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "auto" => Ok(Self::Auto),
+            "sync" => Ok(Self::Sync),
+            "async" => Ok(Self::Async),
+            _ => Err("mount read mode must be auto, sync or async".into()),
+        }
+    }
+}
+
 /// Mount read scheduling limits, independent of transport deadlines.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct MountReadConfig {
+    pub mode: MountReadMode,
+    /// Queued plus active owned read tasks; callback admission is also bounded
+    /// by the platform worker count and the ordinary RPC deadline.
+    pub max_pending_reads: usize,
     /// Linux FUSE workers; None preserves the platform default.
     pub worker_threads: Option<usize>,
     pub max_inflight_reads: usize,
     /// Budget for requested bytes of in-flight RPCs, not total process RSS.
     pub max_inflight_read_mib: u32,
+    /// Linux external-unmount detection interval; independent of RPC deadlines.
+    pub unmount_poll_ms: u64,
 }
 
 impl Default for MountReadConfig {
     fn default() -> Self {
         Self {
+            mode: MountReadMode::Auto,
+            max_pending_reads: 64,
             worker_threads: None,
             max_inflight_reads: 8,
             max_inflight_read_mib: 32,
+            unmount_poll_ms: 250,
         }
     }
 }
 
 impl MountReadConfig {
     pub fn validate(&self) -> Result<(), String> {
+        if !(1..=4096).contains(&self.max_pending_reads) {
+            return Err("mount max_pending_reads must be between 1 and 4096".into());
+        }
+        if !(10..=60_000).contains(&self.unmount_poll_ms) {
+            return Err("mount unmount_poll_ms must be between 10 and 60000".into());
+        }
         if self
             .worker_threads
             .is_some_and(|count| !(1..=64).contains(&count))
@@ -37,6 +73,57 @@ impl MountReadConfig {
             return Err("mount max_inflight_read_mib must be between 8 and 512".into());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mount_read_tests {
+    use super::*;
+
+    #[test]
+    fn modes_parse_explicitly_without_silent_fallback() {
+        for (name, mode) in [
+            ("auto", MountReadMode::Auto),
+            ("sync", MountReadMode::Sync),
+            ("async", MountReadMode::Async),
+        ] {
+            assert_eq!(name.parse::<MountReadMode>().unwrap(), mode);
+        }
+        for name in ["", "Async", "unknown"] {
+            assert!(name.parse::<MountReadMode>().is_err());
+        }
+    }
+
+    #[test]
+    fn pending_and_detection_limits_accept_both_boundaries() {
+        let defaults = MountReadConfig::default();
+        assert_eq!(defaults.mode, MountReadMode::Auto);
+        assert_eq!(defaults.max_pending_reads, 64);
+        assert!(defaults.validate().is_ok());
+        for count in [1, 4096] {
+            assert!(MountReadConfig {
+                max_pending_reads: count,
+                ..defaults.clone()
+            }
+            .validate()
+            .is_ok());
+        }
+        for interval in [10, 60000] {
+            assert!(MountReadConfig {
+                unmount_poll_ms: interval,
+                ..defaults.clone()
+            }
+            .validate()
+            .is_ok());
+        }
+        for count in [0, 4097] {
+            assert!(MountReadConfig {
+                max_pending_reads: count,
+                ..defaults.clone()
+            }
+            .validate()
+            .is_err());
+        }
     }
 }
 
