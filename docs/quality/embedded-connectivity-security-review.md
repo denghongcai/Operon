@@ -11,6 +11,18 @@ expanded wrapper and object lifetime/null/type validation before disposition.
 The current API read returns three open code-scanning alerts (#13–15), zero
 Dependabot and zero secret-scanning alerts. No findings were dismissed.
 
+Local wrapper review: pinned napi-derive-backend emits `napi_unwrap` status
+checks, `validate_type_tag` (active because this crate enables napi8), then
+`register_native_borrow_with_value` before FromNapiRef/FromNapiMutRef casts.
+The pinned napi 3.14.2 borrow guard rejects null pointers and tracks aliases;
+the rooted conversion scope keeps the source JavaScript object referenced.
+Generated method receivers separately use `CallbackInfo::unwrap_raw` and
+borrow guards. The actual Alpine Node fixture now verifies both classes reject
+plain objects, prototype-spoofed objects and a wrapped object of the wrong class
+before rerunning all capability checks. Those checks passed locally. This is
+not a blanket disposition: asynchronous reference lifetime review, exact-source
+online regressions and final alert review remain required.
+
 On 2026-10-11, a paginated GitHub API read of `denghongcai/Operon` returned six
 open CodeQL alerts, no open Dependabot alerts and no open secret-scanning
 alerts. All three APIs were accessible. Re-query against the final release

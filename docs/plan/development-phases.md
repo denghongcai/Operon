@@ -8036,6 +8036,11 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   real SDK acceptance passes again after the fix; Windows revalidation remains
   required. Security API now reports three open alerts: existing #13 plus N-API
   macro pointer findings #14/#15, requiring expanded-wrapper lifetime review.
+  Reviewed pinned N-API conversion generation and null/type/borrow guards;
+  real Alpine tests now reject plain, prototype-spoofed and wrong-native-class
+  receivers for both client and call before full capability acceptance. All
+  pass locally; asynchronous lifetime and online Security disposition remain
+  open, with no alert dismissal or suppression.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

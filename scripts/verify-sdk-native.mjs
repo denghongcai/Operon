@@ -14,7 +14,7 @@ const bindingPath = process.env.OPERON_SDK_NATIVE_PATH;
 assert(bindingPath && path.isAbsolute(bindingPath), "explicit absolute binding path required");
 const binding = { exports: {} };
 process.dlopen(binding, bindingPath);
-const { NativeClient } = binding.exports;
+const { NativeClient, NativeCall } = binding.exports;
 const dir = await mkdtemp(path.join(os.tmpdir(), "operon-sdk-native-"));
 let daemon;
 let client;
@@ -105,6 +105,14 @@ try {
   assert(node.includes(Buffer.from("native-sdk-owned")), "node response has wrong logical ID");
   await assert.rejects(rpc("Health", "invalid-test-token"), /grpc-status:16:/);
   const stalled = await client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]");
+  // Exercise generated N-API class receiver validation, including a genuine
+  // native object of the wrong class and prototype-spoofed plain objects.
+  for (const receiver of [{}, Object.create(NativeClient.prototype), stalled]) {
+    assert.throws(() => NativeClient.prototype.close.call(receiver));
+  }
+  for (const receiver of [{}, Object.create(NativeCall.prototype), client]) {
+    assert.throws(() => NativeCall.prototype.cancel.call(receiver));
+  }
   const waiting = stalled.receive();
   stalled.cancel();
   await assert.rejects(waiting, /cancelled/);
