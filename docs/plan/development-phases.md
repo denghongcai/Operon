@@ -8291,6 +8291,11 @@ now pins npm 11.6.1 while retaining Node 22, checks out the immutable input tag
 and emits a checked source-SHA marker. Its verifier orchestration revision can
 differ from the runtime tag; validation scripts and public binaries remain
 exact-source. All five public SDK business/relay gates must still pass.
+Replacement public artifact run `38158880680` uses that pinned installer.
+The explicit postrelease artifact-run option requires successful native jobs
+on all five platforms, their checked original-tag SHA markers and their full
+runtime acceptance completion lines; a tooling workflow commit alone is not
+source evidence. No tag or published runtime asset changes are made.
 
 ## Planning Principle
 

@@ -205,7 +205,27 @@ verify_postrelease() {
   fi
 
   echo "public release is published: $release_url"
-  require_successful_workflow "Verify Release Artifacts"
+  if [[ -n "${OPERON_RELEASE_ARTIFACT_RUN_ID:-}" ]]; then
+    # A tooling-only workflow revision may still check out the exact tag.
+    # Require all native platforms and each job's checked source/output proof.
+    (
+      artifact_run="$OPERON_RELEASE_ARTIFACT_RUN_ID"
+      [[ "$artifact_run" =~ ^[0-9]+$ ]]
+      test "$(gh run view "$artifact_run" --repo "$REPO" --json status,conclusion,name --jq '.status + ":" + .conclusion + ":" + .name')" = 'completed:success:Verify Release Artifacts'
+      job_names="$(gh run view "$artifact_run" --repo "$REPO" --json jobs --jq '.jobs[] | select(.conclusion == "success") | .name' | sort)"
+      expected_jobs="$(printf 'Verify Release Artifacts (%s)\n' ubuntu-24.04 ubuntu-24.04-arm macos-15 macos-15-intel windows-2025 | sort)"
+      test "$job_names" = "$expected_jobs"
+      test "$(gh run view "$artifact_run" --repo "$REPO" --json jobs --jq '.jobs | length')" = 5
+      artifact_log="$(mktemp /tmp/operon-public-artifact-gate.XXXXXX)"
+      trap 'rm -f "$artifact_log"' EXIT
+      gh run view "$artifact_run" --repo "$REPO" --log > "$artifact_log"
+      test "$(grep -Fc "PUBLIC_ARTIFACT_SOURCE=$COMMIT_SHA TAG=$TAG" "$artifact_log")" = 5
+      test "$(grep -Fc "release artifact verification passed for $REPO@$TAG on " "$artifact_log")" = 5
+      echo "Five-platform public artifacts passed in run $artifact_run using tagged source $COMMIT_SHA"
+    )
+  else
+    require_successful_workflow "Verify Release Artifacts"
+  fi
   require_successful_workflow "Verify Release Install Usability"
   require_successful_workflow "Verify README Quickstart"
   if release_has_musl_assets "$TAG"; then
