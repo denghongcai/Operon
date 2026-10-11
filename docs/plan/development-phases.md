@@ -7908,7 +7908,7 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   groups), native dual-architecture Alpine `38125745828`, Embedded Connectivity
   `38125745818` and CodeQL `38125745734`. These prove the MSRV/toolchain and
   owned transport foundation, not the still-open later-phase release scope.
-- Phase 156 — In Progress: native daemon/client/config/identity integration.
+- Phase 156 — Completed: native daemon/client/config/identity integration.
   Added protocol/framework-free core connection settings, optional
   `daemon.iroh` and per-node `transport.iroh`, nested unknown-field warnings,
   explicit private identity paths and configurable endpoint/handshake/QUIC
@@ -7945,7 +7945,7 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   not yet accepted. Doctor now separately diagnoses mandatory bearer auth for
   embedded listeners, including loopback TCP configurations; regression covers
   missing auth and configured token-file references.
-- Phase 157 — In progress: self-hosted relay/NAT and public SDK/native/online CI
+- Phase 157 — Completed: self-hosted relay/NAT and public SDK/native/online CI
   tests. Added version-pinned upstream iroh-relay 1.3.0 Docker build and an
   owned-loopback relay gate, wired into Embedded Connectivity CI. Real local
   execution passed: both endpoints have zero IP transports, pinned identities
@@ -8132,7 +8132,7 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   still mandatory. The concurrent grouped core run observed an intermediate
   stale shell assertion before its fix; complete groups must be rerun on the
   immutable fixed source, not treated as accepted from mixed-worktree output.
-- Phase 158 — In progress: complete regressions, matched ops/s and README/support docs.
+- Phase 158 — Completed: complete regressions, matched ops/s and README/support docs.
   Added owned-relay bootstrap/direct-upgrade acceptance using only the peer's
   relay address at connect time. Observe the connection path stream until an
   IP path is actually selected for application data, then verify payload echo
@@ -8234,6 +8234,29 @@ behavior, no external process/public relay enrollment, native SDK matching and
 measured performance limits; it links to actual publication status rather than
 describing the production implementation as only a PoC. Runtime sources are
 unchanged from the focused-tested PTY fix; final exact-SHA CI remains required.
+Candidate `68f98ab6722dcf773dcd913836474307d1365d1c` now passes complete
+CI `38154495859`, CodeQL `38154495408`, five native SDK platforms
+`38154533676`, hosted macOS/Windows live mount `38154538295` and Windows
+runner `38154540879`. Security APIs reference this exact source: three open
+CodeQL findings with source/native-test-supported not-affected dispositions,
+zero Dependabot and zero secret-scanning alerts; no dismissal or suppression.
+Embedded Connectivity `38154535926` passes every required real-network gate,
+including TLS/SNAT same-connection upgrade and actual UDP-denied interrupted
+stream recovery without mutation replay. Alpine x86_64 passes; arm64 remains
+in its final GNU/musl ops comparison. Evidence documentation is
+held for the post-publication commit; candidate runtime/tag source is unchanged.
+All seven final-source gates now pass, including native Alpine run
+`38154495831` on both architectures with runtime/FUSE/OpenRC, SDK and ops/s
+acceptance. Formal pretag passes for `68f98ab6722dcf773dcd913836474307d1365d1c`;
+immutable `v0.16.15` is pushed and Draft Release `38156351970` is running on
+that exact SHA. Phases 156–158 are complete at the verified source boundary;
+Phase 159 remains in progress until all 17 draft assets, public download,
+installation/SDK/Alpine/README gates and formal postrelease verification pass.
+User-requested README cleanup removes release/implementation/test commentary
+from the introduction. A standalone Embedded Connectivity section now contains
+only server/client configuration, pairing, unchanged commands and the setup
+guide link. This documentation-only follow-up does not move the release tag or
+change the verified runtime source; public acceptance remains pending.
 
 ## Planning Principle
 

@@ -1,14 +1,40 @@
 # Embedded connectivity release Security review
 
-Status: In progress; not a release-completion claim.
+Status: Final source review completed; public artifact acceptance remains pending.
 
-Current API refresh on 2026-10-11: three open CodeQL alerts (#13–15),
+Current API refresh on 2026-10-12: three open CodeQL alerts (#13–15),
 zero open Dependabot alerts and zero open secret-scanning alerts. All three
 APIs are accessible. Each open CodeQL finding currently references analysis
-source `09a97c464f166966a3e0674b44495c43a8ea4156` on `refs/heads/main`.
-The newer `bd16bee` source still needs its final scan and native evidence.
+source `68f98ab6722dcf773dcd913836474307d1365d1c` on `refs/heads/main`.
+CodeQL `38154495408`, complete CI `38154495859`, five-platform native SDK
+`38154533676` and hosted macOS/Windows live mount `38154538295` pass on that SHA.
 No alert has been dismissed or suppressed. The snapshots below describe
 earlier source states and must not be used as current alert counts.
+
+## Final source disposition
+
+- **#13: not affected by the reported secret-value disclosure.** The printed
+  values come from `PolicyConfig.exec.allowed_secrets`, permitted names only,
+  not the loaded secret store or bearer token. The compiled CLI regression
+  `config_explain_prints_allowed_secret_names_but_never_values` passes on final
+  MSRV/stable and consolidated CI; it exercises human and JSON output with real
+  token/secret sentinel files and rejects their values in stdout/stderr.
+- **#14–15: not affected by the reported invalid class-pointer conversions
+  with the pinned napi8 wrappers.** Cargo.lock pins napi 3.14.2,
+  napi-derive 3.6.12 and its backend 6.1.5. Reviewed generated conversions check
+  `napi_unwrap`, validate the napi8 type tag and register a non-null, alias-checked
+  rooted native borrow before dereference. Async wrappers transfer
+  `NativeBorrowScope::new_async` into the owner-thread future finalizer, keeping
+  the receiver alive until settlement. Final five-platform extracted native SDK
+  tests reject plain/prototype-spoofed/wrong-class receivers, force GC while
+  receive/close promises are pending, and verify cancellation/joined shutdown.
+  This disposition is specific to those reported paths and pinned wrappers,
+  not a claim that arbitrary unsafe code or future dependency versions are safe.
+
+No dismissal, suppression or severity change is applied. Three alerts remain
+open and disclosed; green CodeQL alone was not used as evidence of resolution.
+
+## Historical checkpoints
 
 Refreshed API checkpoint against analysis source
 `97abd7e75cbc36497c9691baacd70d98a95fdb69`: three open CodeQL alerts

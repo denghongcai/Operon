@@ -14,26 +14,6 @@ Operon is an AI-native capability runtime for machines already connected by
 Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
 private network.
 
-Embedded connectivity is an explicit option in **v0.16.15 builds**, never enabled
-automatically. Existing `grpc://`/`grpcs://` LAN, DNS and VPN addressing remains
-the default. Embedded connections require v0.16.15 or newer daemon/client/SDK
-packages, or matching source builds; older packages do not support this option.
-Native daemon/Rust clients and the optional in-process Node SDK binding do not
-require an external connectivity process or production TCP bridge.
-Select `iroh://<public-endpoint-id>` explicitly; normal LAN/VPN endpoints
-remain the default and there is no silent fallback. Client and daemon onboarding
-have separate private identity options; existing bearer auth and policy still
-apply. The [setup guide](docs/networking/embedded-iroh.md) covers
-pairing, explicit addresses/self-hosted relays, additive private-CA relay trust,
-configurable timeouts and exact OS/CPU/libc/version matching for the SDK binding.
-Use your own explicitly configured relays; no implicit public relay enrollment
-or VPN mesh is provided. Embedded small sequential requests measured slower
-than ordinary gRPC; see the [ops/s evidence and limits](docs/quality/embedded-connectivity-performance.md).
-The [v0.16.15 release acceptance record](docs/plan/v0.16.15-release-publication.md)
-distinguishes source validation from verified published packages. The isolated
-[PoC](experiments/iroh-grpc/README.md) is historical feasibility evidence, not
-the production transport or a substitute for those release gates.
-
 Operon focuses on what happens after machines can reach each other: capability
 discovery, policy, execution graphs, audit, and agent-friendly tooling.
 
@@ -374,7 +354,7 @@ in [docs/quality/security-hardening.md](docs/quality/security-hardening.md).
 
 ## Network Boundary
 
-Operon assumes your nodes can already reach each other.
+By default, Operon uses your existing network connectivity.
 
 Use:
 
@@ -401,8 +381,48 @@ In production-style deployments, run daemon endpoints only on an existing
 encrypted private network or behind a trusted local tunnel.
 
 LAN mDNS discovery can find local Operon daemons, but Operon does not create
-network overlays, assign mesh IPs, perform NAT traversal, or grant capability
+network overlays, assign mesh IPs, or grant capability
 access through discovery.
+
+---
+
+## Embedded Connectivity
+
+From v0.16.15, Operon can use built-in iroh connections without a separate
+connectivity client. This is optional; LAN and VPN endpoints remain the default.
+
+On the server, add an iroh listener to your existing configuration. Keep daemon
+authentication and policy enabled:
+
+```yaml
+daemon:
+  iroh:
+    identity_file: iroh-server.key
+    bind_addrs: ["0.0.0.0:7788"]
+```
+
+Start the daemon normally. Pair the client with the public endpoint ID shown
+at startup and the server's bearer token:
+
+```yaml
+client:
+  nodes:
+    remote:
+      endpoint: iroh://SERVER_PUBLIC_ENDPOINT_ID
+      auth:
+        token_file: remote.token
+      transport:
+        iroh:
+          identity_file: iroh-client.key
+          peer_addrs: ["192.168.1.20:7788"]
+```
+
+Store the bearer token in `remote.token` beside the client configuration, then
+run `operon node ping remote`. Filesystem, exec and mount commands are unchanged.
+
+For cross-network access, configure explicit self-hosted relays on both ends.
+See the [setup guide](docs/networking/embedded-iroh.md) for relay configuration,
+timeouts and the TypeScript SDK's native binding.
 
 ---
 
