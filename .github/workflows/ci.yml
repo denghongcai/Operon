@@ -37,6 +37,8 @@ jobs:
 
       - name: Check
         run: cargo check --workspace --locked
+      - name: Feature-disabled core daemon and CLI
+        run: cargo check -p operond -p operon-cli --no-default-features --all-targets --locked
 
       - name: Test
         run: cargo test --workspace --all-targets --locked

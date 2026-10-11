@@ -23,7 +23,8 @@ OPERON_SKIP_SDK_TESTS=1 scripts/verify-v0.16.2-sdk-maintainability-cleanup.sh
 if command -v rustup >/dev/null 2>&1; then
   rustup target add x86_64-pc-windows-gnu >/dev/null
 fi
-cargo check -p operond --target x86_64-pc-windows-gnu --tests --locked
+# Native platform CI covers iroh crypto and actual native transport tests.
+cargo check -p operond --no-default-features --target x86_64-pc-windows-gnu --tests --locked
 
 scripts/verify-release-artifacts.sh --dry-run v0.16.7 >/dev/null
 OPERON_VERSION=v0.16.7 scripts/verify-readme-quickstart-docker.sh --dry-run >/dev/null

@@ -67,6 +67,7 @@ cargo test -p operond --locked service_management
 if ! rustup target list --installed | rg '^x86_64-pc-windows-gnu$' >/dev/null; then
   rustup target add x86_64-pc-windows-gnu
 fi
-cargo check -p operond --locked --target x86_64-pc-windows-gnu
+# Full embedded transport is tested by native Windows CI, not Linux's C tools.
+cargo check -p operond --no-default-features --locked --target x86_64-pc-windows-gnu
 
 echo "v0.13.5 daemon service management validation passed"

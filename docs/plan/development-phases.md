@@ -7949,6 +7949,29 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   `scripts/verify-embedded-relay.sh` cleans up only its created container.
   This is stream-level evidence, not distinct-container/NAT/recovery/native
   daemon or public SDK acceptance; all those requirements remain open.
+  Follow-up native daemon/CLI gate now runs in two disjoint internal Docker
+  networks with relay as the only shared participant, zero IP transports,
+  loopback-only daemon TCP and no published ports. Passed real bearer rejection,
+  exec output, >8MiB file write/read SHA256 equality and relay restart recovery;
+  relay metrics confirm >16MiB business traffic. Gate is wired into online CI;
+  current-source image revalidation and committed-source online results remain
+  required. The upstream path idle limit is 15 seconds; corrected default and
+  explicit rejection of larger values prevent silent clamping, with a passing
+  configuration regression. NAT/direct upgrade/interrupted streams, broader
+  capabilities/mount and public SDK remain unfinished; Phase 157 is not complete.
+  Current-source rebuilt Docker image passed the full disjoint-network gate
+  again (relay sent 17,467,810 / received 18,534,420 bytes); config limit regression
+  and all-target workspace tests passed. Checkpoint `055f89a` native macOS,
+  Windows, MSRV/stable Rust, TypeScript, linux-system, Embedded Connectivity
+  and CodeQL passed, but overall CI failed in legacy Linux cross-target gates:
+  ring needs Windows C tools/macOS SDK. Keep explicit feature-disabled core
+  cross-checks and full-feature native CI tests, including native daemon I/O;
+  remove unconditional embedded feature from the daemon dev dependency and
+  tie it to its iroh feature instead. Add MSRV/stable feature-disabled all-target
+  checks. Local Windows daemon test cross-check and macOS CLI core cross-check
+  now pass; default-feature native daemon tests and strict workspace Clippy
+  pass after the dependency adjustment. Full core validation is running and
+  committed-source online revalidation remains required.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

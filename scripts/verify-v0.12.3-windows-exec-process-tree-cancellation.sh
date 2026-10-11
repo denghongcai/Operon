@@ -35,6 +35,8 @@ cargo test -p operond --locked exec_cancellation_guarantee_matches_platform
 if ! rustup target list --installed | rg '^x86_64-pc-windows-gnu$' >/dev/null; then
   rustup target add x86_64-pc-windows-gnu
 fi
-cargo check -p operond --locked --target x86_64-pc-windows-gnu
+# Embedded crypto requires native C toolchains; full-feature checks/tests run
+# on native macOS/Windows CI. Retain this core-only Rust cross-target gate.
+cargo check -p operond --no-default-features --locked --target x86_64-pc-windows-gnu
 
 echo "v0.12.3 Windows exec process-tree cancellation validation passed"

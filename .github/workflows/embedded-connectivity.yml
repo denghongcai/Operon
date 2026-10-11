@@ -11,6 +11,8 @@ on:
       - 'rust-toolchain.toml'
       - 'docker/iroh-relay/**'
       - 'scripts/verify-embedded-relay.sh'
+      - 'scripts/verify-embedded-relay-containers.py'
+      - 'docker/Dockerfile'
       - '.github/workflows/embedded-connectivity.yml'
   push:
     branches: [main]
@@ -22,6 +24,8 @@ on:
       - 'rust-toolchain.toml'
       - 'docker/iroh-relay/**'
       - 'scripts/verify-embedded-relay.sh'
+      - 'scripts/verify-embedded-relay-containers.py'
+      - 'docker/Dockerfile'
       - '.github/workflows/embedded-connectivity.yml'
 
 permissions:
@@ -82,5 +86,11 @@ jobs:
         env:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '120'
         run: bash scripts/verify-embedded-relay.sh
-      # Phase 157 still requires distinct-container/NAT/recovery and native
-      # daemon capability acceptance; relay-only streams alone do not prove it.
+      - name: Build production native daemon and CLI for isolated networks
+        run: docker build -f docker/Dockerfile -t operon-native-iroh-acceptance .
+      - name: Native daemon capabilities across disjoint networks and relay restart
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+        run: python3 scripts/verify-embedded-relay-containers.py
+      # Phase 157 still requires NAT/direct upgrade, interrupted streaming,
+      # additional capability/native mount scenarios and public SDK acceptance.

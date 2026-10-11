@@ -83,7 +83,11 @@ are `bind_timeout_secs`, `readiness_timeout_secs`, `idle_timeout_secs`,
 Connection/readiness/idle/handshake deadlines accept zero to disable the
 deadline; closing the endpoint still cancels waits and admissions. QUIC/path
 heartbeat intervals are positive and must be shorter than the applicable idle
-timeout. Values are bounded at seven days; no fixed short application deadline
+timeout. The upstream iroh 1.3 per-path idle limit is 15 seconds: its default
+is 15, and larger values are rejected rather than silently clamped. This is a
+transport path-liveness constraint, not an application RPC timeout; it cannot
+be enlarged through Operon configuration. Other timers are bounded at seven
+days; no fixed short application deadline
 is required for international links. Daemon shutdown remains configurable with
 `--shutdown-timeout-secs` (zero waits indefinitely).
 
@@ -104,7 +108,14 @@ reported relay, and the relay's sent/received counters exceeded 8MiB. Run
 ports and removes only its own container. HTTP is test-only, not a production
 relay recommendation. Online execution is required for the committed source.
 
-Distinct-container relay/NAT topology, denied-direct/UDP,
+The native daemon/CLI disjoint-network gate is
+`python3 scripts/verify-embedded-relay-containers.py` after building the default
+Dockerfile as `operon-native-iroh-acceptance`. It runs no IP transports and no
+published ports, and checks auth denial, exec output, large-file hashes, relay
+traffic counters and recovery after relay restart. Its first local execution
+passed; committed-source online acceptance is still required.
+
+NAT/direct upgrade, interrupted-stream recovery, additional capabilities,
 direct upgrade, relay loss/recovery, public SDK in-process connectivity and
 complete platform/live-mount regression remain Phase 157–159 gates. Do not
 claim those scenarios passed from the current direct-path tests. The current

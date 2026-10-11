@@ -30,6 +30,7 @@ cargo test -p operond --locked persisted_exec_logs_seed_bounded_log_buffers
 if command -v rustup >/dev/null 2>&1; then
   rustup target add x86_64-pc-windows-gnu >/dev/null
 fi
-cargo check -p operond --target x86_64-pc-windows-gnu --tests --locked
+# Embedded native C dependencies are covered on native Windows CI.
+cargo check -p operond --no-default-features --target x86_64-pc-windows-gnu --tests --locked
 
 echo "v0.17.4 daemon runtime maintainability validation passed"

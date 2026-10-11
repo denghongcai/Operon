@@ -30,7 +30,7 @@ impl Default for IrohEndpointConfig {
             readiness_timeout_secs: 30,
             idle_timeout_secs: 120,
             keepalive_interval_secs: 5,
-            path_idle_timeout_secs: 60,
+            path_idle_timeout_secs: 15,
             path_keepalive_interval_secs: 5,
         }
     }
@@ -76,6 +76,9 @@ impl IrohEndpointConfig {
         }
         if self.path_keepalive_interval_secs >= self.path_idle_timeout_secs {
             return Err("iroh path keepalive interval must be less than path idle timeout".into());
+        }
+        if self.path_idle_timeout_secs > 15 {
+            return Err("iroh 1.3 limits path_idle_timeout_secs to 15 seconds; larger values would be silently clamped by the transport".into());
         }
         Ok(())
     }

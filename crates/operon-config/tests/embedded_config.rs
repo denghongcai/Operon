@@ -108,3 +108,20 @@ fn old_config_remains_disabled_and_serialization_omits_new_options() {
         .unwrap()
         .contains("iroh:"));
 }
+
+#[test]
+fn path_idle_limit_is_explicit_instead_of_silently_clamped() {
+    let mut endpoint = operon_config::IrohEndpointConfig {
+        identity_file: "identity.key".into(),
+        ..Default::default()
+    };
+    assert_eq!(endpoint.path_idle_timeout_secs, 15);
+    assert!(endpoint.validate().is_ok());
+    endpoint.path_idle_timeout_secs = 16;
+    assert!(endpoint
+        .validate()
+        .unwrap_err()
+        .contains("silently clamped"));
+    endpoint.path_idle_timeout_secs = 10;
+    assert!(endpoint.validate().is_ok());
+}

@@ -151,8 +151,9 @@ rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu >/dev/null
 
 cargo test -p operon-mount --locked --lib
 cargo check -p operon-mount --target x86_64-apple-darwin --locked --features macos-no-mount
-cargo check -p operon-cli --target x86_64-apple-darwin --locked --features operon-mount/macos-no-mount
+# Keep core cross-compilation separate from native embedded crypto acceptance.
+cargo check -p operon-cli --no-default-features --target x86_64-apple-darwin --locked --features operon-mount/macos-no-mount
 cargo check -p operon-mount --target x86_64-pc-windows-gnu --locked
-cargo check -p operon-cli --target x86_64-pc-windows-gnu --locked
+cargo check -p operon-cli --no-default-features --target x86_64-pc-windows-gnu --locked
 
 echo "v0.14 cross-platform live mount validation passed"
