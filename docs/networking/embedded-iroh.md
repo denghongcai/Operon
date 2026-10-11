@@ -1,10 +1,9 @@
-# Optional embedded iroh (source implementation in progress)
+# Embedded connectivity
 
-Not yet present in the published v0.16.14 binaries. Phases 154–159 require
-additional relay, SDK, native/mount, regression and exact-source/public-release
-acceptance before supported publication. Do not confuse the isolated TCP-bridge
-PoC with the production path: the daemon now accepts native HTTP/2 on QUIC
-streams, and the shared Rust connector carries the unchanged gRPC protocol.
+Optional iroh connectivity runs inside Operon, without an external connectivity
+process. It requires matching v0.16.15 daemon, client and SDK packages or source
+builds. The v0.16.15 packages are currently being prepared; published v0.16.14
+packages do not support this option.
 
 ## Configuration contract
 
@@ -67,7 +66,7 @@ exporting an already configured matching peer preserves its identity, routes
 and authentication. Discovery health checks report when explicit pairing is
 required.
 
-Source CLI onboarding can now render an explicitly paired embedded client:
+Client onboarding accepts explicit identity and peer addresses:
 
 ```sh
 operon onboard --role client --yes --output-dir .operon \
@@ -83,7 +82,7 @@ public lookup or generate private identities. Identity initialization happens
 only when the selected transport starts. These are client options: the daemon
 listener is configured separately as above. Default onboarding stays grpc.
 
-Daemon source onboarding has separate explicit listener options:
+Daemon onboarding has separate listener options:
 
 ```sh
 operon onboard --role daemon --yes --output-dir .operon \
@@ -126,7 +125,7 @@ days; no fixed short application deadline
 is required for international links. Daemon shutdown remains configurable with
 `--shutdown-timeout-secs` (zero waits indefinitely).
 
-## Relay configuration and remaining acceptance
+## Self-hosted relays
 
 Relays are opt-in operator configuration, not an Operon-managed network.
 `relay_urls` enables the local endpoint's relay transport; client
@@ -143,56 +142,27 @@ configuration file; SDK paths should be absolute. Empty, malformed or larger
 than 1 MiB files fail explicitly, without falling back to unverified TLS.
 This affects relay TLS, not the pinned Ed25519 peer identity or bearer policy.
 
-The first self-hosted Docker relay gate passed locally with both endpoints'
-IP transports disabled: pinned identities and >8MiB data matched, QUIC paths
-reported relay, and the relay's sent/received counters exceeded 8MiB. Run
-`docker build -t operon-iroh-relay-acceptance docker/iroh-relay` followed by
-`bash scripts/verify-embedded-relay.sh`; the script publishes random loopback-only
-ports and removes only its own container. HTTP is test-only, not a production
-relay recommendation. Online execution is required for the committed source.
+## TypeScript SDK
 
-The native daemon/CLI disjoint-network gate is
-`python3 scripts/verify-embedded-relay-containers.py` after building the default
-Dockerfile as `operon-native-iroh-acceptance`. It runs no IP transports and no
-published ports, and checks auth denial, exec output, large-file hashes, relay
-traffic counters and recovery after relay restart. Its first local execution
-passed; committed-source online acceptance is still required.
-
-The source TypeScript SDK now has an experimental in-process native adapter.
+The SDK uses an optional in-process native adapter for embedded connections.
 Existing `OperonClient` methods stay unchanged; select `iroh://<public-key>` and
 set `transport.iroh` with `identityFile`, explicit `peerAddrs` or `peerRelayUrls`,
 and the matching local relay settings. SDK settings use camelCase. Identity
 paths resolve from the current working directory; use absolute paths for SDK
 applications. Default grpc/grpcs clients do not load the binding.
 
-For Linux GNU source development, build with
-`cargo build -p operon-sdk-native --features node --locked`, build the SDK, and
-set `OPERON_SDK_NATIVE_PATH` to the absolute path of
-`target/debug/liboperon_sdk_native.so`. This is a development setup, not the
-finished portable package contract. Missing bindings or mismatched backend
-settings fail clearly, never silently falling back to TCP. The first real
-public SDK unary/upload/download/range/exec/log tests passed locally; online
-and native-platform/bidirectional/relay acceptance still remain required.
+Extract the matching native SDK archive and set `OPERON_SDK_NATIVE_PATH` to the
+absolute path of `operon-sdk-native.node`, or place that file in the SDK's
+`native/` directory. Match the SDK version, OS, CPU and libc; GNU and musl are
+not interchangeable. Native bindings support Linux x86_64/arm64, macOS
+x86_64/arm64 and Windows x86_64, not ARMv7. Missing or incompatible bindings
+fail explicitly; there is no fallback to TCP.
 
-The source binding build helper is `bash scripts/build-sdk-native.sh
-<rust-target> <output-directory>`. It emits `operon-sdk-native.node`; musl addon
-builds are dynamic (with addon-only flags), while daemon/CLI remain static.
-Run `bash scripts/package-sdk-native.sh <rust-target> <binding-directory>
-<archive-directory>` on the corresponding native platform to create a
-versioned archive containing the binding and a target/version/N-API/SHA-256
-manifest. Packaging loads the binding and rejects a stale SDK version.
-Extract it privately and point `OPERON_SDK_NATIVE_PATH` to the absolute `.node`
-file, or place it in the SDK's `native/operon-sdk-native.node` directory. Match
-the exact SDK version and OS/CPU/libc target; GNU and musl are not interchangeable.
-These source packaging helpers do not mean those assets have been published.
+For source builds, run `bash scripts/build-sdk-native.sh <rust-target>
+<output-directory>` on the matching native platform and use the emitted
+`operon-sdk-native.node`.
 
-Actual public SDK acceptance now also passes with both endpoint IP transports
-disabled over an owned self-hosted Docker relay, including TCP/UDP services,
-PTY, >8MiB files and cancellation. Supplying `OPERON_SDK_NATIVE_PATH` and
-`OPERON_NATIVE_TEST_DAEMON` to `verify-embedded-relay.sh` includes that gate;
-embedded CI requires it. This is relay-only evidence, not NAT/direct upgrade.
-
-Example source SDK selection (with the optional binding installed):
+Select the embedded endpoint using the existing SDK API:
 
 ```ts
 const client = new OperonClient([{
@@ -215,12 +185,9 @@ try {
 }
 ```
 
-Local public SDK acceptance now also passes TCP/UDP bidirectional echo, PTY
-output/exit and cancellation of an awaiting datagram. The same tests are wired
-to Linux/macOS/Windows CI; this is not proof of the pending platform runs or
-portable binding distribution. User timers remain configurable for slow links.
+Interrupted operations return errors. Reconnect or resume explicitly where the
+API supports it; Operon does not automatically replay mutations.
 
-NAT/direct upgrade, interrupted-stream recovery, additional capabilities,
-portable SDK binding distribution and complete platform/live-mount regression
-remain Phase 157–159 gates. Do not claim these scenarios passed from direct-path
-tests or from the stream-only relay gate.
+Small sequential requests measured slower than ordinary gRPC in source-build
+benchmarks. See [performance results](../quality/embedded-connectivity-performance.md)
+and the [release acceptance record](../plan/v0.16.15-release-publication.md).

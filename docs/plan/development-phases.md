@@ -8257,6 +8257,11 @@ from the introduction. A standalone Embedded Connectivity section now contains
 only server/client configuration, pairing, unchanged commands and the setup
 guide link. This documentation-only follow-up does not move the release tag or
 change the verified runtime source; public acceptance remains pending.
+The setup guide now removes obsolete experimental/source-test narration and
+keeps configuration, pairing, relay trust, timeout constraints and native SDK
+installation instructions. Release notes are reduced to highlights, usage
+limits and a security-review link; detailed gate evidence stays in this phase
+tracker and the publication record. Package publication is still pending.
 
 ## Planning Principle
 
