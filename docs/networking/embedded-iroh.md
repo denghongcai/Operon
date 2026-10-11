@@ -78,6 +78,20 @@ public lookup or generate private identities. Identity initialization happens
 only when the selected transport starts. These are client options: the daemon
 listener is configured separately as above. Default onboarding stays grpc.
 
+Daemon source onboarding has separate explicit listener options:
+
+```sh
+operon onboard --role daemon --yes --output-dir .operon \
+  --daemon-iroh-identity-file server.key \
+  --daemon-iroh-bind-addr 0.0.0.0:7788
+```
+
+Use `--daemon-iroh-relay-url https://your-relay.example` to add a relay;
+addresses and relays are repeatable. At least one listener route is required.
+Daemon onboarding writes its normal private token file, not the identity key;
+the daemon creates its key only on startup. After startup, pair clients using
+the logged public endpoint ID. Client and server must have separate keys.
+
 ## Identity and timeouts
 
 `identity_file` is explicit and relative to the config directory unless absolute.

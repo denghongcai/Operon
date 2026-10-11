@@ -4,6 +4,37 @@ fn operon() -> Command {
     Command::new(env!("CARGO_BIN_EXE_operon"))
 }
 
+#[cfg(feature = "iroh")]
+#[test]
+fn onboard_embedded_daemon_renders_private_config_without_starting_transport() {
+    let base = tempfile::tempdir().expect("temp dir");
+    let output = operon()
+        .args([
+            "onboard",
+            "--yes",
+            "--role",
+            "daemon",
+            "--daemon-iroh-identity-file",
+            "server.key",
+            "--daemon-iroh-bind-addr",
+            "127.0.0.1:7788",
+            "--output-dir",
+        ])
+        .arg(base.path())
+        .output()
+        .expect("onboard");
+    assert!(output.status.success(), "stderr={}", stderr(&output));
+    let config =
+        operon_config::OperonConfig::load(base.path().join("config.yaml")).expect("load config");
+    let daemon = config.daemon.expect("daemon");
+    assert_eq!(
+        daemon.iroh.expect("iroh").endpoint.bind_addrs,
+        vec!["127.0.0.1:7788".parse::<std::net::SocketAddr>().unwrap()]
+    );
+    assert!(base.path().join("token").is_file());
+    assert!(!base.path().join("server.key").exists());
+}
+
 #[test]
 fn cli_version_matches_release_line() {
     let output = operon()

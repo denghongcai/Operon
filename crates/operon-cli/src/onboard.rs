@@ -57,6 +57,18 @@ pub(crate) struct OnboardArgs {
     #[arg(long, requires = "iroh_identity_file")]
     iroh_relay_url: Vec<String>,
 
+    /// Enable an embedded daemon listener with its own private identity.
+    #[arg(long)]
+    daemon_iroh_identity_file: Option<PathBuf>,
+
+    /// Explicit daemon QUIC bind address (repeatable).
+    #[arg(long, requires = "daemon_iroh_identity_file")]
+    daemon_iroh_bind_addr: Vec<std::net::SocketAddr>,
+
+    /// Explicit HTTPS relay for the daemon (repeatable).
+    #[arg(long, requires = "daemon_iroh_identity_file")]
+    daemon_iroh_relay_url: Vec<String>,
+
     #[arg(long)]
     token: Option<String>,
 
@@ -197,6 +209,33 @@ fn build_onboard_plan_inner(
     prompt: &mut impl Prompt,
 ) -> anyhow::Result<OnboardPlan> {
     let role = args.role;
+    let daemon_iroh = if let Some(identity_file) = &args.daemon_iroh_identity_file {
+        anyhow::ensure!(
+            cfg!(feature = "iroh"),
+            "this CLI build does not include iroh support"
+        );
+        anyhow::ensure!(
+            !matches!(role, OnboardRole::Client),
+            "daemon iroh options require role daemon or both"
+        );
+        anyhow::ensure!(
+            args.iroh_identity_file.as_ref() != Some(identity_file),
+            "daemon and client must use separate private identities"
+        );
+        let config = operon_config::IrohListenerConfig {
+            endpoint: operon_config::IrohEndpointConfig {
+                identity_file: identity_file.clone(),
+                bind_addrs: args.daemon_iroh_bind_addr.clone(),
+                relay_urls: args.daemon_iroh_relay_url.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        config.validate().map_err(anyhow::Error::msg)?;
+        Some(config)
+    } else {
+        None
+    };
     let client_iroh = if let Some(identity_file) = &args.iroh_identity_file {
         anyhow::ensure!(
             cfg!(feature = "iroh"),
@@ -321,7 +360,7 @@ fn build_onboard_plan_inner(
             service_port_from_listen_address(&listen),
         )?);
         daemon = Some(DaemonConfig {
-            iroh: None,
+            iroh: daemon_iroh,
             transport: Default::default(),
             node_id: node_id.clone(),
             grpc_listen: listen.parse()?,
@@ -570,6 +609,9 @@ mod tests {
             iroh_identity_file: None,
             iroh_peer_addr: Vec::new(),
             iroh_relay_url: Vec::new(),
+            daemon_iroh_identity_file: None,
+            daemon_iroh_bind_addr: Vec::new(),
+            daemon_iroh_relay_url: Vec::new(),
             token: None,
             discover_lan: false,
             timeout_secs: 1,
@@ -584,6 +626,43 @@ mod tests {
             endpoint_from_listen_address("0.0.0.0:7789"),
             "grpc://127.0.0.1:7789"
         );
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn onboard_daemon_embedded_listener_is_explicit_and_has_private_auth() {
+        let mut args = test_args(OnboardRole::Daemon);
+        args.daemon_iroh_identity_file = Some(PathBuf::from("server.key"));
+        args.daemon_iroh_bind_addr = vec!["127.0.0.1:7788".parse().unwrap()];
+        let plan = plan::build_onboard_plan(args, &mut NoopPrompt).expect("daemon plan");
+        let generated = plan
+            .files
+            .iter()
+            .find(|file| file.path.ends_with("config.yaml"))
+            .unwrap();
+        let config: OperonConfig = serde_yaml::from_str(&generated.content).unwrap();
+        let daemon = config.daemon.unwrap();
+        assert_eq!(
+            daemon.iroh.unwrap().endpoint.identity_file,
+            PathBuf::from("server.key")
+        );
+        assert_eq!(daemon.auth.token_file, Some(PathBuf::from("token")));
+        assert!(!plan
+            .files
+            .iter()
+            .any(|file| file.path.ends_with("server.key")));
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn onboard_daemon_embedded_requires_route_and_correct_role() {
+        let mut args = test_args(OnboardRole::Daemon);
+        args.daemon_iroh_identity_file = Some(PathBuf::from("server.key"));
+        assert!(plan::build_onboard_plan(args, &mut NoopPrompt).is_err());
+        let mut args = test_args(OnboardRole::Client);
+        args.daemon_iroh_identity_file = Some(PathBuf::from("server.key"));
+        args.daemon_iroh_bind_addr = vec!["127.0.0.1:7788".parse().unwrap()];
+        assert!(plan::build_onboard_plan(args, &mut NoopPrompt).is_err());
     }
 
     #[cfg(feature = "iroh")]

@@ -8098,6 +8098,18 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   starting endpoints. Default grpc onboarding stays unchanged. Added unit
   regressions for missing identity/routes and exact rendered transport; daemon
   listener/discovery UX and full compiled CLI acceptance remain required.
+  Added explicit daemon onboarding identity/bind/HTTPS relay options, requiring
+  daemon/both role and at least one listener route. Keeps normal private-token
+  output and rejects literal client/server key reuse; identity is not created
+  during onboarding. Thirteen onboard unit regressions pass. Added a compiled
+  CLI integration test loading its generated config, confirming token creation
+  and no identity/startup side effects. Discovery and full runtime acceptance
+  remain open; these onboarding changes do not complete Phase 156.
+  Compiled onboarding acceptance and full CLI regressions pass: 63 unit tests
+  plus 12 binary integration tests, including existing deadline/keepalive/
+  transfer-liveness and secret-value non-disclosure checks. Initial four
+  network failures were sandbox bind denial; permission-enabled full rerun
+  passed all tests. Focused strict CLI Clippy also passes.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,
