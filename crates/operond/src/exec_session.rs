@@ -285,6 +285,63 @@ struct SessionTask {
 
 type SharedPtyWriter = Arc<Mutex<Option<Box<dyn Write + Send>>>>;
 
+// A descendant may keep the Unix slave open after its parent exits. Poll the
+// owned descriptor so output can drain without an unbounded blocking read.
+#[cfg(unix)]
+struct UnixOutputDrain {
+    fd: std::os::fd::OwnedFd,
+    deadline: Arc<Mutex<Option<Instant>>>,
+}
+
+#[cfg(unix)]
+impl UnixOutputDrain {
+    fn new(fd: std::os::fd::RawFd) -> std::io::Result<Self> {
+        // SAFETY: the live PTY master owns fd; clone it before crossing threads.
+        let fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) }.try_clone_to_owned()?;
+        Ok(Self {
+            fd,
+            deadline: Arc::new(Mutex::new(None)),
+        })
+    }
+
+    fn wait_readable(&self) -> std::io::Result<()> {
+        use std::os::fd::AsRawFd;
+        loop {
+            let deadline = *self
+                .deadline
+                .lock()
+                .map_err(|_| std::io::Error::other("PTY drain deadline lock poisoned"))?;
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "PTY output drain exceeded session timeout",
+                ));
+            }
+            let mut descriptor = libc::pollfd {
+                fd: self.fd.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // Scheduling interval only; the configured session timeout above
+            // controls the drain deadline, not this polling interval.
+            let result = unsafe { libc::poll(&mut descriptor, 1, 20) };
+            if result < 0 {
+                let error = std::io::Error::last_os_error();
+                if error.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(error);
+            }
+            if descriptor.revents & libc::POLLNVAL != 0 {
+                return Err(std::io::Error::other("invalid PTY output descriptor"));
+            }
+            if result > 0 {
+                return Ok(());
+            }
+        }
+    }
+}
+
 fn run_session_task(task: SessionTask) {
     let result = run_session_task_inner(&task);
     let (status, exit_code) = result.unwrap_or_else(|error| {
@@ -327,6 +384,14 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
     drop(slave);
     let mut killer = child.clone_killer();
     let mut reader = master.try_clone_reader()?;
+    #[cfg(unix)]
+    let output_drain = UnixOutputDrain::new(
+        master
+            .as_raw_fd()
+            .ok_or_else(|| anyhow::anyhow!("Unix PTY has no descriptor"))?,
+    )?;
+    #[cfg(unix)]
+    let drain_deadline = output_drain.deadline.clone();
     let writer: SharedPtyWriter = Arc::new(Mutex::new(Some(master.take_writer()?)));
     let output_sink = OutputSink {
         execs: task.execs.clone(),
@@ -337,8 +402,15 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
         event_tx: task.event_tx.clone(),
     };
     let output_writer = writer.clone();
-    let reader_thread =
-        thread::spawn(move || read_session_output(&mut reader, output_sink, output_writer));
+    let reader_thread = thread::spawn(move || {
+        read_session_output(
+            &mut reader,
+            output_sink,
+            output_writer,
+            #[cfg(unix)]
+            output_drain,
+        )
+    });
     let (wait_tx, wait_rx) = std_mpsc::channel();
     thread::spawn(move || {
         let status = child.wait();
@@ -365,8 +437,24 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
                     .join()
                     .map_err(|_| anyhow::anyhow!("PTY output reader panicked"))?;
             }
-            #[cfg(not(windows))]
-            let _ = &reader_thread;
+            #[cfg(unix)]
+            {
+                *drain_deadline
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("PTY drain deadline lock poisoned"))? =
+                    Some(if forced_status.is_some() {
+                        Instant::now()
+                    } else {
+                        deadline
+                    });
+                if reader_thread
+                    .join()
+                    .map_err(|_| anyhow::anyhow!("PTY output reader panicked"))?
+                {
+                    let _ = killer.kill();
+                    forced_status.get_or_insert(ExecStatus::TimedOut);
+                }
+            }
             return Ok(exec_status_from_pty(status, forced_status));
         }
         if forced_status.is_none() && Instant::now() >= deadline {
@@ -484,10 +572,17 @@ fn read_session_output(
     reader: &mut Box<dyn Read + Send>,
     sink: OutputSink,
     writer: SharedPtyWriter,
-) {
+    #[cfg(unix)] drain: UnixOutputDrain,
+) -> bool {
     let mut buffer = [0_u8; 8192];
     loop {
-        match reader.read(&mut buffer) {
+        #[cfg(unix)]
+        let result = drain
+            .wait_readable()
+            .and_then(|()| reader.read(&mut buffer));
+        #[cfg(not(unix))]
+        let result = reader.read(&mut buffer);
+        match result {
             Ok(0) => break,
             Ok(count) => {
                 let data = buffer[..count].to_vec();
@@ -513,6 +608,10 @@ fn read_session_output(
                 );
             }
             Err(error) => {
+                if error.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                let timed_out = error.kind() == std::io::ErrorKind::TimedOut;
                 append_exec_log(
                     &sink.execs,
                     &sink.logs,
@@ -525,10 +624,11 @@ fn read_session_output(
                         sequence: 0,
                     },
                 );
-                break;
+                return timed_out;
             }
         }
     }
+    false
 }
 
 #[cfg(windows)]
@@ -586,6 +686,40 @@ fn pty_size(rows: u32, cols: u32) -> Result<PtySize, Status> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_output_drain_reads_delayed_tail_before_exit() {
+        use std::os::{fd::AsRawFd, unix::net::UnixStream};
+        let (mut reader, mut writer) = UnixStream::pair().expect("pipe");
+        let drain = UnixOutputDrain::new(reader.as_raw_fd()).expect("owned poll fd");
+        *drain.deadline.lock().expect("deadline") = Some(Instant::now() + Duration::from_secs(2));
+        let writer_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(30));
+            writer.write_all(b"tail-before-exit").expect("tail");
+        });
+        drain.wait_readable().expect("delayed output ready");
+        let mut tail = Vec::new();
+        reader.read_to_end(&mut tail).expect("drain");
+        writer_thread.join().expect("writer");
+        assert_eq!(tail, b"tail-before-exit");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_output_drain_bounds_an_open_descendant_descriptor() {
+        use std::os::{fd::AsRawFd, unix::net::UnixStream};
+        let (reader, _held_writer) = UnixStream::pair().expect("pipe");
+        let drain = UnixOutputDrain::new(reader.as_raw_fd()).expect("owned poll fd");
+        *drain.deadline.lock().expect("deadline") =
+            Some(Instant::now() + Duration::from_millis(30));
+        let started = Instant::now();
+        let error = drain
+            .wait_readable()
+            .expect_err("held descriptor must time out");
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
 
     #[test]
     fn session_input_half_close_preserves_platform_terminal_contract() {

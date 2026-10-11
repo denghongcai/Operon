@@ -8211,6 +8211,21 @@ acceptance to checksum and load downloaded musl SDK bindings and exercise the
 downloaded JS SDK/daemon business fixture on both native architectures and both
 pinned Alpine images. This supplements, not replaces, FUSE/OpenRC gates;
 published-artifact execution remains pending until the release exists.
+Final-source CI `38152725255`, CodeQL `38152725076`, five-platform native
+SDK `38152809117` and hosted macOS/Windows live mount `38152814531` pass on
+`e07b311`. Embedded run `38152811845` instead exposes a Unix PTY tail-output
+race in relay SDK acceptance: Exit can overtake the detached output reader.
+Do not waive or retry the assertion. Join Unix output before Exit using an
+owned poll descriptor and the existing configurable session timeout to bound
+draining even when descendants retain the slave; preserve cancellation status.
+Add delayed-tail/open-descriptor tests and repeated SDK short-lived PTYs.
+This fixes the shared daemon lifecycle, not only the embedded transport;
+require corrected-source CI and native/network gates before publishing.
+The nine focused PTY tests and strict daemon/all-target Clippy pass locally.
+The formerly failing owned-relay SDK fixture passes with eight short-lived
+PTYs, full output before Exit and >30 MiB observed relay traffic in each
+direction. No local full-workspace rerun; complete regression is delegated to
+the new exact-source CI/native gates.
 
 ## Planning Principle
 

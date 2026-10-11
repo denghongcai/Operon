@@ -252,23 +252,26 @@ try {
   await datagramIterator.return();
   await pendingDatagram;
   finishUdp();
-  const session = await sdk.openExecSession("sdk-logical", { command: process.platform === "win32" ? "echo native-sdk-pty" : "printf native-sdk-pty", cwd: "/" });
-  const output = [];
-  let sawExit = false;
-  for await (const event of session) {
-    if (event.type === "output") output.push(Buffer.from(event.data));
-    if (event.type === "exit") {
-      let detail = JSON.stringify(event);
-      if (event.exit_code !== 0) {
-        const failureLogs = await sdk.streamExecLogs("sdk-logical", event.exec_id);
-        detail += ` logs=${await new Response(failureLogs).text()}`;
+  // Repeat short-lived processes to catch Exit overtaking the output reader.
+  for (let ptyIteration = 0; ptyIteration < 8; ptyIteration++) {
+    const session = await sdk.openExecSession("sdk-logical", { command: process.platform === "win32" ? "echo native-sdk-pty" : "printf native-sdk-pty", cwd: "/" });
+    const output = [];
+    let sawExit = false;
+    for await (const event of session) {
+      if (event.type === "output") output.push(Buffer.from(event.data));
+      if (event.type === "exit") {
+        let detail = JSON.stringify(event);
+        if (event.exit_code !== 0) {
+          const failureLogs = await sdk.streamExecLogs("sdk-logical", event.exec_id);
+          detail += ` logs=${await new Response(failureLogs).text()}`;
+        }
+        assert.equal(event.exit_code, 0, detail);
+        sawExit = true;
       }
-      assert.equal(event.exit_code, 0, detail);
-      sawExit = true;
     }
+    assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"),
+      `PTY iteration=${ptyIteration} exit=${sawExit} output=${JSON.stringify(Buffer.concat(output).toString())}`);
   }
-  assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"),
-    `PTY exit=${sawExit} output=${JSON.stringify(Buffer.concat(output).toString())}`);
   // A lost peer must terminate in-flight work even without an RPC deadline.
   // The QUIC idle timer is configurable and separate from application deadlines.
   const lostPeerConfig = structuredClone(endpointConfig);
