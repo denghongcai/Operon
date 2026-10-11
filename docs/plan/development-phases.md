@@ -8200,14 +8200,20 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   mount acceptance, preserving default gRPC scenarios. Pair the actual daemon
   public ID and ephemeral UDP address from styled logs; never use TCP fallback.
   Native hosted live-mount workflow now requires both original and embedded
-  acceptance. Local fixture contract passes; actual native mount runs pending.
+  acceptance. Local fixture contract passes. Exact checkpoint `5ff471c` hosted
+  macOS original, explicit async and native iroh live mount all pass in
+  `38135049437`. Windows stopped at the original gRPC startup probe because
+  PowerShell 5 promotes expected native stderr to a terminating error; scope
+  relaxed error handling to readiness probes only and retain a hard timeout
+  failure. Windows revalidation remains pending.
 - Phase 156 discovery UX rejects exporting unpaired embedded peers without
   modifying config or creating keys, preserves an already configured matching
   identity/routes/auth, and reports explicit pairing requirements for discovered
   health checks. Existing direct discovery export/health behavior is retained.
 - User-requested temporary-file cleanup removes 46 old benchmark workspace
   payload trees (including nobody-owned data) after mount/process checks,
-  freeing about 10 GiB. Measurement JSON/logs and existing container bind mounts
+  and 97 obsolete generated benchmark binaries, freeing about 11 GiB.
+  Measurement JSON/logs and existing container bind mounts
   are preserved; payloads can be regenerated but were not backed up.
 
 - Real UDP-denied Docker acceptance now enables endpoint IP transports and

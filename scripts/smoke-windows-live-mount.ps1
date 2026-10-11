@@ -152,8 +152,17 @@ policy:
 
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
-        & $OperonExe --config $Config node ping windows-live *> $null
-        if ($LASTEXITCODE -eq 0) {
+        # Windows PowerShell treats native stderr as an error record. A failed
+        # startup probe is expected; keep Stop semantics everywhere else.
+        $probeErrorPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            & $OperonExe --config $Config node ping windows-live *> $null
+            $probeExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $probeErrorPreference
+        }
+        if ($probeExitCode -eq 0) {
             $ready = $true
             break
         }
@@ -161,6 +170,7 @@ policy:
     }
     if (-not $ready) {
         & $OperonExe --config $Config node ping windows-live
+        throw "daemon did not become ready within 30 startup probes"
     }
 
     foreach ($letter in @("O:", "P:", "Q:", "R:")) {
