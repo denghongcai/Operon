@@ -204,6 +204,26 @@ try {
     if (event.type === "exit") { assert.equal(event.exit_code, 0); sawExit = true; }
   }
   assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"));
+  // A lost peer must terminate in-flight work even without an RPC deadline.
+  // The QUIC idle timer is configurable and separate from application deadlines.
+  const lostPeerConfig = structuredClone(endpointConfig);
+  lostPeerConfig.transport.rpc_timeout_secs = 0;
+  lostPeerConfig.transport.iroh.identity_file = path.join(dir, "lost-peer.key");
+  lostPeerConfig.transport.iroh.idle_timeout_secs = 5;
+  lostPeerConfig.transport.iroh.keepalive_interval_secs = 1;
+  const lostPeerClient = await NativeClient.connect(JSON.stringify(lostPeerConfig));
+  try {
+    const lostCall = await lostPeerClient.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]");
+    try {
+      const pendingRead = lostCall.receive();
+      const rejectedRead = assert.rejects(pendingRead, /grpc-status:|closed|reset|connection/i);
+      const exited = once(daemon, "exit");
+      daemon.kill("SIGKILL");
+      await exited;
+      await rejectedRead;
+    } finally { await lostCall.close(); }
+  } finally { lostPeerClient.close(); }
+  console.log("PASS lost peer rejects pending native RPC with application deadline disabled");
   assert.deepEqual(echoErrors, [], "unexpected TCP echo fixture errors");
   console.log("PASS public SDK native TCP/UDP bidirectional echo, stream cancellation and PTY output/exit");
   console.log("PASS public SDK native unary, client/server streaming, >8MiB roundtrip, 4MiB range and traversal rejection");

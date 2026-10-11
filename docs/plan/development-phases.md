@@ -8063,6 +8063,13 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   acceptance and remaining supported targets are still required.
   The same helper build and module-validating archive package also passed
   locally inside native Alpine x86_64 musl, with a distinct static daemon.
+  Archive packaging additionally rejects OS/CPU/libc mislabeling (GNU success
+  and wrong-arm64 rejection verified). Added actual abrupt daemon-loss native
+  RPC acceptance with application deadline zero and configurable QUIC idle/
+  keepalive; pending reads reject and calls join cleanup. Both native Alpine
+  direct and owned relay public SDK gates pass, the latter recording roughly
+  30MiB relay traffic. No mutation replay/restart recovery claim is inferred
+  from this pending-read interruption test; remaining scenarios stay open.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

@@ -23,6 +23,15 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 const [directory, target, version] = process.argv.slice(2);
+const expectedArch = target.startsWith('x86_64-') ? 'x64' : target.startsWith('aarch64-') ? 'arm64' : 'arm';
+const expectedPlatform = target.includes('-linux-') ? 'linux' : target.includes('-apple-') ? 'darwin' : 'win32';
+if (process.arch !== expectedArch || process.platform !== expectedPlatform) {
+  throw new Error('Archive target does not match this native packaging platform');
+}
+if (process.platform === 'linux') {
+  const isGnu = Boolean(process.report.getReport().header.glibcVersionRuntime);
+  if (isGnu !== target.includes('-gnu')) throw new Error('Archive libc target does not match the Node runtime');
+}
 const binding = { exports: {} };
 process.dlopen(binding, join(directory, 'operon-sdk-native.node'));
 if (binding.exports.bindingVersion?.() !== version) {
