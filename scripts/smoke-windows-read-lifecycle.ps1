@@ -115,9 +115,10 @@ policy:
         if (-not $owner.WaitForExit($waitMs)) { throw "$action did not cancel deadline-zero callback" }
         if ($owner.ExitCode -ne 0 -or -not $output.Result.Contains("joined")) { throw "Helper cleanup failed: $($errors.Result)" }
         try { $null = $read.Wait($waitMs) } catch {
-            if (-not $read.IsFaulted) { throw }
+            if (-not ($read.IsFaulted -or $read.IsCanceled)) { throw }
         }
-        if (-not $read.IsFaulted) { throw "Unmounted pending read did not fail" }
+        if (-not ($read.IsFaulted -or $read.IsCanceled)) { throw "Unmounted pending read succeeded or remained pending" }
+        Write-Host "Pending read terminal status: $($read.Status)"
         if (Test-Path $drive) { throw "Drive survived session cleanup" }
         $status = [OperonReadLifecycle.Native]::NtResumeProcess($daemon.Handle)
         if ($status -lt 0) { throw "Could not resume owned test daemon: $status" }

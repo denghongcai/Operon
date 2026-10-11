@@ -7777,6 +7777,12 @@ leading encoding preamble before matching drop/unmount; unknown commands and
 repeated BOMs remain rejected. Example unit coverage checks ordinary/BOM/CRLF,
 unknown, empty and repeated-BOM lines. Actual native cancellation still needs
 verification after this protocol fix.
+Native run 38106215983 accepted the command and passed helper clean-exit/join
+checks, then failed while awaiting the read task: its assertion accepted only
+Faulted, not Canceled. The test now permits these two explicit unsuccessful
+terminal states, still rejecting successful or pending reads and requiring
+drive detachment. Native rerun is required; this is not a blanket exception
+suppression or a cancellation pass claim.
 Commit/push main, align versions, exact-SHA source/platform
 gates, pretag, verified draft, public Latest and all downloaded artifact/install/
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
