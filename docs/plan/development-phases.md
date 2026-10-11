@@ -7767,6 +7767,10 @@ Native Windows rerun on `59d17ee` exposed that PowerShell 5.1 lacks
 `ProcessStartInfo.StandardInputEncoding`. The test now writes explicit UTF-8
 command bytes through stdin BaseStream, avoiding BOMs without requiring newer
 .NET. Native cancellation assertions remain unchanged and need a new rerun.
+The BaseStream rerun still rejected the command. The helper now reports the
+received byte count and escaped line on protocol failure, distinguishing EOF,
+unexpected encoding and wrong command instead of assuming another BOM cause.
+This diagnostic does not relax read-pending or cleanup assertions.
 Commit/push main, align versions, exact-SHA source/platform
 gates, pretag, verified draft, public Latest and all downloaded artifact/install/
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence

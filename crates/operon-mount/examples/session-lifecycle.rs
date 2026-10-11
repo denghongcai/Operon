@@ -33,11 +33,13 @@ fn main() -> anyhow::Result<()> {
     println!("ready");
     std::io::stdout().flush()?;
     let mut action = String::new();
-    std::io::stdin().read_line(&mut action)?;
+    let action_bytes = std::io::stdin().read_line(&mut action)?;
     match action.trim() {
         "drop" => drop(session),
         "unmount" => session.unmount()?,
-        _ => anyhow::bail!("expected drop or unmount"),
+        _ => anyhow::bail!(
+            "expected drop or unmount; received {action_bytes} bytes: {action:?}"
+        ),
     }
     #[cfg(target_os = "linux")]
     for thread in std::fs::read_dir("/proc/self/task")? {
