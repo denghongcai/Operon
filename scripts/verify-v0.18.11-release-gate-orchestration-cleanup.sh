@@ -51,4 +51,6 @@ done
 scripts/release-gate-orchestrate.sh pretag test-tag HEAD denghongcai/Operon >/dev/null
 scripts/release-gate-orchestrate.sh postrelease test-tag HEAD denghongcai/Operon >/dev/null
 
+python3 scripts/verify-embedded-release-gates.py
+
 echo "v0.18.11 release gate orchestration cleanup validation passed"

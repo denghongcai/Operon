@@ -51,16 +51,13 @@ impl Drop for Running {
 }
 
 fn leases() -> Result<(TcpListener, UdpSocket)> {
-    // Outside hosted platform default outbound ephemeral ranges; retain both
-    // reservations until immediately before native startup.
-    for port in 20000..30000 {
-        if let Ok(tcp) = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)) {
-            if let Ok(udp) = UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, port)) {
-                return Ok((tcp, udp));
-            }
-        }
-    }
-    anyhow::bail!("no native daemon fixture port available")
+    // OS-assigned independent ports avoid simultaneous test processes all
+    // choosing 20000 after an earlier fixture releases its startup lease.
+    // Retain both reservations until immediately before native startup.
+    Ok((
+        TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?,
+        UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0))?,
+    ))
 }
 
 async fn bounded(future: impl std::future::Future<Output = Result<()>>) -> Result<()> {

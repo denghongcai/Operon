@@ -8281,6 +8281,21 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   all two owned-relay transport tests pass. Three-repeat ops/s evidence and
   measured limits are in `docs/quality/embedded-connectivity-performance.md`.
   Native Windows and final-source validation of this follow-up remain pending.
+- Current Security API refresh finds three open CodeQL alerts (#13–15), zero
+  open Dependabot alerts and zero open secret-scanning alerts; current analysis
+  SHA is `09a97c4`. Final source scanning/disposition remains required.
+  Windows live mount `38149941090` at `5fcbf92` has passed both original gRPC
+  and opt-in iroh steps; deadline-zero lifecycle and final-source native SDK
+  checks remain pending. The exact `bd16bee` four-group local regression run
+  is active, with separate preserved logs for each validation group.
+- Formal pretag orchestration now requires exact-source successful
+  `Native SDK Packages` and `Embedded Connectivity` for tags carrying native
+  SDK assets. Offline negative checks prove either missing workflow refuses
+  pretag and run in existing consolidated CI validation.
+  Local core finishes all 55 checks. SDK regression exposes deterministic
+  contention between independently running fixtures selecting TCP 20000;
+  reserve independent OS-assigned TCP/UDP ports for native daemon acceptance.
+  SDK/full regression reruns and publication remain pending.
 
 Every phase should preserve the core boundary:
 

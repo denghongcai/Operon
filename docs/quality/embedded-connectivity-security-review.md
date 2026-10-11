@@ -2,12 +2,20 @@
 
 Status: In progress; not a release-completion claim.
 
+Current API refresh on 2026-10-11: three open CodeQL alerts (#13–15),
+zero open Dependabot alerts and zero open secret-scanning alerts. All three
+APIs are accessible. Each open CodeQL finding currently references analysis
+source `09a97c464f166966a3e0674b44495c43a8ea4156` on `refs/heads/main`.
+The newer `bd16bee` source still needs its final scan and native evidence.
+No alert has been dismissed or suppressed. The snapshots below describe
+earlier source states and must not be used as current alert counts.
+
 Refreshed API checkpoint against analysis source
 `97abd7e75cbc36497c9691baacd70d98a95fdb69`: three open CodeQL alerts
 (#13–15). The older one-alert snapshot below is historical and superseded.
 No alert was dismissed. Final release-source review remains pending.
 
-Latest source checkpoint `dab0e8ecbc8ddf330603b07754dbd84e5f27a180`
+Earlier source checkpoint `dab0e8ecbc8ddf330603b07754dbd84e5f27a180`
 introduces two additional open CodeQL findings: #14 and #15,
 `rust/access-invalid-pointer`, on the `#[napi]` NativeClient and NativeCall
 class declarations. The reported dereferences originate in generated binding
@@ -69,9 +77,9 @@ workflow alone does not prove an alert was resolved. Before publication,
 inspect the current open alert list, affected locations, analysis SHA and
 justified not-affected findings, and record any permission gap explicitly.
 
-Latest API checkpoint on 2026-10-11: CodeQL has one open finding (#13,
+Historical API checkpoint on 2026-10-11: CodeQL had one open finding (#13,
 `rust/cleartext-logging`, severity high); Dependabot and secret scanning each
-have zero open findings. These are current repository alert counts, not
+had zero open findings. These were repository alert counts at that checkpoint, not
 security acceptance of the uncommitted native connectivity changes. The
 workspace all-target tests, including the compiled CLI secret-value regression,
 passed locally after those changes. Re-scan the final committed source and

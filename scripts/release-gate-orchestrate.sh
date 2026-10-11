@@ -161,6 +161,10 @@ verify_pretag() {
 
   require_successful_workflow "CI"
   require_successful_workflow "CodeQL"
+  if release_has_sdk_native_assets "$TAG"; then
+    require_successful_workflow "Native SDK Packages"
+    require_successful_workflow "Embedded Connectivity"
+  fi
   scripts/verify-release-gates.sh "$TAG" "$COMMIT_SHA" "$REPO"
   require_successful_job \
     "Windows Runner Image Smoke" \
