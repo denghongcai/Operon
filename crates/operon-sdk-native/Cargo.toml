@@ -1,6 +1,6 @@
 [package]
 name = "operon-sdk-native"
-version = "0.16.14"
+version = "0.16.15"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

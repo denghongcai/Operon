@@ -2504,7 +2504,7 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "operon-cli"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2534,7 +2534,7 @@ dependencies = [
 
 [[package]]
 name = "operon-config"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "operon-core",
@@ -2545,7 +2545,7 @@ dependencies = [
 
 [[package]]
 name = "operon-core"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -2555,7 +2555,7 @@ dependencies = [
 
 [[package]]
 name = "operon-fs"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "libc",
  "operon-core",
@@ -2565,7 +2565,7 @@ dependencies = [
 
 [[package]]
 name = "operon-grpc-client"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "http-body",
@@ -2580,7 +2580,7 @@ dependencies = [
 
 [[package]]
 name = "operon-mount"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "ctrlc",
@@ -2601,7 +2601,7 @@ dependencies = [
 
 [[package]]
 name = "operon-network"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "mdns-sd",
@@ -2611,14 +2611,14 @@ dependencies = [
 
 [[package]]
 name = "operon-process"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "operon-core",
 ]
 
 [[package]]
 name = "operon-protocol"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "operon-core",
  "prost",
@@ -2629,7 +2629,7 @@ dependencies = [
 
 [[package]]
 name = "operon-sdk-native"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -2648,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "operon-store"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "libc",
@@ -2661,7 +2661,7 @@ dependencies = [
 
 [[package]]
 name = "operon-transport"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "getrandom 0.4.2",
  "hyper-util",
@@ -2685,7 +2685,7 @@ dependencies = [
 
 [[package]]
 name = "operond"
-version = "0.16.14"
+version = "0.16.15"
 dependencies = [
  "anyhow",
  "async-stream",

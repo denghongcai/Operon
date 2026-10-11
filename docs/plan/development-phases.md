@@ -8159,7 +8159,7 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   This is original-path regression evidence, not proof of remaining NAT/direct
   upgrade, embedded live-mount, native online or final public package gates.
   Full post-completion source, matched ops/s and support/README still required.
-- Phase 159 — Planned: immutable exact-source/public package release gates.
+- Phase 159 — In progress: immutable exact-source/public package release gates.
   Windows 3f67d77 SDK retest proves absolute shell lookup is fixed, then reveals
   CreateProcessW error 87 for an empty environment. Upstream portable-pty 0.9.0
   emits only one UTF-16 NUL for that case. Vendor the exact crate with one scoped
@@ -8186,6 +8186,19 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   alerts are no longer open; only #13 remains. Windows platform smoke passed
   the creation-output pointer regressions. Final-source rescanning/alert audit
   and live platform release acceptance still remain required.
+
+### Phase 159: Verified Optional Embedded Connectivity Public Release
+
+Status: In Progress. Candidate Rust/SDK/protocol versions are aligned to 0.16.15,
+retaining Rust 1.91 MSRV and historical v0.16.14 public evidence. Require
+the new current-source release validator alongside all previous milestone
+checks. Candidate tag is unused; no publication or final acceptance is claimed.
+Versioned SDK typecheck, 32 tests/build and release-preparation validator pass;
+workspace/all-targets locked compilation also passes after alignment.
+Full workspace/all-target tests passed at `79fdd8e`; the versioned candidate
+still requires fresh complete checks, all native/embedded gates, Security
+disposition, immutable tag and 17 public assets/install/Quickstart verification.
+See `docs/plan/v0.16.15-release-publication.md` for the release requirements.
 
 ## Planning Principle
 

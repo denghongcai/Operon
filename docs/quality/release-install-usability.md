@@ -51,9 +51,9 @@ The decision is recorded in `docs/decisions/musl-alpine-distribution.md`.
 Use dry-run mode while editing workflow or documentation wiring:
 
 ```bash
-scripts/verify-release-install-usability.sh --dry-run v0.16.14 denghongcai/Operon
-scripts/verify-release-service-management-smoke.sh --dry-run v0.16.14 denghongcai/Operon
-scripts/verify-release-linux-install-containers.sh --dry-run v0.16.14 denghongcai/Operon
+scripts/verify-release-install-usability.sh --dry-run v0.16.15 denghongcai/Operon
+scripts/verify-release-service-management-smoke.sh --dry-run v0.16.15 denghongcai/Operon
+scripts/verify-release-linux-install-containers.sh --dry-run v0.16.15 denghongcai/Operon
 scripts/assess-musl-alpine-distribution.sh --dry-run v0.16.14 denghongcai/Operon
 ```
 
