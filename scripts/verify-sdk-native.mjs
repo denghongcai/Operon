@@ -18,6 +18,7 @@ const { NativeClient } = binding.exports;
 const dir = await mkdtemp(path.join(os.tmpdir(), "operon-sdk-native-"));
 let daemon;
 let client;
+let sdk;
 const limit = setTimeout(() => { daemon?.kill("SIGKILL"); process.exitCode = 1; }, seconds * 1000);
 try {
   await mkdir(path.join(dir, "workspace"));
@@ -36,7 +37,9 @@ try {
     node_id: "native-sdk-owned", workspace: path.join(dir, "workspace"),
     grpc_listen: `127.0.0.1:${tcpPort}`, auth: { token: "native-sdk-test-token" },
     iroh: { identity_file: "server.key", bind_addrs: [`127.0.0.1:${udpPort}`] },
-  } }), { mode: 0o600 });
+  }, policy: { subject: "sdk-acceptance", fs: { mounts: [{ name: "workspace", path: "/", permissions: { read: true, write: true, delete: true } }] },
+    exec: { allowed_cwds: ["/"], default_timeout_secs: 30, max_timeout_secs: 300, allow_sessions: true, preserve_env: false, env_allowlist: [], allowed_secrets: [] } },
+  }), { mode: 0o600 });
   await new Promise(resolve => lease.close(resolve));
   await new Promise(resolve => udpLease.close(resolve));
   daemon = spawn(process.env.OPERON_NATIVE_TEST_DAEMON ?? path.resolve("target/debug/operond"),
@@ -91,9 +94,28 @@ try {
   await assert.rejects(pendingReady, /closed/);
   client.close();
   await assert.rejects(client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]"), /closed/);
+  const { OperonClient } = await import("../packages/sdk-js/dist/index.js");
+  sdk = new OperonClient([{ nodeId: "sdk-logical", endpoint: `iroh://${endpointId}`, token: "native-sdk-test-token",
+    transport: { iroh: { identityFile: path.join(dir, "public-sdk.key"), bindAddrs: ["127.0.0.1:0"], peerAddrs: [`127.0.0.1:${udpPort}`] } } }]);
+  const capabilities = await sdk.listCapabilities("sdk-logical");
+  assert(capabilities.capabilities.length > 0);
+  const payload = Uint8Array.from({ length: 8 * 1024 * 1024 + 117 }, (_, i) => i % 251);
+  await sdk.writeFileBytes("sdk-logical", "/large.bin", payload);
+  const received = new Uint8Array(await sdk.readFileBytes("sdk-logical", "/large.bin"));
+  assert.deepEqual(received, payload);
+  const range = await sdk.readFileRangeBytes("sdk-logical", "/large.bin", 123, 4 * 1024 * 1024);
+  assert.deepEqual(new Uint8Array(range), payload.subarray(123, 123 + 4 * 1024 * 1024));
+  await assert.rejects(sdk.statFs("sdk-logical", "/../escape"));
+  const exec = await sdk.runExec("sdk-logical", { command: "printf sdk-native-exec", cwd: "/" });
+  for await (const event of await sdk.watchExec("sdk-logical", exec.id)) { /* drain terminal event stream */ }
+  assert.equal((await sdk.getExec("sdk-logical", exec.id)).exit_code, 0);
+  const logsStream = await sdk.streamExecLogs("sdk-logical", exec.id);
+  assert((await new Response(logsStream).text()).includes("sdk-native-exec"));
+  console.log("PASS public SDK native unary, client/server streaming, >8MiB roundtrip, 4MiB range and traversal rejection");
   console.log("PASS in-process Node binding, native daemon health/node, bearer rejection, cancellation and joined call shutdown");
 } finally {
   client?.close();
+  sdk?.close();
   if (daemon && daemon.exitCode === null && daemon.signalCode === null) {
     daemon.kill("SIGTERM");
     await once(daemon, "exit");

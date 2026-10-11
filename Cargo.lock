@@ -2631,6 +2631,7 @@ dependencies = [
 name = "operon-sdk-native"
 version = "0.16.14"
 dependencies = [
+ "base64 0.22.1",
  "bytes",
  "http",
  "napi",

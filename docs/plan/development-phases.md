@@ -7871,7 +7871,7 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   these actual scenarios online. Exact commit
   `427631e28570f7a475d92839006f211401b6bffc` passed Embedded Connectivity
   `38121300178`, CI `38121300180` and CodeQL `38121300163`.
-- Phase 155 — In Progress: deliberate MSRV/toolchain and owned transport boundary.
+- Phase 155 — Completed: deliberate MSRV/toolchain and owned transport boundary.
   Workspace MSRV is now 1.91 with a pinned 1.91.0 development baseline;
   Linux CI tests both MSRV and latest stable, with all-target test coverage.
   Native Alpine builder uses the verified multiarch Rust 1.91.0/Alpine 3.22
@@ -7903,6 +7903,11 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   workspace/all-target tests and strict Clippy also passed after introducing
   the transport crate and updated lockfile. Feature-enabled transport tests
   and strict Clippy pass separately. Public binaries are not yet changed.
+  Foundation closeout evidence: `0280d67e7b6d44820ca0f08a1eef030011c26d3e`
+  passed CI `38125745837` (MSRV/stable/native macOS/Windows and all validation
+  groups), native dual-architecture Alpine `38125745828`, Embedded Connectivity
+  `38125745818` and CodeQL `38125745734`. These prove the MSRV/toolchain and
+  owned transport foundation, not the still-open later-phase release scope.
 - Phase 156 — In Progress: native daemon/client/config/identity integration.
   Added protocol/framework-free core connection settings, optional
   `daemon.iroh` and per-node `transport.iroh`, nested unknown-field warnings,
@@ -7987,6 +7992,19 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   regression passed closed-client rejection and zero-deadline readiness
   cancellation after the lazy-owner change. Closing drops the cached channel
   and cancels child call owners; normal call close joins its task.
+  Public SDK source adapter now selects explicit iroh endpoints, loads only an
+  optional in-process native module, reuses deadline middleware, and preserves
+  grpc/grpcs channels. ASCII/binary metadata, actual headers/trailers and gRPC
+  error codes are carried across the boundary. Iterator return aborts pending
+  native reads before joining teardown, including zero-deadline calls. New
+  adapter regressions bring SDK tests to 28; typecheck/build pass. A real public
+  SDK native daemon test passed unary capabilities, >8MiB upload/download,
+  4MiB range, traversal denial, exec, watch and log streams. Additive
+  `IrohConnectionConfig` export is recorded in the public API contract; no
+  existing export is removed. Full SDK group passed all 13 scripts after
+  updating that contract, with TypeScript checks/tests/build enabled.
+  Bidirectional services/PTY, broader cancellation/native/relay
+  acceptance and packaged binding distribution remain required.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,

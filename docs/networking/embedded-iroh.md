@@ -115,9 +115,23 @@ published ports, and checks auth denial, exec output, large-file hashes, relay
 traffic counters and recovery after relay restart. Its first local execution
 passed; committed-source online acceptance is still required.
 
+The source TypeScript SDK now has an experimental in-process native adapter.
+Existing `OperonClient` methods stay unchanged; select `iroh://<public-key>` and
+set `transport.iroh` with `identityFile`, explicit `peerAddrs` or `peerRelayUrls`,
+and the matching local relay settings. SDK settings use camelCase. Identity
+paths resolve from the current working directory; use absolute paths for SDK
+applications. Default grpc/grpcs clients do not load the binding.
+
+For Linux GNU source development, build with
+`cargo build -p operon-sdk-native --features node --locked`, build the SDK, and
+set `OPERON_SDK_NATIVE_PATH` to the absolute path of
+`target/debug/liboperon_sdk_native.so`. This is a development setup, not the
+finished portable package contract. Missing bindings or mismatched backend
+settings fail clearly, never silently falling back to TCP. The first real
+public SDK unary/upload/download/range/exec/log tests passed locally; online
+and native-platform/bidirectional/relay acceptance still remain required.
+
 NAT/direct upgrade, interrupted-stream recovery, additional capabilities,
-direct upgrade, relay loss/recovery, public SDK in-process connectivity and
-complete platform/live-mount regression remain Phase 157–159 gates. Do not
-claim those scenarios passed from the current direct-path tests. The current
-public TypeScript SDK still uses ordinary grpc/grpcs addressing; its embedded
-implementation is not yet complete.
+portable SDK binding distribution and complete platform/live-mount regression
+remain Phase 157–159 gates. Do not claim these scenarios passed from direct-path
+tests or from the stream-only relay gate.

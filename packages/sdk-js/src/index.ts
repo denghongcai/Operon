@@ -108,6 +108,7 @@ export type {
   ServiceList,
   ServicePermissions,
   TransportConfig,
+  IrohConnectionConfig,
 } from "./types";
 
 export class OperonClient {

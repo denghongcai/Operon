@@ -6,6 +6,7 @@ export type NodeEndpoint = {
 };
 
 export type TransportConfig = {
+  iroh?: IrohConnectionConfig;
   connectTimeoutSecs: number;
   rpcTimeoutSecs: number;
   transferTimeoutSecs: number;
@@ -13,6 +14,21 @@ export type TransportConfig = {
   keepaliveIntervalSecs: number;
   keepaliveTimeoutSecs: number;
   keepaliveWhileIdle: boolean;
+};
+
+export type IrohConnectionConfig = {
+  identityFile: string;
+  bindAddrs?: string[];
+  relayUrls?: string[];
+  peerAddrs?: string[];
+  peerRelayUrls?: string[];
+  allowInsecureRelays?: boolean;
+  bindTimeoutSecs?: number;
+  readinessTimeoutSecs?: number;
+  idleTimeoutSecs?: number;
+  keepaliveIntervalSecs?: number;
+  pathIdleTimeoutSecs?: number;
+  pathKeepaliveIntervalSecs?: number;
 };
 
 export type OperonStep = {

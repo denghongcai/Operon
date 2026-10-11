@@ -73,6 +73,15 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '10.33.2'
+      - name: Build public SDK for native capability acceptance
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @operon/sdk typecheck
+          pnpm --filter @operon/sdk test
+          pnpm --filter @operon/sdk build
       - name: Build optional in-process SDK binding
         run: |
           cargo build -p operon-sdk-native --features node --locked

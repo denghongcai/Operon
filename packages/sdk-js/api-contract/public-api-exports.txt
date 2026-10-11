@@ -18,6 +18,7 @@ FsList
 FsListEntry
 FsPrecondition
 FsStat
+IrohConnectionConfig
 NodeEndpoint
 OperonClient
 OperonRunRequest

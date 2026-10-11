@@ -14,6 +14,7 @@ node = ["dep:napi", "dep:napi-derive", "operon-grpc-client/iroh"]
 
 [dependencies]
 bytes = "1"
+base64 = "0.22"
 http = "1"
 operon-core = { path = "../operon-core" }
 operon-grpc-client = { path = "../operon-grpc-client" }

@@ -4,12 +4,13 @@ import { OperonRuntimeDefinition, type OperonRuntimeClient } from "./generated/o
 import { grpcOptions, grpcTarget, type RequestContext } from "./transport";
 import type { NodeEndpoint } from "./types";
 import { deadlineMiddleware, transportConfig } from "./transport-deadlines";
+import { embeddedClient } from "./embedded-client";
 
 export class GrpcClientPool {
   private readonly endpoints: Map<string, NodeEndpoint>;
   private readonly clients = new Map<
     string,
-    { channel: Channel; client: OperonRuntimeClient }
+    { close(): void; client: OperonRuntimeClient }
   >();
 
   constructor(endpoints: NodeEndpoint[]) {
@@ -17,8 +18,8 @@ export class GrpcClientPool {
   }
 
   close(): void {
-    for (const { channel } of this.clients.values()) {
-      channel.close();
+    for (const entry of this.clients.values()) {
+      entry.close();
     }
     this.clients.clear();
   }
@@ -37,6 +38,12 @@ export class GrpcClientPool {
       return cached.client;
     }
     const config = transportConfig(endpoint.transport);
+    if (endpoint.endpoint.startsWith("iroh://")) {
+      const entry = embeddedClient(endpoint);
+      this.clients.set(endpoint.nodeId, entry);
+      return entry.client;
+    }
+    if (config.iroh) throw new Error("transport.iroh requires an iroh endpoint; no fallback was attempted");
     const channel = createChannel(grpcTarget(endpoint.endpoint), undefined, {
       "grpc.max_receive_message_length": 16 * 1024 * 1024,
       "grpc.max_send_message_length": 16 * 1024 * 1024,
@@ -47,7 +54,7 @@ export class GrpcClientPool {
     const ready = config.connectTimeoutSecs === 0 ? undefined
       : () => waitForChannelReady(channel, new Date(Date.now() + config.connectTimeoutSecs * 1000));
     const client = createClientFactory().use(deadlineMiddleware(config, ready)).create(OperonRuntimeDefinition, channel);
-    this.clients.set(endpoint.nodeId, { channel, client });
+    this.clients.set(endpoint.nodeId, { close: () => channel.close(), client });
     return client;
   }
 

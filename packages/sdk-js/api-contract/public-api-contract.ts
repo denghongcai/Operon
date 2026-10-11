@@ -21,6 +21,7 @@ import {
   type FsListEntry,
   type FsPrecondition,
   type FsStat,
+  type IrohConnectionConfig,
   type NodeEndpoint,
   type OperonRunRequest,
   type OperonRunStatus,
@@ -275,6 +276,8 @@ const auditEvent: AuditEvent = {
 };
 const auditLog: AuditLog = { events: [auditEvent] };
 const runtimeDefinition = OperonRuntimeDefinition;
+const iroh: IrohConnectionConfig = { identityFile: "/private/client.key", peerAddrs: ["127.0.0.1:7788"], readinessTimeoutSecs: 0 };
+const embeddedEndpoint: NodeEndpoint = { nodeId: "logical", endpoint: "iroh://public-key", transport: { connectTimeoutSecs: 0, iroh } };
 
 type _ClientContractIsStable = Assert<IsAssignable<OperonClient, ClientContract>>;
 type _GeneratedClientIsPublic = Assert<IsAssignable<OperonRuntimeClient, object>>;
@@ -297,4 +300,5 @@ void [
   datagramEvent,
   auditLog,
   runtimeDefinition,
+  embeddedEndpoint,
 ];
