@@ -198,6 +198,11 @@ impl NodeConfig {
             if iroh.local.identity_file.is_relative() {
                 iroh.local.identity_file = config_dir.join(&iroh.local.identity_file);
             }
+            if let Some(path) = &mut iroh.local.relay_ca_file {
+                if path.is_relative() {
+                    *path = config_dir.join(&*path);
+                }
+            }
         }
         Ok(NodeEndpoint {
             node_id: node_id.to_string(),

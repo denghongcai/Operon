@@ -66,6 +66,13 @@ describe("optional embedded SDK adapter", () => {
     entry.close();
     expect(fake.close).toHaveBeenCalledOnce();
   });
+  it("passes explicit private relay CA trust without enabling insecure relays", () => {
+    const fake = fakeBinding();
+    const entry = embeddedClient({ ...endpoint, transport: { iroh: { ...endpoint.transport.iroh, relayCaFile: "/private/relay.pem" } } });
+    expect(fake.configs[0]).toMatchObject({ transport: { iroh: { relay_ca_file: "/private/relay.pem" } } });
+    expect(JSON.stringify(fake.configs[0])).not.toContain("allow_insecure_relays");
+    entry.close();
+  });
   it("preserves gRPC status instead of returning a successful empty response", async () => {
     fakeBinding(new Error("grpc-status:16:invalid bearer token"));
     const entry = embeddedClient(endpoint);

@@ -20,6 +20,7 @@ client:
         connect_timeout_secs: 0
         iroh:
           identity_file: client.key
+          relay_ca_file: relay-ca.pem
           bind_addrs: [127.0.0.1:0]
           peer_addrs: [127.0.0.1:9000]
           idle_timeout_secs: 0
@@ -47,6 +48,10 @@ fn explicit_optional_config_preserves_logical_identity_and_resolves_key_paths() 
     assert_eq!(endpoint.transport.connect_timeout_secs, 0);
     let iroh = endpoint.transport.iroh.unwrap();
     assert_eq!(iroh.local.identity_file, Path::new("cfg/client.key"));
+    assert_eq!(
+        iroh.local.relay_ca_file.as_deref(),
+        Some(Path::new("cfg/relay-ca.pem"))
+    );
     assert_eq!(iroh.local.idle_timeout_secs, 0);
     assert!(iroh.peer_relay_urls.is_empty());
 }
@@ -81,6 +86,7 @@ fn invalid_or_dangling_backend_configuration_never_falls_back() {
     for config in [
         CONFIG.replace("iroh://", "grpc://"),
         CONFIG.replace("identity_file: client.key", "identity_file: ''"),
+        CONFIG.replace("relay_ca_file: relay-ca.pem", "relay_ca_file: ''"),
         CONFIG.replace("peer_addrs: [127.0.0.1:9000]", "peer_addrs: []"),
         CONFIG.replace("max_connections: 16", "max_connections: 0"),
         CONFIG.replace(

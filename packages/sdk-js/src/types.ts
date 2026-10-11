@@ -20,6 +20,8 @@ export type IrohConnectionConfig = {
   identityFile: string;
   bindAddrs?: string[];
   relayUrls?: string[];
+  /** PEM trust anchors for a private relay CA; normal TLS validation remains enabled. */
+  relayCaFile?: string;
   peerAddrs?: string[];
   peerRelayUrls?: string[];
   allowInsecureRelays?: boolean;

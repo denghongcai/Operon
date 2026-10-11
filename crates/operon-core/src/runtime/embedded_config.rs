@@ -8,6 +8,9 @@ pub struct IrohEndpointConfig {
     pub identity_file: PathBuf,
     pub bind_addrs: Vec<SocketAddr>,
     pub relay_urls: Vec<String>,
+    /// Additional trusted relay CA certificates (PEM); never disables TLS validation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relay_ca_file: Option<PathBuf>,
     pub allow_insecure_relays: bool,
     pub bind_timeout_secs: u64,
     pub readiness_timeout_secs: u64,
@@ -25,6 +28,7 @@ impl Default for IrohEndpointConfig {
             identity_file: PathBuf::new(),
             bind_addrs: vec![SocketAddr::from(([0, 0, 0, 0], 0))],
             relay_urls: vec![],
+            relay_ca_file: None,
             allow_insecure_relays: false,
             bind_timeout_secs: 10,
             readiness_timeout_secs: 30,
@@ -40,6 +44,13 @@ impl IrohEndpointConfig {
     pub fn validate(&self) -> Result<(), String> {
         if self.identity_file.as_os_str().is_empty() {
             return Err("iroh identity_file must not be empty".into());
+        }
+        if self
+            .relay_ca_file
+            .as_ref()
+            .is_some_and(|path| path.as_os_str().is_empty())
+        {
+            return Err("iroh relay_ca_file must not be empty".into());
         }
         if self.bind_addrs.is_empty() && self.relay_urls.is_empty() {
             return Err("iroh needs explicit bind_addrs or relay_urls".into());

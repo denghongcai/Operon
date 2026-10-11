@@ -12,6 +12,9 @@ on:
       - 'docker/iroh-relay/**'
       - 'scripts/verify-embedded-relay.sh'
       - 'scripts/verify-embedded-relay-containers.py'
+      - 'scripts/verify-embedded-nat.py'
+      - 'scripts/verify-embedded-mount.py'
+      - 'packages/sdk-js/**'
       - 'scripts/verify-sdk-native.mjs'
       - 'docker/Dockerfile'
       - '.github/workflows/embedded-connectivity.yml'
@@ -26,6 +29,9 @@ on:
       - 'docker/iroh-relay/**'
       - 'scripts/verify-embedded-relay.sh'
       - 'scripts/verify-embedded-relay-containers.py'
+      - 'scripts/verify-embedded-nat.py'
+      - 'scripts/verify-embedded-mount.py'
+      - 'packages/sdk-js/**'
       - 'scripts/verify-sdk-native.mjs'
       - 'docker/Dockerfile'
       - '.github/workflows/embedded-connectivity.yml'
@@ -140,5 +146,11 @@ jobs:
           OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
           OPERON_TEST_DENY_UDP: '1'
         run: python3 scripts/verify-embedded-relay-containers.py
-      # Phase 157 still requires NAT/direct upgrade, interrupted streaming,
+      - name: Build actual two-router NAT acceptance executable
+        run: docker build -f docker/iroh-relay/nat-native.Dockerfile -t operon-iroh-nat-native .
+      - name: Actual TLS relay bootstrap and selected SNAT public-IP upgrade
+        env:
+          OPERON_EMBEDDED_TEST_TIMEOUT_SECS: '180'
+        run: python3 scripts/verify-embedded-nat.py
+      # Phase 157 still requires interrupted streaming,
       # additional capability/native mount scenarios and public SDK acceptance.

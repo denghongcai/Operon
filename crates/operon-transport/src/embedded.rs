@@ -29,12 +29,44 @@ use tonic::transport::server::Connected;
 
 pub const ALPN: &[u8] = b"operon/grpc-h2/1";
 
+fn load_relay_ca(path: &std::path::Path) -> io::Result<iroh_relay::tls::CaTlsConfig> {
+    use rustls_pki_types::{pem::PemObject, CertificateDer};
+    use std::io::Read;
+    const LIMIT: usize = 1024 * 1024;
+    let mut pem = Vec::new();
+    std::fs::File::open(path)?
+        .take((LIMIT + 1) as u64)
+        .read_to_end(&mut pem)?;
+    if pem.len() > LIMIT {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "relay CA file exceeds 1 MiB",
+        ));
+    }
+    let roots = CertificateDer::pem_slice_iter(&pem)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid relay CA certificate PEM",
+            )
+        })?;
+    if roots.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "relay CA file has no certificates",
+        ));
+    }
+    Ok(iroh_relay::tls::CaTlsConfig::embedded().with_extra_roots(roots))
+}
+
 /// All connection infrastructure is explicit. Empty relays never select
 /// public relays; an empty bind list disables direct IP transports.
 pub struct BindOptions {
     pub identity: SecretKey,
     pub bind_addrs: Vec<SocketAddr>,
     pub relay_urls: Vec<RelayUrl>,
+    pub ca_tls_config: Option<iroh_relay::tls::CaTlsConfig>,
     pub bind_timeout: Duration,
     /// Caller-selected idle, keepalive, path and stream/window limits.
     pub quic: QuicTransportConfig,
@@ -58,6 +90,11 @@ impl EmbeddedEndpoint {
             .validate()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
         let relay_urls = parse_relays(&config.relay_urls, config.allow_insecure_relays)?;
+        let ca_tls_config = config
+            .relay_ca_file
+            .as_ref()
+            .map(|path| load_relay_ca(&operon_config::resolve_path(config_dir, path)))
+            .transpose()?;
         let path = operon_config::resolve_path(config_dir, &config.identity_file);
         let identity = crate::identity::load_or_create_identity(&path)?;
         let idle = if config.idle_timeout_secs == 0 {
@@ -83,6 +120,7 @@ impl EmbeddedEndpoint {
             identity,
             bind_addrs: config.bind_addrs.clone(),
             relay_urls,
+            ca_tls_config,
             bind_timeout: Duration::from_secs(config.bind_timeout_secs),
             quic,
         })
@@ -101,6 +139,9 @@ impl EmbeddedEndpoint {
             .secret_key(options.identity)
             .transport_config(options.quic)
             .alpns(vec![ALPN.to_vec()]);
+        if let Some(ca) = options.ca_tls_config {
+            builder = builder.ca_tls_config(ca);
+        }
         for addr in options.bind_addrs {
             builder = builder.bind_addr(addr).map_err(io::Error::other)?;
         }
@@ -413,5 +454,25 @@ impl Drop for QuicIo {
     fn drop(&mut self) {
         self.connection
             .close(0u32.into(), b"HTTP/2 transport dropped");
+    }
+}
+
+#[cfg(test)]
+mod relay_ca_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_missing_empty_malformed_and_oversized_trust_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ca.pem");
+        assert!(load_relay_ca(&path).is_err());
+        for data in [
+            Vec::new(),
+            b"-----BEGIN CERTIFICATE-----\n!\n-----END CERTIFICATE-----".to_vec(),
+            vec![b'x'; 1024 * 1024 + 1],
+        ] {
+            std::fs::write(&path, data).unwrap();
+            assert!(load_relay_ca(&path).is_err());
+        }
     }
 }

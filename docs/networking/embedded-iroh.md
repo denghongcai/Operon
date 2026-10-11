@@ -59,8 +59,13 @@ remote-logical-name`, filesystem, exec or mount commands. The configuration
 loader keeps unknown-field warnings and resolves client identity paths against
 the config directory. There is no implicit global lookup, address publication
 or enrollment in public relays. Existing LAN discovery continues to locate
-ordinary private-network endpoints; additional embedded discovery/onboarding
-UX remains in Phase 156.
+ordinary private-network endpoints. An embedded discovery record does not
+provide the local identity, routes or bearer token needed to connect: pair it
+explicitly with `operon onboard`, then use the configured node's `node ping`.
+Discovery export rejects an unpaired embedded record before writing config;
+exporting an already configured matching peer preserves its identity, routes
+and authentication. Discovery health checks report when explicit pairing is
+required.
 
 Source CLI onboarding can now render an explicitly paired embedded client:
 
@@ -129,6 +134,14 @@ Relays are opt-in operator configuration, not an Operon-managed network.
 targets configure both, and omit `peer_addrs`. HTTPS is required by default;
 HTTP needs explicit `allow_insecure_relays: true` and is intended only for
 isolated tests. URLs must not embed credentials, a query or fragment.
+
+For a private-CA HTTPS relay, set `relay_ca_file: relay-ca.pem` in each local
+daemon/client iroh configuration (`relayCaFile` in the SDK). The file adds PEM
+CA certificates to the existing public trust anchors; hostname, validity and
+chain checks remain enabled. Rust config-relative paths resolve beside the
+configuration file; SDK paths should be absolute. Empty, malformed or larger
+than 1 MiB files fail explicitly, without falling back to unverified TLS.
+This affects relay TLS, not the pinned Ed25519 peer identity or bearer policy.
 
 The first self-hosted Docker relay gate passed locally with both endpoints'
 IP transports disabled: pinned identities and >8MiB data matched, QUIC paths

@@ -152,6 +152,7 @@ fn collect_iroh(
         "identity_file",
         "bind_addrs",
         "relay_urls",
+        "relay_ca_file",
         "allow_insecure_relays",
         "bind_timeout_secs",
         "readiness_timeout_secs",

@@ -8239,6 +8239,21 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   public SDK field mapping are covered locally. No TLS verification bypass.
   A test-only gRPC observer and two-router SNAT/TLS fixture are being validated
   locally and added to mandatory embedded CI; do not count NAT as passed yet.
+- NAT packet-header and conntrack diagnostics show unsolicited router-local
+  UDP acceptance reserves the reverse tuple and changes MASQUERADE's source
+  port. The isolated fixture now drops router INPUT and bootstrap peer UDP
+  before connection tracking. Local Docker revalidation passes actual TLS relay
+  bootstrap, selected SNAT public-IP upgrade on the same real gRPC connection,
+  exec and >8 MiB file SHA with nonzero owned SNAT counters. Retain evidence in
+  `/tmp/operon-nat-input-drop.log`; online exact-source NAT remains pending.
+  The test observer closes and joins its endpoint on timeout/error as well as
+  success, preserving one total configurable deadline. Example strict Clippy
+  passes. A sandbox test rerun failed socket binding with `EPERM`; the approved
+  network-capable rerun passes all 15 transport/identity/CA tests. Two tests
+  requiring an owned relay remain separately gated. SDK typecheck, 32 tests
+  and build pass. After the temporary automatic-approval usage limit cleared,
+  Windows live mount run `38149432353` started for exact `854751f71fcfef0e9ce072f5e34ba33b108ba5e8`.
+  Windows results, final exact-source gates and release remain pending.
 
 Every phase should preserve the core boundary:
 

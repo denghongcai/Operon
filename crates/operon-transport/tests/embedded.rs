@@ -15,6 +15,7 @@ fn options(identity: u8) -> BindOptions {
         identity: SecretKey::from_bytes(&[identity; 32]),
         bind_addrs: vec!["127.0.0.1:0".parse().unwrap()],
         relay_urls: vec![],
+        ca_tls_config: None,
         bind_timeout: Duration::from_secs(10),
         quic: QuicTransportConfig::builder()
             .max_concurrent_bidi_streams(1u32.into())

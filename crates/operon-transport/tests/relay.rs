@@ -31,6 +31,7 @@ async fn relay_bootstrap_upgrades_to_selected_direct_path() -> io::Result<()> {
             identity: SecretKey::from_bytes(&[identity; 32]),
             bind_addrs: vec!["127.0.0.1:0".parse().unwrap()],
             relay_urls: vec![relay.clone()], bind_timeout: deadline,
+            ca_tls_config: None,
             quic: QuicTransportConfig::builder()
                 .max_concurrent_bidi_streams(1u32.into()).build(),
         };
@@ -104,6 +105,7 @@ async fn relay_only_stream_authentication_payload_and_owned_shutdown() -> io::Re
             // No IP transports: this test cannot silently use direct UDP.
             bind_addrs: vec![],
             relay_urls: vec![relay.clone()],
+            ca_tls_config: None,
             bind_timeout: deadline,
             quic: QuicTransportConfig::builder()
                 .max_concurrent_bidi_streams(1u32.into())
