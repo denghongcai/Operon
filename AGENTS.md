@@ -2,12 +2,15 @@
 
 Guidance for agents working in this repository.
 
-Latest release: Phases 142–146 completed in verified public v0.16.13, source
-`7c2b2e05c98327f2b58251147cf2ddd46e4fd3fc`. Adds configurable bounded parallel
-mount reads and single-task daemon range I/O. Linux defaults to four workers;
-eight is opt-in. GNU/musl, Alpine/OpenRC, macOS and Windows remain supported.
+Latest release: Phases 148–152 completed in verified public v0.16.14, source
+`fdbf071e740235ad46e1f42e92a0ce0b1d1de66e`. Adds bounded async Unix reads and
+owned cancellation on external unmount, including zero RPC deadlines. Linux
+defaults to async with four callback workers and eight independent RPC slots;
+macOS defaults to sync, with explicit async verified. Windows keeps WinFsp.
+GNU/musl, Alpine/OpenRC, macOS and Windows remain supported. Privileged
+concurrent overmount remains an accepted, disclosed non-atomic boundary.
 Full exact-SHA source/platform/public gates and disclosed ops/s evidence
-are in `docs/plan/v0.16.13-release-publication.md`.
+are in `docs/plan/v0.16.14-release-publication.md`.
 
 ## Project Direction
 
@@ -34,6 +37,11 @@ Operon should not own:
 - packet-level network policy
 
 ## Key Design Documents
+
+- `docs/plan/v0.16.14-release-publication.md`
+  - Completed Phase 152: immutable exact-source and public package verification.
+- `docs/plan/v0.18.24-async-fuse-read-roadmap.md`
+  - Phases 148–152: bounded async reads, owned cancellation, ops/s acceptance.
 
 - `docs/plan/v0.16.13-release-publication.md`
   - Completed Phase 146: exact-source and public release gates for parallel-read tuning.

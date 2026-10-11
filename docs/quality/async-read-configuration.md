@@ -1,7 +1,8 @@
-# Formal FUSE read configuration (source checkpoint, not yet published)
+# Formal FUSE read configuration (v0.16.14)
 
-Phases 148–152 are in progress. Public v0.16.13 remains unchanged; its historical
-benchmark results are not final evidence for the following source defaults.
+Published v0.16.14 adds the following defaults. v0.16.13 historical measurements
+are retained separately; see the matched production evidence and
+[exact-source/public gates](../plan/v0.16.14-release-publication.md).
 
 ```yaml
 client:
@@ -21,10 +22,10 @@ operon --rpc-timeout-secs 300 mount remote:/ --to /mnt/remote \
 ```
 
 `auto` selects asynchronous FUSE reads on Linux, synchronous dispatch on macOS
-and the existing native WinFsp dispatcher on Windows. Explicit `async` is implemented for Unix FUSE; native macOS
-acceptance is still required. Windows rejects it instead of silently changing
+and the existing native WinFsp dispatcher on Windows. Explicit `async` is implemented for Unix FUSE and passed native macOS
+acceptance. Windows rejects it instead of silently changing
 WinFsp dispatch. Explicit `sync` uses the callback's thread for the read RPC;
-it does not create a per-read OS thread. Final defaults require native and
+it does not create a per-read OS thread. Defaults passed native and
 ops-first acceptance before publication.
 
 Task admission, RPC/byte-budget queues and the read RPC share one deadline

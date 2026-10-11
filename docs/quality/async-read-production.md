@@ -1,5 +1,9 @@
 # Production async read acceptance checkpoint
 
+The implementation was subsequently published and fully verified as v0.16.14;
+see [release gates](../plan/v0.16.14-release-publication.md). This does not
+change the historical binary provenance or turn these into tagged-archive measurements.
+
 These are Linux source-checkpoint measurements, not verification of a published
 release. Both sides use the same Rust 1.88.0 production binary pair, explicitly
 selecting sync versus async. Binary hashes, source HEAD/dirty status, Docker

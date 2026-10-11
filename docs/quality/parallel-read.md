@@ -1,7 +1,10 @@
 # Parallel read tuning and acceptance
 
-Published v0.16.13: mount worker/read budgets and
-single-task daemon range reads. Protocol and existing consistency remain unchanged.
+Published v0.16.14 adds bounded asynchronous Unix reads and owned cancellation
+to the v0.16.13 worker/read budgets and single-task daemon range reads.
+Protocol and existing consistency remain unchanged. The measurements below
+retain the historical v0.16.13 comparison; current matched sync/async results
+are in [production async acceptance](async-read-production.md).
 
 ```yaml
 client:
@@ -23,12 +26,15 @@ operon --rpc-timeout-secs 300 mount remote:/ --to /mnt/remote \
   --mount-workers 8 --read-concurrency 8 --read-budget-mib 32
 ```
 
-Linux defaults to four synchronous FUSE workers; macOS keeps its supported
-single-worker adapter, Windows keeps WinFsp dispatch. Explicit worker count on
+Linux defaults to async reads with four FUSE callback workers; macOS defaults
+to sync with explicit async supported, and Windows keeps WinFsp dispatch. Explicit worker count on
 non-Linux adapters fails rather than being ignored. Read budgets apply to all
 adapters. Queue wait plus RPC use the same ordinary RPC deadline, including CLI
 overrides; zero disables the deadline. This bounds the client's read-budget
 queue, not time already spent waiting in the kernel/FUSE dispatch queue.
+v0.16.14 also bounds owned async tasks (default 64); mode, pending tasks and
+external-unmount polling are configurable as documented in
+[read configuration](async-read-configuration.md).
 Read failures never replay mutations.
 Budgets cover active RPC requested bytes, not replies already handed to the
 adapter, process RSS, protobuf temporaries or kernel page cache.

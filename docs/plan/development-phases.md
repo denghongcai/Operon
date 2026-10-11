@@ -7610,7 +7610,12 @@ ops/default and exact-source public gates remain mandatory in Phases 150–152.
 
 ## Phase 150: Async Read Correctness and Native Platform Acceptance
 
-Status: In Progress. Low-capacity Linux sync/async live probes passed with
+Status: Completed. Exact-source CI, Linux live mounts, native Alpine x86_64/arm64
+root/nonroot auto/sync FUSE and rebooted OpenRC, macOS default/async FUSE-T,
+and Windows deadline-zero Drop/unmount cancellation passed on `fdbf071`.
+Public downloaded Alpine acceptance also passed. See the Phase 152 release
+evidence for run IDs; the following paragraphs retain historical checkpoints.
+Low-capacity Linux sync/async live probes passed with
 pending=1, RPC concurrency=1 and an 8MiB budget. Four concurrent reads tested
 deadline-zero Drop/unmount, automatic external lazy/ordinary detach, foreground
 interrupt, deadline recovery and replacement preservation. Evidence:
@@ -7684,7 +7689,11 @@ live-FUSE passes and container/native mount coverage remains required.
 
 ## Phase 151: Final Async Read Ops Acceptance and Defaults
 
-Status: In Progress. Rust 1.88.0 current production CLI/daemon/helper were rebuilt
+Status: Completed. Matched production ops/s, regressions/resources and independent
+defaults are retained in `docs/quality/async-read-production.md`; all exact-source
+native gates passed before v0.16.14 tagging. Checkpoint measurements are not
+misrepresented as fresh benchmarks of tagged archives. Historical progress follows.
+Rust 1.88.0 current production CLI/daemon/helper were rebuilt
 and pinned at `/tmp/operon-production-read-checkpoint.O5OsjT`. The first matched
 local 8-RPC matrix passed all 72 cases (three alternating trials, 1/4/8/16 readers,
 same/distinct/random). Both sides use identical binary hashes and explicit
@@ -7719,7 +7728,14 @@ regressions/resources and choose configurable defaults from final evidence.
 
 ## Phase 152: Verified Async Read Public Release
 
-Status: In Progress. On 2026-10-11, GitHub reported v0.16.13 as Latest and
+Status: Completed. Published public Latest v0.16.14 at `2026-10-11T03:34:19Z`
+from immutable source `fdbf071e740235ad46e1f42e92a0ce0b1d1de66e`.
+All exact-source gates, ten assets/nine archive checksums, public installation,
+service management, README Quickstart, native Alpine x86_64/arm64 FUSE/OpenRC
+and Windows Server 2025 passed. Pretag and postrelease orchestration exited
+zero. Evidence: `docs/plan/v0.16.14-release-publication.md`. Documentation
+closeout is a separate main commit and never moves the release tag.
+Historical preparation follows. On 2026-10-11, GitHub reported v0.16.13 as Latest and
 no v0.16.14 tag. Selected v0.16.14; aligned eleven crate manifests and the
 lockfile, SDK package version, protocol version and version assertions. Current
 protocol/CLI/SDK contract validators are being aligned without rewriting
