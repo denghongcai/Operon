@@ -102,6 +102,16 @@ try {
       ...(relayUrl ? { peer_addrs: [], peer_relay_urls: [relayUrl] } : {}),
     } } };
   client = await NativeClient.connect(JSON.stringify(endpointConfig));
+  // RFC 8032's public test vector is a valid but deliberately unpaired key.
+  // Explicit address/relay information must never bypass the identity pin.
+  const wrongPin = structuredClone(endpointConfig);
+  wrongPin.endpoint = "iroh://d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+  wrongPin.transport.connect_timeout_secs = Math.min(seconds, 5);
+  wrongPin.transport.iroh.identity_file = path.join(dir, "wrong-pin.key");
+  const wrongPinClient = new NativeClient(JSON.stringify(wrongPin));
+  try { await assert.rejects(wrongPinClient.ready()); }
+  finally { wrongPinClient.close(); }
+  console.log("PASS valid but unpaired endpoint identity cannot authenticate or fall back");
   const rpc = async (name, token = "native-sdk-test-token") => {
     const call = await client.openCall(`/operon.runtime.v1.OperonRuntime/${name}`,
       JSON.stringify([["authorization", `Bearer ${token}`]]));
@@ -156,6 +166,15 @@ try {
   client.close();
   await assert.rejects(client.openCall("/operon.runtime.v1.OperonRuntime/Health", "[]"), /closed/);
   const { OperonClient } = await import("../packages/sdk-js/dist/index.js");
+  const wrongSdk = new OperonClient([{ nodeId: "wrong-pin", endpoint: wrongPin.endpoint, token: "native-sdk-test-token",
+    transport: { connectTimeoutSecs: Math.min(seconds, 5), iroh: {
+      identityFile: path.join(dir, "wrong-sdk-pin.key"),
+      bindAddrs: relayUrl ? [] : ["127.0.0.1:0"],
+      peerAddrs: relayUrl ? [] : [`127.0.0.1:${udpPort}`],
+      ...(relayUrl ? { relayUrls: [relayUrl], peerRelayUrls: [relayUrl], allowInsecureRelays: true, readinessTimeoutSecs: seconds } : {}),
+    } } }]);
+  try { await assert.rejects(wrongSdk.listCapabilities("wrong-pin")); }
+  finally { wrongSdk.close(); }
   sdk = new OperonClient([{ nodeId: "sdk-logical", endpoint: `iroh://${endpointId}`, token: "native-sdk-test-token",
     transport: { iroh: { identityFile: path.join(dir, "public-sdk.key"), bindAddrs: relayUrl ? [] : ["127.0.0.1:0"], peerAddrs: relayUrl ? [] : [`127.0.0.1:${udpPort}`],
       ...(relayUrl ? { relayUrls: [relayUrl], peerRelayUrls: [relayUrl], allowInsecureRelays: true, readinessTimeoutSecs: seconds } : {}) } } }]);
@@ -209,7 +228,15 @@ try {
   let sawExit = false;
   for await (const event of session) {
     if (event.type === "output") output.push(Buffer.from(event.data));
-    if (event.type === "exit") { assert.equal(event.exit_code, 0); sawExit = true; }
+    if (event.type === "exit") {
+      let detail = JSON.stringify(event);
+      if (event.exit_code !== 0) {
+        const failureLogs = await sdk.streamExecLogs("sdk-logical", event.exec_id);
+        detail += ` logs=${await new Response(failureLogs).text()}`;
+      }
+      assert.equal(event.exit_code, 0, detail);
+      sawExit = true;
+    }
   }
   assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"));
   // A lost peer must terminate in-flight work even without an RPC deadline.

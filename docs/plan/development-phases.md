@@ -8085,6 +8085,12 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   Versioned asset/libc regressions and local extracted GNU manifest checks pass.
   This establishes a candidate contract, not a tag/version bump or publication;
   full source/platform/native/online gates remain required before that step.
+  Added native/public SDK rejection of a valid RFC 8032 but unpaired endpoint
+  ID against explicit peer routes; Alpine direct and owned relay gates pass.
+  Online 862a652 macOS SDK platform passes, while Windows now reaches PTY but
+  reports missing exit code. Preserve its strict success assertion and capture
+  session stderr logs on failure for root-cause diagnosis; Windows is not
+  accepted from the successful compile or earlier TCP-fixture repair.
 - Phase 158 — Planned: complete regressions, matched ops/s and README/support docs.
 - Phase 159 — Planned: immutable exact-source/public package release gates.
   User additionally requires final GitHub Security alert audit (CodeQL,
