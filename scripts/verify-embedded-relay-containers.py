@@ -76,7 +76,7 @@ def main():
             server_path = fixtures / "server.yaml"
             server_path.write_text(json.dumps(server_config))
             server_path.chmod(0o600)
-            server = start(prefix + "-server", "--network", networks[0], "--user", "0:0", "--tmpfs", "/state",
+            server = start(prefix + "-server", "--network", networks[0], "--user", "0:0", "--tmpfs", "/state", "--tmpfs", "/workspace",
                            "--mount", f"type=bind,src={server_path},dst=/config.yaml,readonly",
                            "--entrypoint", "operond", image, "start", "--config", "/config.yaml")
             identity = wait_public_id(server)
@@ -142,6 +142,43 @@ def main():
             cli("fs", "read", "remote:/relay.bin", "--output", "/state/after-restart.bin")
             recovered = docker("exec", client, "sha256sum", "/state/after-restart.bin").split()[0]
             assert recovered == actual, "post-relay-restart data corrupted"
+            # Interrupt an actual streaming response after receiving its first
+            # bytes, then explicitly resume observation of the same execution.
+            interrupted_config = json.loads(json.dumps(client_config))
+            interrupted_config["client"]["nodes"]["remote"]["transport"]["rpc_timeout_secs"] = 5
+            interrupted_path = fixtures / "interrupted.yaml"
+            interrupted_path.write_text(json.dumps(interrupted_config))
+            interrupted_path.chmod(0o600)
+            record = json.loads(cli("--json", "exec", "run", "remote", "--detach", "--cwd", "/",
+                "printf 'once\\n' >> /workspace/no-replay.txt; printf 'stream-started\\n'; sleep 20; printf 'stream-finished\\n'"))
+            with (fixtures / "stream-output.log").open("w+") as output:
+                stream = subprocess.Popen(["docker", "exec", client, "operon", "--config",
+                    "/fixtures/interrupted.yaml", "exec", "logs", "remote", record["id"], "--follow"],
+                    stdout=output, stderr=subprocess.PIPE, text=True)
+                try:
+                    deadline = time.monotonic() + timeout
+                    while time.monotonic() < deadline:
+                        output.seek(0)
+                        if "stream-started" in output.read():
+                            break
+                        assert stream.poll() is None, "stream exited before delivering its first bytes"
+                        time.sleep(0.1)
+                    else:
+                        raise AssertionError("stream did not deliver its first bytes")
+                    docker("stop", "--time", "1", relay)
+                    _, error = stream.communicate(timeout=timeout)
+                    assert stream.returncode != 0, "interrupted stream unexpectedly reported success"
+                    assert error.strip(), "interrupted stream lacks an error diagnostic"
+                finally:
+                    if stream.poll() is None:
+                        stream.kill()
+                        stream.communicate(timeout=timeout)
+            docker("start", relay)
+            cli("node", "ping", "remote")
+            resumed = cli("exec", "logs", "remote", record["id"], "--follow")
+            assert resumed.count("stream-started") == 1 and resumed.count("stream-finished") == 1, resumed
+            assert docker("exec", server, "cat", "/workspace/no-replay.txt") == "once", "mutation replayed after relay recovery"
+            print("PASS actual in-flight log stream interruption, bounded error, explicit same-exec recovery and single mutation")
             print("PASS real native daemon/CLI relay-only auth, exec, >8MiB file roundtrip and relay restart recovery across disjoint networks")
     finally:
         for cid in reversed(containers):

@@ -90,7 +90,9 @@ pub async fn connect_channel(
     with_connect_timeout(&endpoint.endpoint, timeout, async {
         if embedded {
             #[cfg(feature = "iroh")]
-            return embedded_channel::connect(endpoint, channel, timeout).await;
+            // Keep the optional iroh state machine out of every caller's
+            // inline future, including ordinary gRPC commands on Windows.
+            return Box::pin(embedded_channel::connect(endpoint, channel, timeout)).await;
             #[cfg(not(feature = "iroh"))]
             anyhow::bail!("iroh backend is not enabled in this build; enable the iroh feature");
         }
@@ -271,6 +273,22 @@ fn byte_chunks(body: &[u8]) -> impl Iterator<Item = FileChunk> + Send + 'static 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optional_backend_does_not_inflate_direct_connect_future() {
+        let endpoint = NodeEndpoint {
+            node_id: "remote".into(),
+            endpoint: "grpc://127.0.0.1:7789".into(),
+            token: None,
+            transport: Default::default(),
+        };
+        let future = connect_channel(&endpoint, Duration::from_secs(1));
+        let size = std::mem::size_of_val(&future);
+        assert!(
+            size < 64 * 1024,
+            "connection future consumes {size} bytes of caller stack"
+        );
+    }
 
     #[tokio::test]
     async fn progress_deadlines_expire_and_zero_disables_them() {

@@ -8254,6 +8254,21 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   and build pass. After the temporary automatic-approval usage limit cleared,
   Windows live mount run `38149432353` started for exact `854751f71fcfef0e9ce072f5e34ba33b108ba5e8`.
   Windows results, final exact-source gates and release remain pending.
+- Actual disjoint-network relay acceptance now interrupts an in-flight exec
+  log response only after receiving `stream-started`. The client reports an
+  error within the configurable acceptance bound while the relay is stopped; explicitly
+  resuming logs for the original execution returns each sentinel once, and a
+  server-side mutation counter remains exactly one. Local default relay case
+  passes with evidence `/tmp/operon-relay-interrupted-stream.log`. Mandatory
+  Actual UDP-denied case also passes locally with evidence
+  `/tmp/operon-relay-interrupted-udp.log`. Exact-source hosted reruns remain required; this does not
+  imply all stream families or final release acceptance are complete.
+- Windows rerun `38149432353` exposes a real debug CLI main-thread stack
+  overflow in default gRPC `node ping`; the daemon is listening normally.
+  Heap-pin the optional embedded connection future so direct callers do not
+  embed the large iroh state machine. A regression requires the connection
+  future to stay below 64 KiB and passes locally with the iroh feature.
+  Native Windows behavior remains unproven until the corrected source passes.
 
 Every phase should preserve the core boundary:
 
