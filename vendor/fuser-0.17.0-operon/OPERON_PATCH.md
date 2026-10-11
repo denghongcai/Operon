@@ -39,6 +39,8 @@ Additional source-stage lifecycle changes (not yet published):
   external unmount. Detached-session teardown disarms path-based unmount and
   joins the background session; unmount errors still trigger receiver shutdown
   and join before being returned.
+  Identity capture uses an explicit Linux openat syscall to preserve O_PATH
+  on musl: an ordinary read-only open before INIT can deadlock startup.
 - Owned Linux native shutdown uses lazy detach, matching the existing helper,
   to support user-held open descriptors. An identity check is not an atomic
   unmount: the user accepted disclosing the concurrent privileged overmount

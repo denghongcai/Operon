@@ -105,13 +105,27 @@ struct CapturedMount {
 
 #[cfg(target_os = "linux")]
 fn capture_mount_id(path: &Path) -> io::Result<CapturedMount> {
-    use std::os::fd::AsRawFd;
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
     // O_PATH does not invoke filesystem open/getattr callbacks before handshake.
-    let root = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_PATH)
-        .open(path)?;
+    // Preserve the exact Linux flags across libc/stdlib implementations. A
+    // normal read-only open here deadlocks before FUSE INIT on musl.
+    let path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    // SAFETY: path is NUL-terminated and live; no creation mode is required.
+    let fd = unsafe {
+        libc::syscall(
+            libc::SYS_openat,
+            libc::AT_FDCWD,
+            path.as_ptr(),
+            libc::O_PATH | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: successful openat returns a new owned descriptor.
+    let root = unsafe { OwnedFd::from_raw_fd(fd as libc::c_int) };
     let info = std::fs::read_to_string(format!("/proc/self/fdinfo/{}", root.as_raw_fd()))?;
     let id = info
         .lines()

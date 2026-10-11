@@ -7783,6 +7783,15 @@ Faulted, not Canceled. The test now permits these two explicit unsuccessful
 terminal states, still rejecting successful or pending reads and requiring
 drive detachment. Native rerun is required; this is not a blanket exception
 suppression or a cancellation pass claim.
+Windows native run 38106438504 subsequently passed both Drop and explicit
+unmount with actual Canceled read tasks and detached drive. Full c892542 CI,
+CodeQL and macOS/Windows mount gates passed. Alpine revealed a separate startup
+hang: local current-source musl reproduction blocked before workers/INIT;
+syscall tracing showed ordinary O_RDONLY open of the mounted path despite
+requested O_PATH. Identity capture now issues exact Linux openat flags through
+syscall. Rebuilt musl binaries passed pinned Alpine 3.22 root auto/sync full
+500-operation runtime/FUSE acceptance. Nonroot and new exact-SHA native gates
+remain required; prior candidate Alpine cannot be counted as passed.
 Commit/push main, align versions, exact-SHA source/platform
 gates, pretag, verified draft, public Latest and all downloaded artifact/install/
 README/native Alpine/OpenRC/Windows/postrelease gates. Release and evidence
