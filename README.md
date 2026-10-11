@@ -25,7 +25,8 @@ bridge. Select `iroh://<public-endpoint-id>` explicitly; normal LAN/VPN endpoint
 remain the default and there is no silent fallback. Client and daemon onboarding
 have separate private identity options; existing bearer auth and policy still
 apply. The [experimental setup guide](docs/networking/embedded-iroh.md) covers
-pairing, explicit addresses/self-hosted relays, configurable timeouts and exact
+pairing, explicit addresses/self-hosted relays, additive private-CA relay trust,
+configurable timeouts and exact
 OS/CPU/libc/version matching for the SDK binding. Linux direct/relay FUSE and
 SDK source acceptance are not a published support claim; NAT and final native
 platform/release gates remain in progress.

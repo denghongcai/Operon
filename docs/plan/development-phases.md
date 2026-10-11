@@ -8269,6 +8269,18 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   embed the large iroh state machine. A regression requires the connection
   future to stay below 64 KiB and passes locally with the iroh feature.
   Native Windows behavior remains unproven until the corrected source passes.
+- Native SDK checkpoint `09a97c4` passes GNU x86_64/arm64 and both macOS
+  package gates but exposes Windows PTY exit arriving before final output.
+  On Windows close ConPTY with its output reader alive, then join the reader
+  before emitting the terminal gRPC event. Linux's existing teardown is retained.
+  Local seven session tests pass; actual Windows output/exit is still required.
+  Add opt-in matched public-SDK sequential capability and 4 KiB range-read
+  measurements (five warmups, three repeats, configurable operation count),
+  reporting ops/s for gRPC and embedded direct/relay against the same daemon.
+  Local direct and self-hosted relay SDK runs pass complete business checks;
+  all two owned-relay transport tests pass. Three-repeat ops/s evidence and
+  measured limits are in `docs/quality/embedded-connectivity-performance.md`.
+  Native Windows and final-source validation of this follow-up remain pending.
 
 Every phase should preserve the core boundary:
 

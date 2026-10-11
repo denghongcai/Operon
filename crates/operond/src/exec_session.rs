@@ -337,7 +337,7 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
         event_tx: task.event_tx.clone(),
     };
     let output_writer = writer.clone();
-    let _reader_thread =
+    let reader_thread =
         thread::spawn(move || read_session_output(&mut reader, output_sink, output_writer));
     let (wait_tx, wait_rx) = std_mpsc::channel();
     thread::spawn(move || {
@@ -355,6 +355,18 @@ fn run_session_task_inner(task: &SessionTask) -> anyhow::Result<(ExecStatus, Opt
     let mut forced_status = None;
     loop {
         if let Ok(status) = wait_rx.try_recv() {
+            // ConPTY can report child exit before flushing its output pipe.
+            // Closing the console while its reader is alive drains that pipe;
+            // join before publishing Exit, which terminates the gRPC stream.
+            #[cfg(windows)]
+            {
+                drop(master);
+                reader_thread
+                    .join()
+                    .map_err(|_| anyhow::anyhow!("PTY output reader panicked"))?;
+            }
+            #[cfg(not(windows))]
+            let _ = &reader_thread;
             return Ok(exec_status_from_pty(status, forced_status));
         }
         if forced_status.is_none() && Instant::now() >= deadline {

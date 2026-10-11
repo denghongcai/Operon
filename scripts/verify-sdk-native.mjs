@@ -186,6 +186,31 @@ try {
   assert.deepEqual(received, payload);
   const range = await sdk.readFileRangeBytes("sdk-logical", "/large.bin", 123, 4 * 1024 * 1024);
   assert.deepEqual(new Uint8Array(range), payload.subarray(123, 123 + 4 * 1024 * 1024));
+  if (process.env.OPERON_SDK_BENCH_OPS) {
+    const operations = Number(process.env.OPERON_SDK_BENCH_OPS);
+    assert(Number.isSafeInteger(operations) && operations > 0, "benchmark operation count must be positive");
+    const direct = new OperonClient([{ nodeId: "grpc-control", endpoint: `grpc://127.0.0.1:${tcpPort}`,
+      token: "native-sdk-test-token" }]);
+    try {
+      for (const [transport, peer, node] of [["grpc", direct, "grpc-control"],
+        [relayUrl ? "iroh-relay" : "iroh-direct", sdk, "sdk-logical"]]) {
+        for (const workload of ["capabilities", "range-4KiB"]) {
+          const operation = workload === "capabilities"
+            ? async () => assert((await peer.listCapabilities(node)).capabilities.length > 0)
+            : async () => assert.deepEqual(new Uint8Array(await peer.readFileRangeBytes(node, "/large.bin", 123, 4096)), payload.subarray(123, 123 + 4096));
+          for (let warmup = 0; warmup < 5; warmup++) await operation();
+          for (let repeat = 0; repeat < 3; repeat++) {
+            const start = performance.now();
+            for (let operationIndex = 0; operationIndex < operations; operationIndex++) await operation();
+            const elapsedSeconds = (performance.now() - start) / 1000;
+            console.log("BENCH " + JSON.stringify({ transport, workload, operations, repeat,
+              elapsedSeconds, opsPerSecond: operations / elapsedSeconds,
+              platform: process.platform, arch: process.arch, node: process.version }));
+          }
+        }
+      }
+    } finally { direct.close(); }
+  }
   await assert.rejects(sdk.statFs("sdk-logical", "/../escape"));
   const exec = await sdk.runExec("sdk-logical", { command: process.platform === "win32" ? "echo sdk-native-exec" : "printf sdk-native-exec", cwd: "/" });
   for await (const event of await sdk.watchExec("sdk-logical", exec.id)) { /* drain terminal event stream */ }
@@ -238,7 +263,8 @@ try {
       sawExit = true;
     }
   }
-  assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"));
+  assert(sawExit && Buffer.concat(output).toString().includes("native-sdk-pty"),
+    `PTY exit=${sawExit} output=${JSON.stringify(Buffer.concat(output).toString())}`);
   // A lost peer must terminate in-flight work even without an RPC deadline.
   // The QUIC idle timer is configurable and separate from application deadlines.
   const lostPeerConfig = structuredClone(endpointConfig);
