@@ -170,6 +170,9 @@ try {
     ? pathToFileURL(process.env.OPERON_SDK_TEST_JS_PATH).href
     : new URL("../packages/sdk-js/dist/index.js", import.meta.url).href;
   const { OperonClient } = await import(sdkModule);
+  // Keep direct native safety tests explicit, but exercise npm platform selection
+  // without the override when testing a bundled package.
+  if (process.env.OPERON_SDK_TEST_BUNDLED_BINDING === "1") delete process.env.OPERON_SDK_NATIVE_PATH;
   const wrongSdk = new OperonClient([{ nodeId: "wrong-pin", endpoint: wrongPin.endpoint, token: "native-sdk-test-token",
     transport: { connectTimeoutSecs: Math.min(seconds, 5), iroh: {
       identityFile: path.join(dir, "wrong-sdk-pin.key"),

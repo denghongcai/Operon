@@ -1,5 +1,13 @@
 # Development Phases
 
+## Phases 160–162: npm SDK Distribution
+
+In progress: publish `@cellworks/operon-sdk-js` through `npm-publish.yml` and
+OIDC environment `npm`; preserve native iroh support and old release assets,
+then remove all SDK assets from future GitHub Releases. Package/CI acceptance,
+the versioned nine-asset contract and registry provenance are tracked in
+`docs/plan/npm-sdk-distribution.md`. No long-lived npm publish token is used.
+
 This plan translates the current product and architecture decisions into an
 implementation sequence.
 

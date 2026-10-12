@@ -1,10 +1,12 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ClientError, Metadata, Status, type CallOptions, type ClientMiddlewareCall } from "nice-grpc";
 import { OperonRuntimeDefinition, type OperonRuntimeClient } from "./generated/operon/runtime";
 import { deadlineMiddleware, transportConfig } from "./transport-deadlines";
 import type { NodeEndpoint } from "./types";
 import sdkPackage from "../package.json";
+import { nativeTarget } from "./native-target";
 
 interface NativeCall {
   send(data: Buffer): Promise<void>;
@@ -31,7 +33,16 @@ type Method = {
 };
 
 function loadBinding(): Binding {
-  const filename = process.env.OPERON_SDK_NATIVE_PATH ?? fileURLToPath(new URL("../native/operon-sdk-native.node", import.meta.url));
+  let filename = process.env.OPERON_SDK_NATIVE_PATH;
+  if (filename === undefined) {
+    const legacy = fileURLToPath(new URL("../native/operon-sdk-native.node", import.meta.url));
+    if (existsSync(legacy)) filename = legacy;
+    else {
+      const report = process.platform === "linux" ? process.report.getReport() as { header?: { glibcVersionRuntime?: string } } : undefined;
+      const target = nativeTarget(process.platform, process.arch, process.platform === "linux" && !report?.header?.glibcVersionRuntime);
+      filename = fileURLToPath(new URL(`../native/${target}/operon-sdk-native.node`, import.meta.url));
+    }
+  }
   if (!path.isAbsolute(filename)) throw new Error("OPERON_SDK_NATIVE_PATH must be absolute");
   const binding = { exports: {} };
   try { process.dlopen(binding, filename); }

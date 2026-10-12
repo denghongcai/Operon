@@ -1,0 +1,106 @@
+name: Publish npm SDK
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Accepted daemon/native release tag
+        required: true
+        default: v0.16.15
+        type: string
+      native_run:
+        description: Exact-source accepted Draft Release build run
+        required: true
+        default: '38156351970'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-sdk-publish
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.2
+      - name: Validate accepted native source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          NATIVE_RUN: ${{ inputs.native_run }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$NATIVE_RUN" =~ ^[0-9]+$ ]]
+          version=$(node -p 'require("./packages/sdk-js/package.json").version')
+          test "$RELEASE_TAG" = "v$version"
+          source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)
+          test "$(gh run view "$NATIVE_RUN" --json headSha --jq .headSha)" = "$source_sha"
+          test "$(gh run view "$NATIVE_RUN" --json workflowName --jq .workflowName)" = 'Draft Release'
+          test "$(gh run view "$NATIVE_RUN" --json status --jq .status)" = completed
+          gh run view "$NATIVE_RUN" --json jobs --jq '.jobs[] | select(.name != "Draft GitHub Release") | .conclusion' > native-status.txt
+          test "$(wc -l < native-status.txt)" = 15
+          test "$(grep -c '^success$' native-status.txt)" = 15
+          git fetch origin "$RELEASE_TAG" --depth=1
+          git diff --exit-code "$source_sha" HEAD -- crates Cargo.toml Cargo.lock rust-toolchain.toml vendor
+          gh run download "$NATIVE_RUN" --dir accepted-artifacts
+      - name: Test and build SDK
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @operon/sdk typecheck
+          pnpm --filter @operon/sdk test
+          pnpm --filter @operon/sdk build
+      - name: Pack and install actual npm archive
+        run: |
+          npm install --global npm@11.6.1 --ignore-scripts --no-audit --no-fund
+          node scripts/package-sdk-npm.mjs accepted-artifacts npm-package
+          mkdir npm-dist install-smoke
+          npm pack ./npm-package --pack-destination npm-dist
+          npm --prefix install-smoke install ./npm-dist/cellworks-operon-sdk-js-*.tgz --ignore-scripts --no-audit --no-fund
+          node --input-type=module -e 'const m = await import("./install-smoke/node_modules/@cellworks/operon-sdk-js/dist/index.js"); if (typeof m.OperonClient !== "function") throw Error("missing API")'
+          sdk="$PWD/install-smoke/node_modules/@cellworks/operon-sdk-js"
+          target=x86_64-unknown-linux-gnu
+          node scripts/verify-sdk-native-manifest.mjs "$sdk/native/$target" "$(node -p 'require("./npm-package/package.json").version')" "$target"
+          daemon=$(find accepted-artifacts -name 'operon-v*-linux-x86_64.tar.gz' -type f)
+          mkdir daemon-smoke
+          tar -xzf "$daemon" -C daemon-smoke
+          OPERON_NATIVE_TEST_DAEMON="$PWD/daemon-smoke/operon-${{ inputs.tag }}-linux-x86_64/operond" \
+          OPERON_SDK_NATIVE_PATH="$sdk/native/$target/operon-sdk-native.node" \
+          OPERON_SDK_TEST_JS_PATH="$sdk/dist/index.js" OPERON_SDK_TEST_PACKAGED=1 OPERON_SDK_TEST_BUNDLED_BINDING=1 \
+            node --expose-gc scripts/verify-sdk-native.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-sdk
+          path: npm-dist/*.tgz
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm install --global npm@11.6.1 --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-sdk
+          path: npm-dist
+      - name: Publish with npm OIDC
+        run: npm publish ./npm-dist/*.tgz --access public --provenance --ignore-scripts
