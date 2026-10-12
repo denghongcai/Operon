@@ -729,7 +729,7 @@ protocol integration details.
 ## TypeScript SDK Example
 
 ```ts
-import { OperonClient } from "@operon/sdk";
+import { OperonClient } from "@cellworks/operon-sdk-js";
 
 const operon = new OperonClient([
   { nodeId: "cloud-a", endpoint: "grpc://100.96.12.34:7789", token: "cloud-token" },

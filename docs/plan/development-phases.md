@@ -7,6 +7,20 @@ OIDC environment `npm`; preserve native iroh support and old release assets,
 then remove all SDK assets from future GitHub Releases. Package/CI acceptance,
 the versioned nine-asset contract and registry provenance are tracked in
 `docs/plan/npm-sdk-distribution.md`. No long-lived npm publish token is used.
+Phase 160 implements the public manifest, bundled seven-target loader and npm
+OIDC jobs. Local SDK typecheck/build and 42 tests pass. Online package job
+`38268644346` passes archive creation, installed import and real daemon/SDK
+capabilities with automatic native selection. Publishing awaits the user's
+required `npm` environment approval. Phase 161 changes the future v0.16.16+
+asset contract to nine daemon/CLI/checksum assets, preserving old contracts;
+GNU and native Alpine SDK gates now fetch/validate the matching npm version
+instead of skipping SDK checks. Phase 162 registry verification remains pending.
+The user approved the environment; both jobs in `38268644346` succeed, with
+signed OIDC provenance and first publication of version 0.16.15. npm reports
+processing delay before registry visibility; do not republish on temporary 404.
+Future publishes now poll for registry availability, compare SHA512 against the
+accepted tarball and install/import the actual registry package. Historical and
+nine-asset future contract tests and release preparation checks pass locally.
 
 This plan translates the current product and architecture decisions into an
 implementation sequence.

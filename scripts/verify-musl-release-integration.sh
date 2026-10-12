@@ -18,8 +18,14 @@ require_pattern 'ubuntu-24.04-arm' .github/workflows/verify-alpine-release.yml
 [[ "$(release_expected_assets v0.16.12 | wc -l)" == 10 ]]
 [[ "$(release_expected_assets v0.16.14 | wc -l)" == 10 ]]
 [[ "$(release_expected_assets v0.16.15 | wc -l)" == 17 ]]
-[[ "$(release_expected_assets v0.17.0 | wc -l)" == 17 ]]
-[[ "$(release_expected_assets v1.0.0 | wc -l)" == 17 ]]
+[[ "$(release_expected_assets v0.16.16 | wc -l)" == 9 ]]
+[[ "$(release_expected_assets v0.17.0 | wc -l)" == 9 ]]
+[[ "$(release_expected_assets v1.0.0 | wc -l)" == 9 ]]
+if release_expected_assets v0.16.16 | grep -q 'sdk'; then
+  echo 'npm-distributed SDK leaked into future GitHub Release assets' >&2; exit 1
+fi
+release_sdk_from_npm v0.16.16
+if release_sdk_from_npm v0.16.15; then echo 'historical SDK distribution changed' >&2; exit 1; fi
 [[ "$(release_expected_assets v0.13 | wc -l)" == 8 ]]
 release_expected_assets v0.16.12 | grep -Fxq operon-v0.16.12-linux-musl-arm64.tar.gz
 if release_validate_tag 'vgarbage'; then echo 'invalid tag accepted' >&2; exit 1; fi

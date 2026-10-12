@@ -1,5 +1,16 @@
 # Installing Operon
 
+## TypeScript SDK
+
+```sh
+npm install @cellworks/operon-sdk-js
+```
+
+The npm package includes platform-specific native bindings for optional iroh
+connections; ordinary gRPC remains the default. Node.js 22 or newer is required.
+From v0.16.16, GitHub Releases distribute only daemon/CLI archives and checksums;
+SDK packages are distributed through npm. Older release assets remain available.
+
 This page holds the full install path behind the README
 [Quickstart](../README.md#quickstart): release archives, libc selection, live
 mount prerequisites, managed daemon services, shell completions, and agent

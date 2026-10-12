@@ -23,9 +23,20 @@ release_expected_version() {
   printf '%s.%s.%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[4]:-0}" "${BASH_REMATCH[5]:-}"
 }
 
+release_sdk_from_npm() {
+  local tag="$1" major minor patch
+  release_validate_tag "$tag" || return 2
+  [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]
+  major=$((10#${BASH_REMATCH[1]}))
+  minor=$((10#${BASH_REMATCH[2]}))
+  patch=$((10#${BASH_REMATCH[4]:-0}))
+  (( major > 0 || minor > 16 || (minor == 16 && patch >= 16) ))
+}
+
 release_has_sdk_native_assets() {
   local tag="$1" major minor patch
   release_validate_tag "$tag" || return 2
+  if release_sdk_from_npm "$tag"; then return 1; fi
   [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]
   major=$((10#${BASH_REMATCH[1]}))
   minor=$((10#${BASH_REMATCH[2]}))
@@ -49,9 +60,11 @@ operon-${tag}-linux-armv7.tar.gz
 operon-${tag}-macos-x86_64.tar.gz
 operon-${tag}-macos-aarch64.tar.gz
 operon-${tag}-windows-x86_64.zip
-operon-sdk-js-${tag}.tar.gz
 SHA256SUMS
 ASSETS
+  if ! release_sdk_from_npm "$tag"; then
+    printf 'operon-sdk-js-%s.tar.gz\n' "$tag"
+  fi
   if release_has_musl_assets "$tag"; then
     printf 'operon-%s-linux-musl-x86_64.tar.gz\noperon-%s-linux-musl-arm64.tar.gz\n' "$tag" "$tag"
   fi

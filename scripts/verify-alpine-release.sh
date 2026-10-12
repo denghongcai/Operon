@@ -32,7 +32,11 @@ binary_directory="$workdir/extracted/${asset%.tar.gz}"
 test -f "$binary_directory/LICENSE"
 bash "$ROOT/scripts/verify-musl-static-binaries.sh" "$target" "$binary_directory/operon" "$binary_directory/operond"
 sha256sum "$binary_directory/operon" "$binary_directory/operond"
-if release_has_sdk_native_assets "$tag"; then
+if release_sdk_from_npm "$tag"; then
+  bash "$ROOT/scripts/download-sdk-npm.sh" "$tag" "$workdir/extracted/operon-sdk-js-${tag}"
+  mkdir "$workdir/sdk-native"
+  cp "$workdir/extracted/operon-sdk-js-${tag}/native/$target/"* "$workdir/sdk-native/"
+elif release_has_sdk_native_assets "$tag"; then
   for sdk_asset in "operon-sdk-js-${tag}.tar.gz" "operon-sdk-native-${tag}-${target}.tar.gz"; do
     release_install_download "$release_url/$sdk_asset" "$workdir/assets/$sdk_asset"
     awk -v asset="$sdk_asset" '$2 == asset || $2 == "*" asset {print}' "$workdir/assets/SHA256SUMS" >"$workdir/assets/SHA256SUMS.sdk"
@@ -49,7 +53,7 @@ fi
 for image in \
   alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
   alpine@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0; do
-  if release_has_sdk_native_assets "$tag"; then
+  if release_has_sdk_native_assets "$tag" || release_sdk_from_npm "$tag"; then
     docker run --rm \
       --mount "type=bind,src=$ROOT,dst=/workspace,readonly" \
       --mount "type=bind,src=$binary_directory,dst=/operon,readonly" \

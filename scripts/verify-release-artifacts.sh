@@ -123,8 +123,12 @@ esac
 
 scripts/smoke-release-archive.sh "$WORKDIR/assets/$asset"
 
-if release_has_sdk_native_assets "$TAG"; then
+if release_has_sdk_native_assets "$TAG" || release_sdk_from_npm "$TAG"; then
   command -v node >/dev/null || { echo 'Node is required to verify native SDK manifests' >&2; exit 1; }
+  if release_sdk_from_npm "$TAG"; then
+    bash "$ROOT/scripts/download-sdk-npm.sh" "$TAG" "$WORKDIR/npm-sdk"
+    cp -R "$WORKDIR/npm-sdk/native/." "$WORKDIR/extracted/"
+  else
   while IFS= read -r sdk_target; do
     sdk_archive="$WORKDIR/assets/operon-sdk-native-${TAG}-${sdk_target}.tar.gz"
     entries=$(tar -tzf "$sdk_archive" | sort)
@@ -135,6 +139,7 @@ if release_has_sdk_native_assets "$TAG"; then
     tar -xzf "$sdk_archive" -C "$sdk_extract"
     node "$ROOT/scripts/verify-sdk-native-manifest.mjs" "$sdk_extract" "$(release_expected_version "$TAG")" "$sdk_target"
   done < <(release_sdk_native_targets)
+  fi
   if [[ "$asset" == *-linux-armv7.tar.gz ]]; then
     echo 'ARMv7 daemon archive verified; native SDK is not supported on ARMv7'
   else
@@ -158,8 +163,12 @@ if release_has_sdk_native_assets "$TAG"; then
     tar -xzf "$WORKDIR/assets/$asset" -C "$WORKDIR/runtime"
     archive_root="${asset%.tar.gz}"
   fi
-  tar -xzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" -C "$WORKDIR/runtime"
   sdk_root="$WORKDIR/runtime/operon-sdk-js-${TAG}"
+  if release_sdk_from_npm "$TAG"; then
+    cp -R "$WORKDIR/npm-sdk" "$sdk_root"
+  else
+    tar -xzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" -C "$WORKDIR/runtime"
+  fi
   command -v npm >/dev/null || { echo 'npm is required for downloaded SDK acceptance' >&2; exit 1; }
   npm --prefix "$sdk_root" install --omit=dev --ignore-scripts --no-audit --no-fund
   runtime_daemon="$WORKDIR/runtime/$archive_root/operond$suffix"
@@ -181,9 +190,11 @@ if release_has_sdk_native_assets "$TAG"; then
   fi
 fi
 
+if ! release_sdk_from_npm "$TAG"; then
 tar -tzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" \
   | grep -E '(^|/)dist/' >/dev/null
 tar -tzf "$WORKDIR/assets/operon-sdk-js-${TAG}.tar.gz" \
   | grep -E '(^|/)generated/' >/dev/null
+fi
 
 echo "release artifact verification passed for $REPO@$TAG on $asset"
