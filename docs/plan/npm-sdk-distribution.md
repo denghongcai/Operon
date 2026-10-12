@@ -6,14 +6,17 @@ environment `npm`, hosted runners and npm OIDC. No long-lived npm token.
 
 Current evidence: SDK typecheck/build and 42 unit tests pass. Workflow
 `38268644346` completes packing, installation/import and real daemon/SDK native
-business acceptance, including automatic platform selection. Its publish job
-awaits the user's required `npm` environment approval. No publication is claimed
-until registry integrity/provenance and installed package checks pass.
-Both initial jobs now succeed after approval: npm confirms signed provenance
-and accepted publication of 0.16.15. Registry processing/installation checks
-remain in progress. Future workflow runs verify registry SHA512 equality and
+business acceptance, including automatic platform selection. Both jobs succeed
+after the user's environment approval. Public version 0.16.15 has signed SLSA
+provenance; registry SHA512 matches the accepted CI tarball, seven native
+manifests pass, actual npm installation/API import and Node 22 binding load
+pass. npm audit verifies 40 registry signatures and four attestations.
+Phase 160 is complete. Future workflow runs verify registry SHA512 equality and
 installed API after a bounded availability wait. Historical v0.16.15 remains
 17 assets; future releases are nine assets, with matching npm SDK acceptance.
+Package size is 47.7 MB compressed/128 MB unpacked. A single package avoids
+requiring seven additional trusted publishers. Future asset contract tests pass;
+affected online CI/native/embedded runs remain in progress before Phase 162 closure.
 
 ## Phase 160 — Package and trusted publication
 

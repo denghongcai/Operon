@@ -21,6 +21,11 @@ processing delay before registry visibility; do not republish on temporary 404.
 Future publishes now poll for registry availability, compare SHA512 against the
 accepted tarball and install/import the actual registry package. Historical and
 nine-asset future contract tests and release preparation checks pass locally.
+Phase 160 is complete in public npm version 0.16.15: signed provenance,
+registry-to-CI SHA512 equality, seven native manifest checks, actual npm install,
+Node 22 API/binding load and npm signature/attestation audit all pass. Phase 161
+future release contract checks pass; Phase 162 remains pending affected online
+CI/native/embedded completion. Actual package size is 47.7 MB compressed.
 
 This plan translates the current product and architecture decisions into an
 implementation sequence.
