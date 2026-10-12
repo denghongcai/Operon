@@ -20,7 +20,12 @@ require_pattern 'release_expected_assets' scripts/verify-release-artifacts.sh
 require_pattern 'operon-\$\{tag\}-linux-x86_64\.tar\.gz' scripts/lib/release-assets.sh
 require_pattern 'operon-\$\{tag\}-macos-aarch64\.tar\.gz' scripts/lib/release-assets.sh
 require_pattern 'operon-\$\{tag\}-windows-x86_64\.zip' scripts/lib/release-assets.sh
-require_pattern 'operon-sdk-js-\$\{tag\}\.tar\.gz' scripts/lib/release-assets.sh
+# Verify the historical behavior, not its former heredoc implementation.
+source "$ROOT/scripts/lib/release-assets.sh"
+release_expected_assets v0.13.1 | grep -Fxq 'operon-sdk-js-v0.13.1.tar.gz'
+if release_expected_assets v0.16.16 | grep -q 'sdk'; then
+  echo 'future SDK assets must be distributed through npm' >&2; exit 1
+fi
 require_pattern 'scripts/smoke-release-archive.sh "\$WORKDIR/assets/\$asset"' scripts/verify-release-artifacts.sh
 require_pattern 'doctor --help' scripts/smoke-release-archive.sh
 require_pattern 'exec --help' scripts/smoke-release-archive.sh

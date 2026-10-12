@@ -26,6 +26,11 @@ registry-to-CI SHA512 equality, seven native manifest checks, actual npm install
 Node 22 API/binding load and npm signature/attestation audit all pass. Phase 161
 future release contract checks pass; Phase 162 remains pending affected online
 CI/native/embedded completion. Actual package size is 47.7 MB compressed.
+Five-platform native SDK CI passes. SDK validation exposes a stale historical
+validator that matched the old heredoc syntax rather than the retained asset
+contract. Replace it with functional checks: historical v0.13.1 still has its
+SDK archive, while future v0.16.16 has none. The focused validator passes; no
+runtime code or already published npm bytes are changed by this correction.
 
 This plan translates the current product and architecture decisions into an
 implementation sequence.
