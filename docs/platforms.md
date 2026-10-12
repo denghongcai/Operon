@@ -1,65 +1,110 @@
 # Platform Support
 
-## Release targets
+Operon's daemon and CLI support Linux, macOS, and Windows. The core runtime
+provides filesystem RPCs, exec, services, policy, audit, trace, and execution
+graphs on all three platforms. Live mounts use a platform-specific adapter.
 
-Current public release artifacts cover Linux `x86_64`, Linux `arm64`, Linux
-`armv7`, macOS `x86_64`, macOS `aarch64`, and Windows `x86_64`, plus static
-musl Linux `x86_64`/`arm64` archives for Alpine. macOS and Windows
-prebuilt archives include daemon/CLI, gRPC, config, filesystem RPC, exec,
-service, audit, trace, graph, SDK protocol flows, and platform live mount
-adapters.
-See [installing Operon](install.md) for archive selection.
+## Supported platforms
 
-## Platform notes
+| Platform | CPU architectures | Release archive | Live mount dependency |
+| --- | --- | --- | --- |
+| Linux GNU/glibc | `x86_64`, `arm64`, `armv7` | `.tar.gz` | FUSE |
+| Linux musl / Alpine | `x86_64`, `arm64` | `.tar.gz` (static binaries) | FUSE |
+| macOS | Intel `x86_64`, Apple Silicon `aarch64` | `.tar.gz` | FUSE-T |
+| Windows | `x86_64` | `.zip` | WinFsp |
 
-- Live mount uses Linux FUSE, macOS FUSE-T, and Windows WinFsp. macOS live
-  mounts require FUSE-T on the host. Windows live mounts require WinFsp on the
-  host.
+The prebuilt archives include daemon/CLI binaries and platform live mount
+adapters. FUSE, FUSE-T, or WinFsp must also be installed on the host; they are
+not required for ordinary filesystem RPCs or exec commands. GNU archives do
+not run on Alpine—use the musl archive instead.
+
+See [installation](install.md) for archive selection and mount prerequisites.
+The [TypeScript SDK](install.md#typescript-sdk) is distributed through npm;
+its optional native iroh binding supports the platforms above except ARMv7.
+
+## Check platform readiness
+
+Start with a general diagnostic:
+
+```sh
+operon doctor
+```
+
+Before mounting, check the local mount runtime. This command does not require
+a config file or a reachable daemon:
+
+```sh
+operon doctor --mount-runtime
+```
+
+Use `operon --json doctor` or `operon --json doctor --mount-runtime` for
+machine-readable output. Doctor provides runtime status and install hints,
+along with config, endpoint, authentication, protocol, capability, and service
+diagnostics. `operon mount` performs the same local preflight before connecting.
+
+## Live mount reads
+
+### Platform defaults
+
+`client.mount.mode: auto` selects the native default:
+
+| Platform | Read dispatch | Platform-specific behavior |
+| --- | --- | --- |
+| Linux | Asynchronous FUSE reads | Callback workers and in-flight RPCs are limited independently. |
+| macOS | Synchronous FUSE reads | Explicit `async` is also supported. |
+| Windows | Native WinFsp dispatch | Unix `async` mode and Linux worker settings are rejected. |
+
+### Configuration
+
+Set read limits under `client.mount` in `config.yaml`:
+
+| Setting | Default | Allowed values | Controls |
+| --- | --- | --- | --- |
+| `max_inflight_reads` | `8` | `1–64` | Active range-read RPCs on all platforms. |
+| `max_inflight_read_mib` | `32` | `8–512` MiB | Requested bytes in active read RPCs on all platforms. |
+| `mode` | `auto` | `auto`, `sync`, `async` | Unix read dispatch; see platform defaults above. |
+| `worker_threads` | `4` on Linux | `1–64` | Linux FUSE callback workers; omit on macOS and Windows. |
+| `max_pending_reads` | `64` | `1–4096` | Queued and active owned asynchronous FUSE tasks. |
+| `unmount_poll_ms` | `250` | `10–60000` ms | Linux external-unmount detection interval. |
+
+For example, apply read limits and a five-minute RPC deadline to one mount:
+
+```sh
+operon --rpc-timeout-secs 300 mount remote:/ --to /mnt/remote \
+  --read-concurrency 8 --read-budget-mib 32
+```
+
+Additional CLI overrides are `--read-mode`, `--mount-workers`, `--read-pending`,
+and `--unmount-poll-ms`. Their platform restrictions match the configuration
+settings. Run `operon mount --help` for the complete command reference.
+
+### Limits and cancellation
+
+The byte budget limits active RPC request sizes, not process memory or kernel
+page cache. Increasing workers or concurrency is not a universal speedup.
+See the [parallel-read measurements](quality/parallel-read.md) and
+[production ops/s results](quality/async-read-production.md).
+
+Admission, read-budget queueing, and the RPC share one `rpc_timeout_secs`
+deadline. Set a finite value large enough for your link; `0` disables the
+deadline and can leave reads waiting indefinitely on a lost connection.
+Shutdown cancellation remains active. Linux also detects external unmount
+and cancels in-flight reads, including when the RPC deadline is disabled.
+
+Do not concurrently overmount a path while its original owner is shutting
+down. Mount identity checks and unmount are not atomic: coordinate replacement
+and wait for the original owner to exit. See the
+[read configuration and cancellation boundaries](quality/async-read-configuration.md).
+
+## Windows behavior
+
 - Windows non-interactive exec cancellation uses Job Object process-tree
-  termination.
-- Windows interactive exec sessions use `portable-pty` with the same
-  `OpenExecSession` protocol as Unix-like platforms. Windows PTY sessions
-  report `windows-portable-pty-smoke-validated`.
-- Windows token and config private-file handling uses ACL-aware validation for
-  files generated by Operon, allowing the current user, Administrators, and
-  SYSTEM while rejecting broadly accessible existing private files.
-
-## Diagnostics
-
-For first-pass troubleshooting, run `operon doctor` or `operon --json doctor`.
-Doctor reports config warnings, endpoint/auth health, runtime protocol version
-mismatches, capability diagnostics, and service health checks from one command.
-Doctor also reports platform caveats: mount adapter
-runtime status and install hints, private token/config file protection, exec
-cancellation guarantees, PTY session support, and service forwarding firewall
-sensitivity.
-
-For live mount setup, run `operon doctor --mount-runtime` or
-`operon --json doctor --mount-runtime` before mounting; it distinguishes
-missing Linux FUSE helpers, missing macOS FUSE-T, and missing Windows WinFsp
-without needing a config file. `operon mount` runs the same preflight before it
-contacts the daemon.
-
-## Live mount read tuning
-
-Starting with v0.16.13, for parallel-read tuning `client.mount` accepts `worker_threads`
-(Linux FUSE only, 1–64; default 4 on Linux), `max_inflight_reads` (1–64;
-default 8), and `max_inflight_read_mib` (8–512; default 32). The byte budget
-limits requested bytes in active range-read RPCs, not total process memory or
-the kernel page cache. CLI overrides are `operon mount ... --mount-workers 8
---read-concurrency 8 --read-budget-mib 32`; consult `operon mount --help`.
-macOS/Windows support the read budgets but reject the Linux worker setting.
-Read-budget queue waiting and the RPC share the node `rpc_timeout_secs` deadline;
-use `--rpc-timeout-secs 300` for a slower link, or 0 to disable it. More workers
-are not a universal speedup; see [parallel-read acceptance](quality/parallel-read.md).
-
-v0.16.14 adds `client.mount.mode` (`auto`, `sync`, `async`),
-`max_pending_reads` (1–4096; default 64), and `unmount_poll_ms` (10–60000;
-default 250). CLI overrides are `--read-mode`, `--read-pending`, and
-`--unmount-poll-ms`. Linux auto dispatches reads asynchronously with independent
-worker/RPC limits; macOS auto remains synchronous, and Windows retains native
-WinFsp dispatch rather than accepting Unix async mode. Linux detects external
-unmount and cancels in-flight reads even with a zero RPC timeout. Privileged
-concurrent overmount is an explicitly non-atomic boundary, not an atomic
-replacement-safety guarantee. See [configuration and cancellation boundaries](quality/async-read-configuration.md)
-and [production ops/s evidence](quality/async-read-production.md).
+  termination, including descendant processes.
+- Windows interactive exec sessions use `portable-pty` and the same
+  `OpenExecSession` protocol as Unix-like platforms. Diagnostics report
+  `windows-portable-pty-smoke-validated`.
+- Windows token and config private-file handling uses ACL-aware validation.
+  Generated private files allow the current user, Administrators, and SYSTEM;
+  broadly accessible existing private files are rejected.
+- Service forwarding can be affected by host firewall rules. Use `operon doctor`
+  to check service health and the reported platform caveats.

@@ -31,6 +31,13 @@ validator that matched the old heredoc syntax rather than the retained asset
 contract. Replace it with functional checks: historical v0.13.1 still has its
 SDK archive, while future v0.16.16 has none. The focused validator passes; no
 runtime code or already published npm bytes are changed by this correction.
+Documentation follow-up: reorganize `docs/platforms.md` into a compact platform
+matrix, readiness commands, read-dispatch defaults, configuration reference and
+Windows behavior. Preserve supported architectures, mount dependencies, timeout
+and cancellation/overmount limits; link npm SDK installation separately. This
+changes documentation only, without advancing an implementation phase.
+Platform documentation text-contract checks, relative link targets and
+`git diff --check` pass; no Rust/SDK runtime rerun is needed for this edit.
 
 This plan translates the current product and architecture decisions into an
 implementation sequence.
