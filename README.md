@@ -12,7 +12,8 @@
 
 Operon is an AI-native capability runtime for machines already connected by
 Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
-private network.
+private network — or connected by Operon itself, through built-in peer-to-peer
+connectivity backed by [iroh](https://iroh.computer).
 
 Operon focuses on what happens after machines can reach each other: capability
 discovery, policy, execution graphs, audit, and agent-friendly tooling.
@@ -46,7 +47,7 @@ For example:
   auditable.
 
 Operon is not a network overlay, remote desktop, file sync tool, or SSH wrapper.
-It runs on top of connectivity you already trust.
+It turns reachable machines into nodes with explicit, auditable capabilities.
 
 ---
 
@@ -80,15 +81,16 @@ boundaries, and network access being mistaken for capability access.
 |                 v                                         |
 | trace + audit                                             |
 |                                                           |
-| capabilities: fs | exec | service                          |
+| capabilities: fs | exec | service                         |
 | controls:     policy | graph                              |
 +-----------------------------------------------------------+
                               |
-         secure access over existing reachability
+              secure access over any reachability
                               |
 +-----------------------------------------------------------+
-|                 Existing private network                  |
-| Cloudflare Mesh | Tailscale | WireGuard | LAN | Kubernetes|
+|  existing private network      |  built-in connectivity   |
+|  Mesh | Tailscale | WireGuard  |  peer-to-peer, by iroh   |
+|  LAN | Kubernetes              |                          |
 +-----------------------------------------------------------+
       |                       |                       |
    node-a                  node-b                  node-c
@@ -101,100 +103,33 @@ Operon adds:
 - Structured execution across reachable nodes.
 - Built-in trace and audit output.
 - Policy-controlled filesystem, exec, service, and secret use.
-- A clear boundary between private networking and capability authorization.
+- A clear boundary between connectivity and capability authorization.
 
-Cloudflare Mesh or Tailscale can decide whether one device can reach another
-device. Operon decides whether that device can read a directory, run a command, use
-a secret, forward a local service, or inspect an execution trace.
+Cloudflare Mesh, Tailscale, or Operon's built-in connectivity can decide whether
+one device can reach another device. Operon's policy decides whether that device
+can read a directory, run a command, use a secret, forward a local service, or
+inspect an execution trace.
 
 ---
 
 ## Quickstart
 
-Install the latest release binary. Linux and macOS release archives use
-`.tar.gz`; Windows release archives use `.zip`. Live mount support is available
-through Linux FUSE, macOS FUSE-T, and Windows WinFsp; hosts must have the
-corresponding platform runtime installed before `operon mount` can start a
-filesystem session.
-
-GNU/glibc Linux archives target glibc 2.31 or newer, such as Ubuntu 20.04+.
-These archives remain unsupported on Alpine. v0.16.12 adds static musl x86_64/arm64
-archives validated on Alpine 3.22/3.23, including real FUSE and OpenRC; v0.16.11
-and older releases remain GNU-only. No ARMv7 musl archive is provided.
-Use `OPERON_RELEASE_LIBC=gnu|musl` to override libc selection explicitly; unknown
-or ambiguous environments must not silently choose an incompatible archive.
-Alpine needs `bash`, `curl`, `tar`, and `fuse3` plus `/dev/fuse` for live mount.
-For system services see [Alpine/OpenRC guidance](docs/quality/alpine-openrc.md).
+Install `operon` (CLI) and `operond` (daemon) on Linux or macOS:
 
 ```bash
-VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
-test -n "$VERSION" || { echo "failed to resolve latest Operon release" >&2; exit 1; }
-case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64) ARCH=linux-x86_64 ;;
-  Linux-aarch64|Linux-arm64) ARCH=linux-arm64 ;;
-  Linux-armv7l|Linux-armv7*) ARCH=linux-armv7 ;;
-  Darwin-x86_64) ARCH=macos-x86_64 ;;
-  Darwin-arm64) ARCH=macos-aarch64 ;;
-  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-esac
-
-if [[ "$ARCH" == linux-* ]]; then
-  LIBC="${OPERON_RELEASE_LIBC:-auto}"
-  if [[ "$LIBC" == auto ]]; then
-    GNU=false; MUSL=false
-    GNU_VERSION="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
-    LDD_VERSION="$(LC_ALL=C ldd --version 2>&1 || true)"
-    [[ "$GNU_VERSION" == glibc\ * ]] && GNU=true
-    [[ "$LDD_VERSION" == *GLIBC* || "$LDD_VERSION" == *'GNU libc'* || "$LDD_VERSION" == *'GNU C Library'* ]] && GNU=true
-    [[ "$LDD_VERSION" == *musl* || -f /etc/alpine-release ]] && MUSL=true
-    case "$GNU-$MUSL" in
-      true-false) LIBC=gnu ;;
-      false-true) LIBC=musl ;;
-      *) echo 'unknown/ambiguous libc; set OPERON_RELEASE_LIBC=gnu or musl' >&2; exit 1 ;;
-    esac
-  fi
-  case "$LIBC" in
-    gnu) ;;
-    musl)
-      [[ "$ARCH" != linux-armv7 ]] || { echo 'ARMv7 musl is unsupported' >&2; exit 1; }
-      ARCH="linux-musl-${ARCH#linux-}"
-      ;;
-    *) echo 'OPERON_RELEASE_LIBC must be auto, gnu or musl' >&2; exit 1 ;;
-  esac
-fi
-
-curl -fL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/operon-${VERSION}-${ARCH}.tar.gz" -o /tmp/operon.tar.gz
-tar -xzf /tmp/operon.tar.gz -C /tmp
-sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
-sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
-if [[ -f "/tmp/operon-${VERSION}-${ARCH}/libfuse-t.dylib" ]]; then
-  sudo install -m 0644 "/tmp/operon-${VERSION}-${ARCH}/libfuse-t.dylib" /usr/local/bin/libfuse-t.dylib
-fi
+curl -fsSL https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.sh | bash
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$Version = if ($env:OPERON_VERSION) { $env:OPERON_VERSION } else { (Invoke-RestMethod https://api.github.com/repos/denghongcai/Operon/releases/latest).tag_name }
-$Arch = "windows-x86_64"
-$Archive = "$env:TEMP\operon.zip"
-$InstallRoot = "$env:LOCALAPPDATA\Operon"
-Invoke-WebRequest "https://github.com/denghongcai/Operon/releases/download/$Version/operon-$Version-$Arch.zip" -OutFile $Archive
-Expand-Archive -Path $Archive -DestinationPath $env:TEMP -Force
-New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-Copy-Item "$env:TEMP\operon-$Version-$Arch\operon.exe" $InstallRoot -Force
-Copy-Item "$env:TEMP\operon-$Version-$Arch\operond.exe" $InstallRoot -Force
+irm https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.ps1 | iex
 ```
 
-Release maintainers verify the post-download install path with the manual
-`Verify Release Install Usability` workflow after publishing a tag. For local
-workflow/doc wiring checks without downloading assets, run:
-
-```bash
-scripts/verify-release-install-usability.sh --dry-run v0.16.15 denghongcai/Operon
-scripts/verify-release-service-management-smoke.sh --dry-run v0.16.15 denghongcai/Operon
-scripts/verify-release-linux-install-containers.sh --dry-run v0.16.15 denghongcai/Operon
-```
+The installers pick the right archive for your platform and libc, verify its
+checksum, and accept `OPERON_VERSION` and `OPERON_INSTALL_DIR`. See
+[docs/install.md](docs/install.md) for manual install, Alpine, and live mount
+prerequisites.
 
 Create a local workspace and guided config:
 
@@ -209,26 +144,12 @@ operon onboard \
   --listen 127.0.0.1:7789
 ```
 
-Start the daemon. This command runs in the foreground:
+Start the daemon. This command runs in the foreground (to run it as a system
+service, see [managed daemon service](docs/install.md#managed-daemon-service)):
 
 ```bash
 operond start
 ```
-
-For a managed local daemon on Linux or macOS, install a platform-native user
-service that still runs the same foreground daemon entrypoint under systemd or
-launchd supervision:
-
-```bash
-operond service install --config "$HOME/.operon/config.yaml"
-operond service start
-operond service status
-```
-
-`operond service stop` and `operond service uninstall` control the same
-supervisor entry. On Windows, `operond service install --config <path>`
-registers a real Windows Service entrypoint and may require an elevated shell
-depending on local service-control policy.
 
 In another terminal, verify the local node:
 
@@ -237,38 +158,12 @@ operon node ping local
 operon capability list local
 ```
 
-Timeouts for slow or international links are configurable per node under
-`transport`, with CLI per-invocation overrides; see
-[transport liveness configuration](PROTOCOL.md#transport-liveness-configuration).
-
-`operond` and `operon` read `$HOME/.operon/config.yaml` by default. Keep daemon
-listeners on loopback for local development, or configure bearer-token auth with
-`daemon.auth.token_file` / `daemon.auth.token_env` before binding `grpc_listen`
-to a LAN, wildcard, or private-network address. Put daemon endpoints on an
-existing private network such as Cloudflare Mesh, Tailscale, WireGuard, LAN, or
-Kubernetes networking before exposing them to other machines.
-
-Optional shell completions:
+Give your coding agent Operon skills (Node.js 18+; replace `codex` with your
+target agent):
 
 ```bash
-mkdir -p ~/.local/share/bash-completion/completions
-operon completion bash > ~/.local/share/bash-completion/completions/operon
-
-mkdir -p ~/.zfunc
-operon completion zsh > ~/.zfunc/_operon
-```
-
-Optional agent skills require Node.js 18 or newer, npm/npx, and git:
-
-```bash
-npx -y skills add https://github.com/denghongcai/Operon --list
 npx -y skills add https://github.com/denghongcai/Operon --skill '*' --agent codex --yes
 ```
-
-This uses the [Vercel Skills CLI](https://github.com/vercel-labs/skills) to
-install Operon's repo-local skills for agents such as Codex, Claude Code,
-Cursor, and other supported coding agents. Replace `codex` with your target
-agent, or omit `--agent codex --yes` to choose interactively.
 
 ---
 
@@ -297,8 +192,7 @@ Run commands with policy-controlled working directories, timeouts, and secret us
 operon exec run local -- echo hello
 operon exec run local --argv -- printf "hello world"
 operon exec list local
-EXEC_ID="$(operon --json exec run local -- echo hello | sed -n 's/.*"id": "\([^"]*\)".*/\1/p' | head -n 1)"
-operon exec logs local "$EXEC_ID"
+operon exec logs local <exec-id>
 ```
 
 Inspect configured services and open explicit local forwards. The forward
@@ -317,112 +211,8 @@ operon audit show local --limit 20
 ```
 
 Add global `--json` before the subcommand for structured output when scripting,
-for example `operon --json exec list local`.
-
----
-
-## Configuration
-
-`operon onboard` writes a unified `config.yaml` plus referenced secret files
-where needed:
-
-```bash
-operon onboard
-operon config explain
-```
-
-The config contains:
-
-- `daemon`: local node id, listen address, workspace, auth, and store settings.
-- `client`: known node endpoints such as `grpc://100.96.12.34:7789`.
-- `policy`: allowed filesystem mounts, exec roots, services, and secrets.
-- `secrets`: file-backed secret references for exec injection.
-
-External control planes can generate the same endpoint-only `client.nodes`
-shape from Cloudflare, Tailscale, Kubernetes, inventory databases, or DNS.
-Discovery and generated endpoints do not grant capability access; policy still
-controls what each node can do. Service permissions are default-deny when
-omitted, so set `permissions.check` and/or `permissions.forward` explicitly for
-services that should be inspectable or forwardable. Use `operon doctor` to
-inspect listener auth, inline-token, and service-permission diagnostics.
-
-For full config, policy, command, validation, release, and protocol reference,
-see [DEVELOPMENT.md](DEVELOPMENT.md). Security hardening and upgrade notes live
-in [docs/quality/security-hardening.md](docs/quality/security-hardening.md).
-
----
-
-## Network Boundary
-
-By default, Operon uses your existing network connectivity.
-
-Use:
-
-- Cloudflare Mesh
-- Tailscale
-- WireGuard
-- Local LAN
-- Kubernetes networking
-
-Then point Operon at reachable daemon endpoints:
-
-```yaml
-version: 1
-
-client:
-  nodes:
-    cloud-a:
-      endpoint: grpc://100.96.12.34:7789
-    gpu-node:
-      endpoint: grpc://100.96.18.20:7789
-```
-
-In production-style deployments, run daemon endpoints only on an existing
-encrypted private network or behind a trusted local tunnel.
-
-LAN mDNS discovery can find local Operon daemons, but Operon does not create
-network overlays, assign mesh IPs, or grant capability
-access through discovery.
-
----
-
-## Embedded Connectivity
-
-From v0.16.15, Operon can use built-in iroh connections without a separate
-connectivity client. This is optional; LAN and VPN endpoints remain the default.
-
-On the server, add an iroh listener to your existing configuration. Keep daemon
-authentication and policy enabled:
-
-```yaml
-daemon:
-  iroh:
-    identity_file: iroh-server.key
-    bind_addrs: ["0.0.0.0:7788"]
-```
-
-Start the daemon normally. Pair the client with the public endpoint ID shown
-at startup and the server's bearer token:
-
-```yaml
-client:
-  nodes:
-    remote:
-      endpoint: iroh://SERVER_PUBLIC_ENDPOINT_ID
-      auth:
-        token_file: remote.token
-      transport:
-        iroh:
-          identity_file: iroh-client.key
-          peer_addrs: ["192.168.1.20:7788"]
-```
-
-Store the bearer token in `remote.token` beside the client configuration, then
-run `operon node ping remote`. Filesystem, exec and mount commands are unchanged.
-
-For cross-network access, configure explicit self-hosted relays on both ends.
-See the [setup guide](docs/networking/embedded-iroh.md) for relay configuration,
-timeouts and the TypeScript SDK's native binding.
+for example `operon --json exec list local`. When something looks wrong, start
+with `operon doctor`.
 
 ---
 
@@ -476,70 +266,77 @@ mesh://gpu-node/exec/run
 mesh://cloud-a/service/web
 ```
 
-Current capability areas:
-
-- Filesystem read, write, list, copy, mutation, and live mount access through
-  Linux FUSE, macOS FUSE-T, or Windows WinFsp.
-- Exec execution with logs, stdin, cancellation, timeouts, scoped secrets, and
-  PTY-backed interactive sessions through `portable-pty` when policy enables
-  `exec.session`. Windows interactive exec sessions use `portable-pty` with the
-  same `OpenExecSession` protocol as Unix-like platforms.
-- Service metadata, TCP health checks, TCP forwarding, and UDP/datagram
-  forwarding over existing Operon node connections.
-- Audit, trace, and graph inspection.
+- **Filesystem:** read, write, list, copy, mutation, and live mount through
+  Linux FUSE, macOS FUSE-T, and Windows WinFsp.
+- **Exec:** logs, stdin, cancellation, timeouts, scoped secrets, and
+  PTY-backed interactive sessions.
+- **Service:** metadata, TCP health checks, and TCP and UDP forwarding over
+  existing node connections.
+- **Audit, trace, and graph** inspection.
 
 `operon capability list <node>` is policy-derived: filesystem capabilities come
 from configured mounts, exec capability appears only when policy allows at least
 one working directory, and service capabilities come from configured services
-and their permissions.
+and their permissions. Use `operon capability explain` to ask a daemon why one
+action is allowed or denied.
 
-Use `operon capability explain <node> <capability_id> <action> <resource>` to
-ask a daemon why one action is allowed or denied.
+Platform notes, diagnostics, and live mount tuning are in
+[docs/platforms.md](docs/platforms.md).
 
-For first-pass troubleshooting, run `operon doctor` or
-`operon --json doctor`. Doctor reports config warnings, endpoint/auth health,
-runtime protocol version mismatches, capability diagnostics, and service health
-checks from one command. Doctor also reports platform caveats: mount adapter
-runtime status and install hints, private token/config file protection, exec
-cancellation guarantees, PTY session support, and service forwarding firewall
-sensitivity. For live mount setup, run `operon doctor --mount-runtime` or
-`operon --json doctor --mount-runtime` before mounting; it distinguishes
-missing Linux FUSE helpers, missing macOS FUSE-T, and missing Windows WinFsp
-without needing a config file. `operon mount` runs the same preflight before it
-contacts the daemon.
+---
 
-Starting with v0.16.13, for parallel-read tuning `client.mount` accepts `worker_threads`
-(Linux FUSE only, 1–64; default 4 on Linux), `max_inflight_reads` (1–64;
-default 8), and `max_inflight_read_mib` (8–512; default 32). The byte budget
-limits requested bytes in active range-read RPCs, not total process memory or
-the kernel page cache. CLI overrides are `operon mount ... --mount-workers 8
---read-concurrency 8 --read-budget-mib 32`; consult `operon mount --help`.
-macOS/Windows support the read budgets but reject the Linux worker setting.
-Read-budget queue waiting and the RPC share the node `rpc_timeout_secs` deadline;
-use `--rpc-timeout-secs 300` for a slower link, or 0 to disable it. More workers
-are not a universal speedup; see [parallel-read acceptance](docs/quality/parallel-read.md).
-v0.16.14 adds `client.mount.mode` (`auto`, `sync`, `async`),
-`max_pending_reads` (1–4096; default 64), and `unmount_poll_ms` (10–60000;
-default 250). CLI overrides are `--read-mode`, `--read-pending`, and
-`--unmount-poll-ms`. Linux auto dispatches reads asynchronously with independent
-worker/RPC limits; macOS auto remains synchronous, and Windows retains native
-WinFsp dispatch rather than accepting Unix async mode. Linux detects external
-unmount and cancels in-flight reads even with a zero RPC timeout. Privileged
-concurrent overmount is an explicitly non-atomic boundary, not an atomic
-replacement-safety guarantee. See [configuration and cancellation boundaries](docs/quality/async-read-configuration.md)
-and [production ops/s evidence](docs/quality/async-read-production.md).
-v0.16.14 is publicly available; its downloaded-package acceptance is recorded
-in [the release evidence](docs/plan/v0.16.14-release-publication.md).
+## Connecting Nodes
 
-Windows token and config private-file handling uses ACL-aware validation for files
-generated by Operon, allowing the current user, Administrators, and SYSTEM
-while rejecting broadly accessible existing private files. Windows PTY sessions
-report `windows-portable-pty-smoke-validated`.
+`operon onboard` writes a unified `config.yaml` with `daemon`, `client`,
+`policy`, and `secrets` sections; `operon config explain` describes it. Nodes
+are addressed in one of two ways.
 
-For daemon process management, `operond service status` delegates to the
-platform supervisor: user-level systemd on Linux, launchd user agents on macOS,
-and the Windows Service Control Manager on Windows. `operond start` remains the
-foreground runtime command and does not have a `--background` mode.
+**Over your existing network.** Point clients at daemon endpoints on Cloudflare
+Mesh, Tailscale, WireGuard, LAN, or Kubernetes networking:
+
+```yaml
+client:
+  nodes:
+    cloud-a:
+      endpoint: grpc://100.96.12.34:7789
+    gpu-node:
+      endpoint: grpc://100.96.18.20:7789
+```
+
+**Through built-in connectivity.** No VPN or separate connectivity client is
+needed. The daemon adds a listener and prints its public endpoint ID at startup:
+
+```yaml
+daemon:
+  iroh:
+    identity_file: iroh-server.key
+    bind_addrs: ["0.0.0.0:7788"]
+```
+
+Clients address the node by that ID:
+
+```yaml
+client:
+  nodes:
+    remote:
+      endpoint: iroh://SERVER_PUBLIC_ENDPOINT_ID
+      auth:
+        token_file: remote.token
+      transport:
+        iroh:
+          identity_file: iroh-client.key
+          peer_addrs: ["192.168.1.20:7788"]
+```
+
+Filesystem, exec, and mount commands are the same either way. For access across
+networks, configure self-hosted relays; see the
+[built-in connectivity guide](docs/networking/embedded-iroh.md).
+
+Before binding a daemon beyond loopback, configure bearer-token auth with
+`daemon.auth.token_file` or `daemon.auth.token_env`. Timeouts for slow or
+international links are configurable per node; see
+[transport liveness configuration](PROTOCOL.md#transport-liveness-configuration).
+For the full config reference, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ---
 
@@ -548,10 +345,15 @@ foreground runtime command and does not have a `--background` mode.
 Operon enforces capability boundaries:
 
 - Nodes expose only explicit mounts and configured services.
+- Service permissions are default-deny when omitted.
 - Secrets are injected only into allowed execs that request them.
 - Execution is policy-controlled.
 - Every action is auditable.
-- Network reachability never implies capability permission.
+- Reachability, discovery, and peer authentication never imply capability
+  permission.
+
+Hardening and upgrade notes live in
+[docs/quality/security-hardening.md](docs/quality/security-hardening.md).
 
 ---
 
@@ -567,40 +369,23 @@ Agents can:
 - inspect audit and trace output
 - ask why a capability action is allowed or denied before attempting it
 
-For SDK and direct protocol integration details, see
-[DEVELOPMENT.md](DEVELOPMENT.md) and [PROTOCOL.md](PROTOCOL.md).
+For SDK and direct protocol integration, see [DEVELOPMENT.md](DEVELOPMENT.md)
+and [PROTOCOL.md](PROTOCOL.md).
 
 ---
 
 ## Project Status
 
-Operon is usable today as a pre-1.0 runtime. The current release includes:
+Operon is usable today as a pre-1.0 runtime: Rust daemon and CLI, gRPC runtime
+protocol, TypeScript SDK, and prebuilt releases for Linux, macOS, and Windows.
 
-- Rust daemon and CLI.
-- gRPC runtime protocol.
-- TypeScript SDK.
-- Unified config and guided onboarding.
-- Policy-derived capabilities.
-- Filesystem, exec, service, audit, trace, and graph flows.
-- Live mount support through Linux FUSE, macOS FUSE-T, and Windows WinFsp.
-- TCP and UDP service forwarding over existing node connections.
-- mDNS endpoint discovery for local networks.
-
-Current public release artifacts cover Linux `x86_64`, Linux `arm64`, Linux
-`armv7`, macOS `x86_64`, macOS `aarch64`, and Windows `x86_64`. macOS and
-Windows prebuilt archives include daemon/CLI, gRPC, config, filesystem RPC,
-exec, service, audit, trace, graph, SDK protocol flows, and platform live mount
-adapters. Windows non-interactive exec cancellation uses Job Object process-tree
-termination. macOS live mounts require FUSE-T on the host. Windows live mounts
-require WinFsp on the host.
-
-For contributor setup, validation commands, release automation, detailed config
-reference, and current phase tracking, see:
-
-- [DEVELOPMENT.md](DEVELOPMENT.md)
-- [PROTOCOL.md](PROTOCOL.md)
-- [Runtime API Architecture](docs/architecture/runtime-api.md)
-- [Development Phases](docs/plan/development-phases.md)
+- [Installing Operon](docs/install.md)
+- [Platform support, diagnostics, and live mount tuning](docs/platforms.md)
+- [Built-in connectivity](docs/networking/embedded-iroh.md)
+- [DEVELOPMENT.md](DEVELOPMENT.md): config reference, contributing, validation, releases
+- [PROTOCOL.md](PROTOCOL.md): direct gRPC integration
+- [Runtime API architecture](docs/architecture/runtime-api.md)
+- [Development phases](docs/plan/development-phases.md)
 
 ---
 
@@ -611,7 +396,7 @@ Operon is not a remote control tool or network overlay.
 It is a new execution model where:
 
 > Computers are no longer isolated machines,  
-> but capability-bearing nodes on your private network  
+> but capability-bearing nodes on your network  
 > that AI agents can directly operate.
 
 ---

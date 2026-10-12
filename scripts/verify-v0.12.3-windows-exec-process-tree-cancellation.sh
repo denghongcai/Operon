@@ -26,7 +26,7 @@ require_pattern 'windows_job_object_cancellation_terminates_descendant_process' 
 require_pattern "runner.os == 'Windows'" .github/workflows/ci.yml
 require_pattern 'v0.12.3 Windows Exec Process Tree Cancellation Validation' scripts/ci/run-validations.sh
 
-require_pattern 'Windows non-interactive exec cancellation uses Job Object process-tree' README.md
+require_pattern 'Windows non-interactive exec cancellation uses Job Object process-tree' docs/platforms.md
 require_pattern 'Job Object process-tree termination' PROTOCOL.md
 require_pattern 'direct-child' PROTOCOL.md
 require_pattern 'Job Object process-tree' docs/architecture/runtime-api.md

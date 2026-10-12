@@ -35,7 +35,7 @@ require_file README.md
 
 require_pattern 'image: ubuntu:20\.04' .github/workflows/release-draft.yml
 require_pattern 'PROTOC_VERSION: "25\.3"' .github/workflows/release-draft.yml
-require_pattern 'glibc 2\.31' README.md
+require_pattern 'glibc 2\.31' docs/install.md
 reject_pattern 'glibc 2\.39' README.md
 
 if [[ $# -gt 0 ]]; then

@@ -54,6 +54,64 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --locked -- -D warnings
 
+  install-scripts:
+    name: Install Scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-2025
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install latest release with install.sh
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export OPERON_INSTALL_DIR="$RUNNER_TEMP/operon-bin"
+          bash scripts/install.sh --dry-run | tee dry-run.txt
+          export OPERON_VERSION="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          grep -Fx "version=$OPERON_VERSION" dry-run.txt
+          bash < scripts/install.sh
+          "$OPERON_INSTALL_DIR/operon" --version
+          "$OPERON_INSTALL_DIR/operond" --version
+
+      - name: Install latest release with install.ps1 (Windows PowerShell)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:OPERON_INSTALL_DRY_RUN = "1"
+          $DryRun = Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          $DryRun
+          Remove-Item Env:OPERON_INSTALL_DRY_RUN
+          $env:OPERON_VERSION = gh release view --repo $env:GITHUB_REPOSITORY --json tagName -q .tagName
+          $env:OPERON_INSTALL_DIR = Join-Path $env:RUNNER_TEMP "operon-bin"
+          if (-not ($DryRun -contains "version=$env:OPERON_VERSION")) { throw "latest release resolution mismatch" }
+          Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          & (Join-Path $env:OPERON_INSTALL_DIR "operon.exe") --version
+          & (Join-Path $env:OPERON_INSTALL_DIR "operond.exe") --version
+          if (-not (([Environment]::GetEnvironmentVariable("Path", "User") -split ';') -contains $env:OPERON_INSTALL_DIR)) { throw "install dir was not added to the user PATH" }
+
+      - name: Install latest release with install.ps1 (pwsh)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OPERON_INSTALL_DIR = Join-Path $env:RUNNER_TEMP "operon-bin-pwsh"
+          $env:OPERON_INSTALL_DRY_RUN = "1"
+          $DryRun = Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          $DryRun
+          Remove-Item Env:OPERON_INSTALL_DRY_RUN
+          $env:OPERON_VERSION = gh release view --repo $env:GITHUB_REPOSITORY --json tagName -q .tagName
+          if (-not ($DryRun -contains "version=$env:OPERON_VERSION")) { throw "latest release resolution mismatch" }
+          Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          & (Join-Path $env:OPERON_INSTALL_DIR "operon.exe") --version
+
   rust-platform-smoke:
     name: Rust Platform Smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

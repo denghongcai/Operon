@@ -30,7 +30,7 @@ require_pattern 'cargo test -p operon-cli --locked private_file_security_model_i
 require_pattern 'v0.12.1 Platform Parity Hardening Validation' scripts/ci/run-validations.sh
 
 require_pattern 'Windows' README.md
-require_pattern 'token and config private-file handling uses ACL-aware validation' README.md
+require_pattern 'token and config private-file handling uses ACL-aware validation' docs/platforms.md
 require_pattern 'Windows non-interactive exec' PROTOCOL.md
 require_pattern 'Job Object process-tree termination' PROTOCOL.md
 require_pattern 'Windows interactive exec sessions use `portable-pty`' docs/architecture/runtime-api.md

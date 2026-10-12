@@ -23,7 +23,7 @@ require_pattern 'mount_hint=\{\}' crates/operon-cli/src/commands/doctor.rs
 require_pattern 'mount_runtime::setup_hint\(\)' crates/operon-cli/src/commands/mount.rs
 require_pattern 'brew install macos-fuse-t/homebrew-cask/fuse-t' crates/operon-cli/src/commands/mount_runtime.rs
 require_pattern 'WinFsp runtime' crates/operon-cli/src/commands/mount_runtime.rs
-require_pattern 'runtime status and install hints' README.md
+require_pattern 'runtime status and install hints' docs/platforms.md
 require_pattern 'reports mount runtime readiness and install' PROTOCOL.md
 
 cargo test -p operon-cli --locked platform_report_contains_operator_caveats

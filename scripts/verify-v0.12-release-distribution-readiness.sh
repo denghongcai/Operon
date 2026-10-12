@@ -37,13 +37,13 @@ require_pattern 'dist/\*\.tar\.gz' .github/workflows/release-draft.yml
 require_pattern 'dist/\*\.zip' .github/workflows/release-draft.yml
 require_pattern 'sha256sum \*\.tar\.gz \*\.zip > SHA256SUMS' .github/workflows/release-draft.yml
 
-require_pattern 'Linux and macOS release archives use' README.md
-require_pattern '`.tar.gz`; Windows release archives use `.zip`' README.md
-require_pattern 'Windows release archives use `.zip`' README.md
+require_pattern 'Linux and macOS release archives use' docs/install.md
+require_pattern '`.tar.gz`; Windows release archives use `.zip`' docs/install.md
+require_pattern 'Windows release archives use `.zip`' docs/install.md
 require_pattern 'macOS FUSE-T' README.md
 require_pattern 'Windows WinFsp' README.md
-require_pattern 'prebuilt archives include' README.md
-require_pattern 'platform live mount' README.md
+require_pattern 'prebuilt archives include' docs/platforms.md
+require_pattern 'platform live mount' docs/platforms.md
 require_pattern 'macos-x86_64' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'macos-aarch64' docs/architecture/technology-and-protocol-decisions.md
 require_pattern 'windows-x86_64' docs/architecture/technology-and-protocol-decisions.md
@@ -51,6 +51,10 @@ require_pattern 'windows-x86_64' docs/architecture/technology-and-protocol-decis
 require_pattern 'preview' docs/plan/v0.12-release-distribution-readiness.md
 require_pattern 'FUSE-T|WinFsp' docs/architecture/technology-and-protocol-decisions.md
 
-require_pattern 'macos-x86_64' scripts/verify-readme-quickstart-docker.sh
+# The README Quickstart installs through scripts/install.sh.
+require_pattern 'macos-x86_64' scripts/install.sh
+require_pattern 'macos-aarch64' scripts/install.sh
+require_pattern 'windows-x86_64' scripts/install.ps1
+require_pattern 'scripts/install.sh' scripts/verify-readme-quickstart-docker.sh
 
 echo "v0.12 release distribution readiness validation passed"
