@@ -15,7 +15,7 @@ require_pattern 'assert_eq!\(PROTOCOL_VERSION, "v0.16.15"\)' crates/operon-proto
 require_pattern 'stdout.contains\("0.16.15"\)' crates/operon-cli/tests/cli_static_integration.rs
 require_pattern 'default: v0.16.15' .github/workflows/windows-runner-image-smoke.yml
 for script in verify-release-install-usability verify-release-service-management-smoke verify-release-linux-install-containers; do
-  require_pattern "$script.sh --dry-run v0.16.15" README.md docs/quality/release-install-usability.md
+  require_pattern "$script.sh --dry-run v0.16.15" docs/quality/release-install-usability.md
   bash "scripts/$script.sh" --dry-run v0.16.15 denghongcai/Operon >/dev/null
 done
 [[ "$(release_expected_assets v0.16.15 | wc -l)" == 17 ]]

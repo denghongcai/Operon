@@ -22,7 +22,7 @@ require_pattern "if: runner.os == 'Windows'" .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-cli --locked windows_private_file_is_written_with_verified_acl' .github/workflows/ci.yml
 require_pattern 'cargo test -p operon-cli --locked windows_private_file_acl_model' .github/workflows/ci.yml
 
-require_pattern 'token and config private-file handling uses ACL-aware validation' README.md
+require_pattern 'token and config private-file handling uses ACL-aware validation' docs/platforms.md
 require_pattern 'ACL-aware private-file' PROTOCOL.md
 require_pattern 'Windows token and config private-file handling is ACL-aware' docs/architecture/runtime-api.md
 

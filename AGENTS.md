@@ -529,8 +529,13 @@ boundary and `docs/plan/v0.18.26-optional-embedded-connectivity.md` for gates.
   - Direct gRPC protocol integration guide for clients that do not use an Operon SDK.
 
 - `README.md`
-  - Public-facing project positioning and high-level architecture.
-  - Current framing: "AI-native capability runtime over existing private networks."
+  - Public-facing project positioning, Quickstart, and high-level architecture.
+  - Current framing: "AI-native capability runtime" that uses existing networks
+    by default, or optional built-in peer-to-peer connectivity backed by iroh.
+  - Keep it an overview. Install scripts, libc/platform caveats, mount tuning,
+    and release-maintainer commands live in `docs/install.md`,
+    `docs/platforms.md`, and `docs/quality/release-install-usability.md`;
+    pin doc-contract checks for that content to those files, not README.
 
 - `docs/decisions/computer-mesh-operon-summary.md`
   - Product and concept decision summary.
@@ -826,8 +831,8 @@ Defer:
   Release, public release state, release artifact, install usability, and
   README Quickstart evidence.
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
-  when README Quickstart, release packaging, install prerequisites, or agent
-  skills guidance changes. After publishing, verify release artifacts and README
+  when README Quickstart, the `docs/install.md` install path, release
+  packaging, install prerequisites, or agent skills guidance changes. After publishing, verify release artifacts and README
   Quickstart through the manual `Verify Release Artifacts`,
   `Verify Release Install Usability`, and `Verify README Quickstart` GitHub
   Actions workflows. Do not substitute local script runs for release-completion

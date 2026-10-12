@@ -16,7 +16,7 @@ require_file docs/decisions/musl-alpine-distribution.md
 require_file scripts/assess-musl-alpine-distribution.sh
 require_pattern 'policy: keep glibc-only public Linux archives for now' docs/plan/v0.18.7-musl-alpine-distribution-decision.md
 require_pattern 'Decision: add fully static musl archives alongside existing GNU/glibc archives' docs/decisions/musl-alpine-distribution.md
-require_pattern 'archives remain unsupported on Alpine' README.md docs/quality/release-install-usability.md
+require_pattern 'archives remain unsupported on Alpine' docs/install.md
 require_pattern 'scripts/assess-musl-alpine-distribution.sh' docs/quality/release-install-usability.md DEVELOPMENT.md AGENTS.md scripts/ci/run-validations.sh
 require_pattern 'v0.18.7 musl / Alpine Distribution Decision Validation' scripts/ci/run-validations.sh
 require_pattern 'alpine:' scripts/assess-musl-alpine-distribution.sh

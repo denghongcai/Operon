@@ -21,7 +21,7 @@ reject_pattern 'windows-exec-session-unsupported' crates/operon-cli/src/commands
 require_pattern 'cargo test -p operond --locked exec_session_platform_is_supported' .github/workflows/ci.yml
 require_pattern 'cargo test -p operond --locked exec_session_portable_pty_smoke_outputs_and_exits' .github/workflows/ci.yml
 
-require_pattern 'Windows interactive exec sessions use `portable-pty`' README.md
+require_pattern 'Windows interactive exec sessions use `portable-pty`' docs/platforms.md
 require_pattern 'Windows interactive exec sessions use `portable-pty`' PROTOCOL.md
 require_pattern 'Windows interactive exec sessions use `portable-pty`' docs/architecture/runtime-api.md
 require_pattern 'supported through `portable-pty` on Unix-like platforms and Windows' docs/architecture/technology-and-protocol-decisions.md
