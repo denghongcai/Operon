@@ -5,6 +5,46 @@ This page holds the full install path behind the README
 mount prerequisites, managed daemon services, shell completions, and agent
 skills.
 
+## Install scripts
+
+Linux and macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.ps1 | iex
+```
+
+Both installers resolve the latest release (or `OPERON_VERSION`), download the
+archive for the current platform, verify it against the release `SHA256SUMS`,
+and install `operon` and `operond`:
+
+- [`scripts/install.sh`](../scripts/install.sh) installs into `/usr/local/bin`
+  (using `sudo` only when needed), or `OPERON_INSTALL_DIR`. On macOS it also
+  installs the bundled `libfuse-t.dylib` next to the binaries. Linux libc
+  detection follows the [release archive](#release-archives) rules; `OPERON_RELEASE_LIBC` overrides it. Run
+  it with `--dry-run` to print the selected asset without downloading.
+- [`scripts/install.ps1`](../scripts/install.ps1) installs into
+  `%LOCALAPPDATA%\Operon`, or `OPERON_INSTALL_DIR`, and adds that directory to
+  the user `PATH`. Set `OPERON_INSTALL_DRY_RUN=1` to print the selected asset.
+
+To pin a version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.sh | OPERON_VERSION=v0.16.15 bash
+```
+
+## Manual install
+
+Download `operon-<tag>-<platform>.tar.gz` (or `.zip` on Windows) and
+`SHA256SUMS` from the [releases page](https://github.com/denghongcai/Operon/releases),
+verify the checksum, extract the archive, and put `operon` and `operond` on
+your `PATH`. On macOS, keep `libfuse-t.dylib` next to the binaries.
+
 ## Release archives
 
 Linux and macOS release archives use
@@ -25,70 +65,6 @@ WinFsp; hosts must have the corresponding platform runtime installed before
 `operon mount` can start a filesystem session. Run
 `operon doctor --mount-runtime` to check this before mounting. See
 [platform support](platforms.md) for details.
-
-## Linux and macOS
-
-```bash
-VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
-test -n "$VERSION" || { echo "failed to resolve latest Operon release" >&2; exit 1; }
-case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64) ARCH=linux-x86_64 ;;
-  Linux-aarch64|Linux-arm64) ARCH=linux-arm64 ;;
-  Linux-armv7l|Linux-armv7*) ARCH=linux-armv7 ;;
-  Darwin-x86_64) ARCH=macos-x86_64 ;;
-  Darwin-arm64) ARCH=macos-aarch64 ;;
-  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-esac
-
-if [[ "$ARCH" == linux-* ]]; then
-  LIBC="${OPERON_RELEASE_LIBC:-auto}"
-  if [[ "$LIBC" == auto ]]; then
-    GNU=false; MUSL=false
-    GNU_VERSION="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
-    LDD_VERSION="$(LC_ALL=C ldd --version 2>&1 || true)"
-    [[ "$GNU_VERSION" == glibc\ * ]] && GNU=true
-    [[ "$LDD_VERSION" == *GLIBC* || "$LDD_VERSION" == *'GNU libc'* || "$LDD_VERSION" == *'GNU C Library'* ]] && GNU=true
-    [[ "$LDD_VERSION" == *musl* || -f /etc/alpine-release ]] && MUSL=true
-    case "$GNU-$MUSL" in
-      true-false) LIBC=gnu ;;
-      false-true) LIBC=musl ;;
-      *) echo 'unknown/ambiguous libc; set OPERON_RELEASE_LIBC=gnu or musl' >&2; exit 1 ;;
-    esac
-  fi
-  case "$LIBC" in
-    gnu) ;;
-    musl)
-      [[ "$ARCH" != linux-armv7 ]] || { echo 'ARMv7 musl is unsupported' >&2; exit 1; }
-      ARCH="linux-musl-${ARCH#linux-}"
-      ;;
-    *) echo 'OPERON_RELEASE_LIBC must be auto, gnu or musl' >&2; exit 1 ;;
-  esac
-fi
-
-curl -fL "https://github.com/denghongcai/Operon/releases/download/${VERSION}/operon-${VERSION}-${ARCH}.tar.gz" -o /tmp/operon.tar.gz
-tar -xzf /tmp/operon.tar.gz -C /tmp
-sudo install "/tmp/operon-${VERSION}-${ARCH}/operon" /usr/local/bin/operon
-sudo install "/tmp/operon-${VERSION}-${ARCH}/operond" /usr/local/bin/operond
-if [[ -f "/tmp/operon-${VERSION}-${ARCH}/libfuse-t.dylib" ]]; then
-  sudo install -m 0644 "/tmp/operon-${VERSION}-${ARCH}/libfuse-t.dylib" /usr/local/bin/libfuse-t.dylib
-fi
-```
-
-## Windows
-
-In PowerShell:
-
-```powershell
-$Version = if ($env:OPERON_VERSION) { $env:OPERON_VERSION } else { (Invoke-RestMethod https://api.github.com/repos/denghongcai/Operon/releases/latest).tag_name }
-$Arch = "windows-x86_64"
-$Archive = "$env:TEMP\operon.zip"
-$InstallRoot = "$env:LOCALAPPDATA\Operon"
-Invoke-WebRequest "https://github.com/denghongcai/Operon/releases/download/$Version/operon-$Version-$Arch.zip" -OutFile $Archive
-Expand-Archive -Path $Archive -DestinationPath $env:TEMP -Force
-New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-Copy-Item "$env:TEMP\operon-$Version-$Arch\operon.exe" $InstallRoot -Force
-Copy-Item "$env:TEMP\operon-$Version-$Arch\operond.exe" $InstallRoot -Force
-```
 
 ## Managed daemon service
 

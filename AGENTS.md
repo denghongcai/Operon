@@ -831,8 +831,10 @@ Defer:
   Release, public release state, release artifact, install usability, and
   README Quickstart evidence.
 - Every public release must update [`scripts/verify-readme-quickstart-docker.sh`](scripts/verify-readme-quickstart-docker.sh)
-  when README Quickstart, the `docs/install.md` install path, release
-  packaging, install prerequisites, or agent skills guidance changes. After publishing, verify release artifacts and README
+  when README Quickstart, `scripts/install.sh`/`scripts/install.ps1`,
+  release packaging, install prerequisites, or agent skills guidance changes.
+  The installers mirror the archive selection in
+  `scripts/lib/release-assets.sh`; change them together. After publishing, verify release artifacts and README
   Quickstart through the manual `Verify Release Artifacts`,
   `Verify Release Install Usability`, and `Verify README Quickstart` GitHub
   Actions workflows. Do not substitute local script runs for release-completion

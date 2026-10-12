@@ -10,37 +10,59 @@
 
 > The missing execution model for AI agents.
 
-Operon is an AI-native capability runtime for your machines. It uses the
-network you already have (Tailscale, WireGuard, Cloudflare Mesh, LAN,
-Kubernetes…), or connects nodes itself with built-in peer-to-peer
-connectivity, backed by [iroh](https://iroh.computer).
-Either way, reachability never implies permission: policy decides what each
-node can do, and every action is traced and audited.
+Operon is an AI-native capability runtime for machines already connected by
+Cloudflare Mesh, Tailscale, WireGuard, LAN, Kubernetes networking, or any other
+private network — or connected by Operon itself, through built-in peer-to-peer
+connectivity backed by [iroh](https://iroh.computer).
+
+Operon focuses on what happens after machines can reach each other: capability
+discovery, policy, execution graphs, audit, and agent-friendly tooling.
 
 ---
 
 ## What Is Operon?
 
-Inspired by operons in biology, an **Operon** is a unit of coordinated
-execution:
+Inspired by the concept of operons in biology, an **Operon** is a unit of
+coordinated execution.
+
+In Operon:
 
 - A **node** is any reachable machine: local, cloud, container, or server.
 - A **capability** is something a node can do: filesystem access, command
-  execution, service access.
+  execution, service access, and related runtime actions.
 - An **operon** is a composition of capabilities executed across nodes.
 
 ```text
 Operon = Capability + Context + Policy + Execution
 ```
 
-For example, an agent can write files into a remote workspace, run validation
-commands on the machine that owns it, and inspect the resulting trace. Or it can
-start a temporary service with `exec.run`, verify it through a policy-controlled
-health check or local forward, and keep that path auditable.
+For example:
 
-Operon is not a VPN, remote desktop, file sync tool, or SSH wrapper.
-Connectivity is a means; Operon is about what connected machines are allowed to
-do, how execution is composed, and how results are traced.
+- **Agent workspace handoff:** an agent can write files into a remote workspace,
+  run validation commands on the machine that owns that workspace, and inspect
+  the resulting trace and audit events.
+- **Remote service verification:** an agent can start a temporary service on a
+  remote machine with `exec.run`, verify it with a policy-controlled service
+  health check or explicit local forward, and keep that operational path
+  auditable.
+
+Operon is not a network overlay, remote desktop, file sync tool, or SSH wrapper.
+It turns reachable machines into nodes with explicit, auditable capabilities.
+
+---
+
+## Why Operon?
+
+AI agents often interact with real machines through fragmented tools:
+
+- SSH
+- APIs
+- File uploads
+- Remote desktops
+- Privately reachable machines
+
+That usually means poor composability, weak execution traces, unclear security
+boundaries, and network access being mistaken for capability access.
 
 ```text
 +---------------------------+   +---------------------------+
@@ -54,33 +76,62 @@ do, how execution is composed, and how results are traced.
 +-----------------------------------------------------------+
 | Operon capability runtime                                 |
 |                                                           |
-| discover -> authorize -> execute -> trace + audit         |
+| discover -> authorize -> execute                          |
+|                 |                                         |
+|                 v                                         |
+| trace + audit                                             |
 |                                                           |
 | capabilities: fs | exec | service                         |
 | controls:     policy | graph                              |
 +-----------------------------------------------------------+
                               |
-             authenticated gRPC between nodes
+              secure access over any reachability
                               |
 +-----------------------------------------------------------+
-| existing network (LAN, VPN, K8s) or built-in connectivity |
+|  existing private network      |  built-in connectivity   |
+|  Mesh | Tailscale | WireGuard  |  peer-to-peer, by iroh   |
+|  LAN | Kubernetes              |                          |
 +-----------------------------------------------------------+
       |                       |                       |
    node-a                  node-b                  node-c
- fs + exec                 service                fs + exec
+ fs + execs                service                fs + execs
 ```
+
+Operon adds:
+
+- A unified capability model.
+- Structured execution across reachable nodes.
+- Built-in trace and audit output.
+- Policy-controlled filesystem, exec, service, and secret use.
+- A clear boundary between connectivity and capability authorization.
+
+Cloudflare Mesh, Tailscale, or Operon's built-in connectivity can decide whether
+one device can reach another device. Operon's policy decides whether that device
+can read a directory, run a command, use a secret, forward a local service, or
+inspect an execution trace.
 
 ---
 
 ## Quickstart
 
-Install `operon` (CLI) and `operond` (daemon) from the
-[latest release](https://github.com/denghongcai/Operon/releases/latest).
-[docs/install.md](docs/install.md) has copy-paste install scripts for Linux,
-macOS, and Windows, plus libc selection, live mount prerequisites, shell
-completions, and agent skills.
+Install `operon` (CLI) and `operond` (daemon) on Linux or macOS:
 
-Create a local workspace and config:
+```bash
+curl -fsSL https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.sh | bash
+```
+
+On Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/denghongcai/Operon/main/scripts/install.ps1 | iex
+```
+
+The installers pick the right archive for your platform and libc, verify its
+checksum, and accept `OPERON_VERSION` and `OPERON_INSTALL_DIR`. See
+[docs/install.md](docs/install.md) for manual install, Alpine, and live mount
+prerequisites.
+
+Create a local workspace and guided config:
 
 ```bash
 mkdir -p "$HOME/operon-workspace" "$HOME/.operon"
@@ -93,8 +144,8 @@ operon onboard \
   --listen 127.0.0.1:7789
 ```
 
-Start the daemon in the foreground (or install it as a
-[managed service](docs/install.md#managed-daemon-service)):
+Start the daemon. This command runs in the foreground (to run it as a system
+service, see [managed daemon service](docs/install.md#managed-daemon-service)):
 
 ```bash
 operond start
@@ -107,7 +158,8 @@ operon node ping local
 operon capability list local
 ```
 
-To give your coding agent Operon skills:
+Give your coding agent Operon skills (Node.js 18+; replace `codex` with your
+target agent):
 
 ```bash
 npx -y skills add https://github.com/denghongcai/Operon --skill '*' --agent codex --yes
@@ -121,6 +173,7 @@ Inspect nodes and capabilities:
 
 ```bash
 operon node list
+operon node ping local
 operon capability list local
 operon capability explain local fs:workspace read /
 ```
@@ -133,7 +186,7 @@ operon fs write local:/notes.txt --content "hello from Operon"
 operon fs read local:/notes.txt
 ```
 
-Run commands with policy-controlled working directories, timeouts, and secrets:
+Run commands with policy-controlled working directories, timeouts, and secret use:
 
 ```bash
 operon exec run local -- echo hello
@@ -142,7 +195,8 @@ operon exec list local
 operon exec logs local <exec-id>
 ```
 
-Check services and open explicit local forwards (runs in the foreground):
+Inspect configured services and open explicit local forwards. The forward
+command runs in the foreground; stop it with Ctrl-C when finished:
 
 ```bash
 operon service list local
@@ -156,13 +210,16 @@ Review audit output:
 operon audit show local --limit 20
 ```
 
-Add global `--json` before the subcommand for structured output, for example
-`operon --json exec list local`. When something looks wrong, run
-`operon doctor`.
+Add global `--json` before the subcommand for structured output when scripting,
+for example `operon --json exec list local`. When something looks wrong, start
+with `operon doctor`.
 
-### Workflows
+---
 
-A workflow composes node capabilities into a traceable execution graph:
+## Example Workflow
+
+An Operon workflow composes node capabilities into a traceable execution graph.
+This example runs against the `local` node created in the Quickstart:
 
 ```yaml
 name: local-copy-and-run
@@ -187,52 +244,67 @@ steps:
     path: /graph-output.txt
 ```
 
+Save it as `workflow.yaml`, then run it:
+
 ```bash
 operon run --trace-output ./trace.json ./workflow.yaml
 operon trace show ./trace.json
 ```
 
-Every run records inputs, outputs, logs, duration, status, and policy decisions.
+Every run records inputs, outputs, logs, duration, status, and policy decisions
+that can be inspected by humans, scripts, or agents.
 
 ---
 
 ## Capabilities
 
+Operon exposes machines through explicit capabilities:
+
+```text
+mesh://cloud-a/fs/workspace
+mesh://gpu-node/exec/run
+mesh://cloud-a/service/web
+```
+
 - **Filesystem:** read, write, list, copy, mutation, and live mount through
   Linux FUSE, macOS FUSE-T, and Windows WinFsp.
 - **Exec:** logs, stdin, cancellation, timeouts, scoped secrets, and
   PTY-backed interactive sessions.
-- **Service:** metadata, TCP health checks, TCP and UDP forwarding over
+- **Service:** metadata, TCP health checks, and TCP and UDP forwarding over
   existing node connections.
 - **Audit, trace, and graph** inspection.
 
 `operon capability list <node>` is policy-derived: filesystem capabilities come
-from configured mounts, exec appears only when policy allows at least one
-working directory, and service capabilities come from configured services and
-their permissions. `operon capability explain` tells you why one action is
-allowed or denied.
+from configured mounts, exec capability appears only when policy allows at least
+one working directory, and service capabilities come from configured services
+and their permissions. Use `operon capability explain` to ask a daemon why one
+action is allowed or denied.
+
+Platform notes, diagnostics, and live mount tuning are in
+[docs/platforms.md](docs/platforms.md).
 
 ---
 
 ## Connecting Nodes
 
-`operon onboard` writes a unified `$HOME/.operon/config.yaml` with `daemon`,
-`client`, `policy`, and `secrets` sections; `operon config explain` describes
-it. Nodes are addressed in one of two ways.
+`operon onboard` writes a unified `config.yaml` with `daemon`, `client`,
+`policy`, and `secrets` sections; `operon config explain` describes it. Nodes
+are addressed in one of two ways.
 
-**Over an existing network** (default). Point clients at daemon endpoints on
-your LAN, VPN, or Kubernetes network:
+**Over your existing network.** Point clients at daemon endpoints on Cloudflare
+Mesh, Tailscale, WireGuard, LAN, or Kubernetes networking:
 
 ```yaml
 client:
   nodes:
+    cloud-a:
+      endpoint: grpc://100.96.12.34:7789
     gpu-node:
       endpoint: grpc://100.96.18.20:7789
 ```
 
-**With built-in connectivity** (optional, backed by iroh). No VPN or separate
-connectivity client is needed. The daemon adds an iroh listener and prints its
-public endpoint ID at startup:
+**Through built-in connectivity.** No VPN or separate connectivity client is
+needed. The daemon adds a listener and prints its public endpoint ID at startup:
 
 ```yaml
 daemon:
@@ -240,6 +312,8 @@ daemon:
     identity_file: iroh-server.key
     bind_addrs: ["0.0.0.0:7788"]
 ```
+
+Clients address the node by that ID:
 
 ```yaml
 client:
@@ -254,41 +328,60 @@ client:
           peer_addrs: ["192.168.1.20:7788"]
 ```
 
-Cross-network access uses explicitly configured self-hosted relays; see the
+Filesystem, exec, and mount commands are the same either way. For access across
+networks, configure self-hosted relays; see the
 [built-in connectivity guide](docs/networking/embedded-iroh.md).
 
-Filesystem, exec, and mount commands are the same either way. Before binding a
-daemon beyond loopback, configure bearer-token auth with
-`daemon.auth.token_file` or `daemon.auth.token_env`. LAN mDNS discovery can find
-local daemons, but discovery never grants capability access. Timeouts for slow
-links are configurable per node; see
+Before binding a daemon beyond loopback, configure bearer-token auth with
+`daemon.auth.token_file` or `daemon.auth.token_env`. Timeouts for slow or
+international links are configurable per node; see
 [transport liveness configuration](PROTOCOL.md#transport-liveness-configuration).
+For the full config reference, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ---
 
-## Security Model
+## Secure By Design
 
-- Network reachability, discovery, and peer authentication never imply
-  capability permission.
-- Nodes expose only explicit filesystem mounts, exec roots, and services.
-  Service permissions are default-deny when omitted; set `permissions.check`
-  and/or `permissions.forward` explicitly.
+Operon enforces capability boundaries:
+
+- Nodes expose only explicit mounts and configured services.
+- Service permissions are default-deny when omitted.
 - Secrets are injected only into allowed execs that request them.
+- Execution is policy-controlled.
 - Every action is auditable.
+- Reachability, discovery, and peer authentication never imply capability
+  permission.
 
-See [security hardening](docs/quality/security-hardening.md) for hardening and
-upgrade notes.
+Hardening and upgrade notes live in
+[docs/quality/security-hardening.md](docs/quality/security-hardening.md).
 
 ---
 
-## Status and Docs
+## AI-Native
 
-Operon is a usable pre-1.0 runtime: Rust daemon and CLI, gRPC protocol,
-TypeScript SDK, and prebuilt releases for Linux, macOS, and Windows.
+Operon is designed for agents, not just humans.
+
+Agents can:
+
+- discover available capabilities
+- compose workflows dynamically
+- execute across multiple reachable nodes
+- inspect audit and trace output
+- ask why a capability action is allowed or denied before attempting it
+
+For SDK and direct protocol integration, see [DEVELOPMENT.md](DEVELOPMENT.md)
+and [PROTOCOL.md](PROTOCOL.md).
+
+---
+
+## Project Status
+
+Operon is usable today as a pre-1.0 runtime: Rust daemon and CLI, gRPC runtime
+protocol, TypeScript SDK, and prebuilt releases for Linux, macOS, and Windows.
 
 - [Installing Operon](docs/install.md)
 - [Platform support, diagnostics, and live mount tuning](docs/platforms.md)
-- [Built-in connectivity (iroh)](docs/networking/embedded-iroh.md)
+- [Built-in connectivity](docs/networking/embedded-iroh.md)
 - [DEVELOPMENT.md](DEVELOPMENT.md): config reference, contributing, validation, releases
 - [PROTOCOL.md](PROTOCOL.md): direct gRPC integration
 - [Runtime API architecture](docs/architecture/runtime-api.md)
@@ -298,8 +391,16 @@ TypeScript SDK, and prebuilt releases for Linux, macOS, and Windows.
 
 ## Vision
 
+Operon is not a remote control tool or network overlay.
+
+It is a new execution model where:
+
 > Computers are no longer isolated machines,  
-> but capability-bearing nodes  
+> but capability-bearing nodes on your network  
 > that AI agents can directly operate.
 
-If this resonates, star the repo.
+---
+
+## Star This Repo If This Resonates
+
+We're building the runtime layer for AI to interact with the real world.
