@@ -100,8 +100,9 @@ main() {
 
   local version="${OPERON_VERSION:-}"
   if [[ -z "$version" ]]; then
-    version="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-      | sed -n 's/.*"tag_name": *"\(v[^"]*\)".*/\1/p' | head -n 1)"
+    # Follow the releases/latest redirect instead of the rate-limited REST API.
+    version="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")"
+    version="${version##*/}"
     [[ -n "$version" ]] || fail 'failed to resolve the latest release; set OPERON_VERSION'
   fi
   [[ "$version" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]] || fail "invalid release tag: $version"

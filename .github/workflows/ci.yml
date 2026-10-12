@@ -74,9 +74,10 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          export OPERON_VERSION="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
           export OPERON_INSTALL_DIR="$RUNNER_TEMP/operon-bin"
-          bash scripts/install.sh --dry-run
+          bash scripts/install.sh --dry-run | tee dry-run.txt
+          export OPERON_VERSION="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          grep -Fx "version=$OPERON_VERSION" dry-run.txt
           bash < scripts/install.sh
           "$OPERON_INSTALL_DIR/operon" --version
           "$OPERON_INSTALL_DIR/operond" --version
@@ -85,8 +86,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
+          $env:OPERON_INSTALL_DRY_RUN = "1"
+          $DryRun = Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          $DryRun
+          Remove-Item Env:OPERON_INSTALL_DRY_RUN
           $env:OPERON_VERSION = gh release view --repo $env:GITHUB_REPOSITORY --json tagName -q .tagName
           $env:OPERON_INSTALL_DIR = Join-Path $env:RUNNER_TEMP "operon-bin"
+          if (-not ($DryRun -contains "version=$env:OPERON_VERSION")) { throw "latest release resolution mismatch" }
           Get-Content scripts/install.ps1 -Raw | Invoke-Expression
           & (Join-Path $env:OPERON_INSTALL_DIR "operon.exe") --version
           & (Join-Path $env:OPERON_INSTALL_DIR "operond.exe") --version
@@ -96,11 +102,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OPERON_VERSION = gh release view --repo $env:GITHUB_REPOSITORY --json tagName -q .tagName
           $env:OPERON_INSTALL_DIR = Join-Path $env:RUNNER_TEMP "operon-bin-pwsh"
           $env:OPERON_INSTALL_DRY_RUN = "1"
-          Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          $DryRun = Get-Content scripts/install.ps1 -Raw | Invoke-Expression
+          $DryRun
           Remove-Item Env:OPERON_INSTALL_DRY_RUN
+          $env:OPERON_VERSION = gh release view --repo $env:GITHUB_REPOSITORY --json tagName -q .tagName
+          if (-not ($DryRun -contains "version=$env:OPERON_VERSION")) { throw "latest release resolution mismatch" }
           Get-Content scripts/install.ps1 -Raw | Invoke-Expression
           & (Join-Path $env:OPERON_INSTALL_DIR "operon.exe") --version
 

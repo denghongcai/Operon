@@ -58,7 +58,8 @@ set -euo pipefail
 
 export HOME=/home/operon
 
-VERSION="${OPERON_VERSION:-$(curl -fsSL https://api.github.com/repos/denghongcai/Operon/releases/latest | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p')}"
+VERSION="${OPERON_VERSION:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/denghongcai/Operon/releases/latest)}"
+VERSION="${VERSION##*/}"
 test -n "$VERSION" || { echo "failed to resolve latest Operon release" >&2; exit 1; }
 OPERON_VERSION="$VERSION" bash /opt/operon/install.sh
 

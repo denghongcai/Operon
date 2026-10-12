@@ -16,7 +16,10 @@ function Install-Operon {
 
     $Version = $env:OPERON_VERSION
     if (-not $Version) {
-        $Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name
+        # Follow the releases/latest redirect instead of the rate-limited REST API.
+        $Response = Invoke-WebRequest "https://github.com/$Repo/releases/latest" -Method Head -UseBasicParsing
+        $Uri = if ($Response.BaseResponse.ResponseUri) { $Response.BaseResponse.ResponseUri } else { $Response.BaseResponse.RequestMessage.RequestUri }
+        $Version = $Uri.Segments[-1]
         if (-not $Version) { throw "failed to resolve the latest release; set OPERON_VERSION" }
     }
     if ($Version -notmatch '^v\d+\.\d+(\.\d+)?(-[A-Za-z0-9.-]+)?$') { throw "invalid release tag: $Version" }
