@@ -1,13 +1,22 @@
 # Embedded connectivity release Security review
 
-Status: Final source review completed; public artifact acceptance remains pending.
+Status: Final source review and public artifact acceptance completed.
+Independent Windows runner `38261632880` also passes the checked release SHA,
+platform/source tests and downloaded SDK/install/service gates.
 
 Current API refresh on 2026-10-12: three open CodeQL alerts (#13–15),
 zero open Dependabot alerts and zero open secret-scanning alerts. All three
 APIs are accessible. Each open CodeQL finding currently references analysis
-source `68f98ab6722dcf773dcd913836474307d1365d1c` on `refs/heads/main`.
+source `37ebc60d74f469144235e0cc4583cc5043dedc22` on `refs/heads/main`.
+Runtime crates, SDK sources, manifests and Cargo.lock are unchanged from the
+immutable release source `68f98ab6722dcf773dcd913836474307d1365d1c`.
 CodeQL `38154495408`, complete CI `38154495859`, five-platform native SDK
-`38154533676` and hosted macOS/Windows live mount `38154538295` pass on that SHA.
+`38154533676` and hosted macOS/Windows live mount `38154538295` pass on the
+release SHA. Public artifact `38158880680` passes actual downloaded daemon/JS
+SDK/native binding business tests on all five platforms, including invalid
+receivers and forced-GC lifetime/cancellation checks. Native Alpine public
+acceptance `38158589828` passes on both architectures. Current main analysis
+CodeQL `38261607793` also passes; this does not close the three open alerts.
 No alert has been dismissed or suppressed. The snapshots below describe
 earlier source states and must not be used as current alert counts.
 

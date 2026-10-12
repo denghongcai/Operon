@@ -2,15 +2,16 @@
 
 Guidance for agents working in this repository.
 
-Latest release: Phases 148–152 completed in verified public v0.16.14, source
-`fdbf071e740235ad46e1f42e92a0ce0b1d1de66e`. Adds bounded async Unix reads and
-owned cancellation on external unmount, including zero RPC deadlines. Linux
-defaults to async with four callback workers and eight independent RPC slots;
-macOS defaults to sync, with explicit async verified. Windows keeps WinFsp.
-GNU/musl, Alpine/OpenRC, macOS and Windows remain supported. Privileged
-concurrent overmount remains an accepted, disclosed non-atomic boundary.
-Full exact-SHA source/platform/public gates and disclosed ops/s evidence
-are in `docs/plan/v0.16.14-release-publication.md`.
+Latest release: Phases 154–159 completed in verified public v0.16.15, source
+`68f98ab6722dcf773dcd913836474307d1365d1c`. Adds explicit optional embedded
+iroh connections for daemon/CLI/mount and an in-process Node SDK binding.
+Existing grpc/grpcs/LAN/VPN addressing remains default; authentication and
+policy still apply. Rust MSRV is 1.91. GNU/musl, Alpine/OpenRC, macOS and
+Windows remain supported. Linux async mount defaults and the disclosed
+privileged-overmount boundary are unchanged. Embedded small sequential
+requests measured slower than gRPC; this is not a performance upgrade.
+Exact-source/platform/public gates, upload recovery and Security dispositions
+are in `docs/plan/v0.16.15-release-publication.md`.
 
 ## Project Direction
 
@@ -43,6 +44,14 @@ Follow `docs/decisions/optional-embedded-connectivity.md` for the updated
 boundary and `docs/plan/v0.18.26-optional-embedded-connectivity.md` for gates.
 
 ## Key Design Documents
+
+- `docs/plan/v0.16.15-release-publication.md`
+  - Completed Phases 154–159: optional embedded connectivity, native SDK
+    packages and verified source/platform/public release gates.
+
+- `docs/plan/v0.18.26-optional-embedded-connectivity.md`
+  - Completed implementation contract; ordinary private-network addressing
+    stays default and embedded connections preserve authentication/policy.
 
 - `docs/plan/v0.18.26-optional-embedded-connectivity.md`
   - Active Phases 154–159: optional embedded iroh, deliberate MSRV upgrade,

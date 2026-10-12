@@ -8159,7 +8159,11 @@ production backend remains opt-in; MSRV upgrade is explicitly authorized.
   This is original-path regression evidence, not proof of remaining NAT/direct
   upgrade, embedded live-mount, native online or final public package gates.
   Full post-completion source, matched ops/s and support/README still required.
-- Phase 159 — In progress: immutable exact-source/public package release gates.
+- Phase 159 — Completed: verified public v0.16.15, immutable source
+  `68f98ab6722dcf773dcd913836474307d1365d1c`; full source/native/networking,
+  17 assets, five-platform SDK, installation, README, Alpine/OpenRC, independent
+  Windows runner `38261632880` and formal postrelease all pass. The following
+  entries preserve the staged implementation history, not outstanding gates.
   Windows 3f67d77 SDK retest proves absolute shell lookup is fixed, then reveals
   CreateProcessW error 87 for an empty environment. Upstream portable-pty 0.9.0
   emits only one UTF-16 NUL for that case. Vendor the exact crate with one scoped
@@ -8309,6 +8313,32 @@ the same npm 10 `edgesOut` error during downloaded SDK installation. Apply the
 already verified npm 11.6.1/Node 22 setup there, with explicit original-tag
 checkout and source marker for recovery. Its complete run remains required;
 the original source checks are not recorded as failed runtime behavior.
+Recovery Windows run `38261632880` is running with the original tag checked
+out; the workflow revision is `37ebc60`, not the runtime source. Formal
+postrelease passes. Security refresh retains three open CodeQL findings with
+documented dispositions, zero dependency and secret findings; analysis is now
+`8479414` with unchanged runtime/SDK/lockfile. That separately merged README
+and installer update already passes CI `38207251344`, CodeQL `38207251326`
+and Alpine `38207251419`; no duplicate local full run is needed.
+Preserve the separately merged README structure and add only its essential
+connection contract: existing network addressing is default, embedded
+connectivity is explicit from v0.16.15, and bearer authentication/policy still
+apply. This is a documentation-only clarification, not a runtime change.
+The implementation roadmap now records all public gates already passed and
+identifies only the independent Windows runner and final evidence closeout as
+remaining Phase 159 work; old draft-pending text is superseded.
+Final Windows runner `38261632880` succeeds, checking out the original release
+SHA and passing source/platform/build/downloaded-SDK/install/service gates.
+Phase 159 and the complete Phases 154–159 batch are now complete in public
+Latest v0.16.15. Formal postrelease passed; all 17 assets remain byte-identical
+to the accepted original build. Release recovery failures and verifier-only
+revisions are documented, not hidden. Cleanup removes 32 finished archive
+copies and two owned guide binaries (~428 MiB), retaining reports/checksums.
+Final Security refresh now references `37ebc60` (runtime/SDK/lockfile unchanged),
+with the same three documented CodeQL findings and zero dependency/secret
+findings. Main CI `38261608986` and CodeQL `38261607793` pass; the focused
+v0.16.15 publication/documentation contract validator also passes. Final closeout
+changes are documentation-only and do not move the tag.
 
 ## Planning Principle
 

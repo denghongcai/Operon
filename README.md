@@ -289,7 +289,8 @@ Platform notes, diagnostics, and live mount tuning are in
 
 `operon onboard` writes a unified `config.yaml` with `daemon`, `client`,
 `policy`, and `secrets` sections; `operon config explain` describes it. Nodes
-are addressed in one of two ways.
+are addressed in one of two ways. Existing network addressing is the default;
+built-in connectivity is an explicit option in v0.16.15 and later.
 
 **Over your existing network.** Point clients at daemon endpoints on Cloudflare
 Mesh, Tailscale, WireGuard, LAN, or Kubernetes networking:
@@ -304,7 +305,8 @@ client:
 ```
 
 **Through built-in connectivity.** No VPN or separate connectivity client is
-needed. The daemon adds a listener and prints its public endpoint ID at startup:
+needed. Keep bearer authentication and policy configured. The daemon adds a
+listener and prints its public endpoint ID at startup:
 
 ```yaml
 daemon:
