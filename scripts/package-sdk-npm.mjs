@@ -47,7 +47,12 @@ for (const target of targets) {
 }
 await writeFile(path.join(output, 'package.json'), JSON.stringify({
   name: '@cellworks/operon-sdk-js', version: source.version,
-  description: 'Operon capability runtime TypeScript SDK', type: 'module',
+  description: 'TypeScript SDK for the Operon AI-native capability runtime',
+  keywords: [
+    'operon', 'ai', 'agent', 'capability-runtime', 'remote-execution',
+    'distributed-systems', 'typescript', 'grpc', 'filesystem', 'iroh',
+  ],
+  type: 'module',
   main: './dist/index.js', types: './dist/index.d.ts',
   exports: { '.': { types: './dist/index.d.ts', import: './dist/index.js' } },
   files: ['dist', 'native', 'LICENSE', 'LICENSE-portable-pty', 'README.md'],
