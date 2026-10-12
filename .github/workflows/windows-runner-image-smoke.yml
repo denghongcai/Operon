@@ -16,6 +16,10 @@ on:
         required: true
         type: string
         default: v0.16.15
+      source_ref:
+        description: "Optional immutable source ref; defaults to the workflow ref"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -45,6 +49,28 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+
+      - name: Verify explicit release source
+        if: inputs.source_ref != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)
+          test "$(git rev-parse HEAD)" = "$source_sha"
+          echo "WINDOWS_RELEASE_SOURCE=$source_sha TAG=$RELEASE_TAG"
+
+      - name: Install Node for downloaded SDK acceptance
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install pinned npm for release SDK dependencies
+        shell: bash
+        run: npm install --global npm@11.6.1 --ignore-scripts --no-audit --no-fund
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.91.0

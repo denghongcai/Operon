@@ -8296,6 +8296,19 @@ The explicit postrelease artifact-run option requires successful native jobs
 on all five platforms, their checked original-tag SHA markers and their full
 runtime acceptance completion lines; a tooling workflow commit alone is not
 source evidence. No tag or published runtime asset changes are made.
+Public artifact `38158880680` now passes on all five platforms, including both
+GNU relay-only SDK business fixtures. The guide's daemon/client onboard flow
+passes using release binaries proven byte-identical to public assets: separate
+identity keys, explicit peer address, bearer pairing, ping and filesystem stat.
+The owned daemon is stopped. Formal postrelease is running; the independent
+Windows runner is still pending, so Phase 159 remains in progress.
+Formal postrelease passes, including recovered archive equivalence, all five
+tagged-source public artifact results, installation, README and native Alpine.
+Independent Windows run `38158589767` passes its source checks but encounters
+the same npm 10 `edgesOut` error during downloaded SDK installation. Apply the
+already verified npm 11.6.1/Node 22 setup there, with explicit original-tag
+checkout and source marker for recovery. Its complete run remains required;
+the original source checks are not recorded as failed runtime behavior.
 
 ## Planning Principle
 
